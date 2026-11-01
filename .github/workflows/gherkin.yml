@@ -1,10 +1,19 @@
 name: Gherkin
 
-# Scenario features (gherkin/features/*.feature) driven through three Star clients. ONE JOB PER (client, OS, feature):
-# the matrix of each client is generated (gherkin/generated/features-<client>.json) and every job runs exactly one feature
-# and fetches only the datasets it needs (gherkin/generated/feature-datasets-<client>.json), EXCEPT the @ui features (uiXxx, a
-# few clicks each and no datasets) of the mac-gui and desktop legs: those share ONE job per leg, the matrix entry `ui`, because a
-# job apiece paid for a full build of the app, stard or Star.app to run a few clicks.  Legs:
+# Scenario features (gherkin/features/*.feature) driven through three Star clients. ONE JOB PER (client, OS, SHARD): the features of
+# each client (gherkin/generated/features-<client>.json) are dealt into a few shards by the `features` job below, and a shard job builds
+# once (apt/Swift/OpenCV/MSVC setup, the output validator, the trail verifier, stard or Star.app), fetches the union of its features'
+# datasets (gherkin/generated/feature-datasets-<client>.json) and runs its features one after the other.  A job per feature paid all of
+# that setup again for every feature: 55% of the step time of the old one-job-per-feature runs was setup and building (on Windows
+# 82-86%, 5 minutes of it the MSVC toolset install), and the macOS jobs queued behind each other.
+#
+# Per-feature results stay individual even though a job runs several: the job name lists the shard's features, every shard ends with
+# its own "Prove the scenario ran" step (the vacuous-green check below, for each feature of the shard, not stopping at the first miss)
+# that writes a pass/fail row per feature to the job summary and an `::error::` annotation naming each feature that is not proved,
+# and every feature's reports keep their own subfolder in the uploaded artifacts.  fail-fast is off, so one shard's failure does not
+# cancel the others.  The @ui features (uiXxx, a few clicks each and no datasets) of the mac-gui and desktop legs are one shard of their
+# own, named `ui`.  How many shards a leg has is the N of the `features` job; features are dealt round-robin, the video ones (the
+# slow ones) first so they spread out.  Legs:
 #   cli-linux, cli-windows, cli-macos  XCTest running the built `star` binary as a subprocess
 #   mac-gui                       XCUITest against Star.app (hosted macOS runners ship with UI automation
 #                                 mode enabled: no `automationmodetool` step here)
@@ -17,13 +26,13 @@ name: Gherkin
 # macOS and Windows ffmpeg, the Windows OpenCV and StarDecisionTrees) and those rebuilt on every run.  A release download is seconds; see
 # https://docs.github.com/actions/using-workflows/caching-dependencies-to-speed-up-workflows#usage-limits-and-eviction-policy
 #
-# Every leg ends with a "vacuous green" check: it fails the job unless the log (or the Gradle XML) shows
-# exactly one test that ran, passed and was not skipped. Exit codes alone are not proof: xcodebuild
-# -only-testing matching nothing exits 0 having run nothing.
+# Every leg ends with a "vacuous green" check: it fails the job unless the log (or the Gradle XML) shows that every feature of the
+# shard ran, passed and was not skipped (gherkin/prove-xctest-features.sh, gherkin/run-desktop-features.sh). Exit codes alone are not
+# proof: xcodebuild -only-testing matching nothing exits 0 having run nothing.
 #
 # The trail-removal features (removeAirplanes, autoPreservation…, selectiveRemovesOnlyTrails) also run trail_tools'
-# `star-removal-verify` as a subprocess, so those jobs (and only those: the list is the `if:` of the "trail verifier" steps) build
-# trail_tools in release first. Its reports and crops ride on each job's gherkin-artifacts upload. See gherkin/README.md.
+# `star-removal-verify` as a subprocess, so the shards holding one (`trail` in the matrix entry: the list is in the `features` job)
+# build trail_tools in release first. Its reports and crops ride on each job's gherkin-artifacts upload. See gherkin/README.md.
 #
 # DUPLICATED ON PURPOSE (collapse into reusable workflows later, see gherkin/README.md): the apt/Eigen/
 # Swift/MSVC/OpenCV/StarDecisionTrees setup of cli.yml's `linux`/`macos`/`windows` jobs, the stard build
@@ -79,36 +88,58 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # ─── The matrix: which features each client runs ─────────────────────────────
-  # From the generated lists, optionally narrowed by the workflow_dispatch `features` input.
+  # ─── The matrix: which features each client runs, in which shards ────────────
+  # From the generated lists, optionally narrowed by the workflow_dispatch `features` input, dealt into shards: one matrix entry per job,
+  #   {name, label, features (space separated), count, minutes, tests (swift test names), trail, validator}
+  # `name` is "1".."N" or "ui" (the @ui features, one shard of their own); `label` goes into the job name so the job list names every
+  # feature; `trail` is true when the shard holds a trail-verifier feature; `validator` is false for the @ui shard (no validator).
+  # Never more shards than features, so a narrowed workflow_dispatch list still makes sense.
   features:
     name: feature matrix
     runs-on: ubuntu-24.04
     outputs:
       cli: ${{ steps.m.outputs.cli }}
       macgui: ${{ steps.m.outputs.macgui }}
-      macgui_ui: ${{ steps.m.outputs.macgui_ui }}
       desktop: ${{ steps.m.outputs.desktop }}
-      desktop_ui: ${{ steps.m.outputs.desktop_ui }}
     steps:
       - uses: actions/checkout@v4
       - id: m
         env:
           ONLY: ${{ inputs.features }}
+          # shards per client: the knob for trading job count (setup paid once per shard) against how long one shard runs serially
+          SHARDS_CLI: 4
+          SHARDS_MAC_GUI: 3
+          SHARDS_DESKTOP: 3
+          TRAIL: '["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'
         run: |
+          # minutes: a job (or retry attempt) timeout is the old per-feature allowance times the features of the shard, at most 360, the hosted
+          # runner limit.  Workflow expressions cannot multiply, so each allowance in use is precomputed: matrix.shard.minutes['60'] and so on.
+          shard='
+            def cap: .[0:1] | ascii_upcase;
+            . as $all
+            # the video features are the slow ones: deal them first so round-robin gives each shard about one
+            | ([ $all[] | select(startswith("ui") | not) ] | sort_by(test("[Vv]ideo") | not)) as $f
+            | ([$n, ($f | length)] | min) as $k
+            | ([ $all[] | select(startswith("ui")) ]) as $ui
+            | ([ range(0; $k) as $i | { name: ($i + 1 | tostring), features: [ $f | to_entries[] | select(.key % $k == $i) | .value ] } ]
+               + (if ($ui | length) > 0 then [ { name: "ui", features: $ui } ] else [] end))
+            | map(. + {
+                label: (if .name == "ui" then "ui" else "shard \(.name): " + (.features | join(", ")) end),
+                count: (.features | length),
+                minutes: ((.features | length) as $c | [25, 45, 60, 75, 90, 100] | map({ key: tostring, value: ([360, . * $c] | min) }) | from_entries),
+                tests: [ .features[] | "test" + cap + .[1:] + "Feature" ] | join(" "),
+                trail: any(.features[]; . as $x | $trail | index($x) != null),
+                validator: (.name != "ui"),
+                features: (.features | join(" "))
+              })'
           for c in cli mac-gui desktop; do
             if [ -n "$ONLY" ]; then
               arr=$(jq -c --arg only "$ONLY" '[ .[] | select(. as $f | ($only | split(",") | map(gsub("[ ]";"")) | index($f)) != null) ]' "gherkin/generated/features-$c.json")
             else
               arr=$(jq -c . "gherkin/generated/features-$c.json")
             fi
-            # The @ui features of the mac-gui and desktop legs run as one job each, the entry `ui` of that leg's matrix (<leg>_ui lists them).
-            # Every other feature, and every cli feature, stays a job of its own.
-            if [ "$c" != cli ]; then
-              ui=$(jq -c '[ .[] | select(startswith("ui")) ]' <<<"$arr")
-              arr=$(jq -c --argjson ui "$ui" '[ .[] | select(startswith("ui") | not) ] + (if ($ui | length) > 0 then ["ui"] else [] end)' <<<"$arr")
-              echo "${c//-/}_ui=$ui" >> "$GITHUB_OUTPUT"
-            fi
+            var="SHARDS_$(echo "$c" | tr a-z- A-Z_)"
+            arr=$(jq -c --argjson n "${!var}" --argjson trail "$TRAIL" "$shard" <<<"$arr")
             echo "$c: $arr"
             echo "${c//-/}=$arr" >> "$GITHUB_OUTPUT"
           done
@@ -149,29 +180,27 @@ jobs:
 
   # ─── cli, Linux ──────────────────────────────────────────────────────────────
   cli-linux:
-    name: cli (ubuntu-24.04) · ${{ matrix.feature }}
+    name: cli (ubuntu-24.04) · ${{ matrix.shard.label }}
     runs-on: ubuntu-24.04
     needs: [features, ffmpeg-linux]
     if: needs.features.outputs.cli != '[]'
     strategy:
       fail-fast: false
       matrix:
-        feature: ${{ fromJSON(needs.features.outputs.cli) }}
-    timeout-minutes: 60
+        shard: ${{ fromJSON(needs.features.outputs.cli) }}
+    # one old job's allowance per feature of the shard
+    timeout-minutes: ${{ matrix.shard.minutes['60'] }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Name of this feature's test
-        id: t
-        shell: bash
-        run: |
-          f="${{ matrix.feature }}"
-          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-cli.txt), never maintained by hand.
       - name: Fetch test data
-        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-cli.json)
+        env:
+          FEATURES: ${{ matrix.shard.features }}
+        run: |
+          names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-cli.json; done | sort -u)
+          test_data/fetch.sh $names
 
       - name: Install apt prerequisites
         run: |
@@ -230,7 +259,7 @@ jobs:
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        if: ${{ matrix.shard.trail }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -241,13 +270,21 @@ jobs:
         # is `@testable import star` and --filter still compiles every test target. One release compile.
         # --disable-swift-testing: without it, swift test runs a second (Swift Testing) pass that starts the `star` executable
         # inside the test binary, which parses `-c release` as star's own -c flag and exits 1 after the XCTest pass.
-        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter "GherkinTests.GeneratedFeatureTests/${{ steps.t.outputs.name }}" 2>&1 | tee gherkin-cli.log
-
-      - name: Prove the scenario ran (not a vacuous green)
+        # One swift test for the whole shard: one --filter per feature, so the one release compile serves all of them.
+        env:
+          TESTS: ${{ matrix.shard.tests }}
         run: |
-          grep -E "${{ steps.t.outputs.name }}.*passed" gherkin-cli.log
-          grep -E "Executed 1 test, with 0 failures" gherkin-cli.log
-          ! grep -E "${{ steps.t.outputs.name }}.*skipped" gherkin-cli.log
+          filters=""
+          for t in $TESTS; do filters="$filters --filter GherkinTests.GeneratedFeatureTests/$t"; done
+          swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli $filters 2>&1 | tee gherkin-cli.log
+
+      # Every feature of the shard must show passed and not skipped, and the log must say N tests ran with 0 failures; one ::error:: per
+      # feature that is not proved, one row per feature in the job summary.  Also when the test step failed, to say which feature did.
+      - name: Prove the scenario ran (not a vacuous green)
+        if: ${{ !cancelled() }}
+        env:
+          FEATURES: ${{ matrix.shard.features }}
+        run: gherkin/prove-xctest-features.sh cli gherkin-cli.log $FEATURES
 
   # ─── cli, Windows ────────────────────────────────────────────────────────────
   # Same toolchain pinning and cache keys as cli.yml's `windows` job and desktop-windows below, so the three share caches.
@@ -258,35 +295,33 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-cli-linux-${{ matrix.feature }}-artifacts
+          name: gherkin-cli-linux-shard-${{ matrix.shard.name }}-artifacts
           path: ${{ runner.temp }}/gherkin-artifacts
           if-no-files-found: warn
 
   cli-windows:
-    name: cli (windows-2022) · ${{ matrix.feature }}
+    name: cli (windows-2022) · ${{ matrix.shard.label }}
     runs-on: windows-2022
     needs: [features, ffmpeg-windows]
     if: needs.features.outputs.cli != '[]'
     strategy:
       fail-fast: false
       matrix:
-        feature: ${{ fromJSON(needs.features.outputs.cli) }}
-    timeout-minutes: 90
+        shard: ${{ fromJSON(needs.features.outputs.cli) }}
+    # one old job's allowance per feature of the shard
+    timeout-minutes: ${{ matrix.shard.minutes['90'] }}
     defaults:
       run:
         shell: bash  # Git Bash; matches cli.yml's `windows` job
     steps:
       - uses: actions/checkout@v4
 
-      - name: Name of this feature's test
-        id: t
-        shell: bash
-        run: |
-          f="${{ matrix.feature }}"
-          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
-
       - name: Fetch test data
-        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-cli.json)
+        env:
+          FEATURES: ${{ matrix.shard.features }}
+        run: |
+          names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-cli.json; done | sort -u)
+          test_data/fetch.sh $names
 
       - name: Set up Swift
         uses: compnerd/gha-setup-swift@main
@@ -426,7 +461,7 @@ jobs:
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        if: ${{ matrix.shard.trail }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -437,19 +472,27 @@ jobs:
 
       - name: Run the Gherkin features against the built star
         # Flags as in cli-linux (release, -enable-testing for the other test target, --disable-swift-testing).
-        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter "GherkinTests.GeneratedFeatureTests/${{ steps.t.outputs.name }}" 2>&1 | tee gherkin-cli.log
-
-      - name: Prove the scenario ran (not a vacuous green)
+        # One swift test for the whole shard: one --filter per feature, so the one release compile serves all of them.
+        env:
+          TESTS: ${{ matrix.shard.tests }}
         run: |
-          grep -E "${{ steps.t.outputs.name }}.*passed" gherkin-cli.log
-          grep -E "Executed 1 test, with 0 failures" gherkin-cli.log
-          ! grep -E "${{ steps.t.outputs.name }}.*skipped" gherkin-cli.log
+          filters=""
+          for t in $TESTS; do filters="$filters --filter GherkinTests.GeneratedFeatureTests/$t"; done
+          swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli $filters 2>&1 | tee gherkin-cli.log
+
+      # Every feature of the shard must show passed and not skipped, and the log must say N tests ran with 0 failures; one ::error:: per
+      # feature that is not proved, one row per feature in the job summary.  Also when the test step failed, to say which feature did.
+      - name: Prove the scenario ran (not a vacuous green)
+        if: ${{ !cancelled() }}
+        env:
+          FEATURES: ${{ matrix.shard.features }}
+        run: gherkin/prove-xctest-features.sh cli gherkin-cli.log $FEATURES
 
       - name: Upload the log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-cli-windows-${{ matrix.feature }}-log
+          name: gherkin-cli-windows-shard-${{ matrix.shard.name }}-log
           path: gherkin-cli.log
           if-no-files-found: warn
 
@@ -459,34 +502,32 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-cli-windows-${{ matrix.feature }}-artifacts
+          name: gherkin-cli-windows-shard-${{ matrix.shard.name }}-artifacts
           path: ${{ runner.temp }}/gherkin-artifacts
           if-no-files-found: warn
 
   cli-macos:
-    name: cli (macos-15) · ${{ matrix.feature }}
+    name: cli (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos]
     if: needs.features.outputs.cli != '[]'
     strategy:
       fail-fast: false
       matrix:
-        feature: ${{ fromJSON(needs.features.outputs.cli) }}
-    timeout-minutes: 60
+        shard: ${{ fromJSON(needs.features.outputs.cli) }}
+    # one old job's allowance per feature of the shard
+    timeout-minutes: ${{ matrix.shard.minutes['60'] }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Name of this feature's test
-        id: t
-        shell: bash
-        run: |
-          f="${{ matrix.feature }}"
-          echo "name=test$(echo "${f:0:1}" | tr a-z A-Z)${f:1}Feature" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-cli.txt), never maintained by hand.
       - name: Fetch test data
-        run: test_data/fetch.sh $(jq -r '.["${{ matrix.feature }}"][]' gherkin/generated/feature-datasets-cli.json)
+        env:
+          FEATURES: ${{ matrix.shard.features }}
+        run: |
+          names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-cli.json; done | sort -u)
+          test_data/fetch.sh $names
 
       - name: Select latest Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -546,7 +587,7 @@ jobs:
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        if: ${{ matrix.shard.trail }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -557,13 +598,21 @@ jobs:
         # is `@testable import star` and --filter still compiles every test target. One release compile.
         # --disable-swift-testing: without it, swift test runs a second (Swift Testing) pass that starts the `star` executable
         # inside the test binary, which parses `-c release` as star's own -c flag and exits 1 after the XCTest pass.
-        run: swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli --filter "GherkinTests.GeneratedFeatureTests/${{ steps.t.outputs.name }}" 2>&1 | tee gherkin-cli.log
-
-      - name: Prove the scenario ran (not a vacuous green)
+        # One swift test for the whole shard: one --filter per feature, so the one release compile serves all of them.
+        env:
+          TESTS: ${{ matrix.shard.tests }}
         run: |
-          grep -E "${{ steps.t.outputs.name }}.*passed" gherkin-cli.log
-          grep -E "Executed 1 test, with 0 failures" gherkin-cli.log
-          ! grep -E "${{ steps.t.outputs.name }}.*skipped" gherkin-cli.log
+          filters=""
+          for t in $TESTS; do filters="$filters --filter GherkinTests.GeneratedFeatureTests/$t"; done
+          swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli $filters 2>&1 | tee gherkin-cli.log
+
+      # Every feature of the shard must show passed and not skipped, and the log must say N tests ran with 0 failures; one ::error:: per
+      # feature that is not proved, one row per feature in the job summary.  Also when the test step failed, to say which feature did.
+      - name: Prove the scenario ran (not a vacuous green)
+        if: ${{ !cancelled() }}
+        env:
+          FEATURES: ${{ matrix.shard.features }}
+        run: gherkin/prove-xctest-features.sh cli gherkin-cli.log $FEATURES
 
   # ─── macOS gui ───────────────────────────────────────────────────────────────
   # ffmpeg/ffprobe are bundled into Star.app by the Xcode project, so the build needs them (cli.yml's
@@ -573,7 +622,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-cli-macos-${{ matrix.feature }}-artifacts
+          name: gherkin-cli-macos-shard-${{ matrix.shard.name }}-artifacts
           path: ${{ runner.temp }}/gherkin-artifacts
           if-no-files-found: warn
 
@@ -595,41 +644,38 @@ jobs:
       platforms: windows
 
   mac-gui:
-    name: mac gui (macos-15) · ${{ matrix.feature }}
+    name: mac gui (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos]
     if: needs.features.outputs.macgui != '[]'
     strategy:
       fail-fast: false
       matrix:
-        feature: ${{ fromJSON(needs.features.outputs.macgui) }}
-    # the `ui` job runs every @ui feature one after the other in the one build
-    timeout-minutes: ${{ matrix.feature == 'ui' && 120 || 90 }}
+        shard: ${{ fromJSON(needs.features.outputs.macgui) }}
+    # a shard runs its features one after the other in the one build (the `ui` shard: every @ui feature); one old job's allowance per feature
+    timeout-minutes: ${{ matrix.shard.name == 'ui' && 120 || matrix.shard.minutes['90'] }}
     steps:
       - uses: actions/checkout@v4
 
-      # The matrix entry `ui` is every @ui feature of this client in one job (see the top of this file); any other entry is one feature.
-      # Either way this lists what the job runs.
+      # The matrix entry is a shard (see the top of this file): its features run one after the other in the one build, `ui` being every
+      # @ui feature of this client.  This turns them into xcodebuild's -only-testing arguments.
       - name: Which features this job runs
         id: t
         shell: bash
         env:
-          UI: ${{ needs.features.outputs.macgui_ui }}
+          FEATURES: ${{ matrix.shard.features }}
         run: |
-          f="${{ matrix.feature }}"
-          if [ "$f" = ui ]; then features=$(jq -r 'join(" ")' <<<"$UI"); else features=$f; fi
-          only=""; count=0
-          for n in $features; do
+          only=""
+          for n in $FEATURES; do
             only="$only -only-testing:starUITests/GeneratedFeatureUITests/test$(echo "${n:0:1}" | tr a-z A-Z)${n:1}Feature"
-            count=$((count + 1))
           done
-          { echo "features=$features"; echo "only=$only"; echo "count=$count"; } >> "$GITHUB_OUTPUT"
+          echo "only=$only" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-mac-gui.txt), never maintained by hand.
       - name: Fetch test data
         env:
-          FEATURES: ${{ steps.t.outputs.features }}
+          FEATURES: ${{ matrix.shard.features }}
         run: |
           names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-mac-gui.json; done | sort -u)
           test_data/fetch.sh $names gui_splash_video
@@ -696,13 +742,13 @@ jobs:
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
       - name: Build the output validator
-        if: ${{ !startsWith(matrix.feature, 'ui') }}
+        if: ${{ matrix.shard.validator }}
         shell: bash
         run: swift build -c release --package-path removal_tools
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        if: ${{ matrix.shard.trail }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -731,25 +777,20 @@ jobs:
             CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
             2>&1 | tee gherkin-gui.log
 
+      # Every "Executed N tests" line must be the shard's N (nothing else ran, nothing was skipped) and every feature must show passed;
+      # one ::error:: per feature that is not proved, one row per feature in the job summary.  Also when the test step failed.
       - name: Prove the scenarios ran (not a vacuous green)
+        if: ${{ !cancelled() }}
         env:
-          FEATURES: ${{ steps.t.outputs.features }}
-          COUNT: ${{ steps.t.outputs.count }}
-        run: |
-          if [ "$COUNT" = 1 ]; then ran="Executed 1 test, with 0 failures"; else ran="Executed $COUNT tests, with 0 failures"; fi
-          grep -E "$ran" gherkin-gui.log
-          # every "Executed N tests" line must be that one: nothing else ran, nothing was skipped
-          ! grep -E "Executed [0-9]+ tests?" gherkin-gui.log | grep -v "$ran"
-          for n in $FEATURES; do
-            grep -E "Test [Cc]ase '.*test$(echo "${n:0:1}" | tr a-z A-Z)${n:1}Feature.*' passed" gherkin-gui.log
-          done
+          FEATURES: ${{ matrix.shard.features }}
+        run: gherkin/prove-xctest-features.sh gui gherkin-gui.log $FEATURES
 
       # The screenshots in here are the only evidence of a GUI failure.
       - name: Upload the xcresult
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-gui-${{ matrix.feature }}-xcresult
+          name: gherkin-gui-shard-${{ matrix.shard.name }}-xcresult
           path: ${{ runner.temp }}/gherkin-gui.xcresult
           if-no-files-found: warn
 
@@ -759,43 +800,31 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-gui-${{ matrix.feature }}-artifacts
+          name: gherkin-gui-shard-${{ matrix.shard.name }}-artifacts
           # the sandboxed UI-test runner writes into its own container
           path: ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gherkin-artifacts
           if-no-files-found: warn
 
   desktop-linux:
-    name: desktop (ubuntu-24.04) · ${{ matrix.feature }}
+    name: desktop (ubuntu-24.04) · ${{ matrix.shard.label }}
     runs-on: ubuntu-24.04
     needs: [features, ffmpeg-linux]
     if: needs.features.outputs.desktop != '[]'
     strategy:
       fail-fast: false
       matrix:
-        feature: ${{ fromJSON(needs.features.outputs.desktop) }}
-    # the `ui` job runs every @ui feature one after the other in the one build
-    timeout-minutes: ${{ matrix.feature == 'ui' && 120 || 75 }}
+        shard: ${{ fromJSON(needs.features.outputs.desktop) }}
+    # a shard runs its features one after the other in the one build (the `ui` shard: every @ui feature); one old job's allowance per feature
+    timeout-minutes: ${{ matrix.shard.name == 'ui' && 120 || matrix.shard.minutes['75'] }}
     steps:
       - uses: actions/checkout@v4
-
-      # The matrix entry `ui` is every @ui feature of this client in one job (see the top of this file); any other entry is one feature.
-      # Either way this lists what the job runs.
-      - name: Which features this job runs
-        id: t
-        shell: bash
-        env:
-          UI: ${{ needs.features.outputs.desktop_ui }}
-        run: |
-          f="${{ matrix.feature }}"
-          if [ "$f" = ui ]; then features=$(jq -r 'join(" ")' <<<"$UI"); else features=$f; fi
-          echo "features=$features" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
       # A @ui feature needs no dataset, and fetch.sh with no names is a usage error, not a no-op.
       - name: Fetch test data
         env:
-          FEATURES: ${{ steps.t.outputs.features }}
+          FEATURES: ${{ matrix.shard.features }}
         run: |
           names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-desktop.json; done | sort -u)
           if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "$FEATURES needs no test data"; fi
@@ -857,13 +886,13 @@ jobs:
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
       - name: Build the output validator
-        if: ${{ !startsWith(matrix.feature, 'ui') }}
+        if: ${{ matrix.shard.validator }}
         shell: bash
         run: swift build -c release --package-path removal_tools
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        if: ${{ matrix.shard.trail }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -891,8 +920,8 @@ jobs:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
         uses: nick-fields/retry@v3
         with:
-          # an attempt of the `ui` job is all its features; a retry runs only those that failed (the script keeps what passed)
-          timeout_minutes: ${{ matrix.feature == 'ui' && 75 || 25 }}
+          # an attempt of a shard is all its features; a retry runs only those that failed (the script keeps what passed)
+          timeout_minutes: ${{ matrix.shard.name == 'ui' && 75 || matrix.shard.minutes['25'] }}
           max_attempts: 2
           retry_wait_seconds: 20
           polling_interval_seconds: 5
@@ -900,13 +929,19 @@ jobs:
           # The killed run's marker would make the next stard report a crashed run and cover the UI with an alert.
           on_retry_command: pkill -x stard || true; rm -rf star-desktop/build/run-markers
           shell: bash
-          command: gherkin/run-desktop-features.sh "$GITHUB_WORKSPACE/daemon/.build/release/stard" ${{ steps.t.outputs.features }}
+          command: gherkin/run-desktop-features.sh "$GITHUB_WORKSPACE/daemon/.build/release/stard" ${{ matrix.shard.features }}
+
+      # run-desktop-features.sh proves each feature itself (exactly one test, it ran, was not skipped, nothing failed); this reads its PASSED
+      # markers after the last attempt: one row per feature in the job summary, one ::error:: per feature without one.
+      - name: Prove the scenario ran (per-feature results)
+        if: ${{ !cancelled() }}
+        run: gherkin/summarize-desktop-features.sh ${{ matrix.shard.features }}
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-desktop-linux-reports-${{ matrix.feature }}
+          name: gherkin-desktop-linux-reports-shard-${{ matrix.shard.name }}
           path: star-desktop/build/gherkin-each
           if-no-files-found: warn
 
@@ -918,45 +953,33 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-desktop-linux-${{ matrix.feature }}-artifacts
+          name: gherkin-desktop-linux-shard-${{ matrix.shard.name }}-artifacts
           path: ${{ runner.temp }}/gherkin-artifacts
           if-no-files-found: warn
 
   desktop-windows:
-    name: desktop (windows-2022) · ${{ matrix.feature }}
+    name: desktop (windows-2022) · ${{ matrix.shard.label }}
     runs-on: windows-2022
     needs: [features, ffmpeg-windows]
     if: needs.features.outputs.desktop != '[]'
     strategy:
       fail-fast: false
       matrix:
-        feature: ${{ fromJSON(needs.features.outputs.desktop) }}
-    # the `ui` job runs every @ui feature one after the other in the one build
-    timeout-minutes: ${{ matrix.feature == 'ui' && 150 || 90 }}
+        shard: ${{ fromJSON(needs.features.outputs.desktop) }}
+    # a shard runs its features one after the other in the one build (the `ui` shard: every @ui feature); one old job's allowance per feature
+    timeout-minutes: ${{ matrix.shard.name == 'ui' && 150 || matrix.shard.minutes['90'] }}
     defaults:
       run:
         shell: bash  # Git Bash; matches cli.yml's `windows` job
     steps:
       - uses: actions/checkout@v4
 
-      # The matrix entry `ui` is every @ui feature of this client in one job (see the top of this file); any other entry is one feature.
-      # Either way this lists what the job runs.
-      - name: Which features this job runs
-        id: t
-        shell: bash
-        env:
-          UI: ${{ needs.features.outputs.desktop_ui }}
-        run: |
-          f="${{ matrix.feature }}"
-          if [ "$f" = ui ]; then features=$(jq -r 'join(" ")' <<<"$UI"); else features=$f; fi
-          echo "features=$features" >> "$GITHUB_OUTPUT"
-
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
       # A @ui feature needs no dataset, and fetch.sh with no names is a usage error, not a no-op.
       - name: Fetch test data
         env:
-          FEATURES: ${{ steps.t.outputs.features }}
+          FEATURES: ${{ matrix.shard.features }}
         run: |
           names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-desktop.json; done | sort -u)
           if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "$FEATURES needs no test data"; fi
@@ -1090,13 +1113,13 @@ jobs:
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
       - name: Build the output validator
-        if: ${{ !startsWith(matrix.feature, 'ui') }}
+        if: ${{ matrix.shard.validator }}
         shell: bash
         run: swift build -c release --package-path removal_tools
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        if: ${{ matrix.shard.trail }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -1119,13 +1142,19 @@ jobs:
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
         # cygpath -m: the JVM wants C:/... , not Git Bash's /d/a/...
-        run: gherkin/run-desktop-features.sh "$(cygpath -m "$GITHUB_WORKSPACE/daemon/.build/release/stard.exe")" ${{ steps.t.outputs.features }}
+        run: gherkin/run-desktop-features.sh "$(cygpath -m "$GITHUB_WORKSPACE/daemon/.build/release/stard.exe")" ${{ matrix.shard.features }}
+
+      # run-desktop-features.sh proves each feature itself (exactly one test, it ran, was not skipped, nothing failed); this reads its PASSED
+      # markers after the last attempt: one row per feature in the job summary, one ::error:: per feature without one.
+      - name: Prove the scenario ran (per-feature results)
+        if: ${{ !cancelled() }}
+        run: gherkin/summarize-desktop-features.sh ${{ matrix.shard.features }}
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-desktop-windows-reports-${{ matrix.feature }}
+          name: gherkin-desktop-windows-reports-shard-${{ matrix.shard.name }}
           path: star-desktop/build/gherkin-each
           if-no-files-found: warn
 
@@ -1135,42 +1164,31 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-desktop-windows-${{ matrix.feature }}-artifacts
+          name: gherkin-desktop-windows-shard-${{ matrix.shard.name }}-artifacts
           path: ${{ runner.temp }}/gherkin-artifacts
           if-no-files-found: warn
 
   desktop-macos:
-    name: desktop (macos-15) · ${{ matrix.feature }}
+    name: desktop (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos]
     if: needs.features.outputs.desktop != '[]'
     strategy:
       fail-fast: false
       matrix:
-        feature: ${{ fromJSON(needs.features.outputs.desktop) }}
-    # the `ui` job runs every @ui feature one after the other in the one build
-    timeout-minutes: ${{ matrix.feature == 'ui' && 150 || 100 }}
+        shard: ${{ fromJSON(needs.features.outputs.desktop) }}
+    # a shard runs its features one after the other in the one build (the `ui` shard: every @ui feature); one old job's allowance per feature
+    # (`minutes` in the matrix entry: capped at 360, the hosted-runner limit)
+    timeout-minutes: ${{ matrix.shard.name == 'ui' && 150 || matrix.shard.minutes['100'] }}
     steps:
       - uses: actions/checkout@v4
-
-      # The matrix entry `ui` is every @ui feature of this client in one job (see the top of this file); any other entry is one feature.
-      # Either way this lists what the job runs.
-      - name: Which features this job runs
-        id: t
-        shell: bash
-        env:
-          UI: ${{ needs.features.outputs.desktop_ui }}
-        run: |
-          f="${{ matrix.feature }}"
-          if [ "$f" = ui ]; then features=$(jq -r 'join(" ")' <<<"$UI"); else features=$f; fi
-          echo "features=$features" >> "$GITHUB_OUTPUT"
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
       # A @ui feature needs no dataset, and fetch.sh with no names is a usage error, not a no-op.
       - name: Fetch test data
         env:
-          FEATURES: ${{ steps.t.outputs.features }}
+          FEATURES: ${{ matrix.shard.features }}
         run: |
           names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-desktop.json; done | sort -u)
           if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "$FEATURES needs no test data"; fi
@@ -1233,13 +1251,13 @@ jobs:
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
       - name: Build the output validator
-        if: ${{ !startsWith(matrix.feature, 'ui') }}
+        if: ${{ matrix.shard.validator }}
         shell: bash
         run: swift build -c release --package-path removal_tools
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
-        if: ${{ contains(fromJSON('["removeAirplanes","autoPreservationKeepsAirplanesOutJpeg","autoPreservationKeepsAirplanesOutBit16","selectiveRemovesOnlyTrails","syntheticSatellites","syntheticAirplanes"]'), matrix.feature) }}
+        if: ${{ matrix.shard.trail }}
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
@@ -1265,8 +1283,8 @@ jobs:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
         uses: nick-fields/retry@v3
         with:
-          # an attempt of the `ui` job is all its features; a retry runs only those that failed (the script keeps what passed)
-          timeout_minutes: ${{ matrix.feature == 'ui' && 75 || 45 }}
+          # an attempt of a shard is all its features; a retry runs only those that failed (the script keeps what passed)
+          timeout_minutes: ${{ matrix.shard.name == 'ui' && 75 || matrix.shard.minutes['45'] }}
           max_attempts: 2
           retry_wait_seconds: 20
           polling_interval_seconds: 5
@@ -1277,13 +1295,19 @@ jobs:
           # A 7GB VM with ~2-3GB free: at full resolution one frame's keypoint reservation (2.2GB) exceeds stard's narrowed memory budget, so
           # frames wait minutes each. stard itself defaults to 1.5 on such a machine; pin it so a roomier moment on the VM cannot pick 1.
           # Not coarser: 1.8 and 2 find no usable star alignment on this runner. The cli, gui and other desktop legs run the default.
-          command: STAR_SYSTEM_FLOOR_MB=512 STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 gherkin/run-desktop-features.sh "$GITHUB_WORKSPACE/daemon/.build/release/stard" ${{ steps.t.outputs.features }}
+          command: STAR_SYSTEM_FLOOR_MB=512 STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 gherkin/run-desktop-features.sh "$GITHUB_WORKSPACE/daemon/.build/release/stard" ${{ matrix.shard.features }}
+
+      # run-desktop-features.sh proves each feature itself (exactly one test, it ran, was not skipped, nothing failed); this reads its PASSED
+      # markers after the last attempt: one row per feature in the job summary, one ::error:: per feature without one.
+      - name: Prove the scenario ran (per-feature results)
+        if: ${{ !cancelled() }}
+        run: gherkin/summarize-desktop-features.sh ${{ matrix.shard.features }}
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-desktop-macos-reports-${{ matrix.feature }}
+          name: gherkin-desktop-macos-reports-shard-${{ matrix.shard.name }}
           path: star-desktop/build/gherkin-each
           if-no-files-found: warn
 
@@ -1291,7 +1315,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gherkin-desktop-macos-${{ matrix.feature }}-artifacts
+          name: gherkin-desktop-macos-shard-${{ matrix.shard.name }}-artifacts
           path: ${{ runner.temp }}/gherkin-artifacts
           if-no-files-found: warn
 
