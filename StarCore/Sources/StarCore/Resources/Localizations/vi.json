@@ -1229,5 +1229,6 @@
   "settings_tab.gpu": "Sử dụng GPU",
   "settings_tab.alignment": "Căn chỉnh",
   "settings_tab.horizon": "Đường chân trời",
-  "settings_tab.memory": "Bộ nhớ"
+  "settings_tab.memory": "Bộ nhớ",
+  "ui.settings": "Cài đặt"
 }

@@ -37,6 +37,7 @@
     "right.neighbors",
     "sequencelocation.open",
     "sequenceprogress.close",
+    "sequenceprogress.settings",
     "settings.dismiss",
     "settings.process",
     "settings.tab.alignment",

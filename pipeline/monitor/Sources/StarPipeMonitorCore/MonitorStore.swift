@@ -44,6 +44,9 @@ public final class MonitorStore {
     /// The menu-bar badge: a red dot when develop is red or the daemon is down.
     public var needsAttention: Bool { developRed || daemonDown }
 
+    /// The colour of the star in the menu bar and the Dock.
+    public var pipelineState: PipelineState { .of(snapshot: snapshot, daemonDown: daemonDown) }
+
     public func tickets(in group: String) -> [TicketSnap] { snapshot?.tickets.filter { $0.group == group } ?? [] }
 
     public var selectedTicket: TicketSnap? { snapshot?.tickets.first { $0.number == selected } }
