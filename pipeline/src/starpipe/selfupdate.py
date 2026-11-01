@@ -21,7 +21,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import home
+from . import gitutil
+from .config import Config, home
 
 LABEL = "com.brianm998.starpiped"
 CRASH_WINDOW_S = 300.0
@@ -119,6 +120,41 @@ def self_test(rt: Path) -> tuple[bool, str]:
     """Run the runtime's own self-test, from its own environment."""
     done = subprocess.run([str(shim_of(rt)), "daemon", "self-test"], capture_output=True, text=True, check=False, timeout=300)
     return done.returncode == 0, (done.stdout + done.stderr).strip()[-800:]
+
+
+def smoke_check(rt: Path) -> tuple[bool, str]:
+    """What the daemon runs on a staged runtime before it may switch: the self-test (which imports every module, starpipe.daemon
+    among them) and `starpipe --version`, both from the runtime's own environment."""
+    ok, out = self_test(rt)
+    if not ok:
+        return False, out
+    done = subprocess.run([str(shim_of(rt)), "--version"], capture_output=True, text=True, check=False, timeout=120)
+    return done.returncode == 0, (done.stdout + done.stderr).strip()[-800:]
+
+
+def runtime_sha(rt: Path) -> str | None:
+    """The full commit a built runtime holds (its `.complete` file)."""
+    marker = rt / ".complete"
+    return marker.read_text().strip() if marker.exists() else None
+
+
+def fetch_target(repo: Path, config: Config) -> str:
+    """Fetch the base branch and return the sha of origin/<base>."""
+    if config.remote == "https":
+        gitutil.remote_fetch(repo, config.owner, config.repo, config.base_branch)
+    else:
+        gitutil.git(repo, "fetch", "--quiet", "origin")
+    return gitutil.git(repo, "rev-parse", f"origin/{config.base_branch}").strip()
+
+
+def pipeline_commits_behind(repo: Path, have: str, target: str) -> int:
+    """Commits on `target` that are not in `have` and touch pipeline/ outside the monitor app (which the daemon does not run).
+    An unknown `have` (not in this repo) counts as behind when it differs."""
+    if have == target:
+        return 0
+    out = gitutil.git(repo, "rev-list", "--count", f"{have}..{target}", "--", "pipeline", ":(exclude)pipeline/monitor",
+                      check=False).strip()
+    return int(out) if out.isdigit() else 1
 
 
 def current_shim() -> Path:
