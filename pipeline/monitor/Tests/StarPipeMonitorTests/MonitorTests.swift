@@ -27,6 +27,28 @@ final class FixtureTests: XCTestCase {
         XCTAssertNil(s.usagePauseUntil)
     }
 
+    func testSnapshotDecodesMaxActive() throws {
+        XCTAssertEqual(try Self.snapshot().maxActive, 2)
+    }
+
+    func testOverviewGroupsActiveSessionsByModelAndOrdersTheLandingQueue() throws {
+        let base = try XCTUnwrap(try Self.snapshot().tickets.first)
+        func ticket(_ n: Int, _ state: String, model: String?, stage: String? = nil) -> TicketSnap {
+            var t = base
+            t.number = n; t.state = state; t.model = model
+            t.stages = stage.map { [StageSnap(stage: $0, attempt: 1, model: model ?? "", started: 1, ended: nil, lockWaitS: 0, outcome: nil)] } ?? []
+            return t
+        }
+        let tickets = [ticket(9, "developing", model: "opus", stage: "develop"), ticket(3, "exploring", model: "sonnet", stage: "explore"),
+                       ticket(5, "review", model: "opus", stage: "review"), ticket(6, "ci", model: nil), ticket(2, "landing", model: nil),
+                       ticket(4, "ready", model: nil), ticket(7, "queued", model: nil), ticket(8, "ci", model: nil)]
+        let groups = Overview.activeModels(tickets)
+        XCTAssertEqual(groups.map(\.model), ["opus", "sonnet"])
+        XCTAssertEqual(groups[0].sessions.map(\.ticket.number), [5, 9])
+        XCTAssertEqual(groups[0].sessions.map(\.stage), ["review", "develop"])
+        XCTAssertEqual(Overview.landingQueue(tickets).map(\.number), [6, 8, 2, 4])
+    }
+
     func testEveryTicketIsInAKnownGroupAndStagesCarryTheirLockWait() throws {
         let s = try Self.snapshot()
         for t in s.tickets { XCTAssertTrue(s.groups.contains(t.group), "\(t.number) is in \(t.group)") }
