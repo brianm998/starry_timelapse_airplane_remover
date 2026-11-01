@@ -4398,7 +4398,7 @@ final class FolderBookmarkStoreTests: XCTestCase {
           store: { disk.bookmarks = $0 })
     }
 
-    private let sky = URL(fileURLWithPath: "/data/sky", isDirectory: true)
+    private let sky = URL(fileURLWithPath: "/data/sky")
 
     /// Saved in one launch, resolved in the next: a second store over the same file finds it, for the folder and for what is inside.
     func testSaveThenResolveAfterReload() {
