@@ -105,7 +105,9 @@ class FakeGitHub(GitHub):
 
     def paged(self, path: str) -> list[dict[str, Any]]:
         if path.startswith("issues?state=open"):
-            return [i for i in self.issues.values() if i["state"] == "open"]
+            wanted = {x.split("=", 1)[1] for x in path.split("&") if x.startswith("labels=")}
+            return [i for i in self.issues.values() if i["state"] == "open"
+                    and all(w in {lab["name"] for lab in i["labels"]} for w in wanted)]
         return []
 
     def issue(self, number: int) -> dict[str, Any]:
@@ -203,6 +205,12 @@ class FakeGitHub(GitHub):
 
     def delete_branch(self, branch: str) -> None:
         self.deleted.append(branch)
+
+    def remove_label(self, number: int, label: str) -> None:
+        self.issues[number]["labels"] = [lab for lab in self.issues[number]["labels"] if lab["name"] != label]
+
+    def ensure_label(self, name: str) -> None:
+        pass
 
     def state_label(self, number: int) -> str | None:
         names = [lab["name"] for lab in self.issues[number]["labels"] if lab["name"].startswith("pipe:")]

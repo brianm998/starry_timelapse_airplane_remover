@@ -61,6 +61,9 @@ def is_ancestor(root: Path, ancestor: str, descendant: str) -> bool:
 
 
 # remote access over https (plan §14.3): the daemon has no ssh agent under launchd ---------------------------------------
+REMOTE_TIMEOUT_S = 600.0
+
+
 def gh_token() -> str:
     """GH_TOKEN / GITHUB_TOKEN from the environment or ~/.star-pipeline/github.env, else `gh auth token`."""
     import os
@@ -99,8 +102,11 @@ def remote_git(root: Path, owner: str, repo: str, *args: str) -> str:
 
     env = {**os.environ, "GIT_ASKPASS": str(_askpass()), "GIT_TERMINAL_PROMPT": "0", "STARPIPE_GH_TOKEN": gh_token()}
     url = f"https://github.com/{owner}/{repo}.git"
-    done = subprocess.run(["git", "-C", str(root), *[a.replace("@URL@", url) for a in args]],
-                          capture_output=True, text=True, check=False, env=env)
+    try:
+        done = subprocess.run(["git", "-C", str(root), *[a.replace("@URL@", url) for a in args]],
+                              capture_output=True, text=True, check=False, env=env, timeout=REMOTE_TIMEOUT_S)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"git {args[0]} timed out after {REMOTE_TIMEOUT_S:.0f}s") from exc
     if done.returncode != 0:
         raise RuntimeError(f"git {args[0]} failed: {done.stderr.strip()[-400:]}")
     return done.stdout

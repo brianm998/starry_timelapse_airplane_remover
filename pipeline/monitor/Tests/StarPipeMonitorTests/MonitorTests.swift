@@ -267,3 +267,27 @@ final class IssueLinksTests: XCTestCase {
         XCTAssertEqual(IssueLinks.parse(""), [])
     }
 }
+
+final class FontScaleTests: XCTestCase {
+    func testBiggerAndSmallerStepAndClampAndResetReturnsToOne() {
+        XCTAssertEqual(FontScale.default, 1.0)
+        XCTAssertEqual(FontScale.bigger(1.0), 1.1, accuracy: 1e-9)
+        XCTAssertEqual(FontScale.smaller(1.0), 0.9, accuracy: 1e-9)
+
+        // Repeated steps do not drift: ten steps up from 1.0 is exactly 2.0, and it stops there.
+        var scale = FontScale.default
+        for _ in 0..<10 { scale = FontScale.bigger(scale) }
+        XCTAssertEqual(scale, 2.0, accuracy: 1e-9)
+        XCTAssertEqual(FontScale.bigger(scale), FontScale.maximum)
+        for _ in 0..<30 { scale = FontScale.smaller(scale) }
+        XCTAssertEqual(scale, FontScale.minimum, accuracy: 1e-9)
+        XCTAssertEqual(FontScale.smaller(scale), FontScale.minimum)
+
+        // A bad stored value falls back to the default; out-of-range values clamp.
+        XCTAssertEqual(FontScale.clamped(.nan), 1.0)
+        XCTAssertEqual(FontScale.clamped(-3), 1.0)
+        XCTAssertEqual(FontScale.clamped(0), 1.0)
+        XCTAssertEqual(FontScale.clamped(9), FontScale.maximum)
+        XCTAssertEqual(FontScale.clamped(0.1), FontScale.minimum)
+    }
+}

@@ -1,4 +1,7 @@
 #!/bin/bash
 # starpipe from any directory: runs the pipeline project's own environment.
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# The directory is resolved PHYSICALLY (cd -P / pwd -P): launchd runs this through ~/.star-pipeline/runtime/current, a symlink,
+# and `uv run --project` through a symlink took the code from the new runtime but the interpreter and packages from the old one's
+# virtualenv. One real path for everything.
+here="$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 exec uv run --quiet --project "$here" starpipe "$@"
