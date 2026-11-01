@@ -375,12 +375,23 @@ class AppViewModel(
     val showRenderVideo: StateFlow<Boolean> = _showRenderVideo.asStateFlow()
     private val _renderVideoAutoStart = MutableStateFlow(false)
     val renderVideoAutoStart: StateFlow<Boolean> = _renderVideoAutoStart.asStateFlow()
-    fun openRenderVideo(autoStart: Boolean = false) { _renderVideoAutoStart.value = autoStart; _showRenderVideo.value = true }
+    /**
+     * How the automatic render is to be done, as chosen in the pre-processing prompt's options step: the dialog starts from it and not from the
+     * config. null for every other render. Held from the end of the run to the render's start, or the dialog's closing.
+     */
+    var pendingRenderSettings: com.star.proto.VideoEncodeSettings? = null
+        private set
+    fun openRenderVideo(autoStart: Boolean = false, settings: com.star.proto.VideoEncodeSettings? = null) {
+        pendingRenderSettings = settings
+        _renderVideoAutoStart.value = autoStart
+        _showRenderVideo.value = true
+    }
     fun closeRenderVideo() {
         // The dialog is the only way to stop a render: closing it over one would leave ffmpeg writing a video nobody is looking at.
         if (isRendering) return
         _showRenderVideo.value = false
         _renderVideoAutoStart.value = false
+        pendingRenderSettings = null
         _renderState.value = RenderState.Choosing
     }
 
@@ -404,6 +415,7 @@ class AppViewModel(
         if (isRendering) return
         // Said once, here: the dialog is not asked to start again by the render prompt's "Yes" after this.
         consumeRenderVideoAutoStart()
+        pendingRenderSettings = null
         _renderState.value = RenderState.Rendering(fileName, 0, 0)
         renderJob = scope.launch {
             try {
@@ -439,14 +451,18 @@ class AppViewModel(
     // ---- process → render prompt flow (macOS Pre/PostProcessingRenderPrompt) ----
     private val _showPreRenderPrompt = MutableStateFlow(false)
     val showPreRenderPrompt: StateFlow<Boolean> = _showPreRenderPrompt.asStateFlow()
+    /** Which step of the pre-processing prompt is up: the question, or the render options after Yes. */
+    private val preRenderFlow = PreRenderPromptFlow()
+    /** [PreRenderPromptFlow.Step.CHOOSING] while the render options are up in place of the question. */
+    val preRenderStep: StateFlow<PreRenderPromptFlow.Step> = preRenderFlow.step
     private val _showPostRenderPrompt = MutableStateFlow(false)
     val showPostRenderPrompt: StateFlow<Boolean> = _showPostRenderPrompt.asStateFlow()
     /** The question at the end of a run, and which run it is about (P11). */
     private val renderQuestion = RenderQuestion()
 
     /** Arm the end-of-run question for the run the next `processAll` (or resume) starts. */
-    private fun armRenderQuestion(render: Boolean, ask: Boolean) {
-        renderQuestion.arm(forRun = (currentSequence?.runsStarted ?: 0) + 1, render = render, ask = ask)
+    private fun armRenderQuestion(render: Boolean, ask: Boolean, settings: com.star.proto.VideoEncodeSettings? = null) {
+        renderQuestion.arm(forRun = (currentSequence?.runsStarted ?: 0) + 1, render = render, ask = ask, settings = settings)
     }
 
     /** Entry point for "Process All": skip-pref → start directly; otherwise show the pre-render prompt. */
@@ -456,18 +472,33 @@ class AppViewModel(
             renderQuestion.disarm()
             svm.processAll()
         } else {
+            preRenderFlow.open()
             _showPreRenderPrompt.value = true
         }
     }
 
-    fun confirmStartProcessing(autoRender: Boolean, dontAskAgain: Boolean) {
+    /** [settings]: how to render at the end of the run when [autoRender], as chosen in the options step; null renders from the config. */
+    fun confirmStartProcessing(autoRender: Boolean, dontAskAgain: Boolean, settings: com.star.proto.VideoEncodeSettings? = null) {
         if (dontAskAgain) prefs.setSkipRenderPrompt(true)
-        armRenderQuestion(render = autoRender, ask = !dontAskAgain)
+        armRenderQuestion(render = autoRender, ask = !dontAskAgain, settings = settings)
+        preRenderFlow.reset()
         _showPreRenderPrompt.value = false
         currentSequence?.processAll()
     }
 
-    fun dismissPreRenderPrompt() { _showPreRenderPrompt.value = false }
+    /** The prompt's Yes: the render options come next, and nothing starts yet. */
+    fun chooseRenderOptions() { preRenderFlow.yes() }
+
+    /** Cancel in the render options: back to the question, with nothing started. */
+    fun cancelRenderOptions() { preRenderFlow.cancelOptions() }
+
+    /** "Use These Settings": process, and render with [settings] when it is done. */
+    fun confirmRenderOptions(settings: com.star.proto.VideoEncodeSettings) {
+        val start = preRenderFlow.confirm(settings) ?: return
+        confirmStartProcessing(start.autoRender, start.dontAskAgain, start.settings)
+    }
+
+    fun dismissPreRenderPrompt() { preRenderFlow.reset(); _showPreRenderPrompt.value = false }
     fun dismissPostRenderPrompt() { _showPostRenderPrompt.value = false }
 
     /** Post-prompt "Preview first": play the final frames from the start. */
@@ -486,8 +517,9 @@ class AppViewModel(
     }
 
     private fun handleProcessingDone() {
+        val settings = renderQuestion.renderSettings   // done() drops them
         when (renderQuestion.done(currentSequence?.runsStarted ?: 0)) {
-            RenderQuestion.Outcome.RENDER -> openRenderVideo(autoStart = true)
+            RenderQuestion.Outcome.RENDER -> openRenderVideo(autoStart = true, settings = settings)
             RenderQuestion.Outcome.ASK -> _showPostRenderPrompt.value = true
             RenderQuestion.Outcome.NOTHING -> Unit
         }
@@ -810,6 +842,13 @@ class AppViewModel(
         closeSequenceProgress()
         currentSequence?.setMode(com.star.desktop.domain.InteractionMode.EDIT)
         openRenderVideo()
+    }
+
+    /** The panel's Settings: the Processing Settings, in edit mode like the panel's other actions. */
+    fun openSettingsForOpenedSequence() {
+        closeSequenceProgress()
+        currentSequence?.setMode(com.star.desktop.domain.InteractionMode.EDIT)
+        openSettings()
     }
 
     /** Total frames in the open sequence — bounds the moving-horizon count stepper. */
@@ -1190,6 +1229,7 @@ class AppViewModel(
         sessionScope?.cancel()
         sessionScope = null
 
+        preRenderFlow.reset()
         _showPreRenderPrompt.value = false
         _showPostRenderPrompt.value = false
         renderQuestion.disarm()
@@ -1204,6 +1244,7 @@ class AppViewModel(
         _renderState.value = RenderState.Choosing
         _showRenderVideo.value = false
         _renderVideoAutoStart.value = false
+        pendingRenderSettings = null
         _showOutlierWindow.value = false
         _showAlignmentWindow.value = false
         _showInfoDialog.value = false
@@ -1312,7 +1353,7 @@ class AppViewModel(
             "align" -> toggleAlignmentWindow()
             "horizon" -> { svm.setMode(com.star.desktop.domain.InteractionMode.EDIT); svm.toggleHorizonPaint() }
             "info" -> openInfoDialog()                  // dev hook: screenshot the Info dialog
-            "prerender" -> _showPreRenderPrompt.value = true   // dev hook: screenshot the pre-render prompt
+            "prerender" -> { preRenderFlow.open(); _showPreRenderPrompt.value = true }   // dev hook: screenshot the pre-render prompt
             "postrender" -> _showPostRenderPrompt.value = true // dev hook: screenshot the post-render prompt
             "multiselect" -> svm.openMultiSelect(SequenceViewModel.RectSelection(100f, 100f, 400f, 400f)) // dev hook
             "settings" -> openSettings() // dev hook: screenshot the Processing Settings dialog

@@ -1229,5 +1229,8 @@
   "settings_tab.gpu": "Uso de GPU",
   "settings_tab.alignment": "Alinhamento",
   "settings_tab.horizon": "Horizonte",
-  "settings_tab.memory": "Memória"
+  "settings_tab.memory": "Memória",
+  "ui.render_options_after_processing_title": "Escolher as configurações do vídeo",
+  "ui.use_these_settings": "Usar estas configurações",
+  "ui.settings": "Ajustes"
 }

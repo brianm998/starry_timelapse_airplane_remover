@@ -1,20 +1,39 @@
 name: CLI Build
 
+# A change that only touches paths that cannot affect the star program does not start this workflow.
+# The same list is decided in pr-gate.yml's `changes` job: keep the two in step.
+# GitHub does not evaluate path filters for tag pushes, so release/* tags (and workflow_dispatch) run everything.
 on:
   push:
     branches: [main, develop]
+    paths-ignore:
+      - 'pipeline/**'
+      - 'plans/**'
+      - 'docs/**'
+      - '.claude/**'
+      - '**/*.md'
+      - '.github/ISSUE_TEMPLATE/**'
     # release/* tags also trigger the workflow so the macos-signed-release job
     # (gated below with `if:`) runs. The standard per-platform smoke builds run
     # on tag pushes too, which is fine — they're cached and cheap.
     tags: ['release/*']
   pull_request:
     branches: [main, develop]
+    paths-ignore:
+      - 'pipeline/**'
+      - 'plans/**'
+      - 'docs/**'
+      - '.claude/**'
+      - '**/*.md'
+      - '.github/ISSUE_TEMPLATE/**'
   workflow_dispatch:
 
 concurrency:
   group: cli-${{ github.workflow }}-${{ github.ref }}
-  # a push to develop must run to the end: it is the baseline the pipeline's CI judge compares PRs with
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # a newer push to develop supersedes the older develop runs still going, so a burst of pushes does not queue several
+  # long runs; release tags have their own group and are never cancelled. The pipeline's develop watch skips cancelled
+  # runs, so the CI judge's baseline stays the last run that ended success or failure.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
 
 jobs:
   # ─── Linux ───────────────────────────────────────────────────────────────────
@@ -81,9 +100,16 @@ jobs:
   # NOTE: release_darwin.sh also builds the GUI and cli/release.sh runs Apple
   # notarization (which requires secrets), so we replicate the CLI-only path
   # inline using the same sub-scripts the macOS release uses.
+  #
+  # macos-15, not macos-14: GitHub retires the macos-14 image on 2026-11-02 and its brownouts already cancel
+  # this job (https://github.com/actions/runner-images/issues/13518). The OpenCV and StarDecisionTrees caches
+  # below carry their own macos15 keys (shared with pr-gate.yml's macos-15 job): the StarDecisionTrees
+  # .swiftmodule only imports under the compiler that built it (see gherkin.yml), so they must not restore
+  # what the remaining macos-14 jobs (macos-signed-release, kotlin-client.yml macos-signed) saved under the
+  # plain keys.
   macos:
-    name: macOS (macos-14)
-    runs-on: macos-14
+    name: macOS (macos-15)
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
@@ -98,9 +124,9 @@ jobs:
           swift --version
 
       - name: Install Eigen3 via Homebrew
-        # macos-14 runners don't ship Eigen pre-installed. StarCpp/Package.swift
+        # macos-15 runners don't ship Eigen pre-installed. StarCpp/Package.swift
         # expects headers at /opt/homebrew/include/eigen3 (Apple Silicon prefix,
-        # which the macos-14 runner uses).
+        # which the macos-15 runner uses).
         run: brew install eigen
 
       - name: Cache OpenCV
@@ -109,7 +135,7 @@ jobs:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-macos15-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -117,7 +143,7 @@ jobs:
           path: |
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
-          key: dt-macos-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+          key: dt-macos15-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
 
       - name: Build OpenCV (if not cached)
         run: |
@@ -723,9 +749,10 @@ jobs:
             exit 1
           fi
 
+  # Runs on every PR after `macos` (no `if:`), so it leaves the retiring macos-14 image too.
   macos-e2e:
     name: macOS end-to-end (installed .pkg)
-    runs-on: macos-14
+    runs-on: macos-15
     needs: macos
     steps:
       - uses: actions/checkout@v4

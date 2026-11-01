@@ -141,7 +141,7 @@ def ticket_lint(file: Path) -> None:
     """Check a ticket body against plan §6.3 (FILE may be - for stdin)."""
     from . import tickets
 
-    result = tickets.lint(_read_body(file))
+    result = tickets.lint(_read_body(file), allow_fable=config_mod.load().allow_fable)
     for message in result.errors:
         click.echo(f"error    {message}")
     for message in result.warnings:
@@ -156,7 +156,11 @@ def ticket_lint(file: Path) -> None:
 @click.option("--body-file", required=True, type=click.Path(path_type=Path), help="Ticket body; - for stdin.")
 @click.option("--blocked-by", default="", help="Comma-separated issue numbers that must land first.")
 @click.option("--priority", type=click.Choice(["p0", "p1", "p2", "p3"]), default=None)
-def ticket_new(title: str, body_file: Path, blocked_by: str, priority: str | None) -> None:
+@click.option("--propose", is_flag=True, help="File it for the owner to approve (starpipe approve) instead of running it.")
+@click.option("--by", default=None, help="Who is filing (default: $STARPIPE_AGENT, else 'interactive').")
+@click.option("--force", is_flag=True, help="File even if an open issue has a near-identical title.")
+def ticket_new(title: str, body_file: Path, blocked_by: str, priority: str | None, propose: bool, by: str | None,
+               force: bool) -> None:
     """Lint, file, label and link a ticket; prints its number and URL."""
     from . import tickets
     from .github import GitHub
@@ -167,14 +171,65 @@ def ticket_new(title: str, body_file: Path, blocked_by: str, priority: str | Non
         raise click.BadParameter("expected numbers like 41,42", param_hint="--blocked-by") from exc
     cfg = config_mod.load()
     try:
-        number = tickets.file_ticket(GitHub(cfg), title, _read_body(body_file), blockers, priority)
+        number = tickets.file_ticket(GitHub(cfg), title, _read_body(body_file), blockers, priority, propose=propose,
+                                     by=by or os.environ.get("STARPIPE_AGENT") or "interactive", force=force,
+                                     max_open=cfg.max_open_tickets, max_proposed=cfg.max_proposed,
+                                     allow_fable=cfg.allow_fable)
     except tickets.FilingError as exc:
         raise click.ClickException(str(exc)) from exc
-    click.echo(f"#{number} https://github.com/{cfg.owner}/{cfg.repo}/issues/{number}")
+    click.echo(f"#{number} https://github.com/{cfg.owner}/{cfg.repo}/issues/{number}" + (" (proposed)" if propose else ""))
 
 
 def _num(value: str) -> int:
     return int(value.lstrip("#"))
+
+
+@main.command()
+def proposals() -> None:
+    """The tickets waiting for the owner's approval, and who filed each."""
+    from . import tickets
+    from .github import GitHub, GitHubError
+
+    try:
+        found = tickets.proposals(GitHub(config_mod.load()))
+    except GitHubError as exc:
+        raise click.ClickException(str(exc)) from exc
+    for p in found:
+        click.echo(f"#{p.number:<5} {p.title[:70]:<70}  by {p.by}")
+    if not found:
+        click.echo("no proposals waiting")
+
+
+@main.command()
+@click.argument("numbers", nargs=-1, required=True, type=_num)
+@click.option("--priority", type=click.Choice(["p0", "p1", "p2", "p3"]), default=None)
+def approve(numbers: tuple[int, ...], priority: str | None) -> None:
+    """Approve proposed tickets: they join the pipeline's queue."""
+    from . import tickets
+    from .github import GitHub
+
+    cfg = config_mod.load()
+    for n in numbers:
+        try:
+            tickets.approve(GitHub(cfg), n, priority, cfg.max_open_tickets)
+        except tickets.FilingError as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(f"#{n} approved")
+
+
+@main.command()
+@click.argument("number", type=_num)
+@click.argument("reason", required=False, default="")
+def reject(number: int, reason: str) -> None:
+    """Turn a proposal down: comment, close as not planned."""
+    from . import tickets
+    from .github import GitHub
+
+    try:
+        tickets.reject(GitHub(config_mod.load()), number, reason)
+    except tickets.FilingError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"#{number} rejected")
 
 
 def _client() -> Any:
@@ -211,6 +266,10 @@ def status(as_json: bool) -> None:
     if data.get("daemon"):
         d = data["daemon"]
         click.echo(f"daemon up, pid {d['pid']}" + (f"  last error: {d['error']}" if d.get("error") else ""))
+    res = data.get("resources")
+    if res:
+        click.echo(f"LLM sessions {res['llm_active']}/{res['llm_max']} · CPU {res['cpu_pct']:.0f}% (limit {res['cpu_limit']:.0f}%)"
+                   + (f" · new sessions wait: {res['waiting']}" if res.get("waiting") else ""))
     if data.get("pause"):
         click.echo(f"PAUSED: {data['pause']}")
     if data.get("usage_pause_until"):
@@ -272,11 +331,45 @@ def retry(number: int, stage: str) -> None:
 
 
 @main.command()
+@click.option("--llm", type=int, default=None, help="Most LLM sessions running at once.")
+@click.option("--cpu", type=float, default=None, help="Do not start another session while CPU use is above this percent.")
+@click.option("--reset", is_flag=True, help="Go back to the values in config.toml.")
+def limits(llm: int | None, cpu: float | None, reset: bool) -> None:
+    """Show or change what limits starting work: LLM sessions at once, and CPU use (a runtime override of config.toml)."""
+    from . import client as client_mod
+
+    try:
+        client = _client()
+        res = client.call("POST", "/v1/limits", {"llm": llm, "cpu": cpu, "reset": reset}) if (llm or cpu or reset) \
+            else client.call("GET", "/v1/limits")
+    except (client_mod.DaemonDown, RuntimeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"LLM sessions {res['llm_active']}/{res['llm_max']} · CPU {res['cpu_pct']:.0f}% (limit {res['cpu_limit']:.0f}%)"
+               + (" · overridden at runtime" if res["overridden"] else " · from config.toml")
+               + (f" · new sessions wait: {res['waiting']}" if res["waiting"] else ""))
+
+
+@main.command()
+@click.argument("numbers", nargs=-1, required=True, type=_num)
+def requeue(numbers: tuple[int, ...]) -> None:
+    """Move tickets from their own PR and CI onto the landing train (their PRs are closed; the next batch carries them)."""
+    for n in numbers:
+        _post(f"/v1/tickets/{n}/requeue", {})
+
+
+@main.command()
 @click.argument("number", type=_num)
 @click.argument("reason", required=False, default="")
 def cancel(number: int, reason: str) -> None:
     """Stop the ticket and keep its branch."""
     _post(f"/v1/tickets/{number}/cancel", {"reason": reason})
+
+
+@main.command("allow-opus")
+@click.argument("number", type=_num)
+def allow_opus(number: int) -> None:
+    """Let a ticket's own `model_<stage>: opus` choices apply (opus is otherwise never used)."""
+    _post(f"/v1/tickets/{number}/allow-opus", {})
 
 
 @main.command()
@@ -379,9 +472,30 @@ def daemon_run() -> None:
     import logging
 
     from . import daemon as daemon_mod
+    from . import selfupdate
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    selfupdate.record_start()
+    if selfupdate.crash_loop():  # the runtime we switched to does not stay up: go back, and say so
+        name = selfupdate.rollback(_plist_path())
+        from .db import Database
+        from .notify import Notifier
+
+        Notifier(Database()).alert("runtime-rollback", None, f"the new runtime kept crashing: rolled back to {name}")
+        sys.exit(1)
     asyncio.run(daemon_mod.build(config_mod.load()).run())
+
+
+@daemon.command("self-test")
+def daemon_self_test() -> None:
+    """Check this runtime can run the daemon: every module imports, config and database open, the SDK and prompts are there."""
+    from . import selfupdate
+
+    problems = selfupdate.self_test_in_process()
+    for p in problems:
+        click.echo(f"PROBLEM  {p}")
+    click.echo("ok" if not problems else f"{len(problems)} problem(s)")
+    sys.exit(1 if problems else 0)
 
 
 LABEL = "com.brianm998.starpiped"
@@ -393,21 +507,34 @@ def _plist_path() -> Path:
 
 @daemon.command("install")
 def daemon_install() -> None:
-    """Write the launchd agent and load it (KeepAlive, starts at login)."""
-    from . import daemon as daemon_mod
+    """Pin a runtime at origin/<base branch>, write the launchd agent to run it, and load it (KeepAlive, starts at login).
 
-    checkout = daemon_mod.checkout_root(config_mod.load(), Path.cwd())
-    # run from the main checkout, not a worktree that will be deleted; self-update (§14.4) will pin it later
-    main_shim = checkout / "pipeline" / "bin" / "starpipe"
-    shim = main_shim if main_shim.exists() else Path(__file__).resolve().parents[2] / "bin" / "starpipe"
+    The daemon never runs from the main checkout (the owner's working tree): it runs from `~/.star-pipeline/runtime/current`, a
+    copy of pipeline/ at one commit, and updates itself when origin/develop has newer pipeline code. An existing `current` is
+    kept. The checkout is only read."""
+    from . import daemon as daemon_mod
+    from . import selfupdate
+
+    cfg = config_mod.load()
+    checkout = daemon_mod.checkout_root(cfg, Path.cwd())
+    if selfupdate.link("current") is None:
+        try:
+            sha = selfupdate.fetch_target(checkout, cfg)
+            rt = selfupdate.build(checkout, sha, selfupdate.real_sync)
+        except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+            raise click.ClickException(f"could not build the runtime at origin/{cfg.base_branch}: {exc}") from exc
+    else:
+        rt = None
     template = (Path(__file__).resolve().parents[2] / "launchd" / f"{LABEL}.plist.in").read_text()
-    out = (template.replace("@SHIM@", str(shim)).replace("@CHECKOUT@", str(checkout))
+    out = (template.replace("@SHIM@", str(selfupdate.current_shim())).replace("@CHECKOUT@", str(checkout))
            .replace("@HOME@", str(config_mod.home())).replace("@PATH@", os.environ.get("PATH", "/usr/bin:/bin")))
     plistlib.loads(out.encode())  # refuse to write a malformed agent
     (config_mod.home() / "logs").mkdir(parents=True, exist_ok=True)
     _plist_path().parent.mkdir(parents=True, exist_ok=True)
     _plist_path().write_text(out)
-    subprocess.run(["launchctl", "bootstrap", f"gui/{os.getuid()}", str(_plist_path())], check=False)
+    if rt is not None:
+        selfupdate.switch(rt, _plist_path(), restart=False)
+    selfupdate.real_launchctl(["bootstrap", f"gui/{os.getuid()}", str(_plist_path())])
     click.echo(f"installed {_plist_path()}")
 
 
@@ -436,6 +563,56 @@ def daemon_stop() -> None:
         raise click.ClickException("the daemon is not running") from exc
     os.kill(pid, signal.SIGTERM)
     click.echo(f"sent SIGTERM to {pid}")
+
+
+@main.command("self-update")
+@click.option("--ref", default=None, help="What to build the runtime from (default origin/<base branch>).")
+@click.option("--now", is_flag=True, help="Switch even if stage sessions are running (they resume from their recorded ids).")
+@click.option("--dry-run", is_flag=True, help="Build and self-test the new runtime, but do not switch.")
+@click.option("--rollback", "do_rollback", is_flag=True, help="Go back to the previous runtime.")
+@click.option("--wait-minutes", default=60, show_default=True, help="How long to wait for the sessions to finish.")
+def self_update(ref: str | None, now: bool, dry_run: bool, do_rollback: bool, wait_minutes: int) -> None:
+    """Pin the daemon to a copy of pipeline/ at one commit, so a moving checkout cannot change it underneath (plan §14.4)."""
+    from . import client as client_mod
+    from . import daemon as daemon_mod
+    from . import gitutil, selfupdate
+
+    if do_rollback:
+        try:
+            click.echo(f"rolled back to {selfupdate.rollback(_plist_path())}")
+        except RuntimeError as exc:
+            raise click.ClickException(str(exc)) from exc
+        return
+    cfg = config_mod.load()
+    repo = daemon_mod.checkout_root(cfg, Path.cwd())
+    if ref is None:
+        ref = f"origin/{cfg.base_branch}"
+        gitutil.remote_fetch(repo, cfg.owner, cfg.repo, cfg.base_branch)
+
+    def sessions() -> int:
+        try:
+            return int(client_mod.Client(cfg).call("GET", "/v1/runtime")["sessions"])
+        except client_mod.DaemonDown:
+            return 0
+
+    try:
+        report = selfupdate.update(repo, ref, _plist_path(), sessions=sessions, wait_s=wait_minutes * 60.0, now=now, dry_run=dry_run)
+    except (RuntimeError, OSError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"{report.sha[:12]}: {report.detail}")
+    sys.exit(0 if (report.switched or (dry_run and report.tested) or report.detail.startswith("already")) else 1)
+
+
+@main.command()
+def runtime() -> None:
+    """Which pinned runtime the daemon runs, and which one is kept for rollback."""
+    from . import selfupdate
+
+    for name in ("current", "previous"):
+        rt = selfupdate.link(name)
+        click.echo(f"{name:<9}{rt.name if rt else '-'}" + (f"  ({rt})" if rt else ""))
+    if selfupdate.link("current") is None:
+        click.echo("the daemon runs from the checkout; `starpipe self-update` pins it")
 
 
 if __name__ == "__main__":  # pragma: no cover

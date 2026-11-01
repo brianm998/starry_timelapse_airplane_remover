@@ -27,6 +27,28 @@ final class FixtureTests: XCTestCase {
         XCTAssertNil(s.usagePauseUntil)
     }
 
+    func testSnapshotDecodesMaxActive() throws {
+        XCTAssertEqual(try Self.snapshot().maxActive, 2)
+    }
+
+    func testOverviewGroupsActiveSessionsByModelAndOrdersTheLandingQueue() throws {
+        let base = try XCTUnwrap(try Self.snapshot().tickets.first)
+        func ticket(_ n: Int, _ state: String, model: String?, stage: String? = nil) -> TicketSnap {
+            var t = base
+            t.number = n; t.state = state; t.model = model
+            t.stages = stage.map { [StageSnap(stage: $0, attempt: 1, model: model ?? "", started: 1, ended: nil, lockWaitS: 0, outcome: nil)] } ?? []
+            return t
+        }
+        let tickets = [ticket(9, "developing", model: "opus", stage: "develop"), ticket(3, "exploring", model: "sonnet", stage: "explore"),
+                       ticket(5, "review", model: "opus", stage: "review"), ticket(6, "ci", model: nil), ticket(2, "landing", model: nil),
+                       ticket(4, "ready", model: nil), ticket(7, "queued", model: nil), ticket(8, "ci", model: nil)]
+        let groups = Overview.activeModels(tickets)
+        XCTAssertEqual(groups.map(\.model), ["opus", "sonnet"])
+        XCTAssertEqual(groups[0].sessions.map(\.ticket.number), [5, 9])
+        XCTAssertEqual(groups[0].sessions.map(\.stage), ["review", "develop"])
+        XCTAssertEqual(Overview.landingQueue(tickets).map(\.number), [6, 8, 2, 4])
+    }
+
     func testEveryTicketIsInAKnownGroupAndStagesCarryTheirLockWait() throws {
         let s = try Self.snapshot()
         for t in s.tickets { XCTAssertTrue(s.groups.contains(t.group), "\(t.number) is in \(t.group)") }
@@ -34,6 +56,24 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(running.stages.first?.stage, "develop")
         XCTAssertEqual(running.stages.first?.lockWaitS, 0)
         XCTAssertNil(running.stages.first?.ended)
+    }
+}
+
+extension FixtureTests {
+    func testTicketsDecodeTheRunningStagesModel() throws {
+        let s = try Self.snapshot()
+        let running = try XCTUnwrap(s.tickets.first { $0.group == "running" })
+        XCTAssertEqual(running.model, "opus")
+        XCTAssertEqual(running.stages.first?.model, "opus")
+        XCTAssertNil(try XCTUnwrap(s.tickets.first { $0.group == "queued" }).model)
+        // a snapshot from a daemon that predates the field still decodes
+        let old = try JSONSerialization.jsonObject(with: Self.fixture()) as! [String: Any]
+        var tickets = old["tickets"] as! [[String: Any]]
+        tickets[0].removeValue(forKey: "model")
+        var stripped = old
+        stripped["tickets"] = tickets
+        let decoded = try JSONDecoder().decode(Snapshot.self, from: JSONSerialization.data(withJSONObject: stripped))
+        XCTAssertNil(decoded.tickets[0].model)
     }
 }
 
@@ -253,5 +293,168 @@ final class ClientTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? APIError, .status(409, "no open question"))
         }
+    }
+}
+
+final class IssueLinksTests: XCTestCase {
+    func testLinksSplitOnAnyWhitespaceDropEmptiesAndCollapseDuplicates() {
+        let a = "https://github.com/brianm998/starry_timelapse_airplane_remover/issues/8"
+        let b = "https://github.com/brianm998/starry_timelapse_airplane_remover/issues/9"
+        let c = "https://github.com/brianm998/starry_timelapse_airplane_remover/issues/10"
+        let text = "  \(a)\r\n\n\n\(b)\t\(a) \(c)\n\t \n\(b)\n"
+        XCTAssertEqual(IssueLinks.parse(text), [a, b, c])
+        XCTAssertEqual(IssueLinks.parse(" \n\t\r\n "), [])
+        XCTAssertEqual(IssueLinks.parse(""), [])
+    }
+
+    func testTheEnqueueRequestCarriesOnlyNonDefaultModelChoices() {
+        let body = EnqueueRequest.body(numbers: [8, 9], choices: ["develop": "sonnet", "review": "Default", "fix": "opus", "explore": ""])
+        XCTAssertEqual(body["numbers"] as? [Int], [8, 9])
+        XCTAssertEqual(body["models"] as? [String: String], ["develop": "sonnet", "fix": "opus"])
+
+        let none = EnqueueRequest.body(numbers: [8], choices: ["develop": "Default"])
+        XCTAssertEqual(none["numbers"] as? [Int], [8])
+        XCTAssertNil(none["models"])
+        XCTAssertNil(EnqueueRequest.body(numbers: [8], choices: [:])["models"])
+    }
+
+    func testAResolvedIssueDecodesTheAllowedModelsAndStages() throws {
+        let json = #"{"number": 8, "title": "Fix", "state": "open", "queued": false, "models": ["opus", "sonnet", "haiku", "fable"], "stages": ["explore", "ci_fix"]}"#
+        let issue = try JSONDecoder().decode(ResolvedIssue.self, from: Data(json.utf8))
+        XCTAssertEqual(issue.models, ["opus", "sonnet", "haiku", "fable"])
+        XCTAssertEqual(issue.stages, ["explore", "ci_fix"])
+
+        let old = #"{"number": 8, "title": "Fix", "state": "open", "queued": true}"#
+        let older = try JSONDecoder().decode(ResolvedIssue.self, from: Data(old.utf8))
+        XCTAssertNil(older.models)
+        XCTAssertNil(older.stages)
+    }
+}
+
+final class FontScaleTests: XCTestCase {
+    func testBiggerAndSmallerStepAndClampAndResetReturnsToOne() {
+        XCTAssertEqual(FontScale.default, 1.0)
+        XCTAssertEqual(FontScale.bigger(1.0), 1.1, accuracy: 1e-9)
+        XCTAssertEqual(FontScale.smaller(1.0), 0.9, accuracy: 1e-9)
+
+        // Repeated steps do not drift: ten steps up from 1.0 is exactly 2.0, and it stops there.
+        var scale = FontScale.default
+        for _ in 0..<10 { scale = FontScale.bigger(scale) }
+        XCTAssertEqual(scale, 2.0, accuracy: 1e-9)
+        XCTAssertEqual(FontScale.bigger(scale), FontScale.maximum)
+        for _ in 0..<30 { scale = FontScale.smaller(scale) }
+        XCTAssertEqual(scale, FontScale.minimum, accuracy: 1e-9)
+        XCTAssertEqual(FontScale.smaller(scale), FontScale.minimum)
+
+        // A bad stored value falls back to the default; out-of-range values clamp.
+        XCTAssertEqual(FontScale.clamped(.nan), 1.0)
+        XCTAssertEqual(FontScale.clamped(-3), 1.0)
+        XCTAssertEqual(FontScale.clamped(0), 1.0)
+        XCTAssertEqual(FontScale.clamped(9), FontScale.maximum)
+        XCTAssertEqual(FontScale.clamped(0.1), FontScale.minimum)
+    }
+}
+
+@MainActor
+final class UpdateTests: XCTestCase {
+    private func client() -> APIClient {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [StubProtocol.self]
+        return APIClient(config: APIConfig(baseURL: URL(string: "http://127.0.0.1:1")!, token: "tok"), session: URLSession(configuration: cfg))
+    }
+
+    private func answer(_ json: String) {
+        StubProtocol.handler = { _ in (200, Data(json.utf8)) }
+    }
+
+    /// A store whose "remembered sha" lives in a local box, like UserDefaults does in the app.
+    private func makeStore(sourceSHA: String?, remembered: Box = Box()) -> (MonitorStore, Box, Notices) {
+        let notices = Notices()
+        let store = MonitorStore(client: client(), sourceSHA: sourceSHA,
+                                 lastNotifiedUpdate: { remembered.sha }, setLastNotifiedUpdate: { remembered.sha = $0 })
+        store.onUpdate = { notices.alerts.append($0) }
+        return (store, remembered, notices)
+    }
+
+    final class Box { var sha: String? }
+    final class Notices { var alerts: [Alert] = [] }
+
+    func testNotifiesOncePerLatestShaWhenBehind() async throws {
+        let (store, remembered, notices) = makeStore(sourceSHA: "aaaa111")
+        answer(#"{"behind": 3, "latest": "bbbb222"}"#)
+        await store.checkForUpdate()
+        await store.checkForUpdate()  // the hourly check finds the same version: no second notice
+        XCTAssertEqual(notices.alerts.count, 1)
+        XCTAssertEqual(notices.alerts.first?.title, "Pipeline monitor update available")
+        XCTAssertEqual(notices.alerts.first?.body, "3 new commits — run `make -C pipeline/monitor app`")
+        XCTAssertEqual(remembered.sha, "bbbb222")
+        XCTAssertTrue(store.updateAvailable)
+
+        answer(#"{"behind": 4, "latest": "cccc333"}"#)  // develop moved on: announce again
+        await store.checkForUpdate()
+        XCTAssertEqual(notices.alerts.count, 2)
+        XCTAssertEqual(remembered.sha, "cccc333")
+
+        // a relaunch remembers what was announced
+        let (relaunched, _, again) = makeStore(sourceSHA: "aaaa111", remembered: remembered)
+        await relaunched.checkForUpdate()
+        XCTAssertTrue(again.alerts.isEmpty)
+        XCTAssertTrue(relaunched.updateAvailable)
+    }
+
+    func testOneNewCommitIsSingular() {
+        let n = MonitorUpdates.notification(for: MonitorUpdateInfo(behind: 1, latest: "x"), lastNotified: nil)
+        XCTAssertEqual(n?.alert.body, "1 new commit — run `make -C pipeline/monitor app`")
+    }
+
+    func testNeverNotifiesWhenUpToDateOrUnstamped() async throws {
+        let (current, _, currentNotices) = makeStore(sourceSHA: "aaaa111")
+        answer(#"{"behind": 0, "latest": "aaaa111"}"#)
+        await current.checkForUpdate()
+        XCTAssertTrue(currentNotices.alerts.isEmpty)
+        XCTAssertFalse(current.updateAvailable)
+
+        let (unknown, _, unknownNotices) = makeStore(sourceSHA: "aaaa111")
+        answer(#"{"behind": null, "latest": "bbbb222"}"#)
+        await unknown.checkForUpdate()
+        XCTAssertTrue(unknownNotices.alerts.isEmpty)
+        XCTAssertFalse(unknown.updateAvailable)
+
+        // an unstamped build (`swift run`) does not even ask, so it can never report an update
+        for sha in [nil, ""] {
+            let (unstamped, remembered, notices) = makeStore(sourceSHA: sha)
+            StubProtocol.handler = { _ in
+                XCTFail("an unstamped build must not call the daemon")
+                return (200, Data(#"{"behind": 5, "latest": "bbbb222"}"#.utf8))
+            }
+            await unstamped.checkForUpdate()
+            XCTAssertTrue(notices.alerts.isEmpty)
+            XCTAssertNil(remembered.sha)
+            XCTAssertFalse(unstamped.updateAvailable)
+        }
+    }
+
+    func testAnUpdateNoticeIsNotHeldByQuietHours() {
+        let alert = Alert(kind: .monitorUpdate, ticket: nil, title: "t", body: "b")
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let night = cal.date(from: DateComponents(year: 2026, month: 10, day: 31, hour: 23))!
+        XCTAssertTrue(Alerts.isQuiet(night, calendar: cal))
+        XCTAssertTrue(Alerts.shouldDeliver(alert, at: night, calendar: cal))
+    }
+
+    func testTheClientAsksForTheStampedShaAndDecodesBehindAndNull() async throws {
+        StubProtocol.handler = { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer tok")
+            XCTAssertEqual(request.url?.path, "/v1/monitor-update")
+            XCTAssertEqual(URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first?.value, "abc123")
+            return (200, Data(#"{"behind": 2, "latest": "def456"}"#.utf8))
+        }
+        let info = try await client().monitorUpdate(sha: "abc123")
+        XCTAssertEqual(info, MonitorUpdateInfo(behind: 2, latest: "def456"))
+
+        answer(#"{"behind": null, "latest": null}"#)
+        let unknown = try await client().monitorUpdate(sha: "abc123")
+        XCTAssertEqual(unknown, MonitorUpdateInfo(behind: nil, latest: nil))
     }
 }

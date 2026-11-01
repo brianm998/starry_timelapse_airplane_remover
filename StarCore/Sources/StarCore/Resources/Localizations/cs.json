@@ -1229,5 +1229,8 @@
   "settings_tab.gpu": "Využití GPU",
   "settings_tab.alignment": "Zarovnání",
   "settings_tab.horizon": "Horizont",
-  "settings_tab.memory": "Paměť"
+  "settings_tab.memory": "Paměť",
+  "ui.render_options_after_processing_title": "Vyberte nastavení videa",
+  "ui.use_these_settings": "Použít tato nastavení",
+  "ui.settings": "Nastavení"
 }

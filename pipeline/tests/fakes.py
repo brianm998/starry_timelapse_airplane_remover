@@ -79,10 +79,16 @@ class FakeGitHub(GitHub):
         self.prs: dict[int, dict[str, Any]] = {}
         self.ci: dict[str, Ci] = {}
         self.develop_ci: Ci = []
+        self.develop_history: list[Ci] = []  # older develop runs, newest first, after develop_ci
         self.logs: dict[int, str] = {}
         self.reruns: list[int] = []
         self.deleted: list[str] = []
         self.phantom = False
+        self.ci_hook: Callable[[str], Ci] | None = None  # the CI result for a commit, decided when it is asked for
+        self.closed_prs: list[tuple[int, str]] = []
+        self.develop_sha = "develop"
+        self.cancelled_branches: list[str] = []
+        self.cancelled_runs: list[int] = []
         self.run_ids: dict[tuple[str, str], int] = {}
         self.run_jobs_by_id: dict[int, list[dict[str, Any]]] = {}
         self.issues: dict[int, dict[str, Any]] = {}
@@ -105,10 +111,14 @@ class FakeGitHub(GitHub):
 
     def paged(self, path: str) -> list[dict[str, Any]]:
         if path.startswith("issues?state=open"):
-            return [i for i in self.issues.values() if i["state"] == "open"]
+            wanted = {x.split("=", 1)[1] for x in path.split("&") if x.startswith("labels=")}
+            return [i for i in self.issues.values() if i["state"] == "open"
+                    and all(w in {lab["name"] for lab in i["labels"]} for w in wanted)]
         return []
 
     def issue(self, number: int) -> dict[str, Any]:
+        if number not in self.issues:
+            raise GitHubError(f"gh api issues/{number} failed: HTTP 404: Not Found")
         return self.issues[number]
 
     def timeline(self, number: int) -> list[dict[str, Any]]:
@@ -134,9 +144,13 @@ class FakeGitHub(GitHub):
 
     def add_labels(self, number: int, labels: list[str]) -> None:
         self.issues[number]["labels"] += [{"name": n} for n in labels]
+        self.timelines[number] += [{"event": "labeled", "label": {"name": n}, "actor": {"login": OWNER}} for n in labels]
 
     def close_issue(self, number: int, reason: str = "not_planned") -> None:
         self.issues[number]["state"] = "closed"
+
+    def set_body(self, number: int, body: str) -> None:
+        self.issues[number]["body"] = body
 
     # pull requests and CI ---------------------------------------------------------------------------------------------
     def _head(self, branch: str) -> str:
@@ -152,6 +166,17 @@ class FakeGitHub(GitHub):
     def update_pr(self, number: int, body: str) -> None:
         self.prs[number]["body"] = body
 
+    def cancel_runs(self, branch: str) -> int:
+        self.cancelled_branches.append(branch)
+        return 1
+
+    def cancel_run(self, run_id: int) -> None:
+        self.cancelled_runs.append(run_id)
+
+    def close_pr(self, number: int, comment: str = "") -> None:
+        self.closed_prs.append((number, comment))
+        self.prs[number]["state"] = "closed"
+
     def pr(self, number: int) -> dict[str, Any]:
         pr = self.prs[number]
         return {**pr, "head": {"sha": self._head(pr["branch"])}}
@@ -160,17 +185,28 @@ class FakeGitHub(GitHub):
         return next((p for p in self.prs.values() if p["branch"] == branch), None)
 
     def workflow_runs(self, sha: str | None = None, branch: str | None = None, per_page: int = 50) -> list[dict[str, Any]]:
-        key = "develop" if branch else (sha or "")
-        jobs = self.develop_ci if branch else self.ci.get(key, DEFAULT_CI)
+        if branch:
+            generations = [("develop", self.develop_ci), *((f"develop~{n}", ci) for n, ci in enumerate(self.develop_history, 1))]
+        else:
+            key = sha or ""
+            generations = [(key, self.ci_hook(key) if self.ci_hook else self.ci.get(key, DEFAULT_CI))]
         runs: list[dict[str, Any]] = []
-        for wf in dict.fromkeys(w for w, *_ in jobs):
-            run_id = self.run_ids.setdefault((key, wf), 1000 + len(self.run_ids))
-            self.run_jobs_by_id[run_id] = [{"name": j, "status": st, "conclusion": c, "completed_at": None}
-                                           for w, j, st, c in jobs if w == wf]
-            runs.append({"id": run_id, "name": wf, "status": "completed", "head_sha": key})
+        for key, jobs in generations:  # newest first, like the API
+            for wf in dict.fromkeys(w for w, *_ in jobs):
+                run_id = self.run_ids.setdefault((key, wf), 1000 + len(self.run_ids))
+                mine = [(j, st, c) for w, j, st, c in jobs if w == wf]
+                self.run_jobs_by_id[run_id] = [{"name": j, "status": st, "conclusion": c, "completed_at": None}
+                                               for j, st, c in mine]
+                done = all(st == "completed" for _, st, _ in mine)
+                conclusions = {c for _, _, c in mine}
+                # a run's own conclusion: cancelled when the runner cancelled all of it, as a newer push does
+                conclusion = ("cancelled" if conclusions == {"cancelled"} else "success" if conclusions == {"success"}
+                              else "failure") if done else None
+                runs.append({"id": run_id, "name": wf, "status": "completed" if done else "in_progress", "conclusion": conclusion,
+                             "head_sha": self.develop_sha if key == "develop" else key})
         return runs
 
-    def run_jobs(self, run_id: int) -> list[dict[str, Any]]:
+    def run_jobs(self, run_id: int, version: str | None = None) -> list[dict[str, Any]]:
         return self.run_jobs_by_id.get(run_id, [])
 
     def rerun_failed(self, run_id: int) -> None:
@@ -200,6 +236,12 @@ class FakeGitHub(GitHub):
 
     def delete_branch(self, branch: str) -> None:
         self.deleted.append(branch)
+
+    def remove_label(self, number: int, label: str) -> None:
+        self.issues[number]["labels"] = [lab for lab in self.issues[number]["labels"] if lab["name"] != label]
+
+    def ensure_label(self, name: str) -> None:
+        pass
 
     def state_label(self, number: int) -> str | None:
         names = [lab["name"] for lab in self.issues[number]["labels"] if lab["name"].startswith("pipe:")]

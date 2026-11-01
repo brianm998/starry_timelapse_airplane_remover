@@ -13,17 +13,23 @@ Runner = Callable[[Sequence[str], str | None], str]
 
 STATE_LABELS = ["pipe:queued", "pipe:exploring", "pipe:developing", "pipe:verifying", "pipe:review", "pipe:ci",
                 "pipe:landing", "pipe:needs-input", "pipe:failed", "pipe:paused"]
-OTHER_LABELS = ["pipeline", "pipe:landed", "pipe:filed-by-pipeline", "p0", "p1", "p2", "p3"]
+OTHER_LABELS = ["pipeline", "pipe:landed", "pipe:filed-by-pipeline", "pipe:proposed", "p0", "p1", "p2", "p3"]
 LABEL_COLOURS = {"pipeline": "0e8a16", "pipe:landed": "6f42c1", "pipe:failed": "d73a4a", "pipe:needs-input": "fbca04",
-                 "pipe:paused": "bfbfbf", "pipe:filed-by-pipeline": "c5def5"}
+                 "pipe:paused": "bfbfbf", "pipe:filed-by-pipeline": "c5def5", "pipe:proposed": "d4c5f9"}
 
 
 class GitHubError(RuntimeError):
     pass
 
 
+GH_TIMEOUT_S = 120.0
+
+
 def gh_runner(args: Sequence[str], stdin: str | None) -> str:
-    done = subprocess.run(["gh", *args], input=stdin, capture_output=True, text=True, check=False)
+    try:
+        done = subprocess.run(["gh", *args], input=stdin, capture_output=True, text=True, check=False, timeout=GH_TIMEOUT_S)
+    except subprocess.TimeoutExpired as exc:  # a hung call must not hang the daemon with it
+        raise GitHubError(f"gh {' '.join(args)} timed out after {GH_TIMEOUT_S:.0f}s") from exc
     if done.returncode != 0:
         raise GitHubError(f"gh {' '.join(args)} failed: {(done.stderr or done.stdout).strip()}")
     return done.stdout
@@ -34,6 +40,7 @@ class GitHub:
         self.config = config
         self._run = runner
         self.base = f"repos/{config.owner}/{config.repo}"
+        self._jobs_cache: dict[tuple[int, str], list[dict[str, Any]]] = {}
 
     def api(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
         args = ["api", "-X", method, f"{self.base}/{path}"]
@@ -73,6 +80,9 @@ class GitHub:
     def close_issue(self, number: int, reason: str = "not_planned") -> None:
         self.api("PATCH", f"issues/{number}", {"state": "closed", "state_reason": reason})
 
+    def set_body(self, number: int, body: str) -> None:
+        self.api("PATCH", f"issues/{number}", {"body": body})
+
     def comment(self, number: int, body: str) -> int:
         return int(self.api("POST", f"issues/{number}/comments", {"body": body})["id"])
 
@@ -99,6 +109,31 @@ class GitHub:
     def create_pr(self, title: str, body: str, head: str, base: str) -> dict[str, Any]:
         return self.api("POST", "pulls", {"title": title, "body": body, "head": head, "base": base})
 
+    def close_pr(self, number: int, comment: str = "") -> None:
+        if comment:
+            self.comment(number, comment)  # a PR's conversation is its issue's comments
+        self.api("PATCH", f"pulls/{number}", {"state": "closed"})
+
+    def cancel_runs(self, branch: str) -> int:
+        """Cancel the queued and running workflow runs of a branch: closing its PR does not, and a queued run for a closed PR still takes
+        its turn for GitHub's runners. Returns how many cancellations were requested."""
+        data: dict[str, Any] = self.api("GET", f"actions/runs?branch={branch}&per_page=30") or {}
+        cancelled = 0
+        for run in data.get("workflow_runs", []):
+            if run.get("status") in ("queued", "in_progress", "waiting", "pending"):
+                try:
+                    self.api("POST", f"actions/runs/{run['id']}/cancel")
+                    cancelled += 1
+                except GitHubError:
+                    pass  # it finished between the list and the cancel
+        return cancelled
+
+    def cancel_run(self, run_id: int) -> None:
+        try:
+            self.api("POST", f"actions/runs/{run_id}/cancel")
+        except GitHubError:
+            pass  # it finished between the list and the cancel
+
     def update_pr(self, number: int, body: str) -> None:
         self.api("PATCH", f"pulls/{number}", {"body": body})
 
@@ -114,9 +149,18 @@ class GitHub:
         data: dict[str, Any] = self.api("GET", f"actions/runs?{query}") or {}
         return data.get("workflow_runs", [])
 
-    def run_jobs(self, run_id: int) -> list[dict[str, Any]]:
+    def run_jobs(self, run_id: int, version: str | None = None) -> list[dict[str, Any]]:
+        """A run's jobs. With a `version` (only for a completed run: its attempt and update time) the answer is remembered, since a
+        completed run does not change until it is rerun, which changes the version. This is most of the polling cost."""
+        if version is not None and (run_id, version) in self._jobs_cache:
+            return self._jobs_cache[(run_id, version)]
         data: dict[str, Any] = self.api("GET", f"actions/runs/{run_id}/jobs?per_page=100") or {}
-        return data.get("jobs", [])
+        jobs: list[dict[str, Any]] = data.get("jobs", [])
+        if version is not None:
+            if len(self._jobs_cache) > 2000:
+                self._jobs_cache.clear()
+            self._jobs_cache[(run_id, version)] = jobs
+        return jobs
 
     def rerun_failed(self, run_id: int) -> None:
         self.api("POST", f"actions/runs/{run_id}/rerun-failed-jobs")
@@ -134,6 +178,13 @@ class GitHub:
             self.api("DELETE", f"git/refs/heads/{branch}")
         except GitHubError:
             pass  # already deleted
+
+    def ensure_label(self, name: str) -> None:
+        """Create one label if it is missing (an existing one answers 422, which is fine)."""
+        try:
+            self.api("POST", "labels", {"name": name, "color": LABEL_COLOURS.get(name, "ededed")})
+        except GitHubError:
+            pass  # already there; a real failure surfaces on the add_labels that follows
 
     def ensure_labels(self) -> tuple[list[str], list[str]]:
         """Create the missing labels; return (created, already_there)."""

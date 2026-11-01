@@ -91,7 +91,8 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
     var showingInfo by remember { mutableStateOf(false) }
 
     // Return is the Preview button, the sheet's default one in the gui.
-    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}.defaultAction(svm::dismissProcessingModal), contentAlignment = Alignment.Center) {
+    // The tag is on the scrim, which merges the sheet's texts into its own node: one on a text inside it is not found.
+    Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}.testTag("processing.modal").defaultAction(svm::dismissProcessingModal), contentAlignment = Alignment.Center) {
         Column(
             Modifier
                 .widthIn(min = 480.dp, max = 640.dp)

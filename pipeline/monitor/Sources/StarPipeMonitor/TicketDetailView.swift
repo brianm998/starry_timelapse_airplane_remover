@@ -27,7 +27,7 @@ struct TicketDetailView: View {
     private var titleBar: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("#\(ticket.number) \(ticket.title)").font(.title3.weight(.semibold))
+                Text("#\(ticket.number) \(ticket.title)").scaledFont(.title3, weight: .semibold)
                 Chip(text: ticket.state, color: stateColor(ticket.state))
                 Chip(text: "p\(ticket.priority)")
             }
@@ -56,7 +56,7 @@ struct TicketDetailView: View {
                 }
                 Button("Cancel", role: .destructive) { Task { await store.cancel(ticket.number) } }
             }
-            if let error = store.lastError { Text(error).font(.caption).foregroundStyle(.red) }
+            if let error = store.lastError { Text(error).scaledFont(.caption).foregroundStyle(.red) }
         }
     }
 
@@ -104,7 +104,7 @@ struct TicketDetailView: View {
                         HStack {
                             Image(systemName: row.result == "pass" ? "checkmark.circle.fill" : "xmark.circle.fill")
                                 .foregroundStyle(row.result == "pass" ? .green : .red)
-                            Text(row.checkId).font(.callout.monospaced())
+                            Text(row.checkId).scaledFont(.callout, monospaced: true)
                             Spacer()
                             Text(row.result).foregroundStyle(.secondary)
                         }
@@ -119,7 +119,7 @@ struct TicketDetailView: View {
         GroupBox("Log") {
             ScrollView {
                 Text(store.logLines.isEmpty ? "no transcript yet" : store.logLines.joined(separator: "\n"))
-                    .font(.caption.monospaced())
+                    .scaledFont(.caption, monospaced: true)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -156,13 +156,13 @@ struct StageTimeline: View {
                                     .frame(width: w * min(1, s.lockWaitS / max(1, duration(s))))
                             }
                         }
-                        .frame(width: w).help("\(s.stage) \(s.attempt) · \(Int(duration(s) / 60)) min" +
+                        .frame(width: w).help("\(s.stage) \(s.attempt) on \(s.model) · \(Int(duration(s) / 60)) min" +
                                               (s.lockWaitS >= 60 ? " (\(Int(s.lockWaitS / 60)) min waiting for the heavy lock)" : ""))
                     }
                 }
             }
             .frame(height: 18)
-            Text(stages.map { "\($0.stage) \($0.attempt)" }.joined(separator: " → ")).font(.caption).foregroundStyle(.secondary)
+            Text(stages.map { "\($0.stage) \($0.attempt) (\($0.model))" }.joined(separator: " → ")).scaledFont(.caption).foregroundStyle(.secondary)
         }
     }
 

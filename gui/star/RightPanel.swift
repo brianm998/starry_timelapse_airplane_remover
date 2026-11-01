@@ -352,11 +352,13 @@ struct RightPanel: View {
         return HStack {
             Text(text)
               .foregroundColor(.white)
+              .accessibilityIdentifier("right.mode")
             Spacer(minLength: 8)
             Button(localized("ui.change_mode")) {
                 showingChangeMode = true
             }
               .help(localized("ui.clean_method_help"))
+              .accessibilityIdentifier("right.changemode")
         }
           .sheet(isPresented: $showingChangeMode) {
               ChangeProcessingModeView()
@@ -472,6 +474,7 @@ struct ChangeProcessingModeView: View {
                     dismiss()
                 }
                   .keyboardShortcut(.defaultAction)
+                  .accessibilityIdentifier("changemode.ok")
                   .buttonStyle(.borderedProminent)
                   .tint(.blue)
                   .disabled(newMethod == currentMethod)

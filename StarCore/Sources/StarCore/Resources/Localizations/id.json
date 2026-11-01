@@ -1229,5 +1229,8 @@
   "settings_tab.gpu": "Penggunaan GPU",
   "settings_tab.alignment": "Penyelarasan",
   "settings_tab.horizon": "Horizon",
-  "settings_tab.memory": "Memori"
+  "settings_tab.memory": "Memori",
+  "ui.render_options_after_processing_title": "Pilih pengaturan video",
+  "ui.use_these_settings": "Gunakan pengaturan ini",
+  "ui.settings": "Pengaturan"
 }

@@ -2580,6 +2580,67 @@ final class SequenceProgressTests: XCTestCase {
                            "\(onDisk) frames written reads as both finished and untouched")
         }
     }
+
+    // MARK: - the footer
+
+    /// Settings sits immediately left of the one action, so the processing settings can be
+    /// looked at before the video is rendered — and the action stays the rightmost button.
+    func testSettingsIsJustLeftOfRenderVideoForACompleteSequence() {
+        let steps = surveyed([.merge], frameCount: 19, [.merge: 19])
+        let sequence = progress(frameCount: 19, framesComplete: 19, steps: steps)
+
+        XCTAssertEqual(SequenceProgressPanel.footerActions(for: sequence),
+                       [.close, .settings, .renderVideo])
+    }
+
+    /// The same place in the other state, so the settings can be changed before a partly
+    /// processed run is finished (or an untouched one is started).
+    func testSettingsIsJustLeftOfTheProcessingButtonForAnIncompleteSequence() {
+        let untouched = progress(frameCount: 19, framesComplete: 0,
+                                 steps: surveyed([.starKeypoints, .merge], frameCount: 19, [:]))
+        XCTAssertEqual(SequenceProgressPanel.footerActions(for: untouched),
+                       [.close, .settings, .startProcessing])
+
+        let partial = progress(frameCount: 19, framesComplete: 4,
+                               steps: surveyed([.starKeypoints, .merge], frameCount: 19,
+                                               [.starKeypoints: 19, .merge: 4]))
+        XCTAssertEqual(SequenceProgressPanel.footerActions(for: partial),
+                       [.close, .settings, .finishProcessing])
+
+        XCTAssertEqual(SequenceProgressAction.settings.accessibilityIdentifier,
+                       "sequenceprogress.settings")
+    }
+}
+
+/// The re-open panel's Settings button: what it does is in the view model, which cannot be
+/// built in a test without a real sequence (it opens a `FrameSource` and writes run markers),
+/// so the wiring is read from the sources, as `VideoRenderWiringTests` does.
+final class SequenceProgressSettingsWiringTests: XCTestCase {
+    private func source(_ name: String) throws -> String {
+        let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: dir.appendingPathComponent("star/\(name)"), encoding: .utf8)
+    }
+
+    /// The sheet is attached inside `BottomRightView`'s edit-mode branch and a re-opened
+    /// sequence is in `.scrub`, so raising the flag without entering edit mode shows nothing.
+    func testSettingsClosesThePanelEntersEditModeAndRaisesTheSettingsSheet() throws {
+        let model = try source("ImageSequenceViewModel.swift")
+        let start = try XCTUnwrap(model.range(of: "func openSettingsForOpenedSequence()"))
+        let end = try XCTUnwrap(model.range(of: "}", range: start.upperBound..<model.endIndex))
+        let body = String(model[start.upperBound..<end.lowerBound])
+
+        let close = try XCTUnwrap(body.range(of: "sequenceProgressModalShowing = false"))
+        let edit = try XCTUnwrap(body.range(of: "enterEditMode()"))
+        let sheet = try XCTUnwrap(body.range(of: "shouldShowProcessingSettings = true"))
+        XCTAssertLessThan(close.lowerBound, edit.lowerBound)
+        XCTAssertLessThan(edit.lowerBound, sheet.lowerBound,
+                          "the flag set before edit mode is set from .scrub, where no sheet is attached")
+
+        XCTAssertTrue(try source("SequenceProgressView.swift")
+                        .contains("openSettings: { viewModel.openSettingsForOpenedSequence() }"))
+        XCTAssertTrue(try source("BottomRightView.swift")
+                        .contains("$viewModel.shouldShowProcessingSettings"))
+    }
 }
 
 
@@ -4310,5 +4371,114 @@ final class IdRegistryTests: XCTestCase {
         XCTAssertEqual(guiGaps.filter { gap in found.contains { covers(gap, $0) } }.sorted(), [], "knownGaps.gui entries the gui now has")
         XCTAssertEqual(desktopGaps.filter { gap in !found.contains { covers(gap, $0) } }.sorted(), [],
                        "knownGaps.desktop entries the gui does not have either: they are not gaps of the desktop's alone")
+    }
+}
+
+/// The pre-processing "Render video after processing?" prompt: Yes leads to the render options, "Use These Settings" starts processing with
+/// auto-render on and the whole choice (resolution included) goes on to the automatic render, Cancel goes back to the question.
+/// `ImageSequenceViewModel` cannot be built in a test, so the flow it holds is tested on its own.
+final class PreProcessingRenderFlowTests: XCTestCase {
+
+    private let chosen = RenderChoice(frameRate: .custom(29.97),
+                                      codec: .prores,
+                                      encoder: .prores,
+                                      pixelFormat: .yuv444p10le,
+                                      muxer: .mov,
+                                      resolution: .p1080)
+
+    func testYesThenConfirmStartsWithAutoRenderAndCarriesTheChoice() {
+        var flow = PreProcessingRenderFlow()
+        flow.open()
+        XCTAssertEqual(flow.step, .asking)
+
+        flow.yes()
+        XCTAssertEqual(flow.step, .choosingOptions, "Yes asks how to render; it starts nothing")
+        XCTAssertNil(flow.choice)
+
+        let start = flow.confirm(chosen)
+        XCTAssertEqual(start, .init(autoRender: true, dontAskAgain: false))
+        XCTAssertEqual(flow.step, .closed)
+        XCTAssertEqual(flow.choice, chosen)
+        XCTAssertEqual(flow.choice?.resolution, .p1080, "the resolution is not a preference: it has to travel with the choice")
+    }
+
+    func testTheConfirmedChoiceIsHandedToTheAutoRenderOnce() {
+        var flow = PreProcessingRenderFlow()
+        flow.open()
+        flow.yes()
+        _ = flow.confirm(chosen)
+
+        XCTAssertEqual(flow.takeChoice(), chosen)
+        XCTAssertNil(flow.takeChoice(), "the post-processing prompt's Yes must not reuse it")
+
+        // a choice left from an earlier question is not the answer to a new one
+        flow.open()
+        flow.yes()
+        _ = flow.confirm(chosen)
+        flow.open()
+        XCTAssertNil(flow.choice)
+    }
+
+    func testCancelInTheOptionsReturnsToThePromptWithoutStarting() {
+        var flow = PreProcessingRenderFlow()
+        flow.open()
+        flow.yes()
+        flow.cancelOptions()
+        XCTAssertEqual(flow.step, .asking)
+        XCTAssertNil(flow.choice)
+        XCTAssertNil(flow.confirm(chosen), "the options are not showing, so there is nothing to confirm")
+        XCTAssertEqual(flow.step, .asking)
+
+        flow.yes()
+        XCTAssertEqual(flow.step, .choosingOptions, "Yes again goes on to the options")
+    }
+
+    func testNoAndDontAskAgainStartAsBefore() {
+        var flow = PreProcessingRenderFlow()
+        flow.open()
+        XCTAssertEqual(flow.no(), .init(autoRender: false, dontAskAgain: false))
+        XCTAssertEqual(flow.step, .closed)
+
+        flow.open()
+        XCTAssertEqual(flow.dontAskAgain(), .init(autoRender: false, dontAskAgain: true))
+        XCTAssertEqual(flow.step, .closed)
+
+        // neither keeps a choice
+        flow.open()
+        flow.yes()
+        _ = flow.confirm(chosen)
+        _ = flow.no()
+        XCTAssertNil(flow.takeChoice())
+    }
+
+    func testTheViewModelActsOnTheFlow() throws {
+        let model = try source("ImageSequenceViewModel.swift")
+        XCTAssertTrue(model.contains("preProcessingFlow.yes()"))
+        XCTAssertTrue(model.contains("renderVideoAutoChoice = preProcessingFlow.takeChoice()"), "the choice reaches the automatic render")
+        XCTAssertTrue(model.contains("confirmStartProcessing(autoRender: start.autoRender, dontAskAgain: start.dontAskAgain)"))
+        let prompt = try source("PreProcessingRenderPromptView.swift")
+        XCTAssertTrue(prompt.contains("viewModel.chooseRenderOptions()"), "Yes no longer starts processing itself")
+        XCTAssertTrue(prompt.contains("prompt.pre.yes") && prompt.contains("prompt.pre.no"))
+        XCTAssertTrue(prompt.contains("prompt.options.confirm"))
+        let sheet = try source("RenderVideoSheetView.swift")
+        XCTAssertTrue(sheet.contains("autoChoice: RenderChoice?"), "the automatic render's sheet starts from the choice")
+    }
+
+    private func source(_ relativePath: String) throws -> String {
+        let guiDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: guiDir.appendingPathComponent("star/\(relativePath)"), encoding: .utf8)
+    }
+}
+
+/// The settings sheet's tab titles: black on the selected pill, white on the grey track otherwise, yellow when disabled.
+final class SettingsTabTitleColorTests: XCTestCase {
+    func testSelectedTabIsBlackAndUnselectedIsWhite() {
+        XCTAssertEqual(settingsTabTitleColor(isSelected: true, isEnabled: true), .black)
+        XCTAssertEqual(settingsTabTitleColor(isSelected: false, isEnabled: true), .white)
+    }
+
+    func testDisabledTabsStayYellow() {
+        XCTAssertEqual(settingsTabTitleColor(isSelected: true, isEnabled: false), .yellow)
+        XCTAssertEqual(settingsTabTitleColor(isSelected: false, isEnabled: false), .yellow)
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.ReopenVerdict
+import com.star.desktop.domain.SequenceProgressButton
 import com.star.desktop.domain.StepRow
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.app.AppViewModel
@@ -88,13 +89,23 @@ fun SequenceProgressDialog(app: AppViewModel, progress: SequenceProgress) {
 
             HorizontalDivider(color = StarColors.cellDefault)
             Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                HoverTip(localized("ui.close_this_and_go_to_the_frames")) {
-                    OutlinedButton(onClick = app::closeSequenceProgress, modifier = Modifier.testTag("sequenceprogress.close")) { Text(localized("ui.close")) }
-                }
-                Box(Modifier.weight(1f))
-                HoverTip(localized(verdict.actionHelpKey)) {
-                    Button(onClick = action, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
-                        Text(localized(verdict.actionKey), fontWeight = FontWeight.SemiBold)
+                for (button in verdict.footer) {
+                    when (button) {
+                        SequenceProgressButton.CLOSE -> {
+                            HoverTip(localized("ui.close_this_and_go_to_the_frames")) {
+                                OutlinedButton(onClick = app::closeSequenceProgress, modifier = Modifier.testTag(button.testTag!!)) { Text(localized("ui.close")) }
+                            }
+                            Box(Modifier.weight(1f))
+                        }
+                        // A plain button: Return stays with the action to its right.
+                        SequenceProgressButton.SETTINGS -> HoverTip(localized("ui.processing_settings")) {
+                            OutlinedButton(onClick = app::openSettingsForOpenedSequence, modifier = Modifier.testTag(button.testTag!!)) { Text(localized("ui.settings")) }
+                        }
+                        SequenceProgressButton.ACTION -> HoverTip(localized(verdict.actionHelpKey)) {
+                            Button(onClick = action, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
+                                Text(localized(verdict.actionKey), fontWeight = FontWeight.SemiBold)
+                            }
+                        }
                     }
                 }
             }

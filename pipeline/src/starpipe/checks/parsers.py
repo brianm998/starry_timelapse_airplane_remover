@@ -21,6 +21,10 @@ class Counts:
 
 _XCTEST_TOTAL = re.compile(r"Executed (\d+) tests?, with (\d+) failures?(?: \((\d+) unexpected\))?")
 _XCTEST_SKIPPED = re.compile(r"Test Case '.*' skipped \(")
+# A test that skips itself because its data is not in the repo or it is an opt-in measurement skips on every machine and every
+# develop run: that is not a test the change silently lost. Only these reasons are expected; any other skip is still red.
+_XCTEST_EXPECTED_SKIP = re.compile(
+    r"Test skipped - (?:opt-in|no horizon (?:reference fixtures|test sequence)|set STAR_\w+ to\b)")
 # swift-testing: "✔ Test run with 12 tests in 3 suites passed after 0.1 seconds."
 _SWIFT_TESTING = re.compile(r"Test run with (\d+) tests?.* (passed|failed)")
 
@@ -45,7 +49,7 @@ def parse_xctest(text: str) -> Counts:
         counts.executed += int(match.group(1))
         if match.group(2) == "failed":
             counts.failed += 1
-    counts.skipped = len(_XCTEST_SKIPPED.findall(text))
+    counts.skipped = max(0, len(_XCTEST_SKIPPED.findall(text)) - len(_XCTEST_EXPECTED_SKIP.findall(text)))
     return counts
 
 
