@@ -102,7 +102,7 @@ class Daemon:
         self.cpu = load.CpuMeter(window_s=float(config.cpu_window_s))
         engine.cpu = self.cpu.average
         self._update_lock = threading.Lock()
-        self.exit: Callable[[int], None] = sys.exit  # replaced in tests; SystemExit passes through supervise to asyncio.run
+        self.exit: Callable[[int], None] = hard_exit  # replaced in tests
 
     # supervision ---------------------------------------------------------------------------------------------------
     def reconcile(self) -> None:
@@ -769,6 +769,16 @@ class Daemon:
                                  self.supervise("train", self.train.run_forever), self.supervise("cpu", self.cpu_loop))
         finally:
             await runner.cleanup()
+
+
+def hard_exit(code: int) -> None:
+    """Leave now. `sys.exit` unwinds through asyncio and then waits on non-daemon threads (a running check, an SDK
+    subprocess pipe), so a self-update could log "exiting" and then hang with the server closed and launchd none the
+    wiser. State is all in the database, and `reconcile` picks up whatever was running."""
+    logging.shutdown()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
 
 
 def resolve_java_home(config: Config) -> str | None:

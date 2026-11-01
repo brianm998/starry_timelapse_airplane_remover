@@ -635,3 +635,13 @@ async def test_picking_opus_in_the_monitor_and_allow_opus_are_how_a_ticket_may_u
         assert rig.db.get("opus_ok:10") == "1"
     finally:
         await client.close()
+
+
+def test_hard_exit_is_the_default_exit_and_ends_the_process_without_unwinding(monkeypatch: pytest.MonkeyPatch, rig: Rig) -> None:
+    from starpipe import daemon as daemon_mod
+
+    calls: list[int] = []
+    monkeypatch.setattr(daemon_mod.os, "_exit", calls.append)
+    assert daemon_mod.Daemon(rig.engine, rig.engine.config).exit is daemon_mod.hard_exit
+    daemon_mod.hard_exit(0)
+    assert calls == [0], "os._exit, not sys.exit: SystemExit would wait on non-daemon threads and hang"
