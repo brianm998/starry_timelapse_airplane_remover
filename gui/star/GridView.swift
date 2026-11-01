@@ -183,6 +183,8 @@ struct GridCellView: View {
             frameContextMenu
         }
         .environment(frameView)
+          // the id a UI test finds this cell by: the family "grid.cell.*" of gherkin/ui/ids.json, one per frame
+          .accessibilityIdentifier("grid.cell.\(frameIndex)")
     }
 
     private func handleTap() {

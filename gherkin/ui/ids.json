@@ -8,6 +8,7 @@
     "extraction.progress",
     "extraction.waitpanel",
     "frame.number",
+    "grid.cell.*",
     "location.available",
     "location.choose",
     "location.folder",

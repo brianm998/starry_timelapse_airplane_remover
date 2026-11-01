@@ -155,6 +155,9 @@
     },
     "uiOutlierClickUndecided": {
       "sequence": "test_data/test_a7sii_10"
+    },
+    "uiReprocessNonContiguous": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }

@@ -75,6 +75,9 @@ final class GuiFeatureRunner {
         .openCopied: { try $0.openCopiedSequence() },
         .openCopiedNoQuestions: { try $0.openCopiedSequence(askingTheStartupQuestions: false) },
         .clickId: { try $0.clickId($0.args[0]) },
+        .commandClickId: { try $0.clickId($0.args[0], how: .command) },
+        .rightClickId: { try $0.clickId($0.args[0], how: .right) },
+        .processingFinishes: { try $0.waitForProcessingToFinish() },
         .pressKey: { try $0.press($0.args[0]) },
         .idShown: { try $0.expectShown($0.args[0], shown: true) },
         .idNotShown: { try $0.expectShown($0.args[0], shown: false) },
@@ -104,6 +107,7 @@ final class GuiFeatureRunner {
         .dragAround: { try $0.drag(around: $0.args[0]) },
         .clickLabel: { try $0.click(label: $0.args[0]) },
         .wait: { try $0.wait(seconds: Int($0.args[0]) ?? 0) },
+        .largeWindow: { try $0.makeWindowLarge() },
         .idStillSays: { try $0.expectStillSays($0.args[0], text: $0.args[1]) },
         .idStopsSaying: { try $0.expectStopsSaying($0.args[0], text: $0.args[1]) },
         .processedCopy: { try $0.makeProcessedCopy() },
@@ -218,9 +222,33 @@ final class GuiFeatureRunner {
                     if matches.count > 0 { found = matches.element(boundBy: matches.count - 1); return true }
                 }
             }
+            // a context menu belongs to no window
+            let items = self.app.menuItems.matching(predicate)
+            if items.count > 0 { found = items.element(boundBy: items.count - 1); return true }
             return false
         }
         found?.click()
+    }
+
+    /// Zooms the main window to what the screen allows: the grid in the window the app opens at (900 by 450 points) is one cell tall, with the
+    /// rest below the fold of a lazy list, where a cell that has not been built cannot be clicked.
+    private func makeWindowLarge() throws {
+        // the Window menu's Zoom (the window shows no title bar buttons of its own to a test)
+        let windowMenu = app.menuBars.menuBarItems[try english("ui.window")]
+        guard windowMenu.waitForExistence(timeout: 30) else { throw RunnerError("there is no Window menu\n\(app.debugDescription)") }
+        windowMenu.click()
+        let zoom = app.menuBars.menuItems["Zoom"]
+        guard zoom.waitForExistence(timeout: 10) else { throw RunnerError("the Window menu has no Zoom\n\(app.debugDescription)") }
+        zoom.click()
+        // the window takes a moment to arrive at its size
+        var size = app.windows.firstMatch.frame.size
+        var steady = 0
+        while steady < 3 {
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 0.5)
+            let now = app.windows.firstMatch.frame.size
+            steady = now == size ? steady + 1 : 0
+            size = now
+        }
     }
 
     /// Does nothing for [seconds], the app running. For what only shows after a timer in the app has gone off (a frame saved ten seconds after an
@@ -314,7 +342,9 @@ final class GuiFeatureRunner {
 
     /// Clicks the control once it can be hit: a control that is there for a moment while a screen is still being put up (the startup questions
     /// come up over the loading view) is not one to click, and a click on one that has gone fails the whole test.
-    private func clickId(_ identifier: String) throws {
+    private enum Click { case plain, command, right }
+
+    private func clickId(_ identifier: String, how: Click = .plain) throws {
         let e = element(identifier)
         var scroller = Scroller()
         try waitFor("\(identifier) to be clickable", timeout: 60, detail: { "\n\(self.app.debugDescription)" }) {
@@ -330,7 +360,29 @@ final class GuiFeatureRunner {
             steady = now == frame ? steady + 1 : 0
             frame = now
         }
-        e.click()
+        switch how {
+        case .plain: e.click()
+        case .command: XCUIElement.perform(withKeyModifiers: .command) { e.click() }
+        case .right: e.rightClick()
+        }
+    }
+
+    /// Waits for the run that has begun to end: the progress line says "<complete>/<total>/idle" with every frame complete, once it has said
+    /// "running" (a run that has not begun reads the same, so the feature first sees the processing screen come up). The line is in the left panel
+    /// of the edit and scrub screens, so the feature looks away from the processing screen (Preview) and to one of them first.
+    private func waitForProcessingToFinish() throws {
+        let progress = element("processing.progress")
+        var sawRunning = false
+        var last = "(none)"
+        try waitFor("processing to finish", timeout: 20 * 60, interval: 3, detail: { "(last progress: \(last))" }) {
+            guard progress.exists else { return false }
+            let state = progress.label
+            last = state
+            let parts = state.split(separator: "/").map(String.init)
+            guard parts.count == 3, let complete = Int(parts[0]), let total = Int(parts[1]) else { return false }
+            if parts[2] == "running" { sawRunning = true }
+            return sawRunning && parts[2] == "idle" && total > 0 && complete == total
+        }
     }
 
     /// How a scroll towards a control has gone so far: which way a positive distance scrolls (found out by whether the last step got closer).
