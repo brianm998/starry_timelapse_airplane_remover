@@ -1229,5 +1229,6 @@
   "settings_tab.gpu": "GPU उपयोग",
   "settings_tab.alignment": "अलाइनमेंट",
   "settings_tab.horizon": "क्षितिज",
-  "settings_tab.memory": "मेमोरी"
+  "settings_tab.memory": "मेमोरी",
+  "ui.settings": "सेटिंग्स"
 }
