@@ -197,6 +197,9 @@ struct InitialView: View {
                                 // left the loading view up forever.
                                 Task { @MainActor in
                                     do {
+                                        // The drop granted only the json: under the sandbox the images and the
+                                        // output folder it names need access too, as for every other way in.
+                                        try FolderAccess.ensureAccess(forConfigFile: url.path)
                                         let config = try ConfigManager(configFilename: url.path)
                                         try await self.viewModel.startup(withConfig: config)
                                         self.viewModel.userPreferences.justOpened(filename: url.path)

@@ -107,10 +107,17 @@ final class BookmarkStore {
         return resolve(data: data, key: path)
     }
 
-    /// The bookmark of the nearest folder that is `path` or above it.
+    /// The bookmark of the nearest folder that is `path` or above it that still resolves.  A nearer one that is gone or stale does
+    /// not hide a live one further up (the grant of a sequence's parent still covers it after the sequence's own bookmark dies);
+    /// only when none resolves cleanly is the nearest one's outcome reported.
     func resolve(covering path: String) -> Resolution {
-        guard let key = Self.key(covering: path, in: Array(load().keys)) else { return .missing }
-        return resolve(path: key)
+        var nearest: Resolution?
+        for key in Self.keys(covering: path, in: Array(load().keys)) {
+            let resolution = resolve(path: key)
+            if case .resolved = resolution { return resolution }
+            if nearest == nil { nearest = resolution }
+        }
+        return nearest ?? .missing
     }
 
     /// `path` with symlinks (`/tmp`, `/var`) followed, so that two spellings of one folder compare equal.
@@ -120,8 +127,13 @@ final class BookmarkStore {
 
     /// Of `keys`, the longest that is `path` or a folder above it.
     nonisolated static func key(covering path: String, in keys: [String]) -> String? {
+        Self.keys(covering: path, in: keys).first
+    }
+
+    /// Of `keys`, every one that is `path` or a folder above it, nearest first.
+    nonisolated static func keys(covering path: String, in keys: [String]) -> [String] {
         keys.filter { $0 == path || $0 == "/" || path.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") }
-            .max { $0.count < $1.count }
+            .sorted { $0.count > $1.count }
     }
 
     private func resolve(data: Data, key: String) -> Resolution {

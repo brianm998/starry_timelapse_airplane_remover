@@ -4451,6 +4451,19 @@ final class FolderBookmarkStoreTests: XCTestCase {
         XCTAssertEqual(world.started, [])
     }
 
+    /// A nearer bookmark that is gone does not hide a live one further up: the parent's grant still covers the sequence.
+    func testDeadNearerBookmarkFallsBackToLiveAncestor() {
+        let disk = Disk(), world = World()
+        let bookmarks = store(disk, world)
+        bookmarks.save(url: URL(fileURLWithPath: "/data"))
+        bookmarks.save(url: sky)
+        world.gone = ["/data/sky"]
+        XCTAssertEqual(store(disk, world).resolve(covering: "/data/sky/a"), .resolved(URL(fileURLWithPath: "/data")))
+
+        world.gone = ["/data/sky", "/data"]
+        XCTAssertEqual(store(disk, world).resolve(covering: "/data/sky/a"), .missing, "nothing live: the nearest one's outcome")
+    }
+
     /// Only a sandboxed star makes bookmarks: unsandboxed there is nothing for them to add, and the preferences file is shared.
     func testNothingIsSavedWhenNotSandboxed() {
         let disk = Disk(), world = World()
