@@ -11,7 +11,6 @@ from starpipe import selfupdate
 from starpipe.agent import StageOutcome, StageRequest
 from starpipe.config import Config
 from starpipe.daemon import Daemon, activity
-
 from starpipe.tickets import lint, parse_pipeline
 
 from .fakes import GOOD_BODY, accepted, plan_args, sh
