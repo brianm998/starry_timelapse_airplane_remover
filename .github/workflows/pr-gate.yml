@@ -17,7 +17,9 @@ on:
 
 concurrency:
   group: pr-gate-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # a newer push to develop supersedes the older develop runs still going; the pipeline's develop watch skips cancelled
+  # runs, so the CI judge's baseline stays the last run that ended success or failure.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
 
 jobs:
   # ─── static checks and the pipeline's own tests: seconds, no OpenCV ─────────────
