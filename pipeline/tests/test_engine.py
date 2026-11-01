@@ -141,7 +141,7 @@ async def test_a_stage_without_a_result_climbs_the_ladder_then_parks(rig: Rig) -
     rig.engine.sync_issues()
     await rig.engine.drive(7)
     models = [r.model for r in rig.agent.requests]
-    assert models == ["opus", "opus", "opus"]  # escalation model equals the default today
+    assert models == ["sonnet", "sonnet", "sonnet"]  # the escalation model equals the default today
     assert [r.attempt for r in rig.agent.requests] == [1, 2, 3]
     assert rig.state(7) == "failed"
     assert rig.db.open_alert("ticket-failed:7", "again") is False  # already open
@@ -463,3 +463,34 @@ def test_the_fence_denies_what_the_plan_says_it_denies(tmp_path: Path) -> None:
     assert guards.decide("Edit", {"file_path": str(wt / "a")}, ro).kind == "deny"
     assert guards.decide("Bash", {"command": "echo x > a.txt"}, ro).kind == "deny"
     assert guards.decide("Bash", {"command": "git diff origin/develop...HEAD"}, ro).kind == "allow"
+
+
+async def test_verification_does_not_block_the_event_loop(rig: Rig) -> None:
+    """The checks wait for the heavy lock and run for hours. Run on the event loop they froze the whole daemon (its API, the monitor,
+    every other ticket); found when a verifying ticket made `starpipe status` report the daemon down."""
+    import asyncio
+    import threading
+
+    from starpipe.checks import ledger
+
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.engine.claim(rig.db.tickets()[0])
+    rig.db.set_state(7, "verifying")
+    loop_ran = threading.Event()
+    waited_out: list[bool] = []
+
+    def blocking_runner(worktree: Path, base: str) -> list[ledger.Result]:
+        waited_out.append(not loop_ran.wait(5))  # True would mean the event loop never got to run
+        return green_runner(worktree, base)
+
+    async def ticker() -> None:
+        await asyncio.sleep(0.2)
+        loop_ran.set()
+
+    rig.engine.check_runner = blocking_runner
+    ticket = rig.db.ticket(7)
+    assert ticket
+    await asyncio.gather(rig.engine._verify(ticket), ticker())  # pyright: ignore[reportPrivateUsage]
+    assert waited_out == [False]
+    assert rig.state(7) == "review"

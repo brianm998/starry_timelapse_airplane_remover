@@ -21,6 +21,21 @@ Design: `plans/PIPELINE.md` §6. Approval is the only gate, so do not file befor
    ```
 4. Print the issue links, then `pipeline/bin/starpipe status` once it exists.
 
+## Proposing instead of queueing
+
+You queue a ticket (the default) only when the owner approved it in conversation. If you are an agent that was **not** given that
+approval (a review, a nightly, a stage that noticed out-of-scope work, a session working on something else), file it as a proposal:
+
+```bash
+STARPIPE_AGENT="<who you are>" pipeline/bin/starpipe ticket new --propose --title "…" --body-file body.md
+```
+
+It gets `pipe:proposed` and no `pipeline` label, so nothing runs. The owner sees it with `starpipe proposals` and either
+`starpipe approve 41 [--priority p1]` or `starpipe reject 41 "why"`. Every ticket records who filed it. `ticket new` refuses a title that
+nearly matches an open issue (`--force` overrides) and refuses past the caps (`max_open_tickets`, `max_proposed` in config.toml); do not
+work around either: if you hit a cap, the owner has plenty to look at already. This is a workflow guard, not security: everything runs
+with the owner's GitHub token.
+
 ## Body (section headers are exact)
 
 ```markdown

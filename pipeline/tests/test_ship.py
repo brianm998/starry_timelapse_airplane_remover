@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -21,14 +22,14 @@ def rig(tmp_path: Path) -> Rig:
     return Rig(tmp_path)
 
 
-def ready_ticket(rig: Rig, n: int, file: str, text: str) -> None:
+def ready_ticket(rig: Rig, n: int, file: str, text: str, folder: str = "docs") -> None:
     """A ticket that has finished REVIEW: a worktree with one commit and a plan, in state `ready`."""
     rig.gh.add_issue(n, f"change {file}")
     rig.engine.sync_issues()
     t = rig.engine.claim(rig.db.ticket(n))  # type: ignore[arg-type]
     wt = Path(t.worktree or "")
-    (wt / "docs").mkdir(exist_ok=True)
-    (wt / "docs" / file).write_text(text)
+    (wt / folder).mkdir(parents=True, exist_ok=True)
+    (wt / folder / file).write_text(text)
     sh(wt, "git", "add", "-A")
     sh(wt, "git", "commit", "-q", "-m", f"change {file}")
     rig.db.set_fields(n, plan_json=PLAN)
@@ -400,3 +401,54 @@ def test_a_cancelled_or_timed_out_develop_job_is_not_a_regression(rig: Rig) -> N
     ship.watch_develop(rig.engine)
     assert rig.gh.issues == {} and rig.db.get("stop_line") is None
     assert rig.db.baseline("cli", "macos") == "timed_out"
+
+
+def test_a_gradle_download_failure_looks_like_infrastructure_and_a_test_failure_does_not() -> None:
+    gradle = ("> Could not resolve all files for configuration ':classpath'.\n"
+              "   > Could not resolve com.google.protobuf:protobuf-gradle-plugin:0.9.4.\n"
+              "     - https://repo.maven.apache.org/maven2/com/google/gradle/osdetector-gradle-plugin/1.7.3/x.pom")
+    assert ci.INFRA_LOG.search(gradle)
+    assert ci.INFRA_LOG.search("Could not GET 'https://plugins.gradle.org/m2/x.pom'. Received status code 503")
+    assert not ci.INFRA_LOG.search("testFoo failed: expected 1 but was 2\nProcess completed with exit code 1.")
+    assert not ci.INFRA_LOG.search("error: cannot find symbol  Could not find method foo")
+
+
+async def test_publish_ci_polling_and_landing_never_block_the_event_loop(rig: Rig) -> None:
+    """Each GitHub call below waits until the event loop has run a callback scheduled from inside the call. Made on the loop
+    (synchronously) it could never run, so the wait would time out and be recorded."""
+    import asyncio
+    import threading
+    from collections.abc import Callable
+    from typing import Any
+
+    ready_ticket(rig, 1, "one.md", "one\n")
+    loop = asyncio.get_running_loop()
+    blocked: dict[str, bool] = {}
+
+    def watched(name: str, real: Callable[..., Any]) -> Callable[..., Any]:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            ran = threading.Event()
+            loop.call_soon_threadsafe(loop.call_later, 0.2, ran.set)
+            blocked[name] = blocked.get(name, False) or not ran.wait(5)
+            return real(*args, **kwargs)
+        return wrapper
+
+    for name in ("create_pr", "workflow_runs", "pr", "merge_pr"):
+        setattr(rig.gh, name, watched(name, getattr(rig.gh, name)))
+    await rig.engine.drive(1)
+    assert rig.state(1) == "landed"
+    assert blocked == {"create_pr": False, "workflow_runs": False, "pr": False, "merge_pr": False}
+
+
+def test_a_hung_gh_call_times_out_instead_of_hanging_the_daemon(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from starpipe import github
+
+    fake = tmp_path / "gh"
+    fake.write_text("#!/bin/sh\nsleep 30\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}:/usr/bin:/bin")
+    monkeypatch.setattr(github, "GH_TIMEOUT_S", 0.3)
+    started = time.monotonic()
+    with pytest.raises(github.GitHubError, match="timed out"):
+        github.gh_runner(["api", "x"], None)
+    assert time.monotonic() - started < 10

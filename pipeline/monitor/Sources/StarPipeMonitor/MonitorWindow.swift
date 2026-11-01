@@ -16,11 +16,15 @@ struct MonitorWindow: View {
                     TicketDetailView(store: store, ticket: ticket)
                         .id(ticket.number)
                 } else {
-                    ContentUnavailableView("Select a ticket", systemImage: "shippingbox",
-                                           description: Text(store.lastError ?? "Everything the pipeline is doing is in the list."))
+                    ContentUnavailableView {
+                        Label("Select a ticket", systemImage: "shippingbox").scaledFont(.title2, weight: .bold)
+                    } description: {
+                        Text(store.lastError ?? "Everything the pipeline is doing is in the list.").scaledFont(.body)
+                    }
                 }
             }
         }
+        .scaledFont(.body)
         .onChange(of: store.selected) { Task { await store.refreshSelected() } }
     }
 }
@@ -31,7 +35,7 @@ struct Chip: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.medium))
+            .scaledFont(.caption2, weight: .medium)
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(color.opacity(0.18), in: Capsule())
             .foregroundStyle(color)
@@ -69,7 +73,7 @@ struct HeaderStrip: View {
             }
         }
         .padding(.horizontal, 14).padding(.vertical, 8)
-        .font(.caption)
+        .scaledFont(.caption)
     }
 
     private func item(_ label: String, _ value: String, color: Color) -> some View {
@@ -115,15 +119,19 @@ struct Sidebar: View {
             ForEach(store.snapshot?.groups ?? [], id: \.self) { group in
                 let rows = store.tickets(in: group)
                 if !rows.isEmpty {
-                    Section(GroupTitle.title(group)) {
+                    Section {
                         ForEach(rows) { TicketRow(ticket: $0).tag($0.number) }
+                    } header: {
+                        Text(GroupTitle.title(group)).scaledFont(.body, weight: .semibold)
                     }
                 }
             }
         }
         .overlay {
             if store.snapshot?.tickets.isEmpty == true {
-                ContentUnavailableView("No tickets in flight", systemImage: "tray")
+                ContentUnavailableView {
+                    Label("No tickets in flight", systemImage: "tray").scaledFont(.title2, weight: .bold)
+                }
             }
         }
     }
@@ -141,10 +149,10 @@ struct TicketRow: View {
                 Chip(text: ticket.state, color: stateColor(ticket.state))
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(ticket.activity).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text(ticket.activity).scaledFont(.caption).foregroundStyle(.secondary).lineLimit(2)
                 Spacer(minLength: 0)
                 if let model = ticket.model {
-                    Text(model).font(.caption2.monospaced()).foregroundStyle(.tertiary)
+                    Text(model).scaledFont(.caption2, monospaced: true).foregroundStyle(.tertiary)
                 }
             }
         }

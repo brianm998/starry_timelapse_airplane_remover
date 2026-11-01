@@ -85,8 +85,9 @@ def validate(plan: Plan, worktree: Path, body: str, is_bug: bool) -> list[str]:
     mapped = {a.id for a in plan.acceptance}
     for missing in sorted(wanted - mapped):
         errors.append(f"acceptance criterion {missing} is not mapped to a test or check")
-    for extra in sorted(mapped - wanted):
-        errors.append(f"acceptance {extra} is not in the ticket")
+    if wanted:  # a free-form ticket (a follow-up a stage filed) has no A<n> lines: the plan states its own criteria
+        for extra in sorted(mapped - wanted):
+            errors.append(f"acceptance {extra} is not in the ticket")
     if not plan.tests.new and not plan.tests.none_reason:
         errors.append("tests: give new tests, or none_reason")
     if is_bug and not plan.tests.new and not plan.tests.none_reason.strip():

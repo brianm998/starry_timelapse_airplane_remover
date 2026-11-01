@@ -87,6 +87,8 @@ class Fake:
         self.fail_on = fail_on
 
     def __call__(self, args: Sequence[str], stdin: str | None) -> str:
+        if "--paginate" in args:  # the duplicate and cap checks list open issues: there are none
+            return "[[]]"
         method, path = args[args.index("-X") + 1], args[-3] if "--input" in args else args[-1]
         body: dict[str, object] = json.loads(stdin) if stdin else {}
         if self.fail_on and self.fail_on in path:

@@ -8,7 +8,7 @@ from collections.abc import Callable
 from .config import home
 from .db import Database
 
-PAGES = {"needs-input", "develop-red", "phantom-landing", "daemon-down"}
+PAGES = {"needs-input", "develop-red", "phantom-landing", "daemon-down", "runtime-rollback", "self-update-failed"}
 Sender = Callable[[str, str], None]
 
 

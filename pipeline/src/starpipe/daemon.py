@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import secrets
+import subprocess
 import time
 from collections.abc import Awaitable, Callable
 from datetime import datetime
@@ -16,7 +17,7 @@ from typing import Any, cast
 from aiohttp import web
 
 from . import digest as digest_mod
-from . import gitutil, heavy, nightly, ship, watch, worktrees
+from . import gitutil, heavy, nightly, selfupdate, ship, watch, worktrees
 from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
 from .engine import RETRY_STATE, STAGE_STATE, Engine
@@ -161,6 +162,27 @@ class Daemon:
                     and self.start_nightly(nightly.Options(ui=self.config.nightly_ui))):
                 self.db.put("nightly_last_day", now.strftime("%Y-%m-%d"))
             await asyncio.sleep(60)
+
+    def auto_update_once(self, plist: Path, launchctl: selfupdate.Launchctl = selfupdate.real_launchctl) -> str | None:
+        """After a landing that changed pipeline/ (and only when idle), switch to a runtime built from develop's tip."""
+        wanted = self.db.get("self_update_wanted")
+        if not (self.config.auto_self_update and wanted) or self.db.running_stages():
+            return None
+        try:
+            selfupdate.update(self.engine.repo, f"origin/{self.config.base_branch}", plist,
+                              sessions=lambda: len(self.db.running_stages()), wait_s=0, launchctl=launchctl)
+        except (RuntimeError, subprocess.SubprocessError, OSError) as exc:
+            self.db.put("self_update_wanted", None)  # one try per landing: a broken build must not retry in a loop
+            self.engine.notifier.alert("self-update-failed", None, f"self-update to {wanted[:10]} failed: {exc}")
+            return f"failed: {exc}"
+        self.db.put("self_update_wanted", None)
+        return "updated"
+
+    async def update_loop(self) -> None:
+        plist = Path.home() / "Library" / "LaunchAgents" / f"{selfupdate.LABEL}.plist"
+        while True:
+            await asyncio.to_thread(self.auto_update_once, plist)
+            await asyncio.sleep(120)
 
     def write_digest(self, now: float | None = None) -> Path:
         from .checks import ledger
@@ -379,6 +401,13 @@ class Daemon:
         async def snapshot(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             return web.json_response(await asyncio.to_thread(self.snapshot))
 
+        @r.get("/v1/runtime")
+        async def runtime_info(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            cur, prev = selfupdate.link("current"), selfupdate.link("previous")
+            return web.json_response({"sessions": len(self.db.running_stages()), "pid": os.getpid(),
+                                      "current": cur.name if cur else None, "previous": prev.name if prev else None,
+                                      "wanted": self.db.get("self_update_wanted")})
+
         @r.get("/v1/nightly")
         async def nightly_status(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             return web.json_response(self.db.nightly_run() or {})
@@ -444,7 +473,7 @@ class Daemon:
         try:
             await asyncio.gather(self.supervise("poller", self.poller), self.supervise("scheduler", self.scheduler),
                                  self.supervise("watcher", self.watcher), self.supervise("nightly", self.nightly_loop),
-                                 self.supervise("digest", self.digest_loop))
+                                 self.supervise("digest", self.digest_loop), self.supervise("update", self.update_loop))
         finally:
             await runner.cleanup()
 
