@@ -129,10 +129,12 @@ public struct APIClient: Sendable {
         return try JSONDecoder().decode(ResolvedIssue.self, from: try await send(request("/v1/issues/resolve?url=\(value)", timeout: 30)))
     }
 
-    /// Label these issues `pipeline` so the daemon's next intake poll queues them.
-    public func enqueue(numbers: [Int]) async throws -> [EnqueueResult] {
+    /// Label these issues `pipeline` so the daemon's next intake poll queues them, first writing the per-stage
+    /// `models` choices (stage → model, defaults already dropped) into each issue's `## Pipeline` section.
+    public func enqueue(numbers: [Int], models: [String: String] = [:]) async throws -> [EnqueueResult] {
         struct Results: Decodable { var results: [EnqueueResult] }
-        let data = try await send(request("/v1/enqueue", method: "POST", body: ["numbers": numbers], timeout: 60))
+        let body = EnqueueRequest.body(numbers: numbers, choices: models)
+        let data = try await send(request("/v1/enqueue", method: "POST", body: body, timeout: 60))
         return try JSONDecoder().decode(Results.self, from: data).results
     }
 

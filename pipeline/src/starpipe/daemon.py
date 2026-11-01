@@ -21,7 +21,7 @@ from typing import Any, cast
 from aiohttp import web
 
 from . import digest as digest_mod
-from . import gitutil, heavy, nightly, selfupdate, ship, trust, watch, worktrees
+from . import gitutil, heavy, nightly, selfupdate, ship, tickets, trust, watch, worktrees
 from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
 from .engine import RETRY_STATE, STAGE_STATE, Engine
@@ -501,10 +501,24 @@ class Daemon:
         if problem:
             raise web.HTTPUnprocessableEntity(text=problem)
         return {"number": n, "title": str(issue.get("title") or ""), "state": str(issue.get("state")),
-                "queued": self._labelled(issue)}
+                "queued": self._labelled(issue), "models": list(tickets.allowed_models(self.config.allow_fable)),
+                "stages": list(tickets.MODEL_STAGES)}
 
-    def enqueue(self, numbers: list[int]) -> list[dict[str, object]]:
-        """Label each issue `pipeline` with the owner's token, so the next intake poll queues it (trust.may_run)."""
+    def _check_models(self, models: dict[str, str]) -> None:
+        """400 for a stage or model the engine would not honour (tickets.validate_choice), before any issue is touched."""
+        for stage, model in models.items():
+            if stage not in tickets.MODEL_STAGES:
+                raise web.HTTPBadRequest(text=f"unknown stage '{stage}' (one of {', '.join(tickets.MODEL_STAGES)})")
+            bad = tickets.validate_choice(f"model_{stage}", model, self.config.allow_fable)
+            if bad:
+                raise web.HTTPBadRequest(text=f"{stage}: {bad}")
+
+    def enqueue(self, numbers: list[int], models: dict[str, str] | None = None) -> list[dict[str, object]]:
+        """Label each issue `pipeline` with the owner's token, so the next intake poll queues it (trust.may_run).
+
+        `models` ({stage: model}) is written into each issue's '## Pipeline' section first, so the engine applies it."""
+        models = models or {}
+        self._check_models(models)
         out: list[dict[str, object]] = []
         for n in dict.fromkeys(numbers):
             try:
@@ -515,6 +529,10 @@ class Daemon:
                 elif self._labelled(issue):
                     result = "already queued"
                 else:
+                    body = str(issue.get("body") or "")
+                    new_body = tickets.with_pipeline_models(body, models)
+                    if new_body != body:
+                        self.engine.gh.set_body(n, new_body)
                     self.engine.gh.add_labels(n, [trust.PIPELINE_LABEL])
                     result = "labelled"
             except GitHubError as exc:
@@ -609,7 +627,14 @@ class Daemon:
             if not items or not all(isinstance(x, int) and not isinstance(x, bool) for x in items):
                 raise web.HTTPBadRequest(text="numbers must be a non-empty list of issue numbers")
             numbers = [cast("int", x) for x in items]
-            return web.json_response({"results": await asyncio.to_thread(self.enqueue, numbers)})
+            chosen = body.get("models")
+            if chosen is None:
+                chosen = {}
+            if not isinstance(chosen, dict) or not all(isinstance(k, str) and isinstance(v, str)
+                                                       for k, v in cast("dict[object, object]", chosen).items()):
+                raise web.HTTPBadRequest(text="models must be an object of stage to model name")
+            models = cast("dict[str, str]", chosen)
+            return web.json_response({"results": await asyncio.to_thread(self.enqueue, numbers, models)})
 
         @r.post("/v1/tickets/{n}/{action}")
         async def act(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]

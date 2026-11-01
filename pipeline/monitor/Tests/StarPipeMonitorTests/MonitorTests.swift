@@ -306,6 +306,29 @@ final class IssueLinksTests: XCTestCase {
         XCTAssertEqual(IssueLinks.parse(" \n\t\r\n "), [])
         XCTAssertEqual(IssueLinks.parse(""), [])
     }
+
+    func testTheEnqueueRequestCarriesOnlyNonDefaultModelChoices() {
+        let body = EnqueueRequest.body(numbers: [8, 9], choices: ["develop": "sonnet", "review": "Default", "fix": "opus", "explore": ""])
+        XCTAssertEqual(body["numbers"] as? [Int], [8, 9])
+        XCTAssertEqual(body["models"] as? [String: String], ["develop": "sonnet", "fix": "opus"])
+
+        let none = EnqueueRequest.body(numbers: [8], choices: ["develop": "Default"])
+        XCTAssertEqual(none["numbers"] as? [Int], [8])
+        XCTAssertNil(none["models"])
+        XCTAssertNil(EnqueueRequest.body(numbers: [8], choices: [:])["models"])
+    }
+
+    func testAResolvedIssueDecodesTheAllowedModelsAndStages() throws {
+        let json = #"{"number": 8, "title": "Fix", "state": "open", "queued": false, "models": ["opus", "sonnet", "haiku", "fable"], "stages": ["explore", "ci_fix"]}"#
+        let issue = try JSONDecoder().decode(ResolvedIssue.self, from: Data(json.utf8))
+        XCTAssertEqual(issue.models, ["opus", "sonnet", "haiku", "fable"])
+        XCTAssertEqual(issue.stages, ["explore", "ci_fix"])
+
+        let old = #"{"number": 8, "title": "Fix", "state": "open", "queued": true}"#
+        let older = try JSONDecoder().decode(ResolvedIssue.self, from: Data(old.utf8))
+        XCTAssertNil(older.models)
+        XCTAssertNil(older.stages)
+    }
 }
 
 final class FontScaleTests: XCTestCase {

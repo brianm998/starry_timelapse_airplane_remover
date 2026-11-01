@@ -132,9 +132,9 @@ public final class MonitorStore {
     }
 
     /// Enqueue from the + sheet, then refresh like every other action; nil (with `lastError` set) on failure.
-    public func enqueue(numbers: [Int]) async -> [EnqueueResult]? {
+    public func enqueue(numbers: [Int], models: [String: String] = [:]) async -> [EnqueueResult]? {
         var results: [EnqueueResult]?
-        await run { results = try await $0.enqueue(numbers: numbers) }
+        await run { results = try await $0.enqueue(numbers: numbers, models: models) }
         return results
     }
 

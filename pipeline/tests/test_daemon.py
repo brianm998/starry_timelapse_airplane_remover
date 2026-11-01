@@ -12,7 +12,9 @@ from starpipe.agent import StageOutcome, StageRequest
 from starpipe.config import Config
 from starpipe.daemon import Daemon, activity
 
-from .fakes import accepted, plan_args, sh
+from starpipe.tickets import lint, parse_pipeline
+
+from .fakes import GOOD_BODY, accepted, plan_args, sh
 from .test_engine import Rig, explore_ok
 from .test_selfupdate import Launchctl, fake_plist, noop_sync, ok_test
 
@@ -238,7 +240,9 @@ async def test_resolve_reports_number_title_state_and_queued_for_an_issue_in_thi
     try:
         r = await client.get("/v1/issues/resolve", params={"url": f"{ISSUES}/8"}, headers=AUTH)
         assert r.status == 200
-        assert await r.json() == {"number": 8, "title": "Fix the sky", "state": "open", "queued": False}
+        assert await r.json() == {"number": 8, "title": "Fix the sky", "state": "open", "queued": False,
+                                  "models": ["opus", "sonnet", "haiku"],
+                                  "stages": ["explore", "develop", "fix", "review", "resolve", "ci_fix", "conflict"]}
         r = await client.get("/v1/issues/resolve", params={"url": f" {ISSUES}/9#issuecomment-1\n"}, headers=AUTH)
         assert (await r.json())["queued"] is True
     finally:
@@ -282,6 +286,77 @@ async def test_enqueue_labels_unlabelled_issues_skips_labelled_ones_and_sync_iss
         await client.close()
     rig.engine.sync_issues()
     assert rig.state(8) == "queued"
+
+
+async def test_enqueue_with_models_adds_replaces_keeps_and_creates_the_pipeline_section(rig: Rig) -> None:
+    with_section = GOOD_BODY + "\n## Pipeline\ngherkin: no · model_develop: haiku · effort_fix: high · model_review: opus\n"
+    fenced = "```\n## Pipeline\nmodel_fix: haiku\n```\n\n" + GOOD_BODY
+    rig.gh.add_issue(8, "No section", author="someone", labels=())
+    rig.gh.add_issue(9, "Has a section", author="someone", labels=())
+    rig.gh.issues[9]["body"] = with_section + "\n## Notes\nlater\n"
+    rig.gh.add_issue(10, "Heading in a fence", author="someone", labels=())
+    rig.gh.issues[10]["body"] = fenced
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/enqueue", json={"numbers": [8, 9, 10],
+                                                   "models": {"develop": "sonnet", "ci_fix": "opus"}}, headers=AUTH)
+        assert r.status == 200
+        assert [x["result"] for x in (await r.json())["results"]] == ["labelled"] * 3
+    finally:
+        await client.close()
+    bodies = {n: rig.gh.issues[n]["body"] for n in (8, 9, 10)}
+    chosen = "model_develop: sonnet · model_ci_fix: opus"
+    assert bodies[8] == GOOD_BODY.rstrip("\n") + f"\n\n## Pipeline\n{chosen}\n"
+    assert parse_pipeline(bodies[9]) == {"gherkin": "no", "model_develop": "sonnet", "effort_fix": "high",
+                                         "model_review": "opus", "model_ci_fix": "opus"}
+    assert "gherkin: no · model_develop: sonnet · effort_fix: high · model_review: opus · model_ci_fix: opus\n\n## Notes\nlater" in bodies[9]
+    assert bodies[9].count("## Pipeline") == 1
+    assert bodies[10].startswith(fenced) and bodies[10].endswith(f"## Pipeline\n{chosen}\n")
+    assert parse_pipeline(bodies[10]) == {"model_develop": "sonnet", "model_ci_fix": "opus"}
+    assert all(lint(b).ok for b in bodies.values())
+    assert all("pipeline" in {lab["name"] for lab in rig.gh.issues[n]["labels"]} for n in (8, 9, 10))
+
+
+async def test_enqueue_without_models_leaves_the_body_alone(rig: Rig) -> None:
+    rig.gh.add_issue(8, "Fix the sky", author="someone", labels=())
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/enqueue", json={"numbers": [8], "models": {}}, headers=AUTH)
+        assert r.status == 200
+    finally:
+        await client.close()
+    assert rig.gh.issues[8]["body"] == GOOD_BODY
+
+
+async def test_enqueue_rejects_unknown_stages_and_disallowed_models_without_touching_any_issue(rig: Rig) -> None:
+    rig.gh.add_issue(8, "Fix the sky", author="someone", labels=())
+    rig.gh.add_issue(9, "Also", author="someone", labels=())
+    client, _ = await api(rig)
+    try:
+        for models in ({"nonsense": "opus"}, {"ci-fix": "opus"}, {"develop": "fable"}, {"develop": "gpt"},
+                       {"develop": "sonnet", "review": "fable"}, {"develop": 3}, ["develop"]):
+            r = await client.post("/v1/enqueue", json={"numbers": [8, 9], "models": models}, headers=AUTH)
+            assert r.status == 400, models
+            assert (await r.text()).strip(), models
+    finally:
+        await client.close()
+    assert [rig.gh.issues[n]["body"] for n in (8, 9)] == [GOOD_BODY, GOOD_BODY]
+    assert [rig.gh.issues[n]["labels"] for n in (8, 9)] == [[], []]
+
+
+async def test_enqueue_allows_fable_when_the_config_does(rig: Rig) -> None:
+    rig.gh.add_issue(8, "Fix the sky", author="someone", labels=())
+    d = Daemon(rig.engine, Config(allow_fable=True), token="tok")
+    client = TestClient(TestServer(d.app()))
+    await client.start_server()
+    try:
+        r = await client.post("/v1/enqueue", json={"numbers": [8], "models": {"review": "fable"}}, headers=AUTH)
+        assert r.status == 200
+        resolved = await client.get("/v1/issues/resolve", params={"url": f"{ISSUES}/8"}, headers=AUTH)
+        assert (await resolved.json())["models"] == ["opus", "sonnet", "haiku", "fable"]
+    finally:
+        await client.close()
+    assert parse_pipeline(rig.gh.issues[8]["body"]) == {"model_review": "fable"}
 
 
 # self-update ---------------------------------------------------------------------------------------------------------
