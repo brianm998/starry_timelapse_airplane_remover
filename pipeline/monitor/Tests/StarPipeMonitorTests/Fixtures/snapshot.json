@@ -47,6 +47,7 @@
     "paused": false,
     "stop_line": null
   },
+  "max_active": 2,
   "nightly": {
     "at": 1500.0,
     "id": 1,
@@ -60,6 +61,14 @@
   "now": 2000.0,
   "pause": null,
   "repo": "brianm998/starry_timelapse_airplane_remover",
+  "resources": {
+    "cpu_limit": 85.0,
+    "cpu_pct": 0.0,
+    "llm_active": 1,
+    "llm_max": 3,
+    "overridden": false,
+    "waiting": ""
+  },
   "runtime": {
     "behind_develop": 2,
     "sha": "abc1234"
@@ -70,6 +79,7 @@
       "blocked_by": [],
       "branch": null,
       "group": "needs_you",
+      "model": null,
       "number": 1,
       "park_reason": "waiting on the owner",
       "pr_number": null,
@@ -85,6 +95,7 @@
       "blocked_by": [],
       "branch": null,
       "group": "running",
+      "model": "opus",
       "number": 2,
       "park_reason": null,
       "pr_number": null,
@@ -110,6 +121,7 @@
       "blocked_by": [],
       "branch": null,
       "group": "waiting",
+      "model": null,
       "number": 3,
       "park_reason": null,
       "pr_number": null,
@@ -125,6 +137,7 @@
       "blocked_by": [],
       "branch": null,
       "group": "queued",
+      "model": null,
       "number": 4,
       "park_reason": null,
       "pr_number": null,
@@ -140,6 +153,7 @@
       "blocked_by": [],
       "branch": null,
       "group": "landed_today",
+      "model": null,
       "number": 5,
       "park_reason": null,
       "pr_number": null,
@@ -155,6 +169,7 @@
       "blocked_by": [],
       "branch": null,
       "group": "failed",
+      "model": null,
       "number": 6,
       "park_reason": "CI still red after 2 fix cycles",
       "pr_number": null,

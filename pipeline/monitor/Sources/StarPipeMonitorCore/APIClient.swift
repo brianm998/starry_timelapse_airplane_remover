@@ -103,6 +103,13 @@ public struct APIClient: Sendable {
         try JSONDecoder().decode(Snapshot.self, from: try await send(request("/v1/snapshot")))
     }
 
+    public func monitorUpdate(sha: String) async throws -> MonitorUpdateInfo {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&+=#")
+        let encoded = sha.addingPercentEncoding(withAllowedCharacters: allowed) ?? sha
+        return try JSONDecoder().decode(MonitorUpdateInfo.self, from: try await send(request("/v1/monitor-update?sha=\(encoded)")))
+    }
+
     public func detail(_ number: Int) async throws -> TicketDetail {
         try JSONDecoder().decode(TicketDetail.self, from: try await send(request("/v1/tickets/\(number)")))
     }
@@ -116,10 +123,34 @@ public struct APIClient: Sendable {
         _ = try await send(request(path, method: "POST", body: body))
     }
 
+    /// Query-value characters: `urlQueryAllowed` keeps `&`, `=`, `+`, `#` and `?`, which would cut the value short.
+    static let queryValueAllowed: CharacterSet = {
+        var set = CharacterSet.urlQueryAllowed
+        set.remove(charactersIn: "&=+#?")
+        return set
+    }()
+
+    /// Resolve an issue link to its number and title; a rejection (another repo, a PR, closed) is `.status(4xx, reason)`.
+    public func resolve(url: String) async throws -> ResolvedIssue {
+        let value = url.addingPercentEncoding(withAllowedCharacters: Self.queryValueAllowed) ?? ""
+        return try JSONDecoder().decode(ResolvedIssue.self, from: try await send(request("/v1/issues/resolve?url=\(value)", timeout: 30)))
+    }
+
+    /// Label these issues `pipeline` so the daemon's next intake poll queues them, first writing the per-stage
+    /// `models` choices (stage → model, defaults already dropped) into each issue's `## Pipeline` section.
+    public func enqueue(numbers: [Int], models: [String: String] = [:]) async throws -> [EnqueueResult] {
+        struct Results: Decodable { var results: [EnqueueResult] }
+        let body = EnqueueRequest.body(numbers: numbers, choices: models)
+        let data = try await send(request("/v1/enqueue", method: "POST", body: body, timeout: 60))
+        return try JSONDecoder().decode(Results.self, from: data).results
+    }
+
     public func answer(_ number: Int, text: String) async throws { try await post("/v1/tickets/\(number)/answer", body: ["text": text]) }
     public func retry(_ number: Int, stage: String) async throws { try await post("/v1/tickets/\(number)/retry", body: ["stage": stage]) }
     public func cancel(_ number: Int, reason: String) async throws { try await post("/v1/tickets/\(number)/cancel", body: ["reason": reason]) }
     public func setPriority(_ number: Int, _ priority: Int) async throws { try await post("/v1/tickets/\(number)/prio", body: ["priority": priority]) }
+    public func landNow(_ number: Int) async throws { try await post("/v1/tickets/\(number)/land-now") }
+    public func setMaxActive(_ n: Int) async throws { try await post("/v1/settings", body: ["max_active": n]) }
 
     /// The server-sent event stream, from `after`. Ends (throwing) when the connection drops; the caller reconnects.
     public func events(after: Int) -> AsyncThrowingStream<ServerEvent, Error> {

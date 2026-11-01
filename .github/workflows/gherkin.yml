@@ -66,8 +66,10 @@ on:
 
 concurrency:
   group: gherkin-${{ github.workflow }}-${{ github.ref }}
-  # a push to develop must run to the end: it is the baseline the pipeline's CI judge compares PRs with
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # a newer push to develop supersedes the older develop runs still going, so a burst of pushes does not queue several
+  # long runs; release tags have their own group and are never cancelled. The pipeline's develop watch skips cancelled
+  # runs, so the CI judge's baseline stays the last run that ended success or failure.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
 
 jobs:
   # ─── The matrix: which features each client runs ─────────────────────────────
@@ -874,10 +876,24 @@ jobs:
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
       # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.
+      # stard intermittently wedges outright after frame 0's alignment (no governor line for the rest of the run, so it is stuck, not slow;
+      # autoHorizonVideo, about 3 runs in 14), and the whole 50 minutes of the test timeout go by. A passing autoHorizonVideo leg takes
+      # 8-13 minutes, so cut an attempt off at 25 and try once more; the retry kills any stard left behind. Root cause: filed as a follow-up.
       - name: Run the Gherkin features in the Compose UI
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
-        run: gherkin/run-desktop-features.sh "$GITHUB_WORKSPACE/daemon/.build/release/stard" ${{ steps.t.outputs.features }}
+        uses: nick-fields/retry@v3
+        with:
+          # an attempt of the `ui` job is all its features; a retry runs only those that failed (the script keeps what passed)
+          timeout_minutes: ${{ matrix.feature == 'ui' && 75 || 25 }}
+          max_attempts: 2
+          retry_wait_seconds: 20
+          polling_interval_seconds: 5
+          warning_on_retry: true
+          # The killed run's marker would make the next stard report a crashed run and cover the UI with an alert.
+          on_retry_command: pkill -x stard || true; rm -rf star-desktop/build/run-markers
+          shell: bash
+          command: gherkin/run-desktop-features.sh "$GITHUB_WORKSPACE/daemon/.build/release/stard" ${{ steps.t.outputs.features }}
 
       - name: Upload test reports
         if: always()

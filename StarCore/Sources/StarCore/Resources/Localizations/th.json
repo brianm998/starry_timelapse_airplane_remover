@@ -1229,5 +1229,6 @@
   "settings_tab.gpu": "การใช้ GPU",
   "settings_tab.alignment": "การจัดวาง",
   "settings_tab.horizon": "เส้นขอบฟ้า",
-  "settings_tab.memory": "หน่วยความจำ"
+  "settings_tab.memory": "หน่วยความจำ",
+  "ui.settings": "การตั้งค่า"
 }

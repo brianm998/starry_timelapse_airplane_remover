@@ -156,13 +156,13 @@ struct StageTimeline: View {
                                     .frame(width: w * min(1, s.lockWaitS / max(1, duration(s))))
                             }
                         }
-                        .frame(width: w).help("\(s.stage) \(s.attempt) · \(Int(duration(s) / 60)) min" +
+                        .frame(width: w).help("\(s.stage) \(s.attempt) on \(s.model) · \(Int(duration(s) / 60)) min" +
                                               (s.lockWaitS >= 60 ? " (\(Int(s.lockWaitS / 60)) min waiting for the heavy lock)" : ""))
                     }
                 }
             }
             .frame(height: 18)
-            Text(stages.map { "\($0.stage) \($0.attempt)" }.joined(separator: " → ")).scaledFont(.caption).foregroundStyle(.secondary)
+            Text(stages.map { "\($0.stage) \($0.attempt) (\($0.model))" }.joined(separator: " → ")).scaledFont(.caption).foregroundStyle(.secondary)
         }
     }
 

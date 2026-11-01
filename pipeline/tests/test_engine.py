@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from starpipe.engine import Engine
 from starpipe.notify import Notifier
 
 from .fakes import (
+    GOOD_BODY,
     OWNER,
     FakeAgent,
     FakeGitHub,
@@ -36,8 +38,9 @@ class Rig:
         async def sleep(s: float) -> None:
             self.slept.append(s)
             self.now += s
+            await asyncio.sleep(0)  # yield like the real sleep: a ticket polling for room must let the others run
 
-        self.engine = Engine(Config(remote="origin"), self.db, self.gh, self.agent, make_repo(tmp), green_runner,
+        self.engine = Engine(Config(remote="origin", landing_mode="single"), self.db, self.gh, self.agent, make_repo(tmp), green_runner,
                              Notifier(self.db, lambda t, x: self.pages.append((t, x))), "origin/develop",
                              clock=lambda: self.now, sleep=sleep,
                              negative_control=no_controls)
@@ -126,13 +129,18 @@ async def test_blockers_and_priority_decide_the_claim(rig: Rig) -> None:
     assert t and t.number == 1
 
 
-async def test_the_active_cap_holds_new_claims(rig: Rig) -> None:
-    for n in (1, 2, 3):
-        rig.gh.add_issue(n, f"t{n}")
-    rig.engine.sync_issues()
-    rig.db.set_state(1, "developing")
-    rig.db.set_state(2, "exploring")
-    assert rig.engine.claimable() is None
+async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Rig) -> None:
+    assert rig.engine.max_active() == rig.engine.config.max_llm_sessions
+    rig.db.put("max_active", "2")
+    assert rig.engine.max_active() == 2
+    rig.db.put("max_active", "junk")
+    assert rig.engine.max_active() == rig.engine.config.max_llm_sessions  # an unreadable override falls back to the file
+    rig.db.put("max_active", "2")
+    rig.db.put("limit_llm", "5")  # `starpipe limits` is the more specific override
+    assert rig.engine.max_active() == 5
+    rig.db.put("limit_llm", None)
+    rig.db.put("max_active", None)
+    assert rig.engine.max_active() == rig.engine.config.max_llm_sessions
 
 
 async def test_a_stage_without_a_result_climbs_the_ladder_then_parks(rig: Rig) -> None:
@@ -144,6 +152,59 @@ async def test_a_stage_without_a_result_climbs_the_ladder_then_parks(rig: Rig) -
     assert [r.attempt for r in rig.agent.requests] == [1, 2, 3]
     assert rig.state(7) == "failed"
     assert rig.db.open_alert("ticket-failed:7", "again") is False  # already open
+
+
+def piped(entries: str) -> str:
+    return GOOD_BODY + f"\n## Pipeline\n{entries}\n"
+
+
+async def test_a_tickets_per_stage_model_and_effort_reach_the_stage_request(rig: Rig) -> None:
+    rig.engine.config.model = "sonnet"
+    rig.gh.add_issue(7, "t", body=piped("model_explore: haiku · effort_explore: max · effort_develop: low"))
+    rig.gh.add_issue(8, "t")
+    rig.engine.sync_issues()
+    await rig.engine.drive(7)
+    await rig.engine.drive(8)
+    mine = [r for r in rig.agent.requests if r.ticket == 7]
+    other = [r for r in rig.agent.requests if r.ticket == 8]
+    assert [(r.model, r.effort) for r in mine[:2]] == [("haiku", "max")] * 2
+    assert [(r.model, r.effort) for r in other[:2]] == [("sonnet", "high")] * 2
+
+    # a stage the ticket does not name keeps the default, a hyphenated stage maps to its underscored key
+    rig.db.upsert_ticket(7, "t", piped("model_ci_fix: sonnet · effort_ci_fix: xhigh"), OWNER, 2, [])
+    assert rig.engine._stage_choice(rig.db.ticket(7), "ci-fix", 1) == ("sonnet", "xhigh")  # type: ignore[arg-type]
+    assert rig.engine._stage_choice(rig.db.ticket(7), "conflict", 1) == ("sonnet", "high")  # type: ignore[arg-type]
+
+
+async def test_attempt_three_escalates_unless_the_ticket_names_a_model(rig: Rig) -> None:
+    rig.engine.config.model = "sonnet"
+    rig.engine.config.model_escalate = "opus"
+    rig.gh.add_issue(7, "t", body=piped("model_develop: haiku"))
+    rig.gh.add_issue(8, "t", body=piped("effort_explore: low"))
+    rig.engine.sync_issues()
+    await rig.engine.drive(7)
+    await rig.engine.drive(8)
+    assert [r.model for r in rig.agent.requests if r.ticket == 8] == ["sonnet", "sonnet", "opus"]  # explore, escalates
+    rig.agent.on("explore", explore_ok)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"), lambda r: StageOutcome("no-result"),
+                 lambda r: StageOutcome("no-result"))
+    rig.db.set_state(7, "queued")
+    await rig.engine.drive(7)
+    develops = [r for r in rig.agent.requests if r.ticket == 7 and r.stage == "develop"]
+    assert [r.model for r in develops] == ["haiku", "haiku", "haiku"]  # the explicit choice survives attempt 3
+
+
+async def test_a_disallowed_model_or_unknown_effort_falls_back_and_is_noted(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t", body=piped("model_explore: fable · effort_explore: ultra"))
+    rig.engine.sync_issues()
+    await rig.engine.drive(7)
+    assert {(r.model, r.effort) for r in rig.agent.requests} == {(rig.engine.config.model, "high")}
+    noted = [e for e in rig.db.events_since() if e["kind"] == "stage-choice-ignored"]
+    assert {e["data"]["key"] for e in noted} == {"model_explore", "effort_explore"}
+    assert any("fable" in e["data"]["reason"] for e in noted)
+
+    rig.engine.config.allow_fable = True  # fable is honoured once the config allows it
+    assert rig.engine._stage_choice(rig.db.ticket(7), "explore", 1)[0] == "fable"  # type: ignore[arg-type]
 
 
 async def test_a_timeout_resumes_the_same_session(rig: Rig) -> None:
