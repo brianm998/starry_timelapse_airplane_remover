@@ -275,6 +275,28 @@ class Engine:
     def _owner_filed(self, t: Ticket) -> bool:
         return t.author.lower() == self.config.owner.lower() and not self.db.get(f"auto:{t.number}")
 
+    def _record_usage_windows(self, windows: dict[str, Any]) -> None:
+        """Keep the latest five_hour / seven_day utilization and reset time a stage's stream reported. An event carrying
+        only one window leaves the other as it was; anything malformed changes nothing."""
+        stored: dict[str, Any] = {}
+        raw = self.db.get("usage_windows")
+        try:
+            loaded: Any = json.loads(raw) if raw else {}
+            stored = loaded if isinstance(loaded, dict) else {}
+        except ValueError:
+            stored = {}
+        changed = False
+        for key in ("five_hour", "seven_day"):
+            w: Any = windows.get(key)
+            if not isinstance(w, dict):
+                continue
+            u, r = w.get("utilization"), w.get("resetsAt")
+            if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (u, r)):
+                stored[key] = {"utilization": u, "resetsAt": r}
+                changed = True
+        if changed:
+            self.db.put("usage_windows", json.dumps(stored))
+
     async def model_stage(self, t: Ticket, stage: str, prompt: str, *, fresh: bool = False,
                           allow_resolve: bool = True) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
@@ -296,7 +318,8 @@ class Engine:
             req = StageRequest(t.number, stage, attempt, body,
                                prompt_text("_preamble") + "\n\n" + prompt_text(stage.replace("-", "_")), model,
                                effort, BUDGET_S[stage], contract, self._fence(t, stage), resume,
-                               on_session=lambda sid, sid_row=stage_id: self.db.set_session(sid_row, sid))
+                               on_session=lambda sid, sid_row=stage_id: self.db.set_session(sid_row, sid),
+                               on_usage=self._record_usage_windows)
             out: StageOutcome = await self.agent.run(req)
             if out.session_id:
                 self.db.set_session(stage_id, out.session_id)

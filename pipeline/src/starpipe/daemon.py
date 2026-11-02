@@ -423,9 +423,18 @@ class Daemon:
                            "error": self.last_error or self.update_error()},
                 "self_update": {"pending": self.db.get("self_update_pending"), "failed": self.update_failure()},
                 "resources": self.resources(), "pause": self.db.get("pause"), "muted": self.db.get("muted") == "1", "usage_pause_until": self.db.get("usage_pause_until"),
+                "usage_windows": self.usage_windows(),
                 "heavy": {"holders": [h.__dict__ for h in hv.holders], "queue": [w.__dict__ for w in hv.queue]},
                 "landing": train_info(self.db, self.config, self.engine.clock()),
                 "tickets": tickets, "gherkin_nightly": self.gherkin_info()}
+
+    def usage_windows(self) -> dict[str, object] | None:
+        raw = self.db.get("usage_windows")
+        try:
+            value: object = json.loads(raw) if raw else None
+        except ValueError:
+            return None
+        return cast("dict[str, object]", value) if isinstance(value, dict) else None
 
     def update_failure(self) -> dict[str, object] | None:
         raw = self.db.get("self_update_failed")

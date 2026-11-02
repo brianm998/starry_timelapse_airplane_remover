@@ -201,5 +201,15 @@
     }
   ],
   "usage_pause_until": null,
+  "usage_windows": {
+    "five_hour": {
+      "resetsAt": 3600.0,
+      "utilization": 0.1
+    },
+    "seven_day": {
+      "resetsAt": 90000.0,
+      "utilization": 0.24
+    }
+  },
   "version": "starpipe 1"
 }
