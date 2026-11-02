@@ -700,6 +700,17 @@ jobs:
         run: |
           swift build -c release --package-path trail_tools
 
+      # The @ui features that start from "a processed copy of the sequence" (uiOutlier…) need the sequence the cli processes once
+      # (gherkin/ui/make-processed-fixture.sh, selective, ~90 s once the cli is built). The runner would build the cli itself when
+      # it is missing, but not from the XCUITest runner's sandbox (xcrun is refused there) and not on a leg that has no cli, so the
+      # job makes the fixture first and the runner finds it.
+      - name: Make the processed sequence the @ui features start from
+        if: ${{ matrix.feature == 'ui' }}
+        shell: bash
+        run: |
+          swift build -c release --package-path cli
+          gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
+
       # Release, but ENABLE_TESTABILITY=YES: the scheme's other test target (starTests) is `@testable import Star`, and Release
       # builds every test target even under -only-testing.
       # Never -target Star (bogus module errors) and no -destination (errors on this scheme): see gherkin/README.md.
@@ -860,6 +871,17 @@ jobs:
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
+
+      # The @ui features that start from "a processed copy of the sequence" (uiOutlier…) need the sequence the cli processes once
+      # (gherkin/ui/make-processed-fixture.sh, selective, ~90 s once the cli is built). The runner would build the cli itself when
+      # it is missing, but not from the XCUITest runner's sandbox (xcrun is refused there) and not on a leg that has no cli, so the
+      # job makes the fixture first and the runner finds it.
+      - name: Make the processed sequence the @ui features start from
+        if: ${{ matrix.feature == 'ui' }}
+        shell: bash
+        run: |
+          swift build -c release --package-path cli
+          gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -1093,6 +1115,20 @@ jobs:
         shell: bash
         run: |
           swift build -c release --package-path trail_tools
+
+      # The @ui features that start from "a processed copy of the sequence" (uiOutlier…) need the sequence the cli processes once
+      # (gherkin/ui/make-processed-fixture.sh, selective, ~90 s once the cli is built). The runner would build the cli itself when
+      # it is missing, but not from the XCUITest runner's sandbox (xcrun is refused there) and not on a leg that has no cli, so the
+      # job makes the fixture first and the runner finds it.
+      - name: Make the processed sequence the @ui features start from
+        if: ${{ matrix.feature == 'ui' }}
+        shell: bash
+        run: |
+          swift build -c release --package-path cli
+          BIN="$(swift build -c release --package-path cli --show-bin-path)"
+          # the script (and the runner's call of it, which finds the fixture ready) looks for the cli here
+          echo "STAR_CLI_PATH=$BIN/star.exe" >> "$GITHUB_ENV"
+          STAR_CLI_PATH="$BIN/star.exe" gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4

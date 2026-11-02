@@ -34,12 +34,17 @@ if [ ! -x "$star" ]; then
 fi
 
 name=$(basename "$sequence")
-stamp=$(stat -f '%m-%z' "$star" 2>/dev/null || stat -c '%Y-%s' "$star")
+# GNU stat first: BSD stat has no -c (it fails, printing nothing to stdout), but GNU stat's -f is "filesystem" and prints its report to stdout.
+stamp=$(stat -c '%Y-%s' "$star" 2>/dev/null || stat -f '%m-%z' "$star")
 fixtures=${STAR_UI_FIXTURES:-$root/.test-data/ui-processed}
 dest="$fixtures/$name-$stamp"
 
+# What is printed, and handed to the cli, is the path in the form the runner's own language reads: on Windows (Git Bash) a JVM wants C:/..., not /d/a/...
+shown=$dest
+if command -v cygpath >/dev/null 2>&1; then shown=$(cygpath -m "$dest"); fi
+
 if [ -f "$dest/READY" ]; then
-    echo "$dest"
+    echo "$shown"
     exit 0
 fi
 
@@ -47,7 +52,7 @@ fi
 rm -rf "$dest"
 mkdir -p "$dest/input"
 cp -R "$sequence" "$dest/input/$name"
-if ! "$star" --language en -l info --keep-temp-files --no-horizon -c selective "$dest/input/$name" "$dest/output" > "$dest/star.log" 2>&1; then
+if ! "$star" --language en -l info --keep-temp-files --no-horizon -c selective "$shown/input/$name" "$shown/output" > "$dest/star.log" 2>&1; then
     echo "star exited with an error; last output:" >&2
     tail -40 "$dest/star.log" >&2
     rm -rf "$dest"
@@ -59,4 +64,4 @@ if [ ! -f "$dest/input/star_temp_$name/config.json" ]; then
     exit 1
 fi
 date -u +%Y-%m-%dT%H:%M:%SZ > "$dest/READY"
-echo "$dest"
+echo "$shown"
