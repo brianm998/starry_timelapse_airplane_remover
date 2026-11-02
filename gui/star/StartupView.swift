@@ -472,11 +472,11 @@ struct RemovalView: View {
 
             Space(height: 14)
             Divider()
-            Space(height: 10)
+            Space(height: 6)
             KeypointDivisorSummaryRow(divisor: viewModel.alignmentKeypointDetectionDivisor) {
                 showSpeedSheet = true
             }
-            Space(height: 10)
+            Space(height: 6)
             Divider()
 
             Space(height: 10)

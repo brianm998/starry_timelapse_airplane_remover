@@ -5,6 +5,10 @@ import logging
 /// What the cleanup dialog's one-line "Speed vs. Sharpness" row says is in effect, and the
 /// button that opens the full choice (`KeypointDivisorStartupView`) in a sheet.
 ///
+/// Kept no taller than the 21pt line of text beside it: this dialog is the one that is too
+/// tall for small screens, and on a 768pt display (a hosted runner) a few points more push
+/// the Back button into the Dock's zone, where a click is lost.
+///
 /// The value is the label from `KeypointDivisorStartupView.summaryLabel`: a preset's number
 /// and name, or the bare number for any other value.
 struct KeypointDivisorSummaryRow: View {
@@ -27,8 +31,8 @@ struct KeypointDivisorSummaryRow: View {
                   .font(.title3)
                   .foregroundColor(.white)
                   .padding(.horizontal, 12)
-                  .padding(.vertical, 4)
-                  .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue.opacity(0.7)))
+                  .padding(.vertical, 1)
+                  .background(RoundedRectangle(cornerRadius: 12).fill(Color.blue.opacity(0.7)))
             }
               .buttonStyle(PlainButtonStyle())
               .accessibilityIdentifier("startup.removal.speed.update")
