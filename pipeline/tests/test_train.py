@@ -349,11 +349,30 @@ async def test_drive_leaves_ready_and_batched_tickets_to_the_train(rig: Rig) -> 
     assert rig.state(1) == "ci" and len(rig.gh.prs) == 1
 
 
+async def test_members_are_recorded_while_building_and_deferred_ones_dropped(rig: Rig) -> None:
+    ready_ticket(rig, 1, "same.md", "one\n")
+    ready_ticket(rig, 2, "same.md", "two\n")  # conflicts with #1: it waits for the next batch
+    ready_ticket(rig, 3, "f3.md", "3\n")
+    seen: list[list[int]] = []
+    t = train_of(rig)
+    real = t._build  # pyright: ignore[reportPrivateUsage]
+
+    def watched(bid: int, tickets: list[Any], base: str) -> Any:
+        seen.append(rig.db.batch_members(bid))  # what the monitor reads while the batch is `building`
+        return real(bid, tickets, base)
+
+    t._build = watched  # type: ignore[method-assign]  # pyright: ignore[reportPrivateUsage]
+    await t._start([1, 2, 3])  # pyright: ignore[reportPrivateUsage]
+    assert seen == [[1, 2, 3]]
+    assert rig.db.batch_members(1) == [1, 3], "the deferred ticket is no longer shown in the batch"
+    assert rig.db.batch_of(2) is None
+
+
 async def test_the_activity_line_names_the_batch(rig: Rig) -> None:
     for n in (1, 2):
         ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
     ticket = rig.db.ticket(1)
-    assert ticket and activity(rig.db, ticket) == "ready · waiting for the next batch"
+    assert ticket and activity(rig.db, ticket, config=rig.engine.config) == "ready · waiting for the next batch (starting)"
     assert activity(rig.db, ticket, mode="single") == "ready to publish"
     await train_of(rig)._start([1, 2])  # pyright: ignore[reportPrivateUsage]
     ticket = rig.db.ticket(1)

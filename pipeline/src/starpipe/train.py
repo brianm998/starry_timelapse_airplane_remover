@@ -22,7 +22,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from . import ci, gitutil, landing, ship, worktrees
-from .db import Ticket
+from .config import Config
+from .db import Database, Ticket
 from .github import GitHubError
 
 if TYPE_CHECKING:
@@ -30,6 +31,8 @@ if TYPE_CHECKING:
 
 WORKTREE = "pipe-batch"
 BACKOFF_S = 60.0
+SLOW_BUILDING_S = 600.0  # a batch still `building` after this long is marked slow in the snapshot
+ABANDONED_MEMORY_S = 3600.0  # how long the snapshot and status remember the last abandoned batch
 
 
 def batch_worktree(repo: Path) -> Path:
@@ -38,6 +41,21 @@ def batch_worktree(repo: Path) -> Path:
 
 def batch_branch(batch: int) -> str:
     return f"pipe/batch-{batch}"
+
+
+def window_left(db: Database, config: Config, now: float) -> float | None:
+    """Seconds until the train forms its next batch (0: it is about to), or None when a batch is active or nothing is ready.
+
+    The same arithmetic as `Train._pick`: a batch forms once `batch_max` tickets are ready or the oldest has waited `batch_window_s`."""
+    if db.active_batch() is not None:
+        return None
+    ready = [t for t in db.tickets(("ready",)) if db.batch_of(t.number) is None]
+    if not ready:
+        return None
+    if len(ready) >= config.batch_max:
+        return 0.0
+    oldest = min(db.state_since(t.number, "ready") or t.updated_at for t in ready)
+    return max(0.0, config.batch_window_s - (now - oldest))
 
 
 @dataclass
@@ -120,12 +138,15 @@ class Train:
             return
         bid = eng.db.batch_create(base)
         tickets = [t for n in members if (t := eng.db.ticket(n)) is not None and t.state == "ready"]
+        for position, t in enumerate(tickets):  # members from the start, so the monitor can say "in batch N (building)"
+            eng.db.batch_add(bid, t.number, position)
         try:
             built = await asyncio.to_thread(self._build, bid, tickets, base)
         except (RuntimeError, OSError) as exc:
             await asyncio.to_thread(self._abandon, bid, f"could not build the batch: {exc}")
             await eng.sleep(BACKOFF_S)
             return
+        eng.db.batch_remove(bid, [*built.deferred, *built.catch_up])  # not in this batch after all
         if not built.merged:
             for n in built.catch_up:
                 await self._catch_up(n)

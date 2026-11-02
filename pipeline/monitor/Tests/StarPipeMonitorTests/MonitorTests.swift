@@ -27,6 +27,31 @@ final class FixtureTests: XCTestCase {
         XCTAssertNil(s.usagePauseUntil)
     }
 
+    func testLandingQueueSectionShowsTheBatchTheAbandonedBatchAndTheSlowFlag() throws {
+        var s = try Self.snapshot()
+        XCTAssertEqual(s.landing.batch, BatchInfo(number: 2, phase: "ci", ageS: 90, members: [3], prNumber: 12, slow: false))
+        XCTAssertEqual(s.landing.lastAbandoned?.reason, "develop moved")
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.text),
+                       ["batch 2: ci · age 1m · #3", "batch 1 abandoned 1m ago: develop moved"])
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.slow), [false, false])
+
+        s.landing.batch = BatchInfo(number: 8, phase: "building", ageS: 11 * 60, members: [59, 76], prNumber: nil, slow: true)
+        s.landing.lastAbandoned = AbandonedBatch(number: 7, state: "abandoned", reason: "develop moved with overlapping changes",
+                                                 agoS: 18 * 60)
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.text),
+                       ["batch 8: building · age 11m · #59 #76 · SLOW",
+                        "batch 7 abandoned 18m ago: develop moved with overlapping changes"])
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.slow), [true, false])
+
+        s.landing.batch = nil
+        s.landing.lastAbandoned = nil
+        s.landing.nextBatchInS = 45
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.text), ["no batch yet: the next one starts in 45s"])
+        s.landing.nextBatchInS = nil
+        XCTAssertEqual(Overview.landingLines(s.landing), [])
+        XCTAssertEqual(Overview.landingLines(nil), [])
+    }
+
     func testSnapshotDecodesMaxActive() throws {
         XCTAssertEqual(try Self.snapshot().maxActive, 2)
     }

@@ -266,6 +266,16 @@ class Database:
     def batch_add(self, batch: int, ticket: int, position: int) -> None:
         self._exec("INSERT OR REPLACE INTO batch_members(batch,ticket,position) VALUES (?,?,?)", (batch, ticket, position))
 
+    def batch_remove(self, batch: int, tickets: list[int]) -> None:
+        for n in tickets:
+            self._exec("DELETE FROM batch_members WHERE batch=? AND ticket=?", (batch, n))
+
+    def last_abandoned_batch(self, since: float) -> dict[str, Any] | None:
+        """The most recent batch that was given up (abandoned or red) at or after `since`; its `note` is the reason."""
+        rows = self._all("SELECT * FROM batches WHERE state IN ('abandoned','failed') AND ended >= ? ORDER BY ended DESC, id DESC LIMIT 1",
+                         (since,))
+        return dict(rows[0]) if rows else None
+
     def batch_members(self, batch: int) -> list[int]:
         return [r["ticket"] for r in self._all("SELECT ticket FROM batch_members WHERE batch=? ORDER BY position", (batch,))]
 
