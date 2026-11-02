@@ -231,10 +231,7 @@ public actor OutlierGroups {
 
             // look for OutlierGroupPaintData.json
 
-            let paintfileurl = NSURL(fileURLWithPath: filename,
-                                     isDirectory: false)
-
-            let (paintData, _) = try await URLSession.shared.data(for: URLRequest(url: paintfileurl as URL))
+            let paintData = try Data(contentsOf: URL(fileURLWithPath: filename))
 
             return try decoder.decode([UInt16:RemoveReason].self, from: paintData)
         }

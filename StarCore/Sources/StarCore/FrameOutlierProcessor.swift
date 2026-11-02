@@ -113,8 +113,7 @@ final public actor FrameOutlierProcessor {
                 // newer file format, default to this
                 return try await loadOutliersFromBinaryFile()
             } catch {
-                //Log.i("frame \(frameIndex) failed to load outliers: \(error)")
-                // XXX log here
+                Log.i("frame \(frameIndex) failed to load outliers: \(error)")
             }
 
             return nil
