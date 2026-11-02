@@ -7,6 +7,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from pydantic import ValidationError
+
+from . import plan as planmod
 from .github import GitHub, GitHubError
 
 SECTIONS = ["Goal", "Context", "Acceptance criteria", "Tests", "Out of scope"]
@@ -132,6 +135,116 @@ def validate_choice(key: str, value: str, allow_fable: bool = False) -> str | No
     return None
 
 
+# the '## Plan' section of an owner-filed ticket -----------------------------------------------------------------------
+PLAN_KEYS = ("summary", "parity", "localization", "approach", "file", "risk")
+TEST_KINDS = ("unit", "daemon", "cli-gherkin", "ui")
+DASH = r"(?:—|--)"
+TEST_LINE = re.compile(rf"^(?P<kind>{'|'.join(TEST_KINDS)}):\s*(?P<target>\S+)\s+(?P<name>\S+)\s*{DASH}\s*shows:\s*(?P<shows>\S+?)"
+                       rf"(?:\s*{DASH}\s*(?P<fails>fails before fix))?\s*$")
+FILE_LINE = re.compile(rf"^(?P<file>[^\s:]+):(?P<line>\d+)\s*{DASH}\s*(?P<claim>\S.*)$")
+
+
+def _split_dash(text: str) -> tuple[str, str]:
+    """'both — why' as ('both', 'why'); no dash is (text, '')."""
+    head, *tail = re.split(rf"\s*{DASH}\s*", text, maxsplit=1)
+    return head.strip(), tail[0].strip() if tail else ""
+
+
+def ticket_plan(body: str) -> tuple[planmod.Plan | None, list[str]]:
+    """The `Plan` a ticket body carries in its '## Plan' section, or what is wrong with it.
+
+    `(None, [])` is a body with no '## Plan'. The syntax is checked here with no worktree; whether the files and lines exist,
+    the criteria are mapped and the bug rules hold is `Contract.check_plan`'s job (the same call EXPLORE's plan goes through)."""
+    sections = split_sections(body)
+    if "Plan" not in sections:
+        return None, []
+    errors: list[str] = []
+    fields: dict[str, str] = {}
+    approach: list[str] = []
+    risks: list[str] = []
+    findings: list[dict[str, Any]] = []
+    for raw in sections["Plan"].splitlines():
+        line = raw.strip().lstrip("-* ").strip()
+        if not line:
+            continue
+        key, colon, value = line.partition(":")
+        key, value = key.strip(), value.strip()
+        if not colon or key not in PLAN_KEYS:
+            errors.append(f"'## Plan' line '{line}': unknown key (one of {', '.join(PLAN_KEYS)})")
+        elif not value:
+            errors.append(f"'## Plan' {key}: is empty")
+        elif key == "approach":
+            approach.append(value)
+        elif key == "risk":
+            risks.append(value)
+        elif key == "file":
+            m = FILE_LINE.match(value)
+            if m and int(m.group("line")) >= 1:
+                findings.append({"file": m.group("file"), "line": int(m.group("line")), "claim": m.group("claim")})
+            else:
+                errors.append(f"'## Plan' file '{value}': expected '<repo path>:<line> — <what is there and why it matters>'")
+        elif key in fields:
+            errors.append(f"'## Plan' has two '{key}:' lines")
+        else:
+            fields[key] = value
+    for needed in ("summary", "parity", "localization"):
+        if needed not in fields:
+            errors.append(f"'## Plan' needs a '{needed}:' line")
+    if not approach:
+        errors.append("'## Plan' needs at least one '- approach:' line")
+
+    parity, reason = "neither", ""
+    if "parity" in fields:
+        parity, reason = _split_dash(fields["parity"])
+        if parity not in ("neither", "both", "gui-only", "desktop-only"):
+            errors.append(f"'## Plan' parity '{parity}' is not neither, both, gui-only or desktop-only")
+        elif parity in ("gui-only", "desktop-only") and not reason:
+            errors.append(f"'## Plan' parity {parity} needs a reason: '{parity} — <why>'")
+    localization = fields.get("localization", "").lower()
+    if "localization" in fields and localization not in ("yes", "no"):
+        errors.append("'## Plan' localization must be yes or no")
+
+    criteria = {ident: rest for ident, rest in
+                re.findall(r"^\s*[-*]\s*(A\d+):(.*)$", sections.get("Acceptance criteria", ""), re.MULTILINE)}
+    acceptance = [{"id": ident, "check": (m.group(1) if (m := re.search(r"\bcheck:\s*(.+)$", rest)) else rest).strip()}
+                  for ident, rest in criteria.items()]
+
+    gherkin = parse_pipeline(body).get("gherkin", "").strip()
+    features: list[str] = []
+    if not gherkin:
+        errors.append("'## Plan' needs an explicit 'gherkin: <features|no>' entry under '## Pipeline'")
+    elif gherkin.lower() not in NO_FEATURES:
+        features = [f for f in re.split(r"[,\s]+", gherkin) if f]
+
+    tests: dict[str, Any] = {"new": [], "none_reason": ""}
+    test_text = sections.get("Tests", "")
+    if (none := re.match(r"none:\s*(.*)", test_text, re.IGNORECASE | re.DOTALL)):
+        tests["none_reason"] = none.group(1).strip()
+    else:
+        for raw in test_text.splitlines():
+            line = raw.strip().lstrip("-* ").strip()
+            if not line:
+                continue
+            m = TEST_LINE.match(line)
+            if not m:
+                errors.append(f"'## Tests' line '{line}': a plan ticket needs '- <{'|'.join(TEST_KINDS)}>: <target> <name> — "
+                              "shows: A<n>[ — fails before fix]' or 'none: <reason>'")
+            elif m.group("shows") not in criteria:
+                errors.append(f"'## Tests' line '{line}': shows: {m.group('shows')} is not an acceptance criterion of this ticket")
+            else:
+                tests["new"].append({"target": m.group("target"), "name": m.group("name"), "kind": m.group("kind"),
+                                     "shows": m.group("shows"), "fails_before_fix": bool(m.group("fails"))})
+    if errors:
+        return None, errors
+    try:
+        return planmod.Plan.model_validate({
+            "summary": fields["summary"], "findings": findings, "approach": approach, "tests": tests,
+            "gherkin_features_to_run": features, "acceptance": acceptance, "parity": parity, "parity_reason": reason,
+            "touches_localization": localization == "yes", "risks": risks}), []
+    except ValidationError as exc:
+        return None, [f"'## Plan' {'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()]
+
+
 def lint(body: str, title: str = "", allow_fable: bool = False) -> Lint:
     result = Lint()
     sections = split_sections(body)
@@ -169,6 +282,7 @@ def lint(body: str, title: str = "", allow_fable: bool = False) -> Lint:
             result.errors.append(f"unknown '## Pipeline' key '{key}' (known: {', '.join(sorted(PIPELINE_KEYS))})")
         elif (bad := validate_choice(key, value, allow_fable)):
             result.errors.append(f"'## Pipeline' {key}: {bad}")
+    result.errors += ticket_plan(body)[1]  # a body with no '## Plan' adds nothing
     return result
 
 

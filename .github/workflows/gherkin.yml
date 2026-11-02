@@ -81,7 +81,7 @@ on:
 
 # The run name tells a full run from a subset: the daemon counts only `Gherkin: full` (or a push, which was always full) as a
 # green full run, never `Gherkin: <features>`. Other events keep GitHub's own title (the PR title, the head commit message).
-run-name: ${{ github.event_name == 'workflow_dispatch' && format('Gherkin: {0}', inputs.features || 'full') || github.event.pull_request.title || github.event.head_commit.message }}
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('Gherkin: {0}', inputs.features || 'full') || github.event.pull_request.title || github.event.head_commit.message }}"
 
 concurrency:
   group: gherkin-${{ github.workflow }}-${{ github.ref }}
@@ -767,6 +767,18 @@ jobs:
         run: |
           swift build -c release --package-path trail_tools
 
+      # The @ui features that start from a processed sequence ask for one made by the cli (gherkin/ui/make-processed-fixture.sh). The UI-test
+      # runner is sandboxed: `swift build` there dies with "xcrun: error: cannot be used within an App Sandbox", and it cannot write the fixture
+      # into the workspace. So build the cli and make the fixture here; the runner finds it ready (same cli binary, same fixture directory).
+      - name: Make the processed fixture for the @ui features
+        if: ${{ matrix.shard.name == 'ui' }}
+        shell: bash
+        run: |
+          swift build -c release --package-path cli
+          BIN="$(swift build -c release --package-path cli --show-bin-path)"
+          echo "STAR_CLI_PATH=$BIN/star" >> "$GITHUB_ENV"
+          STAR_CLI_PATH="$BIN/star" gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
+
       # Release, but ENABLE_TESTABILITY=YES: the scheme's other test target (starTests) is `@testable import Star`, and Release
       # builds every test target even under -only-testing.
       # Never -target Star (bogus module errors) and no -destination (errors on this scheme): see gherkin/README.md.
@@ -779,6 +791,7 @@ jobs:
           STAR_SYSTEM_FLOOR_MB: 512
           TEST_RUNNER_STAR_SYSTEM_FLOOR_MB: 512
           TEST_RUNNER_STAR_FFMPEG_DIR: ${{ github.workspace }}/external_binaries/bin
+          TEST_RUNNER_STAR_CLI_PATH: ${{ env.STAR_CLI_PATH }}
         run: |
           set -o pipefail
           xcodebuild test \
