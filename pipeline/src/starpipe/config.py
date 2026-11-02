@@ -61,7 +61,9 @@ class Config(BaseModel):
     ci_blocking_wait_s: int = 4 * 3600
     # Workflows whose result a PR does not wait for. Gherkin's matrix takes ~3 h and is mostly queueing for GitHub's few macOS runners,
     # so waiting for it capped landings at a few a day (2026-10-31). Its runs on the PR are cancelled at once, to free those runners;
-    # the push to develop runs it, and the post-merge watch files a regression ticket if it goes red.
+    # the push to develop runs it, and the post-merge watch files a regression ticket if it goes red. A ticket that names Gherkin
+    # features (`gherkin:` in its Pipeline section, or the plan's gherkin_features_to_run) is the exception: ship.feature_gate dispatches
+    # gherkin.yml on its own branch with just those features, recognises the run by its display_title, and waits for it.
     ci_post_merge_workflows: tuple[str, ...] = ("Gherkin",)
     heavy_wait_report_s: float = 60.0
     api_port: int = 47231
