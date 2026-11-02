@@ -646,9 +646,9 @@ final class UsageLimitTextTests: XCTestCase {
         XCTAssertEqual(line(.fiveHour, window(0.5, in: 30 * 60)).text, "5 hour: 50% resets in 30 min (12:30pm)")
         XCTAssertEqual(line(.fiveHour, window(0.5, in: 22 * 3600 + 30 * 60)).text, "5 hour: 50% resets in 23 hours (10:30am)")
         XCTAssertEqual(line(.fiveHour, window(0.5, in: 12 * 3600)).text, "5 hour: 50% resets in 12 hours (12am)")
-        // Friday 10:00 in Los Angeles is two days and 22 hours after Wednesday noon.
-        XCTAssertEqual(line(.weekly, window(0.24, in: (2 * 24 + 22) * 3600)).text, "weekly: 24% resets at 10am friday")
-        XCTAssertEqual(line(.weekly, window(0.24, in: (2 * 24 + 22) * 3600 + 30 * 60)).text, "weekly: 24% resets at 10:30am friday")
+        // Friday 10:00 in Los Angeles is one day and 22 hours after Wednesday noon.
+        XCTAssertEqual(line(.weekly, window(0.24, in: (24 + 22) * 3600)).text, "weekly: 24% resets at 10am friday")
+        XCTAssertEqual(line(.weekly, window(0.24, in: (24 + 22) * 3600 + 30 * 60)).text, "weekly: 24% resets at 10:30am friday")
     }
 
     func testUsageLineColourBands() {
