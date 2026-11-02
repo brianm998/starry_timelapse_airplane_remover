@@ -732,6 +732,17 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
+      # The @ui features that open a processed sequence (`a processed copy of the sequence`) start from the one the cli makes once
+      # (gherkin/ui/make-processed-fixture.sh); the runners find it ready.  Made here, outside the test: the XCUITest runner is an App Sandbox
+      # process, where the script's fallback `swift build` dies on "xcrun: error: cannot be used within an App Sandbox", and the desktop legs
+      # would build the cli inside the test's timeout.  The cli builds into cli/.build, where the script looks for it.
+      - name: Build the star cli and make the processed sequence the @ui features start from
+        if: ${{ matrix.shard.name == 'ui' }}
+        shell: bash
+        run: |
+          swift build -c release --package-path cli
+          gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
+
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
       - name: Build the output validator
@@ -875,6 +886,17 @@ jobs:
         run: |
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # The @ui features that open a processed sequence (`a processed copy of the sequence`) start from the one the cli makes once
+      # (gherkin/ui/make-processed-fixture.sh); the runners find it ready.  Made here, outside the test: the XCUITest runner is an App Sandbox
+      # process, where the script's fallback `swift build` dies on "xcrun: error: cannot be used within an App Sandbox", and the desktop legs
+      # would build the cli inside the test's timeout.  The cli builds into cli/.build, where the script looks for it.
+      - name: Build the star cli and make the processed sequence the @ui features start from
+        if: ${{ matrix.shard.name == 'ui' }}
+        shell: bash
+        run: |
+          swift build -c release --package-path cli
+          gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
@@ -1103,6 +1125,18 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg.exe external_binaries/bin/ffprobe.exe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
+      # The @ui features that open a processed sequence (`a processed copy of the sequence`) start from the one the cli makes once
+      # (gherkin/ui/make-processed-fixture.sh); the runners find it ready.  Made here, outside the test: the XCUITest runner is an App Sandbox
+      # process, where the script's fallback `swift build` dies on "xcrun: error: cannot be used within an App Sandbox", and the desktop legs
+      # would build the cli inside the test's timeout.  The cli builds into cli/.build, where the script looks for it.
+      - name: Build the star cli and make the processed sequence the @ui features start from
+        if: ${{ matrix.shard.name == 'ui' }}
+        shell: bash
+        run: |
+          swift build -c release --package-path cli
+          echo "STAR_CLI_PATH=$GITHUB_WORKSPACE/cli/.build/release/star.exe" >> "$GITHUB_ENV"
+          STAR_CLI_PATH="$GITHUB_WORKSPACE/cli/.build/release/star.exe" gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
+
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
       - name: Build the output validator
@@ -1240,6 +1274,17 @@ jobs:
         run: |
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # The @ui features that open a processed sequence (`a processed copy of the sequence`) start from the one the cli makes once
+      # (gherkin/ui/make-processed-fixture.sh); the runners find it ready.  Made here, outside the test: the XCUITest runner is an App Sandbox
+      # process, where the script's fallback `swift build` dies on "xcrun: error: cannot be used within an App Sandbox", and the desktop legs
+      # would build the cli inside the test's timeout.  The cli builds into cli/.build, where the script looks for it.
+      - name: Build the star cli and make the processed sequence the @ui features start from
+        if: ${{ matrix.shard.name == 'ui' }}
+        shell: bash
+        run: |
+          swift build -c release --package-path cli
+          gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.

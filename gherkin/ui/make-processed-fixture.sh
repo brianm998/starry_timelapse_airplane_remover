@@ -34,9 +34,12 @@ if [ ! -x "$star" ]; then
 fi
 
 name=$(basename "$sequence")
-stamp=$(stat -f '%m-%z' "$star" 2>/dev/null || stat -c '%Y-%s' "$star")
+# GNU stat first: `stat -f` there is the file-system mode, which does not fail on this format but prints something else.
+stamp=$(stat -c '%Y-%s' "$star" 2>/dev/null || stat -f '%m-%z' "$star")
 fixtures=${STAR_UI_FIXTURES:-$root/.test-data/ui-processed}
 dest="$fixtures/$name-$stamp"
+# Git Bash on Windows: the cli (native) writes this path into config.json and the runner (a JVM) opens it, so both need C:/..., not /c/...
+if command -v cygpath >/dev/null 2>&1; then dest=$(cygpath -m "$dest"); fi
 
 if [ -f "$dest/READY" ]; then
     echo "$dest"
