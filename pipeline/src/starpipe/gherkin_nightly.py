@@ -7,7 +7,7 @@ the daemon decides whether a full run is worth it, and dispatches one when it is
 * the newest finished full run (green or red, not cancelled) tested exactly the current tip: skip, there is nothing new to learn;
 * no green full run ever: dispatch;
 * otherwise diff the last green full run's sha against the tip and dispatch only if a file matches the workflow's own
-  `on.pull_request.paths` globs (read from gherkin.yml at the tip, so the list lives in one place).
+  `on.pull_request.paths` globs (read at the tip from gherkin-smoke.yml, the workflow a PR runs; gherkin.yml has no pull_request trigger, so the list lives in one place).
 
 Then `follow_once` acts on the dispatched run's results: the failed jobs are rerun once, a job that fails again is red (one fix
 ticket per feature, legs grouped), one that passes on the rerun is flaky (recorded, and a ticket to make it reliable). A job the
@@ -38,6 +38,8 @@ from .tickets import FilingError, file_ticket
 
 WORKFLOW_FILE = "gherkin.yml"
 WORKFLOW_PATH = f".github/workflows/{WORKFLOW_FILE}"
+PATHS_FILE = "gherkin-smoke.yml"  # holds the `pull_request.paths` list: the full workflow is not triggered by a PR
+PATHS_PATH = f".github/workflows/{PATHS_FILE}"
 FULL_TITLE = "Gherkin: full"
 IN_FLIGHT = ("queued", "in_progress", "waiting", "pending", "requested")
 FINISHED = ("success", "failure")  # a cancelled run tested nothing
@@ -80,7 +82,7 @@ def relevant_globs(yml_text: str) -> list[str]:
         key = text.split(":", 1)[0].strip()
         path.append((indent, key))
     if not found:
-        raise ValueError(f"no on.pull_request.paths list in {WORKFLOW_PATH}")
+        raise ValueError(f"no on.pull_request.paths list in {PATHS_PATH}")
     return found
 
 
@@ -176,7 +178,7 @@ def git_source(repo: Path, base: str, fetch: Callable[[Path], None]) -> Source:
         return gitutil.git(repo, "diff", "--name-only", sha, ref).splitlines()
 
     return Source(lambda: fetch(repo), lambda: gitutil.git(repo, "rev-parse", ref).strip(),
-                  lambda: gitutil.git(repo, "show", f"{ref}:{WORKFLOW_PATH}"), changed)
+                  lambda: gitutil.git(repo, "show", f"{ref}:{PATHS_PATH}"), changed)
 
 
 def _dispatched_run(gh: GitHub, base: str, before: set[int], sleep: Callable[[float], None]) -> int | str:
