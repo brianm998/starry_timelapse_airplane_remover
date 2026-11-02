@@ -266,6 +266,8 @@ def test_git_source_diffs_against_the_tip_and_notices_a_missing_sha(tmp_path: Pa
     origin, repo = tmp_path / "origin.git", tmp_path / "repo"
     sh(tmp_path, "git", "init", "-q", "--bare", "-b", "develop", str(origin))
     sh(tmp_path, "git", "clone", "-q", str(origin), str(repo))
+    sh(repo, "git", "config", "user.email", "t@t")
+    sh(repo, "git", "config", "user.name", "t")
     base = ""
     for name, text in (("docs/a.md", "1"), ("cli/b.swift", "1")):
         (repo / name).parent.mkdir(exist_ok=True)
