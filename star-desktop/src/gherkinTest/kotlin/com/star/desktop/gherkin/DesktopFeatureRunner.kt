@@ -20,6 +20,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
@@ -333,9 +334,13 @@ class DesktopFeatureRunner {
         return gaps.getAsJsonObject(feature)?.get(CLIENT)?.asString
     }
 
+    /** The key host's focus, which it takes once when it is composed. */
+    private var keyHostFocus: androidx.compose.ui.focus.FocusRequester? = null
+
     @androidx.compose.runtime.Composable
     private fun KeyHost(model: AppViewModel, content: @androidx.compose.runtime.Composable () -> Unit) {
         val focus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+        keyHostFocus = focus
         androidx.compose.foundation.layout.Box(
             androidx.compose.ui.Modifier.focusRequester(focus).focusable().onKeyEvent { com.star.desktop.ui.app.handleGlobalKey(it, model) },
         ) { content() }
@@ -574,6 +579,11 @@ class DesktopFeatureRunner {
         if (t.onAllNodes(isRoot()).fetchSemanticsNodes().size > 1) {
             t.onAllNodes(isRoot())[0].performMouseInput { moveTo(Offset(1f, 1f)) }
             runCatching { waitFor(t, "a hover tip to close", 5_000) { t.onAllNodes(isRoot()).fetchSemanticsNodes().size == 1 } }
+        }
+        // A sheet that has closed (the multi-choice one) leaves nothing focused, and a key then goes nowhere, where the real window's handler still hears
+        // it: the key host takes the focus back, but only when nothing has it, so a focused field keeps its keys.
+        if (t.onAllNodes(isFocused()).fetchSemanticsNodes().isEmpty()) {
+            keyHostFocus?.let { focus -> t.runOnUiThread { runCatching { focus.requestFocus() } }; t.waitForIdle() }
         }
         t.onAllNodes(isRoot())[0].performKeyInput {
             modifiers.forEach { keyDown(it) }
