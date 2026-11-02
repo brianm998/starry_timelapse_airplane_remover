@@ -62,6 +62,14 @@ def test_a_stage_waiting_for_the_heavy_lock_is_waiting_not_running(rig: Rig, mon
     assert groups[2] == "waiting"
 
 
+def test_a_stage_holding_the_heavy_lock_is_running(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    d = populate(rig)
+    held = heavy.Holder(pid=4242, ticket="2", cmd="swift test", since=0.0)
+    monkeypatch.setattr(heavy, "status", lambda: heavy.Status([held], []))
+    groups = {t["number"]: t["group"] for t in d.snapshot()["tickets"]}  # type: ignore[index, union-attr]
+    assert groups[2] == "running", "the ticket whose job holds the lock is working, not waiting"
+
+
 def test_old_landed_and_failed_tickets_drop_off(rig: Rig) -> None:
     rig.gh.add_issue(1, "old")
     rig.engine.sync_issues()

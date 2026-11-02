@@ -72,12 +72,12 @@ MAX_ACTIVE_CAP = 6
 GROUPS = ("needs_you", "running", "waiting", "queued", "landed_today", "failed")
 
 
-def group_of(t: Ticket, holding_or_waiting_lock: bool, now: float, updated: float) -> str | None:
+def group_of(t: Ticket, waiting_for_lock: bool, now: float, updated: float) -> str | None:
     """Which sidebar group a ticket belongs in (computed here, never by a client). None: not shown."""
     if t.state == "needs-input":
         return "needs_you"
     if t.state in ACTIVE_STATES:
-        return "waiting" if holding_or_waiting_lock else "running"
+        return "waiting" if waiting_for_lock else "running"
     if t.state in ("ready", "ci", "landing", "paused"):
         return "waiting"
     if t.state == "queued":
@@ -402,7 +402,7 @@ class Daemon:
         base = {k: v for k, v in self.status().items() if k != "self_update"}  # the monitor's contract is pinned by a fixture
         now = time.time()
         hv: dict[str, Any] = base["heavy"]  # type: ignore[assignment]
-        lock_tickets = {str(h["ticket"]) for h in hv["holders"]} | {str(w["ticket"]) for w in hv["queue"]}
+        lock_tickets = {str(w["ticket"]) for w in hv["queue"]}  # waiting for the lock; a holder is running its job
         tickets: list[dict[str, object]] = []
         for t in self.db.tickets():
             row = self.db._all("SELECT updated_at FROM tickets WHERE number=?", (t.number,))[0]  # pyright: ignore[reportPrivateUsage]
