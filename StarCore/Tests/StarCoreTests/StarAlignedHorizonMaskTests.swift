@@ -300,11 +300,11 @@ final class StarAlignedHorizonMaskTests: XCTestCase {
         let wave = (0..<width).map { x in
             Optional(2000 + Int(150 * sin(Double(x) / 400)))
         }
-        nonisolated(unsafe) let mask = try XCTUnwrap(PixelatedImage.fromHorizonColumnY(
+        let mask = try XCTUnwrap(PixelatedImage.fromHorizonColumnY(
           width: width, height: height, columnY: wave))
-        nonisolated(unsafe) let frame = try XCTUnwrap(PixelatedImage(mat: sixteenBitFrame(width: width, height: height,
+        let frame = try XCTUnwrap(PixelatedImage(mat: sixteenBitFrame(width: width, height: height,
                                                                     seed: 3)))
-        nonisolated(unsafe) let small = try XCTUnwrap(PixelatedImage(mat: sixteenBitFrame(width: 3000, height: 2000,
+        let small = try XCTUnwrap(PixelatedImage(mat: sixteenBitFrame(width: 3000, height: 2000,
                                                                     seed: 9)))
 
         let masks = 12
