@@ -54,6 +54,9 @@ struct HeaderStrip: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 22) {
+            Button { store.showOverview() } label: { Image(systemName: "house") }
+                .help("Back to the Overview")
+                .disabled(store.selected == nil)
             item("Daemon", daemonText, color: store.daemonDown ? .red : .green)
             item("Heavy lock", lockText, color: .secondary)
             item("Landing", landingText, color: store.snapshot?.landing.paused == true || store.developRed ? .orange : .secondary)
@@ -125,14 +128,14 @@ struct Sidebar: View {
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .background(store.selected == nil ? Color.accentColor.opacity(0.2) : Color.clear)
                 .contentShape(Rectangle())
-                .onTapGesture { store.selected = nil }
+                .onTapGesture { store.showOverview() }
             Divider()
             List(selection: $store.selected) {
                 ForEach(store.snapshot?.groups ?? [], id: \.self) { group in
                     let rows = store.tickets(in: group)
                     if !rows.isEmpty {
                         Section {
-                            ForEach(rows) { TicketRow(ticket: $0).tag($0.number) }
+                            ForEach(rows) { TicketRow(ticket: $0, repo: store.snapshot?.repo ?? "").tag($0.number) }
                         } header: {
                             Text(GroupTitle.title(group)).scaledFont(.body, weight: .semibold)
                         }
@@ -152,6 +155,7 @@ struct Sidebar: View {
 
 struct TicketRow: View {
     let ticket: TicketSnap
+    let repo: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -162,7 +166,7 @@ struct TicketRow: View {
                 Chip(text: ticket.state, color: stateColor(ticket.state))
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(ticket.activity).scaledFont(.caption).foregroundStyle(.secondary).lineLimit(2)
+                activityLine
                 Spacer(minLength: 0)
                 if let model = ticket.model {
                     Text(model).scaledFont(.caption2, monospaced: true).foregroundStyle(.tertiary)
@@ -170,5 +174,22 @@ struct TicketRow: View {
             }
         }
         .padding(.vertical, 2)
+    }
+
+    /// `queued: #84, #85` with each blocker a Link, so a click opens the issue rather than only selecting the row.
+    @ViewBuilder
+    private var activityLine: some View {
+        if let row = BlockerLinks.row(activity: ticket.activity, blockedBy: ticket.blockedBy, repo: repo) {
+            HStack(spacing: 0) {
+                Text(row.prefix + " ").foregroundStyle(.secondary)
+                ForEach(Array(row.links.enumerated()), id: \.element.id) { i, link in
+                    if i > 0 { Text(", ").foregroundStyle(.secondary) }
+                    Link(link.label, destination: link.url).help(link.url.absoluteString)
+                }
+            }
+            .scaledFont(.caption).lineLimit(1)
+        } else {
+            Text(ticket.activity).scaledFont(.caption).foregroundStyle(.secondary).lineLimit(2)
+        }
     }
 }

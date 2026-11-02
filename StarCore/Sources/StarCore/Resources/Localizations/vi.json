@@ -1230,6 +1230,10 @@
   "settings_tab.alignment": "Căn chỉnh",
   "settings_tab.horizon": "Đường chân trời",
   "settings_tab.memory": "Bộ nhớ",
+  "ui.location_grant_message": "Star cần quyền truy cập {0} để ghi kết quả cạnh {1}.",
+  "ui.folder_access_prompt": "Star cần quyền truy cập {0} để mở chuỗi ảnh này. Hãy chọn thư mục đó để tiếp tục.",
+  "ui.folder_access_denied": "Star không thể truy cập {0}. Có thể thư mục đã bị di chuyển hoặc xóa, hoặc quyền truy cập chưa được cấp.",
+  "ui.folder_access_grant": "Cho phép truy cập",
   "ui.render_options_after_processing_title": "Chọn cài đặt video",
   "ui.use_these_settings": "Dùng các cài đặt này",
   "ui.settings": "Cài đặt"
