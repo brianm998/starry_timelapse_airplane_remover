@@ -21,7 +21,8 @@ Feature: The multi-choice sheet applied from this frame to the end leaves the fr
     Then  "status.keep" says "0 will keep"
     When  I click "right.multichoice"
       And I click "outlier.first"
-      And I click the label "multi_selection.allAfter"
+    Then  "multichoice.summary" is shown
+    When  I click the label "multi_selection.allAfter"
     Then  "multichoice.summary" is shown
     When  I click "multichoice.apply"
     Then  "multichoice.summary" is not shown
