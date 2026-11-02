@@ -20,7 +20,7 @@ fun introVideoFfmpegArgs(ffmpeg: String, video: String, height: Int): List<Strin
 /** The `ffmpeg -i` probe: it prints the streams to stderr and exits with "at least one output file must be specified". */
 fun introVideoProbeArgs(ffmpeg: String, video: String): List<String> = listOf(ffmpeg, "-hide_banner", "-i", video)
 
-private val VIDEO_SIZE = Regex("""Video:[^\n]*?[\s,](\d{2,5})x(\d{2,5})(?=[\s,\[])""")
+private val VIDEO_SIZE = Regex("""[Vv]ideo:[^\n]*?[\s,](\d{2,5})x(\d{2,5})(?=[\s,\[])""")
 
 /** The first video stream's (width, height) from `ffmpeg -i` stderr, or null when there is none. */
 fun parseVideoSize(stderr: String): Pair<Int, Int>? {

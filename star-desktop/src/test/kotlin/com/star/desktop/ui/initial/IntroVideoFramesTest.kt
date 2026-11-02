@@ -77,7 +77,7 @@ class IntroVideoFramesTest {
         assertNull(parseVideoSize(""))
 
         assertEquals(720, introVideoHeight(3840, 2160))
-        assertEquals(534, introVideoHeight(1920, 800))   // 533.33 -> 533 -> down to even
+        assertEquals(532, introVideoHeight(1920, 800))   // 533.33 -> 533 -> down to even
         assertEquals(1280, introVideoHeight(1280, 1280))
         assertEquals(0, introVideoHeight(1000, 999) % 2)
     }
