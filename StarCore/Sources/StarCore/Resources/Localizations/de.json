@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — Verarbeitung {0} %",
   "ui.menu_bar.tooltip.rendering": "star — Video wird gerendert {0} %",
   "ui.menu_bar.tooltip.finished": "star — fertig",
-  "ui.menu_bar.tooltip.failed": "star — fehlgeschlagen"
+  "ui.menu_bar.tooltip.failed": "star — fehlgeschlagen",
+  "ui.steps_info_help": "Was sind diese Schritte?",
+  "ui.steps_info_title": "Über die Verarbeitungsschritte",
+  "ui.steps_info_intro_moving": "Star verarbeitet ein bewegtes Video im Verarbeitungsmodus „{0}“.",
+  "ui.steps_info_intro_static": "Star verarbeitet ein statisches Video im Verarbeitungsmodus „{0}“.",
+  "ui.steps_info_subtitle": "Zur Verarbeitung Ihres Videos werden die folgenden Schritte verwendet.",
+  "ui.steps_info.extraction.what": "Holt jedes Bild aus Ihrem Video und speichert es als Bilddatei, damit die späteren Schritte die Bilder einzeln bearbeiten können.",
+  "ui.steps_info.needs.extraction": "Baut auf nichts Früherem auf: Er liest das gewählte Video, und jeder andere Schritt beginnt mit den Bildern, die er schreibt.",
+  "ui.steps_info.needs.horizon": "Baut auf den extrahierten Bildern auf: Der Horizont wird gefunden, indem die Pixel jedes Bildes betrachtet werden.",
+  "ui.steps_info.needs.merged_horizon": "Baut auf dem in jedem Bild gefundenen Horizont auf: Die Schätzung eines einzelnen Bildes kann falsch sein, deshalb werden alle gebraucht, um sie zu einer stabileren Maske zu kombinieren.",
+  "ui.steps_info.needs.star_keypoints": "Baut auf den Bildern und dem zusammengeführten Horizont auf: Die Horizontmaske sagt, welche Pixel Himmel sind, damit Sterne nur dort und nicht auf dem Boden gesucht werden.",
+  "ui.steps_info.needs.earth_keypoints": "Baut auf den Bildern und dem zusammengeführten Horizont auf: Die Horizontmaske sagt, welche Pixel Boden sind, damit Bodenmerkmale nur dort gesucht werden.",
+  "ui.steps_info.needs.star_alignment": "Baut auf den Stern-Merkmalspunkten auf: Er ordnet die Punkte jedes Bildes denen der Nachbarbilder zu, um zu berechnen, wie sich die Sterne dazwischen bewegt haben – die Merkmalspunkte müssen also zuerst gefunden sein.",
+  "ui.steps_info.needs.earth_alignment": "Baut auf den Erd-Merkmalspunkten und dem Horizont auf: Er ordnet die Bodenpunkte jedes Bildes denen der Nachbarbilder zu, um zu berechnen, wie sich die Landschaft bewegt hat; der Horizont legt fest, was als Boden gilt.",
+  "ui.steps_info.needs.horizon_consensus": "Baut auf der Erdausrichtung und dem Horizont jedes Bildes auf: Er legt jeden Horizont fest, indem er die Horizonte der Nachbarbilder entlang des ausgerichteten Bodens mitführt – alle müssen also zuerst vorliegen.",
+  "ui.steps_info.needs.outliers": "Baut auf der Ausrichtung und der Horizontmaske auf: Nachbarbilder müssen deckungsgleich sein, bevor sich Streifen unterscheiden lassen, die nur in einem von ihnen vorkommen; die Maske sagt, welche Pixel Himmel sind.",
+  "ui.steps_info.needs.merged": "Baut auf der Ausrichtung und der endgültigen Horizontmaske auf, und in den Modi, die Ausreißer prüfen, auch auf den Ausreißern: Nachbarbilder lassen sich erst kombinieren, wenn sie deckungsgleich sind, nur der Himmel wird übermalt, und nur die gefundenen Streifen werden entfernt."
 }

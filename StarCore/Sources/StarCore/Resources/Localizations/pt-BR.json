@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — processando {0}%",
   "ui.menu_bar.tooltip.rendering": "star — renderizando vídeo {0}%",
   "ui.menu_bar.tooltip.finished": "star — concluído",
-  "ui.menu_bar.tooltip.failed": "star — falhou"
+  "ui.menu_bar.tooltip.failed": "star — falhou",
+  "ui.steps_info_help": "O que são estas etapas?",
+  "ui.steps_info_title": "Sobre as etapas de processamento",
+  "ui.steps_info_intro_moving": "O Star está processando um vídeo em movimento no modo de processamento “{0}”.",
+  "ui.steps_info_intro_static": "O Star está processando um vídeo estático no modo de processamento “{0}”.",
+  "ui.steps_info_subtitle": "As etapas a seguir são usadas para processar o seu vídeo.",
+  "ui.steps_info.extraction.what": "Extrai cada quadro do seu vídeo e o salva como imagem, para que as etapas seguintes trabalhem nos quadros um a um.",
+  "ui.steps_info.needs.extraction": "Não depende de nenhuma etapa anterior: lê o vídeo que você escolheu, e todas as outras etapas partem dos quadros que ela grava.",
+  "ui.steps_info.needs.horizon": "Depende dos quadros extraídos: o horizonte é encontrado examinando os pixels de cada um.",
+  "ui.steps_info.needs.merged_horizon": "Depende do horizonte encontrado em cada quadro: a estimativa de um só pode estar errada, então todas são necessárias para combiná-las em uma máscara mais estável.",
+  "ui.steps_info.needs.star_keypoints": "Depende dos quadros e do horizonte mesclado: a máscara do horizonte diz quais pixels são céu, de modo que as estrelas só são procuradas ali e não no solo.",
+  "ui.steps_info.needs.earth_keypoints": "Depende dos quadros e do horizonte mesclado: a máscara do horizonte diz quais pixels são solo, de modo que os elementos do solo só são procurados ali.",
+  "ui.steps_info.needs.star_alignment": "Depende dos pontos-chave das estrelas: associa os pontos de cada quadro aos dos quadros vizinhos para calcular como as estrelas se moveram entre eles, então os pontos-chave precisam ser encontrados antes.",
+  "ui.steps_info.needs.earth_alignment": "Depende dos pontos-chave do solo e do horizonte: associa os pontos do solo de cada quadro aos dos vizinhos para calcular como a paisagem se moveu, e o horizonte define o que conta como solo.",
+  "ui.steps_info.needs.horizon_consensus": "Depende do alinhamento ao solo e do horizonte de cada quadro: define cada horizonte levando os dos vizinhos ao longo do solo alinhado, então todos precisam existir antes.",
+  "ui.steps_info.needs.outliers": "Depende do alinhamento e da máscara do horizonte: os quadros vizinhos precisam estar alinhados antes que se possam distinguir os rastros que aparecem em apenas um deles, e a máscara diz quais pixels são céu.",
+  "ui.steps_info.needs.merged": "Depende do alinhamento e da máscara final do horizonte e, nos modos que revisam discrepantes, também dos discrepantes: os vizinhos só podem ser combinados depois de alinhados, só o céu é retocado e só os rastros encontrados são apagados."
 }

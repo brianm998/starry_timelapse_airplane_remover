@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — przetwarzanie {0}%",
   "ui.menu_bar.tooltip.rendering": "star — renderowanie wideo {0}%",
   "ui.menu_bar.tooltip.finished": "star — zakończono",
-  "ui.menu_bar.tooltip.failed": "star — niepowodzenie"
+  "ui.menu_bar.tooltip.failed": "star — niepowodzenie",
+  "ui.steps_info_help": "Czym są te kroki?",
+  "ui.steps_info_title": "O krokach przetwarzania",
+  "ui.steps_info_intro_moving": "Star przetwarza film z ruchomym aparatem w trybie przetwarzania „{0}”.",
+  "ui.steps_info_intro_static": "Star przetwarza film ze stałym aparatem w trybie przetwarzania „{0}”.",
+  "ui.steps_info_subtitle": "Do przetworzenia filmu używane są poniższe kroki.",
+  "ui.steps_info.extraction.what": "Wyciąga każdą klatkę z filmu i zapisuje ją jako obraz, aby kolejne kroki mogły pracować na klatkach po kolei.",
+  "ui.steps_info.needs.extraction": "Nie zależy od żadnego wcześniejszego kroku: odczytuje wybrany film, a każdy inny krok zaczyna od klatek, które ten zapisuje.",
+  "ui.steps_info.needs.horizon": "Zależy od wyodrębnionych klatek: horyzont znajduje się, przyglądając się pikselom każdej z nich.",
+  "ui.steps_info.needs.merged_horizon": "Zależy od horyzontu znalezionego w każdej klatce: wynik pojedynczej klatki bywa błędny, więc potrzebne są wszystkie, by połączyć je w stabilniejszą maskę.",
+  "ui.steps_info.needs.star_keypoints": "Zależy od klatek i od scalonego horyzontu: maska horyzontu mówi, które piksele są niebem, więc gwiazd szuka się tylko tam, a nie na ziemi.",
+  "ui.steps_info.needs.earth_keypoints": "Zależy od klatek i od scalonego horyzontu: maska horyzontu mówi, które piksele są ziemią, więc elementów ziemi szuka się tylko tam.",
+  "ui.steps_info.needs.star_alignment": "Zależy od punktów kluczowych gwiazd: dopasowuje punkty każdej klatki do punktów sąsiednich, aby obliczyć, jak gwiazdy przesunęły się między nimi, więc punkty kluczowe muszą zostać znalezione wcześniej.",
+  "ui.steps_info.needs.earth_alignment": "Zależy od punktów kluczowych ziemi i od horyzontu: dopasowuje punkty ziemi każdej klatki do punktów sąsiednich, aby obliczyć, jak przesunął się krajobraz, a horyzont wyznacza, co jest ziemią.",
+  "ui.steps_info.needs.horizon_consensus": "Zależy od wyrównania do ziemi i od horyzontu każdej klatki: ustala każdy horyzont, przenosząc horyzonty sąsiednich klatek wzdłuż wyrównanej ziemi, więc wszystkie muszą istnieć wcześniej.",
+  "ui.steps_info.needs.outliers": "Zależy od wyrównania i maski horyzontu: sąsiednie klatki trzeba wyrównać, zanim da się odróżnić smugi widoczne tylko w jednej z nich, a maska mówi, które piksele są niebem.",
+  "ui.steps_info.needs.merged": "Zależy od wyrównania i ostatecznej maski horyzontu, a w trybach sprawdzających wartości odstające także od nich: sąsiednie klatki można połączyć dopiero po wyrównaniu, zamalowywane jest tylko niebo i usuwane są tylko znalezione smugi."
 }

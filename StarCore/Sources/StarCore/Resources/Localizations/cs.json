@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — zpracování {0} %",
   "ui.menu_bar.tooltip.rendering": "star — vykreslování videa {0} %",
   "ui.menu_bar.tooltip.finished": "star — hotovo",
-  "ui.menu_bar.tooltip.failed": "star — selhalo"
+  "ui.menu_bar.tooltip.failed": "star — selhalo",
+  "ui.steps_info_help": "Co jsou tyto kroky?",
+  "ui.steps_info_title": "O krocích zpracování",
+  "ui.steps_info_intro_moving": "Star zpracovává video s pohyblivou kamerou v režimu zpracování „{0}“.",
+  "ui.steps_info_intro_static": "Star zpracovává video se statickou kamerou v režimu zpracování „{0}“.",
+  "ui.steps_info_subtitle": "Ke zpracování vašeho videa se používají následující kroky.",
+  "ui.steps_info.extraction.what": "Vytáhne z videa každý snímek a uloží ho jako obrázek, aby mohly další kroky pracovat se snímky jeden po druhém.",
+  "ui.steps_info.needs.extraction": "Nezávisí na žádném dřívějším kroku: čte vámi vybrané video a každý další krok vychází ze snímků, které zapíše.",
+  "ui.steps_info.needs.horizon": "Závisí na vyextrahovaných snímcích: horizont se najde zkoumáním pixelů každého z nich.",
+  "ui.steps_info.needs.merged_horizon": "Závisí na horizontu nalezeném v každém snímku: odhad jediného snímku může být chybný, proto jsou potřeba všechny, aby se daly spojit do stabilnější masky.",
+  "ui.steps_info.needs.star_keypoints": "Závisí na snímcích a na sloučeném horizontu: maska horizontu říká, které pixely jsou obloha, takže hvězdy se hledají jen tam a ne na zemi.",
+  "ui.steps_info.needs.earth_keypoints": "Závisí na snímcích a na sloučeném horizontu: maska horizontu říká, které pixely jsou země, takže prvky země se hledají jen tam.",
+  "ui.steps_info.needs.star_alignment": "Závisí na klíčových bodech hvězd: páruje body každého snímku s body sousedních snímků, aby spočítal, jak se hvězdy mezi nimi posunuly, takže klíčové body musí být nalezeny jako první.",
+  "ui.steps_info.needs.earth_alignment": "Závisí na klíčových bodech země a na horizontu: páruje body země každého snímku s body sousedních snímků, aby spočítal, jak se posunula krajina, a horizont určuje, co se počítá jako země.",
+  "ui.steps_info.needs.horizon_consensus": "Závisí na zarovnání podle země a na horizontu každého snímku: určí každý horizont tak, že horizonty sousedních snímků přenese podél zarovnané země, takže všechny musí existovat dřív.",
+  "ui.steps_info.needs.outliers": "Závisí na zarovnání a na masce horizontu: sousední snímky musí být zarovnané, než se dají rozlišit pruhy, které se objevují jen v jednom z nich, a maska říká, které pixely jsou obloha.",
+  "ui.steps_info.needs.merged": "Závisí na zarovnání a konečné masce horizontu a v režimech, které kontrolují odlehlé hodnoty, i na nich: sousední snímky lze sloučit až po zarovnání, přemalovává se jen obloha a odstraňují se jen nalezené pruhy."
 }

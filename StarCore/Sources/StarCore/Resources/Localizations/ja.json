@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — 処理中 {0}%",
   "ui.menu_bar.tooltip.rendering": "star — ビデオを書き出し中 {0}%",
   "ui.menu_bar.tooltip.finished": "star — 完了",
-  "ui.menu_bar.tooltip.failed": "star — 失敗"
+  "ui.menu_bar.tooltip.failed": "star — 失敗",
+  "ui.steps_info_help": "これらのステップは何ですか?",
+  "ui.steps_info_title": "処理ステップについて",
+  "ui.steps_info_intro_moving": "Star は動きのあるビデオを「{0}」処理モードで処理しています。",
+  "ui.steps_info_intro_static": "Star は固定カメラのビデオを「{0}」処理モードで処理しています。",
+  "ui.steps_info_subtitle": "ビデオの処理には次のステップが使われます。",
+  "ui.steps_info.extraction.what": "ビデオから各フレームを取り出して画像として保存し、後のステップがフレームを1枚ずつ処理できるようにします。",
+  "ui.steps_info.needs.extraction": "それより前のステップには依存しません。選んだビデオを読み込み、ほかのすべてのステップはここで書き出されたフレームから始まります。",
+  "ui.steps_info.needs.horizon": "抽出されたフレームに依存します。地平線は各フレームのピクセルを調べて見つけます。",
+  "ui.steps_info.needs.merged_horizon": "各フレームで見つかった地平線に依存します。1フレームの推定は誤ることがあるため、より安定したマスクにまとめるにはすべてが必要です。",
+  "ui.steps_info.needs.star_keypoints": "フレームと結合した地平線に依存します。地平線マスクがどのピクセルが空かを示すので、星は地上ではなく空の部分だけで探されます。",
+  "ui.steps_info.needs.earth_keypoints": "フレームと結合した地平線に依存します。地平線マスクがどのピクセルが地上かを示すので、地上の特徴はその部分だけで探されます。",
+  "ui.steps_info.needs.star_alignment": "星のキーポイントに依存します。各フレームの点を隣のフレームの点と対応づけて、その間に星がどう動いたかを求めるため、先にキーポイントが見つかっている必要があります。",
+  "ui.steps_info.needs.earth_alignment": "地上のキーポイントと地平線に依存します。各フレームの地上の点を隣のフレームの点と対応づけて、風景がどう動いたかを求め、何を地上とみなすかは地平線が決めます。",
+  "ui.steps_info.needs.horizon_consensus": "地上アライメントと各フレームの地平線に依存します。そろえた地上に沿って隣のフレームの地平線を持ち越すことで各地平線を確定するため、すべてが先に存在している必要があります。",
+  "ui.steps_info.needs.outliers": "アライメントと地平線マスクに依存します。1枚にしか写らない軌跡を見分けるには、隣のフレームが先にそろっている必要があり、どのピクセルが空かはマスクが示します。",
+  "ui.steps_info.needs.merged": "アライメントと最終的な地平線マスクに依存し、外れ値を確認するモードでは外れ値にも依存します。隣のフレームはそろってから初めて結合でき、塗りつぶされるのは空だけ、消されるのは見つかった軌跡だけです。"
 }

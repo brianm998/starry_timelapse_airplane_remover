@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — đang xử lý {0}%",
   "ui.menu_bar.tooltip.rendering": "star — đang kết xuất video {0}%",
   "ui.menu_bar.tooltip.finished": "star — hoàn tất",
-  "ui.menu_bar.tooltip.failed": "star — thất bại"
+  "ui.menu_bar.tooltip.failed": "star — thất bại",
+  "ui.steps_info_help": "Các bước này là gì?",
+  "ui.steps_info_title": "Giới thiệu các bước xử lý",
+  "ui.steps_info_intro_moving": "Star đang xử lý video chuyển động ở chế độ xử lý “{0}”.",
+  "ui.steps_info_intro_static": "Star đang xử lý video tĩnh ở chế độ xử lý “{0}”.",
+  "ui.steps_info_subtitle": "Các bước sau được dùng để xử lý video của bạn.",
+  "ui.steps_info.extraction.what": "Lấy từng khung hình ra khỏi video và lưu thành ảnh, để các bước sau có thể xử lý từng khung hình một.",
+  "ui.steps_info.needs.extraction": "Không phụ thuộc bước nào trước đó: bước này đọc video bạn chọn, và mọi bước khác bắt đầu từ các khung hình mà nó ghi ra.",
+  "ui.steps_info.needs.horizon": "Phụ thuộc vào các khung hình đã trích xuất: đường chân trời được tìm bằng cách xem xét các điểm ảnh của từng khung hình.",
+  "ui.steps_info.needs.merged_horizon": "Phụ thuộc vào đường chân trời tìm được ở từng khung hình: ước tính của một khung hình có thể sai, nên cần tất cả để ghép thành một mặt nạ ổn định hơn.",
+  "ui.steps_info.needs.star_keypoints": "Phụ thuộc vào các khung hình và đường chân trời đã ghép: mặt nạ đường chân trời cho biết điểm ảnh nào là bầu trời, nên sao chỉ được tìm ở đó chứ không phải trên mặt đất.",
+  "ui.steps_info.needs.earth_keypoints": "Phụ thuộc vào các khung hình và đường chân trời đã ghép: mặt nạ đường chân trời cho biết điểm ảnh nào là mặt đất, nên đặc trưng mặt đất chỉ được tìm ở đó.",
+  "ui.steps_info.needs.star_alignment": "Phụ thuộc vào điểm đặc trưng sao: ghép các điểm của từng khung hình với điểm của khung hình lân cận để tính các ngôi sao đã dịch chuyển thế nào giữa chúng, nên các điểm đặc trưng phải được tìm trước.",
+  "ui.steps_info.needs.earth_alignment": "Phụ thuộc vào điểm đặc trưng mặt đất và đường chân trời: ghép các điểm mặt đất của từng khung hình với điểm của khung hình lân cận để tính phong cảnh đã dịch chuyển thế nào, và đường chân trời xác định đâu được coi là mặt đất.",
+  "ui.steps_info.needs.horizon_consensus": "Phụ thuộc vào căn theo mặt đất và đường chân trời của từng khung hình: chốt từng đường chân trời bằng cách mang đường chân trời của các khung hình lân cận dọc theo mặt đất đã căn, nên tất cả phải có từ trước.",
+  "ui.steps_info.needs.outliers": "Phụ thuộc vào việc căn chỉnh và mặt nạ đường chân trời: các khung hình lân cận phải được căn khớp trước khi phân biệt được những vệt chỉ xuất hiện ở một khung hình, và mặt nạ cho biết điểm ảnh nào là bầu trời.",
+  "ui.steps_info.needs.merged": "Phụ thuộc vào việc căn chỉnh và mặt nạ đường chân trời cuối cùng, và trong các chế độ xem xét ngoại lai thì cả vào các ngoại lai: các khung hình lân cận chỉ ghép được khi đã khớp nhau, chỉ phần bầu trời được vẽ đè và chỉ những vệt tìm thấy mới bị xóa."
 }

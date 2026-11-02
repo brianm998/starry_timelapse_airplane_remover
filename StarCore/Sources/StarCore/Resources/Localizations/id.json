@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — memproses {0}%",
   "ui.menu_bar.tooltip.rendering": "star — merender video {0}%",
   "ui.menu_bar.tooltip.finished": "star — selesai",
-  "ui.menu_bar.tooltip.failed": "star — gagal"
+  "ui.menu_bar.tooltip.failed": "star — gagal",
+  "ui.steps_info_help": "Apa saja langkah ini?",
+  "ui.steps_info_title": "Tentang langkah pemrosesan",
+  "ui.steps_info_intro_moving": "Star sedang memproses video bergerak dalam mode pemrosesan “{0}”.",
+  "ui.steps_info_intro_static": "Star sedang memproses video statis dalam mode pemrosesan “{0}”.",
+  "ui.steps_info_subtitle": "Langkah-langkah berikut digunakan untuk memproses video Anda.",
+  "ui.steps_info.extraction.what": "Mengambil setiap bingkai dari video Anda dan menyimpannya sebagai gambar, sehingga langkah-langkah berikutnya dapat mengerjakan bingkai satu per satu.",
+  "ui.steps_info.needs.extraction": "Tidak bergantung pada langkah sebelumnya: membaca video yang Anda pilih, dan setiap langkah lain dimulai dari bingkai yang ditulisnya.",
+  "ui.steps_info.needs.horizon": "Bergantung pada bingkai yang diekstrak: horizon ditemukan dengan memeriksa piksel setiap bingkai.",
+  "ui.steps_info.needs.merged_horizon": "Bergantung pada horizon yang ditemukan di setiap bingkai: perkiraan satu bingkai bisa keliru, jadi semuanya diperlukan untuk digabung menjadi masker yang lebih stabil.",
+  "ui.steps_info.needs.star_keypoints": "Bergantung pada bingkai dan horizon gabungan: masker horizon menunjukkan piksel mana yang langit, sehingga bintang hanya dicari di sana dan bukan di tanah.",
+  "ui.steps_info.needs.earth_keypoints": "Bergantung pada bingkai dan horizon gabungan: masker horizon menunjukkan piksel mana yang tanah, sehingga fitur tanah hanya dicari di sana.",
+  "ui.steps_info.needs.star_alignment": "Bergantung pada titik kunci bintang: mencocokkan titik setiap bingkai dengan titik bingkai tetangganya untuk menghitung bagaimana bintang bergeser di antaranya, jadi titik kunci harus ditemukan lebih dulu.",
+  "ui.steps_info.needs.earth_alignment": "Bergantung pada titik kunci bumi dan horizon: mencocokkan titik tanah setiap bingkai dengan titik bingkai tetangganya untuk menghitung bagaimana lanskap bergeser, dan horizon menentukan apa yang dianggap tanah.",
+  "ui.steps_info.needs.horizon_consensus": "Bergantung pada penyelarasan bumi dan horizon setiap bingkai: menetapkan tiap horizon dengan membawa horizon bingkai tetangga di sepanjang tanah yang telah diselaraskan, jadi semuanya harus ada lebih dulu.",
+  "ui.steps_info.needs.outliers": "Bergantung pada penyelarasan dan masker horizon: bingkai tetangga harus diselaraskan sebelum goresan yang hanya muncul di satu bingkai dapat dibedakan, dan masker menunjukkan piksel mana yang langit.",
+  "ui.steps_info.needs.merged": "Bergantung pada penyelarasan dan masker horizon akhir, serta pada pencilan dalam mode yang meninjau pencilan: bingkai tetangga baru dapat digabung setelah selaras, hanya langit yang dicat ulang, dan hanya goresan yang ditemukan yang dihapus."
 }

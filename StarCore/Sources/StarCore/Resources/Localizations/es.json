@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — procesando {0} %",
   "ui.menu_bar.tooltip.rendering": "star — renderizando vídeo {0} %",
   "ui.menu_bar.tooltip.finished": "star — terminado",
-  "ui.menu_bar.tooltip.failed": "star — falló"
+  "ui.menu_bar.tooltip.failed": "star — falló",
+  "ui.steps_info_help": "¿Qué son estos pasos?",
+  "ui.steps_info_title": "Acerca de los pasos de procesamiento",
+  "ui.steps_info_intro_moving": "Star está procesando un vídeo en movimiento en el modo de procesamiento «{0}».",
+  "ui.steps_info_intro_static": "Star está procesando un vídeo estático en el modo de procesamiento «{0}».",
+  "ui.steps_info_subtitle": "Para procesar tu vídeo se usan los pasos siguientes.",
+  "ui.steps_info.extraction.what": "Extrae cada fotograma de tu vídeo y lo guarda como imagen, para que los pasos posteriores trabajen con los fotogramas uno a uno.",
+  "ui.steps_info.needs.extraction": "No depende de ningún paso anterior: lee el vídeo que elegiste, y todos los demás pasos parten de los fotogramas que escribe.",
+  "ui.steps_info.needs.horizon": "Depende de los fotogramas extraídos: el horizonte se encuentra examinando los píxeles de cada uno.",
+  "ui.steps_info.needs.merged_horizon": "Depende del horizonte hallado en cada fotograma: la estimación de uno solo puede ser errónea, así que hacen falta todas para combinarlas en una máscara más estable.",
+  "ui.steps_info.needs.star_keypoints": "Depende de los fotogramas y del horizonte combinado: la máscara del horizonte indica qué píxeles son cielo, de modo que las estrellas solo se buscan ahí y no en la tierra.",
+  "ui.steps_info.needs.earth_keypoints": "Depende de los fotogramas y del horizonte combinado: la máscara del horizonte indica qué píxeles son tierra, de modo que los rasgos de la tierra solo se buscan ahí.",
+  "ui.steps_info.needs.star_alignment": "Depende de los puntos clave de las estrellas: empareja los puntos de cada fotograma con los de sus vecinos para calcular cómo se movieron las estrellas entre ellos, así que los puntos clave deben encontrarse antes.",
+  "ui.steps_info.needs.earth_alignment": "Depende de los puntos clave de la tierra y del horizonte: empareja los puntos de la tierra de cada fotograma con los de sus vecinos para calcular cómo se movió el paisaje, y el horizonte define qué cuenta como tierra.",
+  "ui.steps_info.needs.horizon_consensus": "Depende de la alineación con la tierra y del horizonte de cada fotograma: fija cada horizonte trasladando los de sus vecinos a lo largo de la tierra alineada, así que todos deben existir antes.",
+  "ui.steps_info.needs.outliers": "Depende de la alineación y de la máscara del horizonte: los fotogramas vecinos deben estar alineados para distinguir las estelas que aparecen en uno solo, y la máscara indica qué píxeles son cielo.",
+  "ui.steps_info.needs.merged": "Depende de la alineación y de la máscara final del horizonte y, en los modos que revisan atípicos, también de los atípicos: los vecinos solo se combinan una vez alineados, solo se retoca el cielo y solo se borran las estelas encontradas."
 }

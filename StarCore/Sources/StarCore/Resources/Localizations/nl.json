@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — verwerken {0}%",
   "ui.menu_bar.tooltip.rendering": "star — video renderen {0}%",
   "ui.menu_bar.tooltip.finished": "star — voltooid",
-  "ui.menu_bar.tooltip.failed": "star — mislukt"
+  "ui.menu_bar.tooltip.failed": "star — mislukt",
+  "ui.steps_info_help": "Wat zijn deze stappen?",
+  "ui.steps_info_title": "Over de verwerkingsstappen",
+  "ui.steps_info_intro_moving": "Star verwerkt een bewegende video in de verwerkingsmodus ‘{0}’.",
+  "ui.steps_info_intro_static": "Star verwerkt een statische video in de verwerkingsmodus ‘{0}’.",
+  "ui.steps_info_subtitle": "De volgende stappen worden gebruikt om je video te verwerken.",
+  "ui.steps_info.extraction.what": "Haalt elk beeld uit je video en slaat het op als afbeelding, zodat de latere stappen de beelden een voor een kunnen bewerken.",
+  "ui.steps_info.needs.extraction": "Is van niets eerders afhankelijk: leest de video die je koos, en elke andere stap begint bij de beelden die deze wegschrijft.",
+  "ui.steps_info.needs.horizon": "Is afhankelijk van de uitgepakte beelden: de horizon wordt gevonden door de pixels van elk beeld te bekijken.",
+  "ui.steps_info.needs.merged_horizon": "Is afhankelijk van de horizon die in elk beeld is gevonden: de schatting van één beeld kan fout zijn, dus alle zijn nodig om ze te combineren tot een stabieler masker.",
+  "ui.steps_info.needs.star_keypoints": "Is afhankelijk van de beelden en de samengevoegde horizon: het horizonmasker geeft aan welke pixels lucht zijn, zodat sterren alleen daar worden gezocht en niet op de grond.",
+  "ui.steps_info.needs.earth_keypoints": "Is afhankelijk van de beelden en de samengevoegde horizon: het horizonmasker geeft aan welke pixels grond zijn, zodat grondkenmerken alleen daar worden gezocht.",
+  "ui.steps_info.needs.star_alignment": "Is afhankelijk van de kernpunten van de sterren: koppelt de punten van elk beeld aan die van de naburige beelden om uit te rekenen hoe de sterren ertussen bewogen, dus de kernpunten moeten eerst gevonden zijn.",
+  "ui.steps_info.needs.earth_alignment": "Is afhankelijk van de kernpunten van de aarde en de horizon: koppelt de grondpunten van elk beeld aan die van de naburige beelden om uit te rekenen hoe het landschap bewoog, en de horizon bepaalt wat als grond telt.",
+  "ui.steps_info.needs.horizon_consensus": "Is afhankelijk van de aarduitlijning en de horizon van elk beeld: legt elke horizon vast door de horizons van de naburige beelden langs de uitgelijnde grond mee te nemen, dus alle moeten eerst bestaan.",
+  "ui.steps_info.needs.outliers": "Is afhankelijk van de uitlijning en het horizonmasker: naburige beelden moeten uitgelijnd zijn voordat strepen die maar in één ervan voorkomen kunnen worden onderscheiden, en het masker geeft aan welke pixels lucht zijn.",
+  "ui.steps_info.needs.merged": "Is afhankelijk van de uitlijning en het definitieve horizonmasker, en in de modi die uitschieters controleren ook van de uitschieters: naburige beelden kunnen pas worden gecombineerd als ze uitgelijnd zijn, alleen de lucht wordt overgeschilderd en alleen de gevonden strepen worden weggehaald."
 }

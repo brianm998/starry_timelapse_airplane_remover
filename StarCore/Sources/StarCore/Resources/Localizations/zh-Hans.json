@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — 正在处理 {0}%",
   "ui.menu_bar.tooltip.rendering": "star — 正在渲染视频 {0}%",
   "ui.menu_bar.tooltip.finished": "star — 已完成",
-  "ui.menu_bar.tooltip.failed": "star — 失败"
+  "ui.menu_bar.tooltip.failed": "star — 失败",
+  "ui.steps_info_help": "这些步骤是什么？",
+  "ui.steps_info_title": "关于处理步骤",
+  "ui.steps_info_intro_moving": "Star 正在以“{0}”处理模式处理一段移动拍摄的视频。",
+  "ui.steps_info_intro_static": "Star 正在以“{0}”处理模式处理一段固定拍摄的视频。",
+  "ui.steps_info_subtitle": "处理您的视频会用到以下步骤。",
+  "ui.steps_info.extraction.what": "从视频中取出每一帧并保存为图像，以便后续步骤逐帧处理。",
+  "ui.steps_info.needs.extraction": "不依赖任何更早的步骤：它读取您选择的视频，其他所有步骤都从它写出的帧开始。",
+  "ui.steps_info.needs.horizon": "依赖提取出的帧：通过查看每一帧的像素来找到地平线。",
+  "ui.steps_info.needs.merged_horizon": "依赖在每一帧中找到的地平线：单独一帧的判断可能出错，所以需要全部帧的结果合并成更稳定的蒙版。",
+  "ui.steps_info.needs.star_keypoints": "依赖这些帧和合并的地平线：地平线蒙版指明哪些像素是天空，所以只在那里寻找星点，而不是在地面上。",
+  "ui.steps_info.needs.earth_keypoints": "依赖这些帧和合并的地平线：地平线蒙版指明哪些像素是地面，所以只在那里寻找地面特征。",
+  "ui.steps_info.needs.star_alignment": "依赖星点关键点：把每一帧的点与相邻帧的点配对，算出星点在它们之间如何移动，所以必须先找到关键点。",
+  "ui.steps_info.needs.earth_alignment": "依赖地面关键点和地平线：把每一帧的地面点与相邻帧的点配对，算出景物如何移动，而什么算地面由地平线决定。",
+  "ui.steps_info.needs.horizon_consensus": "依赖地面对齐和每一帧的地平线：沿着已对齐的地面带入相邻帧的地平线来确定每条地平线，所以它们必须全部先存在。",
+  "ui.steps_info.needs.outliers": "依赖对齐和地平线蒙版：相邻帧必须先对齐，才能分辨只出现在其中一帧里的轨迹，而哪些像素是天空由蒙版指明。",
+  "ui.steps_info.needs.merged": "依赖对齐和最终的地平线蒙版，在检查离群点的模式下还依赖离群点：相邻帧对齐后才能合并，只涂改天空，只抹除找到的轨迹。"
 }

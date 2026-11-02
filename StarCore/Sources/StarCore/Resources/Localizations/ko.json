@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — 처리 중 {0}%",
   "ui.menu_bar.tooltip.rendering": "star — 비디오 렌더링 중 {0}%",
   "ui.menu_bar.tooltip.finished": "star — 완료",
-  "ui.menu_bar.tooltip.failed": "star — 실패"
+  "ui.menu_bar.tooltip.failed": "star — 실패",
+  "ui.steps_info_help": "이 단계들은 무엇인가요?",
+  "ui.steps_info_title": "처리 단계 안내",
+  "ui.steps_info_intro_moving": "Star가 움직이는 비디오를 “{0}” 처리 모드로 처리하고 있습니다.",
+  "ui.steps_info_intro_static": "Star가 고정된 비디오를 “{0}” 처리 모드로 처리하고 있습니다.",
+  "ui.steps_info_subtitle": "비디오를 처리하는 데 다음 단계가 사용됩니다.",
+  "ui.steps_info.extraction.what": "비디오에서 각 프레임을 꺼내 이미지로 저장하여, 이후 단계가 프레임을 하나씩 처리할 수 있게 합니다.",
+  "ui.steps_info.needs.extraction": "앞선 단계에 의존하지 않습니다. 선택한 비디오를 읽으며, 다른 모든 단계는 이 단계가 기록한 프레임에서 시작합니다.",
+  "ui.steps_info.needs.horizon": "추출된 프레임에 의존합니다. 지평선은 각 프레임의 픽셀을 살펴서 찾습니다.",
+  "ui.steps_info.needs.merged_horizon": "각 프레임에서 찾은 지평선에 의존합니다. 한 프레임의 추정은 틀릴 수 있으므로, 더 안정적인 마스크로 합치려면 모두 필요합니다.",
+  "ui.steps_info.needs.star_keypoints": "프레임과 병합된 지평선에 의존합니다. 지평선 마스크가 어떤 픽셀이 하늘인지 알려 주므로, 별은 지면이 아닌 그곳에서만 찾습니다.",
+  "ui.steps_info.needs.earth_keypoints": "프레임과 병합된 지평선에 의존합니다. 지평선 마스크가 어떤 픽셀이 지면인지 알려 주므로, 지면의 특징은 그곳에서만 찾습니다.",
+  "ui.steps_info.needs.star_alignment": "별 키포인트에 의존합니다. 각 프레임의 점을 이웃 프레임의 점과 짝지어 그 사이에 별이 어떻게 움직였는지 계산하므로, 키포인트가 먼저 찾아져 있어야 합니다.",
+  "ui.steps_info.needs.earth_alignment": "지면 키포인트와 지평선에 의존합니다. 각 프레임의 지면 점을 이웃 프레임의 점과 짝지어 풍경이 어떻게 움직였는지 계산하며, 무엇을 지면으로 볼지는 지평선이 정합니다.",
+  "ui.steps_info.needs.horizon_consensus": "지면 정렬과 각 프레임의 지평선에 의존합니다. 정렬된 지면을 따라 이웃 프레임의 지평선을 옮겨 와 각 지평선을 확정하므로, 모두가 먼저 존재해야 합니다.",
+  "ui.steps_info.needs.outliers": "정렬과 지평선 마스크에 의존합니다. 한 프레임에만 나타나는 궤적을 구분하려면 이웃 프레임이 먼저 정렬되어야 하며, 어떤 픽셀이 하늘인지는 마스크가 알려 줍니다.",
+  "ui.steps_info.needs.merged": "정렬과 최종 지평선 마스크에 의존하며, 이상치를 검토하는 모드에서는 이상치에도 의존합니다. 이웃 프레임은 정렬된 뒤에야 합칠 수 있고, 하늘만 덧칠하며, 찾아낸 궤적만 지웁니다."
 }

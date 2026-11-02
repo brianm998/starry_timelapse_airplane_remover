@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — işleniyor %{0}",
   "ui.menu_bar.tooltip.rendering": "star — video işleniyor %{0}",
   "ui.menu_bar.tooltip.finished": "star — tamamlandı",
-  "ui.menu_bar.tooltip.failed": "star — başarısız"
+  "ui.menu_bar.tooltip.failed": "star — başarısız",
+  "ui.steps_info_help": "Bu adımlar nedir?",
+  "ui.steps_info_title": "İşleme adımları hakkında",
+  "ui.steps_info_intro_moving": "Star, hareketli bir videoyu “{0}” işleme modunda işliyor.",
+  "ui.steps_info_intro_static": "Star, sabit bir videoyu “{0}” işleme modunda işliyor.",
+  "ui.steps_info_subtitle": "Videonuzu işlemek için aşağıdaki adımlar kullanılır.",
+  "ui.steps_info.extraction.what": "Videonuzdaki her kareyi çıkarıp görüntü olarak kaydeder; böylece sonraki adımlar kareler üzerinde tek tek çalışabilir.",
+  "ui.steps_info.needs.extraction": "Öncesindeki hiçbir adıma bağlı değildir: seçtiğiniz videoyu okur ve diğer her adım onun yazdığı karelerden başlar.",
+  "ui.steps_info.needs.horizon": "Çıkarılan karelere bağlıdır: ufuk, her karenin pikselleri incelenerek bulunur.",
+  "ui.steps_info.needs.merged_horizon": "Her karede bulunan ufka bağlıdır: tek bir karenin tahmini yanlış olabilir, bu yüzden daha kararlı bir maske için hepsinin birleştirilmesi gerekir.",
+  "ui.steps_info.needs.star_keypoints": "Karelere ve birleştirilmiş ufka bağlıdır: ufuk maskesi hangi piksellerin gökyüzü olduğunu söyler, böylece yıldızlar yalnızca orada aranır, zeminde aranmaz.",
+  "ui.steps_info.needs.earth_keypoints": "Karelere ve birleştirilmiş ufka bağlıdır: ufuk maskesi hangi piksellerin zemin olduğunu söyler, böylece zemin özellikleri yalnızca orada aranır.",
+  "ui.steps_info.needs.star_alignment": "Yıldız anahtar noktalarına bağlıdır: yıldızların aralarında nasıl kaydığını hesaplamak için her karenin noktalarını komşu karelerinkilerle eşleştirir; bu yüzden anahtar noktalar önce bulunmalıdır.",
+  "ui.steps_info.needs.earth_alignment": "Zemin anahtar noktalarına ve ufka bağlıdır: manzaranın nasıl kaydığını hesaplamak için her karenin zemin noktalarını komşu karelerinkilerle eşleştirir; neyin zemin sayılacağını ufuk belirler.",
+  "ui.steps_info.needs.horizon_consensus": "Zemin hizalamasına ve her karenin ufkuna bağlıdır: komşu karelerin ufuklarını hizalanmış zemin boyunca taşıyarak her ufku belirler; bu yüzden hepsinin önceden var olması gerekir.",
+  "ui.steps_info.needs.outliers": "Hizalamaya ve ufuk maskesine bağlıdır: yalnızca birinde görünen izleri ayırt edebilmek için komşu karelerin önce hizalanması gerekir; maske hangi piksellerin gökyüzü olduğunu söyler.",
+  "ui.steps_info.needs.merged": "Hizalamaya ve son ufuk maskesine, aykırıları inceleyen modlarda ise aykırılara da bağlıdır: komşu kareler ancak hizalandıktan sonra birleştirilebilir, yalnızca gökyüzü boyanır ve yalnızca bulunan izler silinir."
 }

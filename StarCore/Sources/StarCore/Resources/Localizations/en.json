@@ -1240,5 +1240,21 @@
   "ui.menu_bar.tooltip.processing": "star — processing {0}%",
   "ui.menu_bar.tooltip.rendering": "star — rendering video {0}%",
   "ui.menu_bar.tooltip.finished": "star — finished",
-  "ui.menu_bar.tooltip.failed": "star — failed"
+  "ui.menu_bar.tooltip.failed": "star — failed",
+  "ui.steps_info_help": "What are these steps?",
+  "ui.steps_info_title": "About the processing steps",
+  "ui.steps_info_intro_moving": "Star is processing a moving video in the {0} processing mode.",
+  "ui.steps_info_intro_static": "Star is processing a static video in the {0} processing mode.",
+  "ui.steps_info_subtitle": "The following steps are used to process your video.",
+  "ui.steps_info.extraction.what": "Pulls each frame out of your video and saves it as an image, so the later steps can work on the frames one by one.",
+  "ui.steps_info.needs.extraction": "Relies on nothing earlier: it reads the video you chose, and every other step starts from the frames it writes.",
+  "ui.steps_info.needs.horizon": "Relies on the extracted frames: the horizon is found by looking at the pixels of each one.",
+  "ui.steps_info.needs.merged_horizon": "Relies on the horizon found in each frame: one frame's guess can be wrong, so all of them are needed to combine into a steadier mask.",
+  "ui.steps_info.needs.star_keypoints": "Relies on the frames and on the merged horizon: the horizon mask says which pixels are sky, so stars are only looked for there and not on the ground.",
+  "ui.steps_info.needs.earth_keypoints": "Relies on the frames and on the merged horizon: the horizon mask says which pixels are ground, so ground features are only looked for there.",
+  "ui.steps_info.needs.star_alignment": "Relies on the star keypoints: it matches each frame's points to its neighbours' to work out how the stars moved between them, so the keypoints must be found first.",
+  "ui.steps_info.needs.earth_alignment": "Relies on the earth keypoints and the horizon: it matches each frame's ground points to its neighbours' to work out how the landscape moved, and the horizon says what counts as ground.",
+  "ui.steps_info.needs.horizon_consensus": "Relies on the earth alignment and on every frame's horizon: it settles each horizon by carrying its neighbours' horizons along the aligned ground, so all of them must exist first.",
+  "ui.steps_info.needs.outliers": "Relies on the alignment and the horizon mask: neighbouring frames have to be lined up before the streaks that appear in only one of them can be told apart, and the mask says which pixels are sky.",
+  "ui.steps_info.needs.merged": "Relies on the alignment and the final horizon mask, and in the modes that review outliers on the outliers too: neighbours can only be combined once they line up, only the sky is painted over, and only the streaks that were found are painted out."
 }
