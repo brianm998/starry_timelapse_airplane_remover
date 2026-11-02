@@ -1,22 +1,25 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from pathlib import Path
 
 import pytest
 
-from starpipe import guards, negctl
+from starpipe import guards, negctl, worktrees
 from starpipe.agent import StageOutcome, StageRequest
 from starpipe.config import Config
 from starpipe.db import Database
 from starpipe.engine import Engine
 from starpipe.notify import Notifier
+from starpipe.tickets import filed_by
 
 from .fakes import (
     GOOD_BODY,
     OWNER,
     FakeAgent,
+    FakeAnnouncer,
     FakeGitHub,
     accepted,
     commit_change,
@@ -32,6 +35,7 @@ class Rig:
         self.gh = FakeGitHub(origin=tmp / "origin.git")
         self.agent = FakeAgent()
         self.pages: list[tuple[str, str]] = []
+        self.announcer = FakeAnnouncer()
         self.slept: list[float] = []
         self.now = time.time()
 
@@ -43,7 +47,7 @@ class Rig:
         self.engine = Engine(Config(remote="origin", landing_mode="single"), self.db, self.gh, self.agent, make_repo(tmp), green_runner,
                              Notifier(self.db, lambda t, x: self.pages.append((t, x))), "origin/develop",
                              clock=lambda: self.now, sleep=sleep,
-                             negative_control=no_controls)
+                             negative_control=no_controls, announcer=self.announcer)
         self.db.clock = lambda: self.now
 
     def state(self, n: int) -> str:
@@ -127,6 +131,38 @@ async def test_blockers_and_priority_decide_the_claim(rig: Rig) -> None:
     rig.db.set_state(3, "landed")
     t = rig.engine.claimable()
     assert t and t.number == 1
+
+
+async def test_a_landing_stage_takes_a_session_over_the_limit_and_new_work_waits_for_it(rig: Rig) -> None:
+    rig.engine.config.max_llm_sessions = 1
+    rig.gh.add_issue(1, "running", labels=("pipeline", "p2"))
+    rig.gh.add_issue(2, "landing", labels=("pipeline", "p2"))
+    rig.gh.add_issue(3, "new", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    t1, t2, t3 = (rig.db.ticket(n) for n in (1, 2, 3))
+    assert t1 and t2 and t3
+    rig.db.begin_stage(1, "develop", 1, "sonnet")  # the one allowed session is busy
+    assert not rig.engine.llm_room().ok and rig.engine.llm_room(extra=1).ok
+    async def sleep(_: float) -> None:
+        await asyncio.sleep(0.01)
+
+    rig.engine.sleep = sleep
+    new_work = asyncio.create_task(rig.engine._begin_when_room(t3, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(0.05)
+    assert not new_work.done() and rig.db.get("llm_wait:3"), "no room for new work"
+    stage_id = await rig.engine._begin_when_room(t2, "conflict", 1, "sonnet")  # pyright: ignore[reportPrivateUsage]
+    assert stage_id and rig.engine.landing_waiting == set(), "the landing stage started at once, one over the limit"
+    rig.db.end_stage(1, "accepted", 0.0, "")  # stage rows are 1 (develop) and 2 (conflict): both end, room opens
+    rig.db.end_stage(2, "accepted", 0.0, "")
+    await asyncio.wait_for(new_work, 2)
+
+
+async def test_nothing_new_is_claimed_while_a_landing_stage_waits_for_a_session(rig: Rig) -> None:
+    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    assert rig.engine.claimable() is not None
+    rig.engine.landing_waiting.add(9)
+    assert rig.engine.claimable() is None
 
 
 async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Rig) -> None:
@@ -525,3 +561,137 @@ def test_the_defaults_are_sonnet_everywhere() -> None:
 
     cfg = Config()
     assert (cfg.model, cfg.model_escalate, cfg.allow_opus) == ("sonnet", "sonnet", False)
+
+
+async def test_needs_input_announces_with_the_attention_voice(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.add_question(7, "explore", "ship it?", {})
+    rig.db.answer_question(1, "no", "owner")
+    rig.db.put("delivered:1", "1")
+
+    def ask(req: StageRequest) -> StageOutcome:
+        req.contract.ask_question({"question": "ship it?", "why_unanswerable": "again"})
+        return accepted(req)
+
+    rig.agent.on("explore", ask)
+    await rig.engine.drive(7)
+    assert rig.state(7) == "needs-input"
+    assert rig.announcer.calls == [("attention", 7)]
+    from starpipe.announce import CLIPS
+
+    sound, voice, sentence = CLIPS["attention"]
+    assert sentence.format(n=7) == "Star issue number 7 needs your attention"
+    assert (sound, voice) != CLIPS["landed"][:2]
+
+
+async def test_announcer_failure_does_not_fail_the_stage(rig: Rig) -> None:
+    rig.announcer.fail = True
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    result = rig.engine.park(t, "needs a human", state="needs-input")
+    assert not result.ok and rig.state(7) == "needs-input" and rig.announcer.calls == [("attention", 7)]
+    rig.engine._to_state(7, "landed")  # pyright: ignore[reportPrivateUsage]
+    assert rig.state(7) == "landed"
+
+
+def test_the_real_announcer_swallows_missing_binaries_and_never_blocks(monkeypatch: pytest.MonkeyPatch) -> None:
+    from starpipe import announce
+
+    monkeypatch.setattr(announce, "AFPLAY", "/nonexistent/afplay")
+    monkeypatch.setattr(announce, "SAY", "/nonexistent/say")
+    announce.SayAnnouncer.play("landed", 1)  # no exception
+    a = announce.SayAnnouncer()
+    a.announce("attention", 2)  # returns at once; the worker thread swallows the failure
+
+
+PLAN_TICKET = """## Goal
+Tidy the docs.
+
+## Context
+docs/a.md.
+
+## Acceptance criteria
+- A1: the docs file has a second line — check: review: docs/a.md
+
+## Tests
+none: docs only
+
+## Out of scope
+Everything else.
+
+## Plan
+summary: Add a line to the docs file.
+parity: neither
+localization: no
+- approach: edit docs/a.md
+- file: docs/a.md:1 — the one line there
+- risk: none
+
+## Pipeline
+gherkin: no
+"""
+
+
+async def test_owner_ticket_with_a_valid_plan_skips_explore(rig: Rig) -> None:
+    rig.gh.add_issue(7, "Tidy the docs", PLAN_TICKET + filed_by("interactive"))
+    rig.engine.sync_issues()
+    t = rig.engine.claim(rig.db.ticket(7))  # type: ignore[arg-type]
+    assert t.state == "developing"
+    assert t.plan and t.plan["summary"] == "Add a line to the docs file." and t.plan["findings"][0]["line"] == 1
+    assert json.loads((worktrees.ticket_dir(7) / "plan.json").read_text()) == t.plan
+    assert [e["kind"] for e in rig.db.events_since() if e["ticket"] == 7 and e["kind"].startswith(("plan", "ticket-plan"))] \
+        == ["plan-from-ticket"]
+    rig.agent.on("develop", develop_ok)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    assert rig.state(7) == "landed"
+    assert not [r for r in rig.agent.requests if r.stage == "explore"]
+
+
+async def test_an_invalid_ticket_plan_falls_back_to_explore_with_reasons(rig: Rig) -> None:
+    past_eof = PLAN_TICKET.replace("docs/a.md:1 —", "docs/a.md:99 —").replace(
+        "none: docs only", "unit: pipeline/tests/test_x.py test_x — shows: A1")
+    rig.gh.add_issue(7, "Fix the docs crash", past_eof + filed_by("interactive"))
+    rig.engine.sync_issues()
+    rig.agent.on("explore", explore_ok)
+    rig.agent.on("develop", develop_ok)
+    rig.agent.on("review", review_ok)
+    rig.engine.claim(rig.db.ticket(7))  # type: ignore[arg-type]
+    assert rig.state(7) == "exploring" and not rig.db.ticket(7).plan  # type: ignore[union-attr]
+    rejected = [e for e in rig.db.events_since() if e["kind"] == "ticket-plan-rejected"]
+    assert len(rejected) == 1 and rejected[0]["ticket"] == 7
+    reasons = rejected[0]["data"]["reasons"]
+    assert any("docs/a.md has fewer than 99 lines" in r for r in reasons)
+    assert any("fails_before_fix" in r for r in reasons)
+    await rig.engine.drive(7)
+    (req,) = [r for r in rig.agent.requests if r.stage == "explore"]
+    assert "was rejected" in req.prompt and all(r in req.prompt for r in reasons)
+    assert rig.state(7) == "landed"
+
+    rig.gh.add_issue(8, "Tidy the docs again", PLAN_TICKET.replace("## Plan", "## Plan\nbogus: 1")
+                     + filed_by("interactive"))
+    rig.engine.sync_issues()
+    rig.engine.claim(rig.db.ticket(8))  # type: ignore[arg-type]
+    assert rig.state(8) == "exploring" and "unknown key" in (rig.db.get("plan_rejected:8") or "")
+
+
+async def test_pipeline_and_agent_filed_tickets_always_explore(rig: Rig) -> None:
+    mine = PLAN_TICKET + filed_by("interactive")
+    rig.gh.add_issue(1, "labelled by the pipeline", mine, labels=("pipeline", "pipe:filed-by-pipeline"))
+    rig.gh.add_issue(2, "filed by an agent", PLAN_TICKET + filed_by("nightly-review"))
+    rig.gh.add_issue(3, "filed by a stranger", mine, author="stranger")
+    rig.gh.add_issue(4, "no marker at all", PLAN_TICKET)
+    rig.engine.sync_issues()
+    for n in (1, 2, 3, 4):
+        assert tickets_ok(rig, n)
+
+
+def tickets_ok(rig: Rig, n: int) -> bool:
+    assert rig.db.ticket(n), f"#{n} was not taken up"
+    t = rig.engine.claim(rig.db.ticket(n))  # type: ignore[arg-type]
+    assert t.state == "exploring" and t.plan is None, f"#{n} skipped EXPLORE"
+    assert rig.db.get(f"plan_rejected:{n}") is None
+    return True

@@ -145,3 +145,29 @@ def judge(jobs: list[Job], baseline: Baseline, *, now: float, head_pushed_at: fl
     elif pending:
         verdict.kind, verdict.reason = "pending", "other jobs still running"
     return verdict
+
+
+def judge_feature_run(jobs: list[Job], reran: set[tuple[str, str]], *, run_completed: bool = False,
+                      run_conclusion: str | None = None, run_id: int = 0) -> Verdict:
+    """The jobs of ONE dispatched Gherkin feature run (a ticket's `gherkin:` features, proven on its own branch).
+
+    Every job blocks: there is no develop baseline for a subset run's job names (a baseline lookup would make a red one a
+    harmless `known_red`), and a slow job is never demoted, because the run is the proof the ticket asked for. A red job gets
+    one rerun; red twice is `fail`. A run that finished with no jobs (a feature name that does not exist) fails at once instead
+    of hanging."""
+    if not jobs:
+        if not run_completed:
+            return Verdict("pending", "the feature run has no jobs yet")
+        empty = Job("Gherkin", "feature matrix (no jobs ran)", "completed", run_conclusion or "failure", run_id)
+        return Verdict("fail", "the feature run finished without running any job (unknown feature name?)", blocking=[empty])
+    if not all(j.done for j in jobs):
+        return Verdict("pending", "the feature run is still going")
+    red = [j for j in jobs if j.red]
+    verdict = Verdict("pass")
+    verdict.blocking = [j for j in red if j.key in reran]
+    verdict.rerun = [j for j in red if j.key not in reran]
+    if verdict.blocking:
+        verdict.kind, verdict.reason = "fail", "feature run red twice: " + ", ".join(f"{j.workflow}/{j.job}" for j in verdict.blocking)
+    elif verdict.rerun:
+        verdict.kind, verdict.reason = "rerun", "feature run red: " + ", ".join(f"{j.workflow}/{j.job}" for j in verdict.rerun)
+    return verdict

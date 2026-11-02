@@ -34,6 +34,7 @@
   { "case": "rightClickId"          , "text": "I right-click \"<id>\"" },
   { "case": "clickLabel"            , "text": "I click the label \"<key>\"" },
   { "case": "processingFinishes"    , "text": "I wait for processing to finish" },
+  { "case": "processingStops"       , "text": "I wait for processing to stop" },
   { "case": "wait"                  , "text": "I wait <n:int> seconds" },
   { "case": "largeWindow"           , "text": "I make the window large" },
   { "case": "idStillSays"           , "text": "\"<id>\" is still saying \"<text>\"" },

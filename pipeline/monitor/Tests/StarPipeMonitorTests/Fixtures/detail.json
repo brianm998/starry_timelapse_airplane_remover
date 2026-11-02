@@ -1,5 +1,11 @@
 {
   "activity": "landed",
+  "blockers": [
+    {
+      "number": 27,
+      "title": "Processing Frames dialog: remember the window size"
+    }
+  ],
   "branch": "pipe/28-processing-frames-dialog-show-alignment-",
   "checks": [
     {

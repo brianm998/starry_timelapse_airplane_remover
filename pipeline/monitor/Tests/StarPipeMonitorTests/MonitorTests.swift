@@ -27,8 +27,37 @@ final class FixtureTests: XCTestCase {
         XCTAssertNil(s.usagePauseUntil)
     }
 
+    func testLandingQueueSectionShowsTheBatchTheAbandonedBatchAndTheSlowFlag() throws {
+        var s = try Self.snapshot()
+        XCTAssertEqual(s.landing.batch, BatchInfo(number: 2, phase: "ci", ageS: 90, members: [3], prNumber: 12, slow: false))
+        XCTAssertEqual(s.landing.lastAbandoned?.reason, "develop moved")
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.text),
+                       ["batch 2: ci · age 1m · #3", "batch 1 abandoned 1m ago: develop moved"])
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.slow), [false, false])
+
+        s.landing.batch = BatchInfo(number: 8, phase: "building", ageS: 11 * 60, members: [59, 76], prNumber: nil, slow: true)
+        s.landing.lastAbandoned = AbandonedBatch(number: 7, state: "abandoned", reason: "develop moved with overlapping changes",
+                                                 agoS: 18 * 60)
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.text),
+                       ["batch 8: building · age 11m · #59 #76 · SLOW",
+                        "batch 7 abandoned 18m ago: develop moved with overlapping changes"])
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.slow), [true, false])
+
+        s.landing.batch = nil
+        s.landing.lastAbandoned = nil
+        s.landing.nextBatchInS = 45
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.text), ["no batch yet: the next one starts in 45s"])
+        s.landing.nextBatchInS = nil
+        XCTAssertEqual(Overview.landingLines(s.landing), [])
+        XCTAssertEqual(Overview.landingLines(nil), [])
+    }
+
     func testSnapshotDecodesMaxActive() throws {
         XCTAssertEqual(try Self.snapshot().maxActive, 2)
+    }
+
+    func testSnapshotDecodesMuted() throws {
+        XCTAssertEqual(try Self.snapshot().muted, false)
     }
 
     func testOverviewGroupsActiveSessionsByModelAndOrdersTheLandingQueue() throws {
@@ -47,6 +76,28 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(groups[0].sessions.map(\.ticket.number), [5, 9])
         XCTAssertEqual(groups[0].sessions.map(\.stage), ["review", "develop"])
         XCTAssertEqual(Overview.landingQueue(tickets).map(\.number), [6, 8, 2, 4])
+    }
+
+    func testTopBarCountsBucketTicketStates() throws {
+        let base = try XCTUnwrap(try Self.snapshot().tickets.first)
+        func ticket(_ n: Int, _ state: String) -> TicketSnap {
+            var t = base
+            t.number = n; t.state = state
+            return t
+        }
+        let live = ["queued", "exploring", "developing", "verifying", "review", "ready", "ci", "landing", "needs-input", "paused"]
+        let terminal = ["landed", "failed", "closed", "cancelled"]
+        // two needs-input tickets and two ci tickets to tell a count from a presence check
+        let states = live + terminal + ["needs-input", "ci"]
+        let counts = Overview.topBarCounts(states.enumerated().map { ticket($0.offset + 1, $0.element) })
+        XCTAssertEqual(counts.map(\.label), ["Needs input", "Queued", "Exploring", "Developing", "Testing", "Review", "Landing"])
+        XCTAssertEqual(counts.map(\.count), [2, 1, 1, 1, 1, 1, 4])
+        // every live state but paused is in exactly one bucket; paused and terminal states in none
+        for state in live + terminal {
+            let hits = counts.filter { $0.states.contains(state) }.count
+            XCTAssertEqual(hits, live.contains(state) && state != "paused" ? 1 : 0, state)
+        }
+        XCTAssertEqual(Overview.topBarCounts([]).map(\.count), [0, 0, 0, 0, 0, 0, 0])
     }
 
     func testEveryTicketIsInAKnownGroupAndStagesCarryTheirLockWait() throws {
@@ -87,6 +138,42 @@ final class DetailTests: XCTestCase {
         XCTAssertEqual(d.checks.first?.checkId, "t0:diff-check")
         XCTAssertEqual(d.checks.first?.result, "pass")
         XCTAssertNil(d.question)
+        XCTAssertEqual(d.blockers, [BlockerRef(number: 27, title: "Processing Frames dialog: remember the window size")])
+    }
+
+    func testADetailWithoutBlockersFromAnOlderDaemonDecodesToNone() throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: "detail", withExtension: "json", subdirectory: "Fixtures"))
+        var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        raw["blockers"] = nil
+        let d = try JSONDecoder().decode(TicketDetail.self, from: JSONSerialization.data(withJSONObject: raw))
+        XCTAssertEqual(d.blockers, [])
+        XCTAssertEqual(d.number, 28)
+    }
+}
+
+final class BlockerLinksTests: XCTestCase {
+    let repo = "brianm998/starry_timelapse_airplane_remover"
+
+    func testBlockerLinksBuildIssueURLsAndRowLabels() throws {
+        XCTAssertEqual(BlockerLinks.issueURL(repo: repo, number: 84)?.absoluteString,
+                       "https://github.com/brianm998/starry_timelapse_airplane_remover/issues/84")
+        XCTAssertNil(BlockerLinks.issueURL(repo: "", number: 84))
+        let row = try XCTUnwrap(BlockerLinks.row(activity: "queued: #84, #85", blockedBy: [84, 85], repo: repo))
+        XCTAssertEqual(row.prefix, "queued:")
+        XCTAssertEqual(row.links.map(\.label), ["#84", "#85"])
+        XCTAssertEqual(row.links.map(\.url.absoluteString), [84, 85].map { "https://github.com/\(repo)/issues/\($0)" })
+        XCTAssertNil(BlockerLinks.row(activity: "queued", blockedBy: [], repo: repo), "an unblocked row is plain text")
+        XCTAssertNil(BlockerLinks.row(activity: "developing · attempt 1/3 · 4m", blockedBy: [84], repo: repo))
+        XCTAssertNil(BlockerLinks.row(activity: "queued: #84", blockedBy: [84], repo: ""), "no repo, no links")
+    }
+
+    func testDetailRowsListEachBlockerAndAreEmptyWithNone() {
+        let rows = BlockerLinks.detailRows(blockers: [BlockerRef(number: 84, title: "first"), BlockerRef(number: 85, title: "")],
+                                           repo: repo)
+        XCTAssertEqual(rows.map(\.label), ["#84", "#85"])
+        XCTAssertEqual(rows.map(\.title), ["first", ""])
+        XCTAssertEqual(rows.map(\.url.absoluteString), [84, 85].map { "https://github.com/\(repo)/issues/\($0)" })
+        XCTAssertEqual(BlockerLinks.detailRows(blockers: [], repo: repo), [])
     }
 }
 
@@ -122,6 +209,84 @@ final class StoreTests: XCTestCase {
         s.tickets.removeAll { $0.number == 5 }
         store.apply(s)
         XCTAssertNil(store.selected)
+    }
+
+    func testShowOverviewClearsTheSelectionAndDetail() async throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        store.selected = 5
+        XCTAssertEqual(store.selectedTicket?.number, 5)
+        store.showOverview()
+        XCTAssertNil(store.selected)
+        XCTAssertNil(store.selectedTicket)
+        XCTAssertNil(store.detail)
+        XCTAssertTrue(store.logLines.isEmpty)
+    }
+
+    func testNavigationHistoryRecordsEachViewChangeOnce() throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        XCTAssertFalse(store.canGoBack)
+        store.selected = 5
+        store.selected = 5            // already showing: nothing recorded
+        store.selected = 3
+        store.showOverview()
+        store.showOverview()
+        store.goBack()
+        XCTAssertEqual(store.selected, 3)
+        store.goBack()
+        XCTAssertEqual(store.selected, 5)
+        store.goBack()
+        XCTAssertNil(store.selected)
+        XCTAssertFalse(store.canGoBack)
+        XCTAssertTrue(store.canGoForward)
+    }
+
+    func testBackThenNewSelectionDropsForwardHistory() throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        store.selected = 5
+        store.selected = 3
+        store.goBack()
+        XCTAssertEqual(store.selected, 5)
+        XCTAssertTrue(store.canGoForward)
+        store.selected = 6
+        XCTAssertFalse(store.canGoForward)
+        store.goBack()
+        XCTAssertEqual(store.selected, 5)
+        store.goForward()
+        XCTAssertEqual(store.selected, 6)
+        XCTAssertFalse(store.canGoForward)
+    }
+
+    func testBackSkipsTicketsThatLeftTheSnapshot() throws {
+        let store = MonitorStore()
+        var s = try FixtureTests.snapshot()
+        store.apply(s)
+        store.selected = 5
+        store.selected = 3
+        store.selected = 6
+        s.tickets.removeAll { $0.number == 3 }
+        store.apply(s)
+        store.goBack()
+        XCTAssertEqual(store.selected, 5)   // 9 skipped
+        // a snapshot-driven reset is not a navigation
+        s.tickets.removeAll { $0.number == 5 }
+        store.apply(s)
+        XCTAssertNil(store.selected)
+        XCTAssertFalse(store.canGoBack)     // only dead entries remain behind the Overview
+        XCTAssertTrue(store.canGoForward)
+        store.goForward()
+        XCTAssertEqual(store.selected, 6)
+    }
+
+    func testNavigationHistoryIsBounded() throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        for i in 0..<(MonitorStore.historyLimit * 2) { store.selected = i.isMultiple(of: 2) ? 5 : 3 }
+        var steps = 0
+        while store.canGoBack { store.goBack(); steps += 1 }
+        XCTAssertEqual(steps, MonitorStore.historyLimit - 1)
     }
 
     func testOnlyTheLastFiveChangesAreKept() {

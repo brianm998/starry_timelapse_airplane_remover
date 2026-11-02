@@ -4,6 +4,7 @@ import asyncio
 import json
 import subprocess
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +13,7 @@ import pytest
 from starpipe import ci, gitutil, landing, ship, worktrees
 from starpipe.agent import StageOutcome, StageRequest
 
-from .fakes import FakeGitHub, accepted, sh
+from .fakes import GOOD_BODY, FakeGitHub, accepted, sh
 from .test_engine import Rig
 
 PLAN = json.dumps({"summary": "A planned change.", "acceptance": [{"id": "A1", "check": "review: x"}],
@@ -24,9 +25,14 @@ def rig(tmp_path: Path) -> Rig:
     return Rig(tmp_path)
 
 
-def ready_ticket(rig: Rig, n: int, file: str, text: str, folder: str = "docs") -> None:
+def with_gherkin(value: str) -> str:
+    """GOOD_BODY with a Pipeline section naming Gherkin features."""
+    return f"{GOOD_BODY}\n## Pipeline\ngherkin: {value}\n"
+
+
+def ready_ticket(rig: Rig, n: int, file: str, text: str, folder: str = "docs", body: str = GOOD_BODY) -> None:
     """A ticket that has finished REVIEW: a worktree with one commit and a plan, in state `ready`."""
-    rig.gh.add_issue(n, f"change {file}")
+    rig.gh.add_issue(n, f"change {file}", body)
     rig.engine.sync_issues()
     t = rig.engine.claim(rig.db.ticket(n))  # type: ignore[arg-type]
     wt = Path(t.worktree or "")
@@ -708,6 +714,49 @@ def test_a_pr_does_not_wait_for_gherkin_and_its_runs_are_cancelled(rig: Rig) -> 
     assert rig.gh.cancelled_runs == [rig.gh.run_ids[("sha1", "Gherkin")]], "only Gherkin's run was cancelled"
 
 
+SMOKE_JOB = "cli (ubuntu-24.04) · shard 1: autoHorizonJpeg"
+FULL_JOB = "desktop (ubuntu-24.04) · shard 1: autoHorizonVideo"
+
+
+def _judge_pr(rig: Rig, sha: str, reran: set[tuple[str, str]] | None = None) -> ci.Verdict:
+    rig.engine.db.put("pushed_at:1", str(rig.engine.clock() - 10000))
+    return ship._judge(rig.engine, 1, sha, reran or set())  # pyright: ignore[reportPrivateUsage]
+
+
+def test_a_red_smoke_job_green_on_develop_is_rerun_then_blocks(rig: Rig) -> None:
+    """A PR is gated on "Gherkin smoke": a job red here and green on develop gets one rerun, then blocks. The full matrix next to it,
+    still running, is neither waited for nor judged, and is cancelled."""
+    rig.gh.ci["sha3"] = [("pr-gate", "linux", "completed", "success"), ("Gherkin smoke", SMOKE_JOB, "completed", "failure"),
+                         ("Gherkin", FULL_JOB, "in_progress", None)]
+    rig.engine.db.set_baseline("Gherkin smoke", SMOKE_JOB, "x", "success")
+    v = _judge_pr(rig, "sha3")
+    assert v.kind == "rerun" and [j.key for j in v.rerun] == [("Gherkin smoke", SMOKE_JOB)]
+    v = _judge_pr(rig, "sha3", {("Gherkin smoke", SMOKE_JOB)})
+    assert v.kind == "fail" and [j.key for j in v.blocking] == [("Gherkin smoke", SMOKE_JOB)]
+    assert rig.gh.cancelled_runs and set(rig.gh.cancelled_runs) == {rig.gh.run_ids[("sha3", "Gherkin")]}, "only the full matrix is cancelled"
+
+
+def test_a_red_smoke_job_that_is_red_on_develop_does_not_block(rig: Rig) -> None:
+    rig.gh.ci["sha4"] = [("pr-gate", "linux", "completed", "success"), ("Gherkin smoke", SMOKE_JOB, "completed", "failure")]
+    rig.engine.db.set_baseline("Gherkin smoke", SMOKE_JOB, "x", "failure")
+    v = _judge_pr(rig, "sha4")
+    assert v.kind == "pass" and [j.key for j in v.known_red] == [("Gherkin smoke", SMOKE_JOB)]
+
+
+def test_a_red_full_gherkin_job_does_not_block_while_smoke_is_green(rig: Rig) -> None:
+    """The full matrix is post-merge only: a red job of it on a PR, even one that is green on develop, blocks nothing and the run is
+    cancelled if still going. Removing "Gherkin" from ci_post_merge_workflows, or adding "Gherkin smoke" to it, breaks this and the two above."""
+    from starpipe.config import Config
+
+    assert Config().ci_post_merge_workflows == ("Gherkin",)
+    rig.gh.ci["sha5"] = [("pr-gate", "linux", "completed", "success"), ("Gherkin smoke", SMOKE_JOB, "completed", "success"),
+                         ("Gherkin", FULL_JOB, "completed", "failure"), ("Gherkin", "mac gui (macos-15) · ui", "in_progress", None)]
+    rig.engine.db.set_baseline("Gherkin", FULL_JOB, "x", "success")
+    v = _judge_pr(rig, "sha5")
+    assert v.kind == "pass" and v.blocking == [] and v.rerun == [] and v.known_red == []
+    assert rig.gh.cancelled_runs == [rig.gh.run_ids[("sha5", "Gherkin")]]
+
+
 def test_a_red_non_gherkin_job_still_blocks_when_gherkin_is_ignored(rig: Rig) -> None:
     rig.gh.ci["sha2"] = [("pr-gate", "linux", "completed", "success"), ("Kotlin Client", "build", "completed", "failure"),
                          ("Gherkin", "cli (macos-15) · a", "in_progress", None)]
@@ -773,3 +822,119 @@ def test_a_short_line_must_be_present_exactly(tmp_path: Path) -> None:
     pr = "a = 2\n"
     resolved = "a = 2\nreturn x + 1\n"  # `return` and `x` both appear, but the line itself is gone
     assert [d.line for d in _audit_repo(tmp_path, base, develop, pr, resolved)] == ["return x"]
+
+
+async def test_landing_announces_each_ticket_once(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n")
+    await rig.engine.drive(1)
+    assert rig.state(1) == "landed"
+    assert rig.announcer.calls == [("landed", 1)]
+
+
+def test_a_tickets_gherkin_features_are_the_pipeline_value_plus_the_plans_without_duplicates() -> None:
+    from starpipe import tickets
+
+    plan = {"gherkin_features_to_run": ["autoHorizonJpeg", "autoMovingTiff16"]}
+    assert tickets.gherkin_features(with_gherkin("autoMovingTiff16, selectiveTiff16"), plan) == [
+        "autoMovingTiff16", "selectiveTiff16", "autoHorizonJpeg"]
+    assert tickets.gherkin_features(with_gherkin("no"), None) == [] and tickets.gherkin_features(GOOD_BODY, {}) == []
+    assert tickets.feature_title(["a", "b"]) == "Gherkin: a,b", "the run-name gherkin.yml gives a dispatch with features a,b"
+
+
+async def test_gherkin_features_are_dispatched_on_the_branch_and_block_landing(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n", body=with_gherkin("autoMovingTiff16"))
+    t = rig.db.ticket(1)
+    assert t and t.branch
+    rig.gh.feature_pending_polls = 2
+    during: list[tuple[str, bool]] = []
+    real_sleep = rig.engine.sleep
+
+    async def sleep(s: float) -> None:
+        during.append((rig.state(1), any(p["merged"] for p in rig.gh.prs.values())))
+        await real_sleep(s)
+
+    rig.engine.sleep = sleep  # type: ignore[method-assign]
+    await rig.engine.drive(1)
+    assert rig.gh.dispatches == [("gherkin.yml", t.branch, {"features": "autoMovingTiff16"})]
+    assert rig.gh.feature_runs[5000]["title"] == "Gherkin: autoMovingTiff16"
+    assert len(during) >= 2 and set(during) == {("ci", False)}, "it waited for the run in CI and nothing landed meanwhile"
+    assert rig.state(1) == "landed" and rig.gh.cancelled_runs == [], "the feature run was not cancelled as a PR's full matrix is"
+
+
+async def test_a_feature_run_red_twice_goes_back_to_ci_fix_with_the_log(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n", body=with_gherkin("autoMovingTiff16"))
+    t = rig.db.ticket(1)
+    assert t
+    wt = Path(t.worktree or "")
+    rig.gh.feature_attempts = [[("cli (macos-15) · autoMovingTiff16", "failure")]] * 2  # the first attempt and its rerun
+    rig.gh.logs[5000] = "Then the trail is removed\n  expected 3 stars, got 1"
+
+    def fix(req: StageRequest) -> StageOutcome:
+        (wt / "docs" / "one.md").write_text("fixed\n")
+        sh(wt, "git", "add", "-A")
+        sh(wt, "git", "commit", "-q", "-m", "fix the feature")
+        rig.gh.feature_attempts = [[("cli (macos-15) · autoMovingTiff16", "success")]]  # the new head's run is green
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "fixed"})
+        return accepted(req, "S-fix")
+
+    rig.agent.on("ci-fix", fix)
+    await rig.engine.drive(1)
+    fixes = [r for r in rig.agent.requests if r.stage == "ci-fix"]
+    assert len(fixes) == 1 and "expected 3 stars, got 1" in fixes[0].prompt and "feature run red twice" in fixes[0].prompt
+    assert rig.gh.reruns == [5000], "rerun once, not more"
+    assert [d[2] for d in rig.gh.dispatches] == [{"features": "autoMovingTiff16"}] * 2, "the fixed head was dispatched again"
+    assert rig.gh.feature_runs[5000]["sha"] != rig.gh.feature_runs[5001]["sha"]
+    assert rig.state(1) == "landed"
+
+
+async def test_a_feature_run_red_twice_with_no_fix_parks_the_ticket(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n", body=with_gherkin("autoMovingTiff16"))
+    rig.gh.feature_attempts = [[("cli (macos-15) · autoMovingTiff16", "failure")]]
+    await rig.engine.drive(1)
+    assert rig.state(1) == "failed" and not any(p["merged"] for p in rig.gh.prs.values())
+
+
+async def test_a_feature_run_red_then_green_passes(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n", body=with_gherkin("autoMovingTiff16"))
+    rig.gh.feature_attempts = [[("cli (macos-15) · autoMovingTiff16", "failure")], [("cli (macos-15) · autoMovingTiff16", "success")]]
+    await rig.engine.drive(1)
+    assert rig.state(1) == "landed" and rig.gh.reruns == [5000]
+    assert len(rig.gh.dispatches) == 1 and not [r for r in rig.agent.requests if r.stage == "ci-fix"]
+
+
+async def test_full_matrix_gherkin_runs_are_still_cancelled_and_featureless_tickets_unchanged(rig: Rig) -> None:
+    # a PR's full-matrix Gherkin run is cancelled and not waited for; a dispatched feature run with the ticket's title is left alone
+    rig.gh.ci["sha1"] = [("pr-gate", "linux", "completed", "success"), ("Gherkin", "cli (macos-15) · a", "in_progress", None)]
+    rig.gh.feature_runs[5000] = {"id": 5000, "branch": "b", "sha": "sha1", "attempt": 1, "title": "Gherkin: x", "polls": 5}
+    rig.engine.db.put("pushed_at:1", str(rig.engine.clock() - 10000))
+    v = ship._judge(rig.engine, 1, "sha1", set(), ("Gherkin: x",))  # pyright: ignore[reportPrivateUsage]
+    assert v.kind == "pass", "neither the full matrix nor the feature run is waited for by the PR judge"
+    assert rig.gh.cancelled_runs == [rig.gh.run_ids[("sha1", "Gherkin")]], "the full matrix was cancelled, the feature run was not"
+    ship._judge(rig.engine, 1, "sha1", set())  # pyright: ignore[reportPrivateUsage]
+    assert 5000 in rig.gh.cancelled_runs, "a run that is not the ticket's own feature run is cancelled, whatever its title"
+    # tickets with no features (nothing named, or `gherkin: no`) dispatch nothing and land as before
+    ready_ticket(rig, 2, "two.md", "two\n")
+    ready_ticket(rig, 3, "three.md", "three\n", body=with_gherkin("no"))
+    await rig.engine.drive(2)
+    await rig.engine.drive(3)
+    assert rig.state(2) == "landed" and rig.state(3) == "landed" and rig.gh.dispatches == []
+
+
+def test_a_feature_run_on_a_branch_without_a_run_name_is_matched_by_its_path_title_and_time() -> None:
+    sha, title, path = "abc", "Gherkin: uiX", ".github/workflows/gherkin.yml"
+    dispatched = datetime(2026, 11, 2, 12, 0, 0, tzinfo=UTC).timestamp()
+
+    def run(display_title: str, created: str | None, head: str = sha, event: str = "workflow_dispatch") -> dict[str, Any]:
+        return {"id": 1, "event": event, "head_sha": head, "display_title": display_title, "created_at": created}
+
+    assert ship._is_feature_run(run(title, None), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert ship._is_feature_run(run(path, "2026-11-02T12:00:05Z"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert not ship._is_feature_run(run(path, "2026-11-02T11:50:00Z"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    named = {**run("Gherkin", "2026-11-02T12:00:05Z"), "name": "Gherkin"}  # what the REST API returns for a run-name-less workflow
+    assert ship._is_feature_run(named, sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert not ship._is_feature_run(run("Gherkin", "2026-11-02T12:00:05Z"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert not ship._is_feature_run(run(path, None), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert not ship._is_feature_run(run(path, "2026-11-02T12:00:05Z", head="other"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert not ship._is_feature_run(run(path, "2026-11-02T12:00:05Z", event="push"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert not ship._is_feature_run(run("Some PR title", "2026-11-02T12:00:05Z"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
