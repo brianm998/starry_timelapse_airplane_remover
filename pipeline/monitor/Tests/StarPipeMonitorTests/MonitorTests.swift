@@ -176,6 +176,72 @@ final class StoreTests: XCTestCase {
         XCTAssertTrue(store.logLines.isEmpty)
     }
 
+    func testNavigationHistoryRecordsEachViewChangeOnce() throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        XCTAssertFalse(store.canGoBack)
+        store.selected = 5
+        store.selected = 5            // already showing: nothing recorded
+        store.selected = 3
+        store.showOverview()
+        store.showOverview()
+        store.goBack()
+        XCTAssertEqual(store.selected, 3)
+        store.goBack()
+        XCTAssertEqual(store.selected, 5)
+        store.goBack()
+        XCTAssertNil(store.selected)
+        XCTAssertFalse(store.canGoBack)
+        XCTAssertTrue(store.canGoForward)
+    }
+
+    func testBackThenNewSelectionDropsForwardHistory() throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        store.selected = 5
+        store.selected = 3
+        store.goBack()
+        XCTAssertEqual(store.selected, 5)
+        XCTAssertTrue(store.canGoForward)
+        store.selected = 6
+        XCTAssertFalse(store.canGoForward)
+        store.goBack()
+        XCTAssertEqual(store.selected, 5)
+        store.goForward()
+        XCTAssertEqual(store.selected, 6)
+        XCTAssertFalse(store.canGoForward)
+    }
+
+    func testBackSkipsTicketsThatLeftTheSnapshot() throws {
+        let store = MonitorStore()
+        var s = try FixtureTests.snapshot()
+        store.apply(s)
+        store.selected = 5
+        store.selected = 3
+        store.selected = 6
+        s.tickets.removeAll { $0.number == 3 }
+        store.apply(s)
+        store.goBack()
+        XCTAssertEqual(store.selected, 5)   // 9 skipped
+        // a snapshot-driven reset is not a navigation
+        s.tickets.removeAll { $0.number == 5 }
+        store.apply(s)
+        XCTAssertNil(store.selected)
+        XCTAssertFalse(store.canGoBack)     // only dead entries remain behind the Overview
+        XCTAssertTrue(store.canGoForward)
+        store.goForward()
+        XCTAssertEqual(store.selected, 6)
+    }
+
+    func testNavigationHistoryIsBounded() throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        for i in 0..<(MonitorStore.historyLimit * 2) { store.selected = i.isMultiple(of: 2) ? 5 : 3 }
+        var steps = 0
+        while store.canGoBack { store.goBack(); steps += 1 }
+        XCTAssertEqual(steps, MonitorStore.historyLimit - 1)
+    }
+
     func testOnlyTheLastFiveChangesAreKept() {
         let store = MonitorStore()
         for i in 1...8 {

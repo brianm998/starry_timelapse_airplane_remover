@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "السماح بالوصول",
   "ui.render_options_after_processing_title": "اختيار إعدادات الفيديو",
   "ui.use_these_settings": "استخدام هذه الإعدادات",
-  "ui.settings": "الإعدادات"
+  "ui.settings": "الإعدادات",
+  "ui.menu_bar.tooltip.idle": "star — في وضع الخمول",
+  "ui.menu_bar.tooltip.processing": "star — المعالجة {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — عرض الفيديو {0}%",
+  "ui.menu_bar.tooltip.finished": "star — اكتمل",
+  "ui.menu_bar.tooltip.failed": "star — فشل"
 }

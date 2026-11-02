@@ -340,7 +340,7 @@ struct StarApp: App {
             // The panel style, because the default menu cannot draw a progress bar.
             MenuBarStatusView(viewModel: viewModel)
         } label: {
-            Label(localized("ui.star"), systemImage: "wand.and.stars.inverse")
+            MenuBarLabel(viewModel: viewModel)
         }
         .menuBarExtraStyle(.window)
 
