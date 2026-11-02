@@ -8,6 +8,7 @@ Feature: A click with the Keep tool on a group nobody has decided keeps it
   Scenario: Click an undecided group with the Keep tool
     Given a processed copy of the sequence {sequence}
     When  I open the processed copy
+      And I make the window large
       And I click "sequenceprogress.close"
       And I click "mode.edit"
     Then  "status.keep" says "0 will keep"

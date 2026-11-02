@@ -9,6 +9,7 @@ Feature: A click with the Multi tool changes the group's decision, unless Multi 
   Scenario: Keep every group, then click one with the Multi tool
     Given a processed copy of the sequence {sequence}
     When  I open the processed copy
+      And I make the window large
       And I click "sequenceprogress.close"
       And I click "mode.edit"
       And I choose the menu command "keepAll"

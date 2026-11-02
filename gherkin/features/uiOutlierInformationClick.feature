@@ -9,6 +9,7 @@ Feature: A click with the Information tool lists the group and leaves its decisi
   Scenario: Look at an undecided group
     Given a processed copy of the sequence {sequence}
     When  I open the processed copy
+      And I make the window large
       And I click "sequenceprogress.close"
       And I click "mode.edit"
     Then  the "outlier" window is not open

@@ -8,6 +8,7 @@ Feature: A click on a kept outlier group makes it one to remove
   Scenario: Keep every group, then click one
     Given a processed copy of the sequence {sequence}
     When  I open the processed copy
+      And I make the window large
       And I click "sequenceprogress.close"
       And I click "mode.edit"
       And I choose the menu command "keepAll"

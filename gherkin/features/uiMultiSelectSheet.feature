@@ -9,6 +9,7 @@ Feature: A drag with the Multi tool opens the area sheet, on Keep and for all fr
   Scenario: Drag a box with the Multi tool
     Given a processed copy of the sequence {sequence}
     When  I open the processed copy
+      And I make the window large
       And I click "sequenceprogress.close"
       And I click "mode.edit"
       And I press "7"

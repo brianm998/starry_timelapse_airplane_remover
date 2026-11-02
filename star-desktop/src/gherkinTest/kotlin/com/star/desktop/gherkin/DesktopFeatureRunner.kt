@@ -991,6 +991,21 @@ class DesktopFeatureRunner {
     private var processedConfig: File? = null
 
     /**
+     * The `bash` that runs the fixture script. On a Windows machine the first `bash` on the PATH of a JVM is usually `C:\Windows\System32\bash.exe`, the
+     * WSL launcher, which fails at once where no distribution is installed (as on the hosted runners); the script is for Git Bash, which the
+     * runner's own `shell: bash` steps use (`STAR_BASH` names another).
+     */
+    private fun bashExecutable(): String {
+        if (!System.getProperty("os.name").orEmpty().startsWith("Windows", ignoreCase = true)) return "bash"
+        val candidates = listOfNotNull(
+            System.getenv("STAR_BASH"),
+            System.getenv("ProgramFiles")?.let { "$it\\Git\\bin\\bash.exe" },
+            "C:\\Program Files\\Git\\bin\\bash.exe",
+        )
+        return candidates.firstOrNull { File(it).isFile } ?: "bash"
+    }
+
+    /**
      * A relocated copy, in the scratch directory, of the processed sequence the cli made once (`gherkin/ui/make-processed-fixture.sh`: it runs the cli
      * over the sequence the first time it is asked, which takes minutes, and finds it afterwards). The copy's json files that hold the old absolute
      * path (the config.json among them) are rewritten to hold the new one.
@@ -999,16 +1014,26 @@ class DesktopFeatureRunner {
         val source = resolveSequence(param("sequence"))
         val script = File(repoRoot(), "gherkin/ui/make-processed-fixture.sh")
         // A machine without a built cli builds it (the script's STAR_CLI_BUILD): the first feature of a run that needs the processed sequence waits for that.
-        val builder = ProcessBuilder("bash", script.path, source.path).redirectError(ProcessBuilder.Redirect.INHERIT)
+        val bash = bashExecutable()
+        val builder = ProcessBuilder(bash, script.path.replace('\\', '/'), source.path.replace('\\', '/')).redirectError(ProcessBuilder.Redirect.INHERIT)
         builder.environment().putIfAbsent("STAR_CLI_BUILD", "1")
         val process = builder.start()
-        val printed = process.inputStream.bufferedReader().readText().lines().lastOrNull { it.isNotBlank() }?.trim()
-        if (process.waitFor() != 0 || printed == null) throw RunnerError("could not make the processed sequence (the script's own message is above)")
+        val output = process.inputStream.bufferedReader().readText()
+        val printed = output.lines().lastOrNull { it.isNotBlank() }?.trim()
+        val exit = process.waitFor()
+        if (exit != 0 || printed == null) {
+            throw RunnerError("could not make the processed sequence: $bash exited $exit, printed \"${output.trim().take(400)}\" (the script's own message, if it had one, is above)")
+        }
         val target = File(scratch, "processed")
         File(printed).copyRecursively(target)
         target.walkTopDown().filter { it.isFile && it.extension == "json" && it.length() < 8_000_000 }.forEach { f ->
             val text = f.readText()
             if (printed in text) f.writeText(text.replace(printed, target.path))
+        }
+        // A fixture without frame 0's outliers is opened and has its groups worked out again (minutes on a small runner, and none of its decisions): say so here.
+        val frame0 = File(target, "input/star_temp_${source.name}/outliers/0")
+        if (!File(frame0, "outliers.bin").isFile) {
+            throw RunnerError("the processed copy has no ${File(frame0, "outliers.bin").path}; it holds ${frame0.parentFile.list()?.sorted()?.take(30)} (fixture $printed)")
         }
         processedConfig = File(target, "input/star_temp_${source.name}/config.json")
     }

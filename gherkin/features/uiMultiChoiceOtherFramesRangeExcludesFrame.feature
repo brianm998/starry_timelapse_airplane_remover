@@ -10,6 +10,7 @@ Feature: The multi-choice sheet applied from this frame to the end leaves the fr
     Given a processed copy of the sequence {sequence}
       And the processed copy has the outliers of frame 0 copied into frame 1
     When  I open the processed copy
+      And I make the window large
       And I click "sequenceprogress.close"
       And I click "mode.edit"
     Then  "frame.number" says "frame 0"

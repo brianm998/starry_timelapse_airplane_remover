@@ -11,6 +11,7 @@ Feature: With Multi Choice on, a click on a decided group opens the sheet; Cance
   Scenario: Remove every group, then look at the sheet, cancel it, and apply it
     Given a processed copy of the sequence {sequence}
     When  I open the processed copy
+      And I make the window large
       And I click "sequenceprogress.close"
       And I click "mode.edit"
       And I choose the menu command "removeAll"
