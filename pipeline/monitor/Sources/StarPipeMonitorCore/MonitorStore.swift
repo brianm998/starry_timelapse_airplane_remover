@@ -24,8 +24,18 @@ public final class MonitorStore {
     public private(set) var recentChanges: [Change] = []
     public private(set) var detail: TicketDetail?
     public private(set) var logLines: [String] = []
-    public var selected: Int?
+    /// The view showing in the detail pane: a ticket number, or nil for the Overview. Every change the owner makes
+    /// (sidebar, Overview rows, home button) lands here and is recorded in the navigation history.
+    public var selected: Int? {
+        didSet { if !navigating { record(selected, was: oldValue) } }
+    }
     public var lastError: String?
+
+    /// Most views the back/forward history keeps; the oldest are dropped first.
+    public static let historyLimit = 100
+    private var history: [Int?] = [nil]
+    private var position = 0
+    @ObservationIgnored private var navigating = false
 
     public var onAlert: (@MainActor (Alert) -> Void)?
     /// Called with the update notice when the daemon reports newer monitor code; the sha is recorded as announced
@@ -75,7 +85,12 @@ public final class MonitorStore {
         Alerts.diff(old: snapshot, new: new).forEach { onAlert?($0) }
         snapshot = new
         connection = .live
-        if let selected, !new.tickets.contains(where: { $0.number == selected }) { self.selected = nil }
+        if let selected, !new.tickets.contains(where: { $0.number == selected }) {
+            // a snapshot-driven reset is not a navigation
+            navigating = true
+            self.selected = nil
+            navigating = false
+        }
     }
 
     public func apply(event: ServerEvent) {
@@ -114,6 +129,46 @@ public final class MonitorStore {
     /// Back to the initial status screen: no ticket selected, nothing of the last ticket's detail kept.
     public func showOverview() {
         selected = nil
+        detail = nil
+        logLines = []
+    }
+
+    // navigation history -------------------------------------------------------------------------------------------
+    private func record(_ view: Int?, was old: Int?) {
+        guard view != old else { return }
+        history.removeSubrange((position + 1)...)
+        history.append(view)
+        if history.count > Self.historyLimit { history.removeFirst(history.count - Self.historyLimit) }
+        position = history.count - 1
+    }
+
+    private func isLive(_ view: Int?) -> Bool {
+        guard let view else { return true }
+        return snapshot?.tickets.contains { $0.number == view } ?? false
+    }
+
+    /// The nearest history entry in `step` direction that can be shown and differs from what is showing.
+    private func target(_ step: Int) -> Int? {
+        var i = position + step
+        while history.indices.contains(i) {
+            if history[i] != selected && isLive(history[i]) { return i }
+            i += step
+        }
+        return nil
+    }
+
+    public var canGoBack: Bool { target(-1) != nil }
+    public var canGoForward: Bool { target(1) != nil }
+
+    public func goBack() { go(target(-1)) }
+    public func goForward() { go(target(1)) }
+
+    private func go(_ index: Int?) {
+        guard let index else { return }
+        position = index
+        navigating = true
+        selected = history[index]
+        navigating = false
         detail = nil
         logLines = []
     }
