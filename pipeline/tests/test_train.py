@@ -17,7 +17,7 @@ from starpipe.github import GitHubError
 
 from .fakes import Ci, accepted, sh
 from .test_engine import Rig
-from .test_ship import advance_develop, ready_ticket
+from .test_ship import advance_develop, ready_ticket, with_gherkin
 
 PASS: Ci = [("pr-gate", "linux", "completed", "success")]
 RED: Ci = [("pr-gate", "linux", "completed", "failure")]
@@ -504,3 +504,33 @@ async def test_abandoning_a_batch_cancels_its_queued_ci_runs_too(rig: Rig) -> No
     await train_of(rig).run_until_idle()
     assert "pipe/batch-1" in rig.gh.cancelled_branches, "the abandoned batch's runs were cancelled, not just its PR closed"
     assert rig.gh.closed_prs and rig.state(1) == "landed"
+
+
+async def test_a_feature_run_happens_per_ticket_before_batching_not_per_batch(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoHorizonJpeg"))
+    rig.gh.feature_pending_polls = 2
+    t1, t2 = rig.db.ticket(1), rig.db.ticket(2)
+    assert t1 and t2
+    at_publish: list[list[tuple[str, str, dict[str, str]]]] = []
+    real_create = rig.gh.create_pr
+
+    def create_pr(title: str, body: str, head: str, base: str) -> dict[str, Any]:
+        at_publish.append(list(rig.gh.dispatches))
+        return real_create(title, body, head, base)
+
+    rig.gh.create_pr = create_pr  # type: ignore[method-assign]
+    await train_of(rig).run_until_idle()
+    assert sorted((ref, inputs["features"]) for _, ref, inputs in rig.gh.dispatches) == sorted(
+        [(t1.branch, "autoMovingTiff16"), (t2.branch, "autoHorizonJpeg")]), "one run per ticket, each on its own branch"
+    assert len(at_publish) == 1 and len(at_publish[0]) == 2, "both feature runs were done before the one batch was published"
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2 and len(rig.gh.prs) == 1, "still one PR and one CI for the two"
+    assert rig.gh.cancelled_runs == []
+
+
+async def test_a_ticket_still_owing_a_feature_run_is_not_batched(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    train = train_of(rig)
+    assert train._gated(rig.db.ticket(1)) and train._pick() == []  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
+    rig.db.put("gherkin_ok:1", "x")
+    assert train._pick() == [1]  # pyright: ignore[reportPrivateUsage]
