@@ -133,14 +133,14 @@ def _dispatch_features(eng: Engine, t: Ticket, sha: str, title: str, features: l
 
 def _is_feature_run(run: dict[str, Any], sha: str, title: str, since: float) -> bool:
     """A dispatched run for this head: titled `title`, or, on a branch cut before gherkin.yml had a run-name, titled by the workflow's
-    path and created no earlier than the dispatch (GitHub's title for a run-name-less workflow; matching only by title redispatched
+    name (the REST API) or path (`gh`) and created no earlier than the dispatch (GitHub's title for a run-name-less workflow; matching only by title redispatched
     every ten minutes and each new run cancelled the last)."""
     if run.get("event") != "workflow_dispatch" or run.get("head_sha") != sha:
         return False
     if run.get("display_title") == title:
         return True
     created = str(run.get("created_at") or "")
-    return (run.get("display_title") == gherkin_nightly.WORKFLOW_PATH and bool(created)
+    return (run.get("display_title") in (gherkin_nightly.WORKFLOW_PATH, run.get("name")) and bool(created)
             and datetime.fromisoformat(created).timestamp() >= since)
 
 

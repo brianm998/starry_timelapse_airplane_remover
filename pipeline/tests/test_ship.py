@@ -931,6 +931,9 @@ def test_a_feature_run_on_a_branch_without_a_run_name_is_matched_by_its_path_tit
     assert ship._is_feature_run(run(title, None), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
     assert ship._is_feature_run(run(path, "2026-11-02T12:00:05Z"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
     assert not ship._is_feature_run(run(path, "2026-11-02T11:50:00Z"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    named = {**run("Gherkin", "2026-11-02T12:00:05Z"), "name": "Gherkin"}  # what the REST API returns for a run-name-less workflow
+    assert ship._is_feature_run(named, sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert not ship._is_feature_run(run("Gherkin", "2026-11-02T12:00:05Z"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
     assert not ship._is_feature_run(run(path, None), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
     assert not ship._is_feature_run(run(path, "2026-11-02T12:00:05Z", head="other"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
     assert not ship._is_feature_run(run(path, "2026-11-02T12:00:05Z", event="push"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
