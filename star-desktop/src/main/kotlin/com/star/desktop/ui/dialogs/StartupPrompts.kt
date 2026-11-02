@@ -24,6 +24,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import com.star.desktop.domain.KeypointDivisor
+import com.star.desktop.domain.KeypointDivisorDraft
+import com.star.desktop.ui.components.modalScrim
 import com.star.desktop.ui.components.HoverTip
 import com.star.proto.KeypointDivisorAdvice
 import kotlin.math.abs
@@ -63,14 +65,19 @@ import com.star.desktop.i18n.localized
  */
 @Composable
 fun StartupPrompts(app: AppViewModel, step: StartupStep) {
-    StartupCard {
-        when (step) {
-            StartupStep.HORIZON -> HorizonPrompt(app)
-            StartupStep.MOVING -> MovingPrompt(app)
-            StartupStep.SELECT_HORIZON -> SelectHorizonPrompt(app)
-            StartupStep.SELECT_MOVING_HORIZONS -> SelectMovingHorizonsPrompt(app)
-            StartupStep.REMOVAL -> RemovalPrompt(app)
+    // Held here, outside the card, so the Speed vs. Sharpness modal is a scrim over the whole window rather than a child laid out inside the card.
+    var showSpeedModal by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize()) {
+        StartupCard {
+            when (step) {
+                StartupStep.HORIZON -> HorizonPrompt(app)
+                StartupStep.MOVING -> MovingPrompt(app)
+                StartupStep.SELECT_HORIZON -> SelectHorizonPrompt(app)
+                StartupStep.SELECT_MOVING_HORIZONS -> SelectMovingHorizonsPrompt(app)
+                StartupStep.REMOVAL -> RemovalPrompt(app) { showSpeedModal = true }
+            }
         }
+        if (showSpeedModal && step == StartupStep.REMOVAL) KeypointDivisorModal(app) { showSpeedModal = false }
     }
 }
 
@@ -150,7 +157,7 @@ private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
 }
 
 @Composable
-private fun RemovalPrompt(app: AppViewModel) {
+private fun RemovalPrompt(app: AppViewModel, onOpenSpeedModal: () -> Unit) {
     var selective by remember { mutableStateOf(false) }
     var autoSelective by remember { mutableStateOf(false) }
     var groundAlignment by remember { mutableStateOf(true) }
@@ -180,7 +187,7 @@ private fun RemovalPrompt(app: AppViewModel) {
         ToggleRow(localized("ui.startup_ground_alignment_toggle"), groundAlignment, "startup.removal.groundalignment") { groundAlignment = it }
         Body(localized("ui.startup_ground_alignment_desc"))
         HorizontalDivider(color = StarColors.cellDefault)
-        KeypointDivisorSection(app)
+        KeypointDivisorSummaryRow(app, onOpenSpeedModal)
         HorizontalDivider(color = StarColors.cellDefault)
         AnswerRow(back = { app.startupGoBack(StartupStep.REMOVAL) }, advanced = { app.startupOpenAdvanced() }) {
             SecondaryButton(localized("ui.close")) { app.dismissStartup() }
@@ -190,42 +197,61 @@ private fun RemovalPrompt(app: AppViewModel) {
 }
 
 /**
- * "Speed vs. Sharpness" (macOS `KeypointDivisorStartupView`): how much smaller than the frame the alignment step looks for stars, which on a
- * large sequence decides whether the run goes at a sensible speed or crawls. Collapsed to its title when this machine copes with the
- * sequence at full resolution, open when it does not or when a value was already set. The choice is written as it is made (see
- * [AppViewModel.setKeypointDivisor]), so what is typed counts without being committed.
+ * The cleanup dialog's one-line "Speed vs. Sharpness": the title, what is in effect and an Update button (macOS `KeypointDivisorSummaryRow`).
+ * Update opens the modal ([KeypointDivisorModal]).
  */
 @Composable
-private fun KeypointDivisorSection(app: AppViewModel) {
+private fun KeypointDivisorSummaryRow(app: AppViewModel, onUpdate: () -> Unit) {
     val session by app.sessions.session.collectAsState()
     val divisor = session?.config?.alignmentKeypointDetectionDivisor?.takeIf { it > 0.0 } ?: 1.0
-    var advice by remember { mutableStateOf<KeypointDivisorAdvice?>(null) }
-    var expanded by remember { mutableStateOf(false) }
-    var customText by remember { mutableStateOf(KeypointDivisor.format(divisor)) }
-    var customFocused by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        val answer = app.keypointAdvice()
-        advice = answer
-        expanded = KeypointDivisor.initiallyExpanded(answer, app.sessions.session.value?.config?.alignmentKeypointDetectionDivisor ?: 1.0)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(localized("ui.speed_vs_sharpness"), color = StarColors.textPrimary, fontSize = 18.sp)
+        Text(KeypointDivisor.summaryLabel(divisor), color = StarColors.textSecondary, fontSize = 15.sp, modifier = Modifier.testTag("startup.removal.speed.value"))
+        Spacer(Modifier.weight(1f))
+        PrimaryButton(localized("ui.update"), "startup.removal.speed.update", onUpdate)
     }
+}
+
+/** [SpeedSharpnessDialog] over the session's current value, with the machine's advice asked for when it opens (fresh: it depends on settings that move it). */
+@Composable
+private fun KeypointDivisorModal(app: AppViewModel, onClose: () -> Unit) {
+    val divisor = app.sessions.session.value?.config?.alignmentKeypointDetectionDivisor?.takeIf { it > 0.0 } ?: 1.0
+    var advice by remember { mutableStateOf<KeypointDivisorAdvice?>(null) }
+    LaunchedEffect(Unit) { advice = app.keypointAdvice() }
+    SpeedSharpnessDialog(initial = divisor, advice = advice, onCancel = onClose, onUpdate = { app.setKeypointDivisor(it); onClose() })
+}
+
+/**
+ * The full "Speed vs. Sharpness" choice (macOS `KeypointDivisorStartupView`): how much smaller than the frame the alignment step looks for
+ * stars, which on a large sequence decides whether the run goes at a sensible speed or crawls. It edits a draft of [initial]: Update hands the
+ * draft to [onUpdate] (a typed custom value included, applied on every keystroke), Cancel hands nothing over, so the value stays as it was.
+ * Knows nothing of the app, so it can be driven on its own.
+ */
+@Composable
+fun SpeedSharpnessDialog(initial: Double, advice: KeypointDivisorAdvice?, onCancel: () -> Unit, onUpdate: (Double) -> Unit) {
+    val draft = remember { KeypointDivisorDraft(initial) }
+    var divisor by remember { mutableStateOf(initial) }
+    var customText by remember { mutableStateOf(KeypointDivisor.format(initial)) }
+    var customFocused by remember { mutableStateOf(false) }
     // Follow the value when a preset moved it, but never while the field is being typed into: that would rewrite the text under the cursor.
     LaunchedEffect(divisor) { if (!customFocused) customText = KeypointDivisor.format(divisor) }
 
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        HoverTip(localized(if (expanded) "ui.hide_speed_settings" else "ui.show_speed_settings")) {
-            Row(
-                Modifier.fillMaxWidth().clickable { expanded = !expanded },
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(if (expanded) "▼" else "▶", color = StarColors.textSecondary, fontSize = 13.sp)
-                Text(localized("ui.speed_vs_sharpness"), color = StarColors.textPrimary, fontSize = 18.sp)
-                if (!expanded) {
-                    Text(localized("ui.current_choice_suffix", KeypointDivisor.currentChoiceName(divisor)), color = StarColors.textSecondary, fontSize = 15.sp)
-                }
-            }
-        }
-        if (expanded) {
+    // Return is the dialog's Update, and Esc its Cancel; the dialog sits over the cleanup dialog, so Return must not reach Start Processing.
+    Box(
+        Modifier.fillMaxSize().background(StarColors.scrim).modalScrim().testTag("startup.speed.modal")
+            .defaultAction({ onUpdate(draft.committed()) }, onEscape = onCancel),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .widthIn(min = 420.dp, max = 600.dp)
+                .clip(StarShapes.card)
+                .background(StarColors.prefsCard)
+                .verticalScroll(rememberScrollState())
+                .padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Title(localized("ui.speed_vs_sharpness"))
             Body(KeypointDivisor.explanation(advice))
             for (preset in KeypointDivisor.presets) {
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -233,14 +259,16 @@ private fun KeypointDivisorSection(app: AppViewModel) {
                         Checkbox(
                             checked = KeypointDivisor.matches(divisor, preset.divisor),
                             // Exclusive: checking one selects it, and unchecking the checked one does nothing.
-                            onCheckedChange = { if (it) app.setKeypointDivisor(preset.divisor) },
+                            onCheckedChange = { if (it) { draft.choose(preset.divisor); divisor = draft.current } },
+                            modifier = Modifier.testTag("startup.speed.preset.${KeypointDivisor.format(preset.divisor)}"),
                         )
                         Text(localized(preset.nameKey), color = StarColors.textPrimary, fontSize = 15.sp)
                         Text(KeypointDivisor.format(preset.divisor), color = StarColors.textDisabled, fontSize = 15.sp)
                         if (KeypointDivisor.isRecommended(advice, preset.divisor)) {
                             Text(
                                 localized("ui.recommended"), color = Color.White, fontSize = 11.sp,
-                                modifier = Modifier.clip(RoundedCornerShape(50)).background(StarColors.accent.copy(alpha = 0.7f)).padding(horizontal = 6.dp, vertical = 1.dp),
+                                modifier = Modifier.clip(RoundedCornerShape(50)).background(StarColors.accent.copy(alpha = 0.7f)).padding(horizontal = 6.dp, vertical = 1.dp)
+                                    .testTag("startup.speed.recommended"),
                             )
                         }
                     }
@@ -254,7 +282,8 @@ private fun KeypointDivisorSection(app: AppViewModel) {
                     onValueChange = { text ->
                         customText = text
                         // Applied on every keystroke: every prefix of a number being typed is itself a number.
-                        KeypointDivisor.parse(text)?.let { if (abs(it - divisor) >= 0.0001) app.setKeypointDivisor(it) }
+                        draft.typed(text)
+                        if (abs(draft.current - divisor) >= 0.0001) divisor = draft.current
                     },
                     singleLine = true,
                     textStyle = TextStyle(color = StarColors.white, fontSize = 13.sp),
@@ -263,12 +292,21 @@ private fun KeypointDivisorSection(app: AppViewModel) {
                         .width(70.dp)
                         .background(StarColors.sidePanel)
                         .padding(horizontal = 6.dp, vertical = 4.dp)
-                        .onFocusChanged { customFocused = it.isFocused },
+                        .onFocusChanged { customFocused = it.isFocused }
+                        .testTag("startup.speed.custom"),
                 )
                 Text(localized("ui.any_number_from_1_to_8_1_is_full_size_2_is"), color = StarColors.textDisabled, fontSize = 11.sp)
             }
             if (KeypointDivisor.isTooHigh(divisor)) {
-                Text(localized("ui.keypoint_too_high", KeypointDivisor.format(divisor)), color = StarColors.yellow, fontSize = 13.sp)
+                Text(
+                    localized("ui.keypoint_too_high", KeypointDivisor.format(divisor)), color = StarColors.yellow, fontSize = 13.sp,
+                    modifier = Modifier.testTag("startup.speed.toohigh"),
+                )
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                SecondaryButton(localized("ui.cancel"), "startup.speed.cancel") { onCancel() }
+                Spacer(Modifier.weight(1f))
+                PrimaryButton(localized("ui.update"), "startup.speed.update") { onUpdate(draft.committed()) }
             }
         }
     }
