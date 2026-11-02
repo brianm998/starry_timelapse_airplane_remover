@@ -34,6 +34,16 @@ BACKOFF_S = 60.0
 SLOW_BUILDING_S = 600.0  # a batch still `building` after this long is marked slow in the snapshot
 ABANDONED_MEMORY_S = 3600.0  # how long the snapshot and status remember the last abandoned batch
 
+MAX_NOTED = 5  # files named in an abandon note
+
+
+def overlap_note(ov: landing.Overlap) -> str:
+    """What develop and the batch both changed, for the abandon note: up to MAX_NOTED files, or the shared check sets."""
+    if not ov.files:
+        return "same checks: " + ", ".join(ov.checks[:MAX_NOTED])
+    more = len(ov.files) - MAX_NOTED
+    return ", ".join(ov.files[:MAX_NOTED]) + (f" and {more} more" if more > 0 else "")
+
 
 def batch_worktree(repo: Path) -> Path:
     return repo / ".claude" / "worktrees" / WORKTREE
@@ -289,8 +299,10 @@ class Train:
                 await asyncio.to_thread(self._abandon, bid, "a member left the batch while it waited to land")
                 return
             result = await asyncio.to_thread(self._merge, bid, notes)
-        if result == "rebuild":
-            await asyncio.to_thread(self._abandon, bid, "develop moved with overlapping changes: rebuilding on the new base")
+        if result.startswith("rebuild"):
+            why = result.partition(":")[2].strip()
+            await asyncio.to_thread(self._abandon, bid, f"develop moved with overlapping changes{f' ({why})' if why else ''}: "
+                                    "rebuilding on the new base")
         elif result.startswith("refused"):
             await asyncio.to_thread(self._abandon, bid, f"the merge was {result}")
             await eng.sleep(BACKOFF_S)
@@ -309,8 +321,12 @@ class Train:
                 return "rebuild"
             if mb != gitutil.git(wt, "rev-parse", base).strip():  # develop moved while CI ran
                 files = [p for p in gitutil.git(wt, "diff", "--name-only", f"{mb}..{head}").splitlines() if p]
-                if landing.overlap(wt, mb, base, files).any or pr.get("mergeable") is False:
-                    return "rebuild"
+                ov = landing.overlap(wt, mb, base, files)
+                if pr.get("mergeable") is False:
+                    return f"rebuild:{overlap_note(ov)}" if ov.any else "rebuild:the PR is not mergeable"
+                if ov.any:
+                    # the overlap is real, but it may still merge cleanly: keep the batch and its PR, and run CI on the merge
+                    return "updated" if self._catch_up_batch(bid, wt, base, head, ov) else f"rebuild:{overlap_note(ov)}"
             if notes:
                 tickets = [t for n in eng.db.batch_members(bid) if (t := eng.db.ticket(n)) is not None]
                 eng.gh.update_pr(int(batch["pr_number"]), self._body(bid, tickets, notes))
@@ -331,6 +347,29 @@ class Train:
         eng.db.batch_update(bid, state="landing", note=sha)
         self._finish(bid, sha)
         return "merged"
+
+    def _catch_up_batch(self, bid: int, wt: Path, base: str, head: str, ov: landing.Overlap) -> bool:
+        """Merge develop into the green batch's branch and push it, so the same batch and PR go back to CI.
+
+        False (with the worktree left clean) when the merge conflicts: the batch has to be rebuilt instead."""
+        eng = self.eng
+        if gitutil.head_sha(wt) != head:
+            return False
+        code, _ = gitutil.run(wt, "merge", "--no-ff", "--no-edit", "-m", f"Merge develop into batch #{bid}", base)
+        if code != 0:
+            gitutil.run(wt, "merge", "--abort")
+            return False
+        branch = batch_branch(bid)
+        if eng.config.remote == "https":
+            gitutil.remote_push(wt, eng.config.owner, eng.config.repo, branch)
+        else:
+            gitutil.git(wt, "push", "--quiet", "origin", f"HEAD:refs/heads/{branch}")
+        new = gitutil.head_sha(wt)
+        eng.db.batch_update(bid, head_sha=new, ci_started=eng.clock())
+        eng.db.put(f"pushed_at:batch{bid}", str(eng.clock()))
+        eng.db.put(f"reran:batch{bid}", None)
+        eng.db.event("batch-caught-up", None, batch=bid, files=ov.files[:MAX_NOTED], head=new)
+        return True
 
     def _resume_landing(self, bid: int) -> None:
         eng = self.eng

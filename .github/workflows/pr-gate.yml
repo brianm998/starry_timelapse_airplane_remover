@@ -4,8 +4,8 @@ name: pr-gate
 # Target: 30 minutes. No path filter on the workflow, so there is always a result for the head SHA.
 # When a PR changes only paths that cannot affect the star program, the `changes` job says so and
 # the heavy `linux` and `macos` jobs are skipped (a skipped job counts as green); `static` always runs.
-# The slow workflows (Gherkin, the installers, wgpu) are not part of this gate; they block a merge only
-# when they fail on a PR where develop passes them.
+# The slow workflows (Gherkin smoke, the installers, wgpu) are not part of this gate; they block a merge only
+# when they fail on a PR where develop passes them. The full Gherkin matrix is post-merge only.
 #
 # Not in this first version: a Windows job (cli.yml's windows job needs ~190 lines of MSVC/SDK
 # pinning and is red on develop today). It joins once that is fixed.
