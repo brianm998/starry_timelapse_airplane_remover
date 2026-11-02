@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "অ্যাক্সেসের অনুমতি দিন",
   "ui.render_options_after_processing_title": "ভিডিও সেটিংস বেছে নিন",
   "ui.use_these_settings": "এই সেটিংস ব্যবহার করুন",
-  "ui.settings": "সেটিংস"
+  "ui.settings": "সেটিংস",
+  "ui.menu_bar.tooltip.idle": "star — নিষ্ক্রিয়",
+  "ui.menu_bar.tooltip.processing": "star — প্রক্রিয়াকরণ {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — ভিডিও রেন্ডার হচ্ছে {0}%",
+  "ui.menu_bar.tooltip.finished": "star — সম্পন্ন",
+  "ui.menu_bar.tooltip.failed": "star — ব্যর্থ"
 }

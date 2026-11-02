@@ -47,6 +47,9 @@ public final class LoggingViewModel {
 @MainActor @Observable
 public final class ViewModel {
 
+    /// How the last run ended, shown on the menu-bar wand until the menu is opened or a run starts.
+    var menuBarOutcome = MenuBarOutcome()
+
     /// A view onto the one live copy, not a copy of it — see `UserPreferencesStore`.
     var userPreferences: UserPreferences {
         get { UserPreferencesStore.shared.preferences }
@@ -293,6 +296,7 @@ public final class ViewModel {
     ///   see `restartAbandonedRun()`.
     func report(warning: StarWarning, restartableConfigPath: String? = nil) {
         self.latestWarning = warning
+        if warning.severity == .critical { menuBarOutcome.runEnded(.failed) }
         guard warning.severity == .critical else {
             show(inBanner: warning)
             return

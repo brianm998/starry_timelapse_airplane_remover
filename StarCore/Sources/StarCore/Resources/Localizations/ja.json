@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "アクセスを許可",
   "ui.render_options_after_processing_title": "動画の設定を選択",
   "ui.use_these_settings": "この設定を使う",
-  "ui.settings": "設定"
+  "ui.settings": "設定",
+  "ui.menu_bar.tooltip.idle": "star — 待機中",
+  "ui.menu_bar.tooltip.processing": "star — 処理中 {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — ビデオを書き出し中 {0}%",
+  "ui.menu_bar.tooltip.finished": "star — 完了",
+  "ui.menu_bar.tooltip.failed": "star — 失敗"
 }
