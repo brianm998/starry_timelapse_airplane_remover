@@ -988,11 +988,17 @@ class DesktopFeatureRunner {
         val source = resolveSequence(param("sequence"))
         val script = File(repoRoot(), "gherkin/ui/make-processed-fixture.sh")
         // A machine without a built cli builds it (the script's STAR_CLI_BUILD): the first feature of a run that needs the processed sequence waits for that.
-        val builder = ProcessBuilder("bash", script.path, source.path).redirectError(ProcessBuilder.Redirect.INHERIT)
+        // The script's messages go to a file and into the error: Gradle's test log shows a test's stdout only, so inherited stderr was lost on CI.
+        val messages = File(scratch.apply { mkdirs() }, "processed-fixture.err")
+        val builder = ProcessBuilder(bashExecutable(), script.invariantSeparatorsPath, source.invariantSeparatorsPath).redirectError(messages)
         builder.environment().putIfAbsent("STAR_CLI_BUILD", "1")
         val process = builder.start()
         val printed = process.inputStream.bufferedReader().readText().lines().lastOrNull { it.isNotBlank() }?.trim()
-        if (process.waitFor() != 0 || printed == null) throw RunnerError("could not make the processed sequence (the script's own message is above)")
+        val exit = process.waitFor()
+        if (exit != 0 || printed == null) {
+            val said = messages.takeIf { it.isFile }?.readText()?.trim().orEmpty().ifEmpty { "(it printed nothing)" }
+            throw RunnerError("could not make the processed sequence: ${script.name} exited $exit using ${builder.command().first()}; its messages:\n$said")
+        }
         val target = File(scratch, "processed")
         File(printed).copyRecursively(target)
         target.walkTopDown().filter { it.isFile && it.extension == "json" && it.length() < 8_000_000 }.forEach { f ->
@@ -1000,6 +1006,17 @@ class DesktopFeatureRunner {
             if (printed in text) f.writeText(text.replace(printed, target.path))
         }
         processedConfig = File(target, "input/star_temp_${source.name}/config.json")
+    }
+
+    /**
+     * The bash that runs the repo's shell scripts. On Windows a bare "bash" can be System32's WSL launcher, which has no distribution on a hosted
+     * runner and exits at once, so look for Git for Windows' own first. STAR_BASH overrides it.
+     */
+    private fun bashExecutable(): String {
+        System.getenv("STAR_BASH")?.takeIf { it.isNotBlank() }?.let { return it }
+        if (!System.getProperty("os.name").orEmpty().startsWith("Windows", ignoreCase = true)) return "bash"
+        val roots = listOfNotNull(System.getenv("ProgramFiles"), System.getenv("ProgramW6432"), "C:\\Program Files").distinct()
+        return roots.map { File(it, "Git/bin/bash.exe") }.firstOrNull { it.isFile }?.path ?: "bash"
     }
 
     /** Opens the processed copy as Load Config does; the reopened sequence says where it left off, which the feature closes. */
