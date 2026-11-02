@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "رسائی کی اجازت دیں",
   "ui.render_options_after_processing_title": "ویڈیو کی ترتیبات منتخب کریں",
   "ui.use_these_settings": "یہ ترتیبات استعمال کریں",
-  "ui.settings": "ترتیبات"
+  "ui.settings": "ترتیبات",
+  "ui.menu_bar.tooltip.idle": "star — بے کار",
+  "ui.menu_bar.tooltip.processing": "star — پروسیسنگ {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — ویڈیو رینڈر ہو رہی ہے {0}%",
+  "ui.menu_bar.tooltip.finished": "star — مکمل",
+  "ui.menu_bar.tooltip.failed": "star — ناکام"
 }

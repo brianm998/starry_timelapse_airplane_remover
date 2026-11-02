@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "อนุญาตการเข้าถึง",
   "ui.render_options_after_processing_title": "เลือกการตั้งค่าวิดีโอ",
   "ui.use_these_settings": "ใช้การตั้งค่านี้",
-  "ui.settings": "การตั้งค่า"
+  "ui.settings": "การตั้งค่า",
+  "ui.menu_bar.tooltip.idle": "star — ว่าง",
+  "ui.menu_bar.tooltip.processing": "star — กำลังประมวลผล {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — กำลังเรนเดอร์วิดีโอ {0}%",
+  "ui.menu_bar.tooltip.finished": "star — เสร็จสิ้น",
+  "ui.menu_bar.tooltip.failed": "star — ล้มเหลว"
 }

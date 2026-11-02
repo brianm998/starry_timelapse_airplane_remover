@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "पहुँच की अनुमति दें",
   "ui.render_options_after_processing_title": "वीडियो सेटिंग चुनें",
   "ui.use_these_settings": "इन सेटिंग का उपयोग करें",
-  "ui.settings": "सेटिंग्स"
+  "ui.settings": "सेटिंग्स",
+  "ui.menu_bar.tooltip.idle": "star — निष्क्रिय",
+  "ui.menu_bar.tooltip.processing": "star — प्रोसेसिंग {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — वीडियो रेंडर हो रहा है {0}%",
+  "ui.menu_bar.tooltip.finished": "star — पूरा हुआ",
+  "ui.menu_bar.tooltip.failed": "star — विफल"
 }

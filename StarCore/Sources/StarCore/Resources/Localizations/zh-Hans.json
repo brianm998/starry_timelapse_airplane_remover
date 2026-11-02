@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "允许访问",
   "ui.render_options_after_processing_title": "选择视频设置",
   "ui.use_these_settings": "使用这些设置",
-  "ui.settings": "设置"
+  "ui.settings": "设置",
+  "ui.menu_bar.tooltip.idle": "star — 空闲",
+  "ui.menu_bar.tooltip.processing": "star — 正在处理 {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — 正在渲染视频 {0}%",
+  "ui.menu_bar.tooltip.finished": "star — 已完成",
+  "ui.menu_bar.tooltip.failed": "star — 失败"
 }

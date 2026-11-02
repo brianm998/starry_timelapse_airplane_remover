@@ -9,7 +9,7 @@ import pytest
 from click.testing import CliRunner
 
 from starpipe import selfupdate
-from starpipe.cli import main
+from starpipe.cli import landing_lines, main
 from starpipe.config import home
 
 from .fakes import sh
@@ -99,3 +99,14 @@ def test_daemon_install_pins_a_runtime_at_origin_develop(tmp_path: Path, monkeyp
     assert any(c[0] == "bootstrap" for c in lc.calls)
     assert sh(repo, "git", "rev-parse", "HEAD").strip() == head and sh(repo, "git", "status", "--porcelain") == status
     assert sh(repo, "git", "rev-parse", "--abbrev-ref", "HEAD").strip() == "develop"
+
+
+def test_status_prints_the_active_batch_and_the_abandoned_one() -> None:
+    landing = {"batch": {"number": 8, "phase": "building", "age_s": 11 * 60, "members": [59, 76, 77], "pr_number": None, "slow": True},
+               "last_abandoned": {"number": 7, "state": "abandoned", "reason": "develop moved with overlapping changes",
+                                  "ended": 1.0, "ago_s": 18 * 60},
+               "next_batch_in_s": None}
+    assert landing_lines(landing) == ["batch 8: building · age 11m · #59 #76 #77 · SLOW",
+                                      "batch 7 abandoned 18m ago: develop moved with overlapping changes"]
+    assert landing_lines({"batch": None, "last_abandoned": None, "next_batch_in_s": 45}) == ["no batch yet: the next one starts in 45s"]
+    assert landing_lines({}) == []

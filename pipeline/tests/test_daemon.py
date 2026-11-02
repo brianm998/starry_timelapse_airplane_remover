@@ -713,3 +713,87 @@ def test_hard_exit_is_the_default_exit_and_ends_the_process_without_unwinding(mo
     assert daemon_mod.Daemon(rig.engine, rig.engine.config).exit is daemon_mod.hard_exit
     daemon_mod.hard_exit(0)
     assert calls == [0], "os._exit, not sys.exit: SystemExit would wait on non-daemon threads and hang"
+
+
+def landing_daemon(rig: Rig, window: int = 120) -> Daemon:
+    return Daemon(rig.engine, Config(landing_mode="batch", batch_window_s=window, batch_max=5), token="tok")
+
+
+def ready_tickets(rig: Rig, *numbers: int) -> None:
+    for n in numbers:
+        rig.gh.add_issue(n, f"t{n}")
+    rig.engine.sync_issues()
+    for n in numbers:
+        rig.engine._to_state(n, "ready")  # pyright: ignore[reportPrivateUsage]
+
+
+def activity_of(d: Daemon, n: int) -> str:
+    return next(t["activity"] for t in d.snapshot()["tickets"] if t["number"] == n)  # type: ignore[index, union-attr]
+
+
+def test_snapshot_shows_the_active_batch_in_each_phase(rig: Rig) -> None:
+    ready_tickets(rig, 1, 2)
+    d = landing_daemon(rig)
+    assert d.snapshot()["landing"]["batch"] is None  # type: ignore[index]
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_add(bid, 1, 0)
+    rig.db.batch_add(bid, 2, 1)
+    rig.now += 90
+    for phase in ("building", "ci", "landing"):
+        rig.db.batch_update(bid, state=phase)
+        landing = d.snapshot()["landing"]
+        assert landing["batch"] == {"number": bid, "phase": phase, "age_s": 90, "members": [1, 2],  # type: ignore[index]
+                                    "pr_number": None, "slow": False}
+        assert d.status()["landing"]["batch"]["phase"] == phase  # type: ignore[index]
+
+
+def test_ready_ticket_reads_in_batch_n_while_building(rig: Rig) -> None:
+    ready_tickets(rig, 1, 2, 3)
+    d = landing_daemon(rig)
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_add(bid, 1, 0)
+    rig.db.batch_add(bid, 2, 1)
+    assert activity_of(d, 1) == f"ready · in batch {bid} (building)"
+    assert activity_of(d, 2) == f"ready · in batch {bid} (building)"
+    assert activity_of(d, 3) == f"ready · waiting for the next batch (batch {bid} is building)"
+
+
+def test_ready_ticket_reads_waiting_for_the_next_batch_with_the_countdown(rig: Rig) -> None:
+    ready_tickets(rig, 1)
+    d = landing_daemon(rig, window=120)
+    rig.now += 30
+    assert activity_of(d, 1) == "ready · waiting for the next batch (starts in 90s)"
+    assert d.snapshot()["landing"]["next_batch_in_s"] == 90  # type: ignore[index]
+    rig.now += 100
+    assert activity_of(d, 1) == "ready · waiting for the next batch (starting)"
+    assert d.snapshot()["landing"]["next_batch_in_s"] == 0  # type: ignore[index]
+
+
+def test_snapshot_remembers_the_last_abandoned_batch_for_an_hour(rig: Rig) -> None:
+    d = landing_daemon(rig)
+    old = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(old, state="abandoned", ended=rig.now, note="an older reason")
+    rig.now += 10
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(bid, state="abandoned", ended=rig.now,
+                        note="develop moved with overlapping changes: rebuilding on the new base")
+    rig.now += 18 * 60
+    snap = d.snapshot()["landing"]
+    assert snap["batch"] is None  # type: ignore[index]
+    assert snap["last_abandoned"] == {"number": bid, "state": "abandoned", "ended": rig.now - 18 * 60, "ago_s": 18 * 60,  # type: ignore[index]
+                                      "reason": "develop moved with overlapping changes: rebuilding on the new base"}
+    rig.now += 41 * 60  # 59 minutes since it ended
+    assert d.snapshot()["landing"]["last_abandoned"]["number"] == bid  # type: ignore[index]
+    rig.now += 2 * 60  # over the hour
+    assert d.snapshot()["landing"]["last_abandoned"] is None  # type: ignore[index]
+
+
+def test_a_batch_building_over_ten_minutes_is_marked_slow(rig: Rig) -> None:
+    d = landing_daemon(rig)
+    bid = rig.db.batch_create("0" * 40)
+    rig.now += 599
+    assert d.snapshot()["landing"]["batch"]["slow"] is False  # type: ignore[index]
+    rig.now += 2
+    assert d.snapshot()["landing"]["batch"]["slow"] is True  # type: ignore[index]
+    rig.db.batch_update(bid, state="ci")  # only a batch still building is slow: CI is expected to take long
+    assert d.snapshot()["landing"]["batch"]["slow"] is False  # type: ignore[index]

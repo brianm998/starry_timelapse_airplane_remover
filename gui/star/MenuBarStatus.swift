@@ -66,6 +66,125 @@ enum MenuBarStatus: Equatable {
     }
 }
 
+/// How the last run ended, kept until the user next opens the menu or starts a run.
+enum RunOutcome: Equatable {
+    case finished
+    case failed
+}
+
+/// The latched outcome of the last run.  Cancelling sets nothing: a cancelled run just goes idle.
+struct MenuBarOutcome: Equatable {
+    private(set) var outcome: RunOutcome?
+
+    mutating func runStarted() { outcome = nil }
+    mutating func runEnded(_ outcome: RunOutcome) { self.outcome = outcome }
+    mutating func menuOpened() { outcome = nil }
+}
+
+/// The four looks of the wand.  The raw values are the ids the desktop tray uses too.
+enum MenuBarIcon: String, Equatable {
+    case idle, running, finished, failed
+
+    /// A run in progress wins over a stale outcome; then the outcome; then idle.
+    static func of(_ status: MenuBarStatus, outcome: RunOutcome?) -> MenuBarIcon {
+        if status != .idle { return .running }
+        switch outcome {
+        case .finished: return .finished
+        case .failed: return .failed
+        case nil: return .idle
+        }
+    }
+
+    var symbolName: String? {
+        switch self {
+        case .idle: return "wand.and.stars.inverse"
+        case .running: return nil
+        case .finished: return "checkmark.circle"
+        case .failed: return "exclamationmark.triangle"
+        }
+    }
+
+    /// A template ring filled to `fraction`, in 5% steps so it is redrawn only when that changes.
+    static func ringImage(fraction: Double) -> NSImage {
+        let step = Int((min(1, max(0, fraction)) * 20).rounded(.down))
+        // One image per step, so an unchanged step is the same image and SwiftUI has nothing to redraw.
+        return ringImages[step]
+    }
+
+    private static let ringImages: [NSImage] = (0...20).map { drawRing(step: $0) }
+
+    private static func drawRing(step: Int) -> NSImage {
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { rect in
+            let c = NSPoint(x: rect.midX, y: rect.midY)
+            let r: CGFloat = 7
+            let track = NSBezierPath(ovalIn: NSRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
+            track.lineWidth = 1.5
+            NSColor.black.withAlphaComponent(0.35).setStroke()
+            track.stroke()
+            if step > 0 {
+                let arc = NSBezierPath()
+                arc.appendArc(withCenter: c, radius: r, startAngle: 90,
+                              endAngle: 90 - 360 * CGFloat(step) / 20, clockwise: true)
+                arc.lineWidth = 2.5
+                NSColor.black.setStroke()
+                arc.stroke()
+            }
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+}
+
+extension MenuBarStatus {
+    /// The wand's tooltip and accessibility label: names the state.
+    func tooltip(outcome: RunOutcome?) -> String {
+        switch self {
+        case .processing(let run):
+            return localized("ui.menu_bar.tooltip.processing", Int(run.fraction * 100))
+        case .rendering(let fraction):
+            return localized("ui.menu_bar.tooltip.rendering", Int(fraction * 100))
+        case .idle:
+            switch outcome {
+            case .finished: return localized("ui.menu_bar.tooltip.finished")
+            case .failed: return localized("ui.menu_bar.tooltip.failed")
+            case nil: return localized("ui.menu_bar.tooltip.idle")
+            }
+        }
+    }
+
+    /// The fraction the ring shows.
+    var ringFraction: Double {
+        switch self {
+        case .idle: return 0
+        case .processing(let run): return run.fraction
+        case .rendering(let f): return f
+        }
+    }
+}
+
+/// The menu-bar extra's label: the icon for the state, redrawn only when the state or the 5% step changes.
+struct MenuBarLabel: View {
+    let viewModel: ViewModel
+
+    var body: some View {
+        let status = viewModel.imageSequence?.menuBarStatus ?? .idle
+        let outcome = viewModel.menuBarOutcome.outcome
+        let icon = MenuBarIcon.of(status, outcome: outcome)
+        let tip = status.tooltip(outcome: outcome)
+        Group {
+            if let symbol = icon.symbolName {
+                Image(systemName: symbol)
+            } else {
+                Image(nsImage: MenuBarIcon.ringImage(fraction: status.ringFraction))
+            }
+        }
+          .help(tip)
+          .accessibilityLabel(tip)
+    }
+}
+
 extension ImageSequenceViewModel {
     /// The wand's content for the state the sequence is in now.  Reads only `@Observable`
     /// state, so a view that calls it is redrawn when a run moves, and costs nothing when none is.
@@ -85,12 +204,48 @@ extension ImageSequenceViewModel {
     }
 }
 
+/// Holds the window the panel is shown in.
+final class PanelWindowBox {
+    weak var window: NSWindow?
+}
+
+/// Finds the window hosting the view it is the background of.
+struct PanelWindowReader: NSViewRepresentable {
+    let window: PanelWindowBox
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { window.window = view.window }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async { window.window = view.window }
+    }
+}
+
 /// The body of the menu-bar wand's panel.
 struct MenuBarStatusView: View {
     let viewModel: ViewModel
 
     var body: some View {
         let status = viewModel.imageSequence?.menuBarStatus ?? .idle
+        content(status)
+          .onAppear { viewModel.menuBarOutcome.menuOpened() }
+          .background(PanelWindowReader(window: panelWindow))
+          .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
+              // The panel may stay alive between openings, so onAppear fires only once.  Only this panel's
+              // window counts: an alert or sheet becoming key is not the menu being opened.
+              if let window = note.object as? NSWindow, window === panelWindow.window {
+                  viewModel.menuBarOutcome.menuOpened()
+              }
+          }
+    }
+
+    @State private var panelWindow = PanelWindowBox()
+
+    @ViewBuilder
+    private func content(_ status: MenuBarStatus) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             switch status {
             case .idle:

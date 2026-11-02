@@ -713,6 +713,49 @@ def test_a_pr_does_not_wait_for_gherkin_and_its_runs_are_cancelled(rig: Rig) -> 
     assert rig.gh.cancelled_runs == [rig.gh.run_ids[("sha1", "Gherkin")]], "only Gherkin's run was cancelled"
 
 
+SMOKE_JOB = "cli (ubuntu-24.04) · shard 1: autoHorizonJpeg"
+FULL_JOB = "desktop (ubuntu-24.04) · shard 1: autoHorizonVideo"
+
+
+def _judge_pr(rig: Rig, sha: str, reran: set[tuple[str, str]] | None = None) -> ci.Verdict:
+    rig.engine.db.put("pushed_at:1", str(rig.engine.clock() - 10000))
+    return ship._judge(rig.engine, 1, sha, reran or set())  # pyright: ignore[reportPrivateUsage]
+
+
+def test_a_red_smoke_job_green_on_develop_is_rerun_then_blocks(rig: Rig) -> None:
+    """A PR is gated on "Gherkin smoke": a job red here and green on develop gets one rerun, then blocks. The full matrix next to it,
+    still running, is neither waited for nor judged, and is cancelled."""
+    rig.gh.ci["sha3"] = [("pr-gate", "linux", "completed", "success"), ("Gherkin smoke", SMOKE_JOB, "completed", "failure"),
+                         ("Gherkin", FULL_JOB, "in_progress", None)]
+    rig.engine.db.set_baseline("Gherkin smoke", SMOKE_JOB, "x", "success")
+    v = _judge_pr(rig, "sha3")
+    assert v.kind == "rerun" and [j.key for j in v.rerun] == [("Gherkin smoke", SMOKE_JOB)]
+    v = _judge_pr(rig, "sha3", {("Gherkin smoke", SMOKE_JOB)})
+    assert v.kind == "fail" and [j.key for j in v.blocking] == [("Gherkin smoke", SMOKE_JOB)]
+    assert rig.gh.cancelled_runs and set(rig.gh.cancelled_runs) == {rig.gh.run_ids[("sha3", "Gherkin")]}, "only the full matrix is cancelled"
+
+
+def test_a_red_smoke_job_that_is_red_on_develop_does_not_block(rig: Rig) -> None:
+    rig.gh.ci["sha4"] = [("pr-gate", "linux", "completed", "success"), ("Gherkin smoke", SMOKE_JOB, "completed", "failure")]
+    rig.engine.db.set_baseline("Gherkin smoke", SMOKE_JOB, "x", "failure")
+    v = _judge_pr(rig, "sha4")
+    assert v.kind == "pass" and [j.key for j in v.known_red] == [("Gherkin smoke", SMOKE_JOB)]
+
+
+def test_a_red_full_gherkin_job_does_not_block_while_smoke_is_green(rig: Rig) -> None:
+    """The full matrix is post-merge only: a red job of it on a PR, even one that is green on develop, blocks nothing and the run is
+    cancelled if still going. Removing "Gherkin" from ci_post_merge_workflows, or adding "Gherkin smoke" to it, breaks this and the two above."""
+    from starpipe.config import Config
+
+    assert Config().ci_post_merge_workflows == ("Gherkin",)
+    rig.gh.ci["sha5"] = [("pr-gate", "linux", "completed", "success"), ("Gherkin smoke", SMOKE_JOB, "completed", "success"),
+                         ("Gherkin", FULL_JOB, "completed", "failure"), ("Gherkin", "mac gui (macos-15) · ui", "in_progress", None)]
+    rig.engine.db.set_baseline("Gherkin", FULL_JOB, "x", "success")
+    v = _judge_pr(rig, "sha5")
+    assert v.kind == "pass" and v.blocking == [] and v.rerun == [] and v.known_red == []
+    assert rig.gh.cancelled_runs == [rig.gh.run_ids[("sha5", "Gherkin")]]
+
+
 def test_a_red_non_gherkin_job_still_blocks_when_gherkin_is_ignored(rig: Rig) -> None:
     rig.gh.ci["sha2"] = [("pr-gate", "linux", "completed", "success"), ("Kotlin Client", "build", "completed", "failure"),
                          ("Gherkin", "cli (macos-15) · a", "in_progress", None)]

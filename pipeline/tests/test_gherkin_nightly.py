@@ -213,12 +213,14 @@ def test_testPathListComesFromTheWorkflowFile(rig: Rig) -> None:
     wide.gh.runs = [run(1, GREEN)]
     assert wide.go().action == "dispatch"
     assert gn.relevant_globs(WORKFLOW) == ["cli/**", "StarCore/**", ".github/workflows/gherkin.yml"]  # not the push list
-    # the real workflow parses, covers what the ticket says, and no longer starts on a develop push
-    real = (REPO_ROOT / ".github" / "workflows" / "gherkin.yml").read_text()
+    # the real PR workflow (gherkin-smoke.yml) parses and covers what the ticket says; gherkin.yml no longer starts on a PR or a develop push
+    real_full = (REPO_ROOT / ".github" / "workflows" / "gherkin.yml").read_text()
+    real = (REPO_ROOT / ".github" / "workflows" / gn.PATHS_FILE).read_text()
     globs = gn.relevant_globs(real)
     assert {"cli/**", "StarCore/**", "gherkin/**"} <= set(globs)
     assert gn.path_matches("cli/Sources/star/main.swift", globs) and not gn.path_matches("docs/a.md", globs)
-    assert "branches: [main]\n" in real.split("pull_request:")[0] and "run-name:" in real and "workflow_dispatch:" in real
+    assert "branches: [main]\n" in real_full.split("workflow_dispatch:")[0] and "pull_request:" not in real_full.split("workflow_dispatch:")[0]
+    assert "run-name:" in real_full and "workflow_dispatch:" in real_full
     # a workflow with no list must fail loudly, not mean "everything"
     broken = Setup(rig, changed, "on:\n  push:\n    branches: [main]\n")
     broken.gh.runs = [run(1, GREEN)]
@@ -280,7 +282,7 @@ def test_git_source_diffs_against_the_tip_and_notices_a_missing_sha(tmp_path: Pa
             base = sh(repo, "git", "rev-parse", "HEAD").strip()
     wf = repo / ".github" / "workflows"
     wf.mkdir(parents=True)
-    (wf / "gherkin.yml").write_text(WORKFLOW)
+    (wf / gn.PATHS_FILE).write_text(WORKFLOW)
     sh(repo, "git", "add", "-A")
     sh(repo, "git", "commit", "-q", "-m", "workflow")
     sh(repo, "git", "push", "-q", "origin", "HEAD:develop")
@@ -291,5 +293,5 @@ def test_git_source_diffs_against_the_tip_and_notices_a_missing_sha(tmp_path: Pa
     src.fetch()
     assert src.tip() == sh(repo, "git", "rev-parse", "origin/develop").strip()
     assert gn.relevant_globs(src.workflow_text())[0] == "cli/**"
-    assert src.changed(base) == [".github/workflows/gherkin.yml", "cli/b.swift"]
+    assert src.changed(base) == [gn.PATHS_PATH, "cli/b.swift"]
     assert src.changed("f" * 40) is None
