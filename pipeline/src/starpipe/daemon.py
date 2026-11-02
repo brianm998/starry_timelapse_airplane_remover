@@ -21,7 +21,20 @@ from typing import Any, cast
 from aiohttp import web
 
 from . import digest as digest_mod
-from . import gitutil, heavy, load, nightly, selfupdate, ship, tickets, train, trust, watch, worktrees
+from . import (
+    gherkin_nightly,
+    gitutil,
+    heavy,
+    load,
+    nightly,
+    selfupdate,
+    ship,
+    tickets,
+    train,
+    trust,
+    watch,
+    worktrees,
+)
 from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
 from .engine import RETRY_STATE, STAGE_STATE, Engine
@@ -72,12 +85,12 @@ MAX_ACTIVE_CAP = 6
 GROUPS = ("needs_you", "running", "waiting", "queued", "landed_today", "failed")
 
 
-def group_of(t: Ticket, holding_or_waiting_lock: bool, now: float, updated: float) -> str | None:
+def group_of(t: Ticket, waiting_for_lock: bool, now: float, updated: float) -> str | None:
     """Which sidebar group a ticket belongs in (computed here, never by a client). None: not shown."""
     if t.state == "needs-input":
         return "needs_you"
     if t.state in ACTIVE_STATES:
-        return "waiting" if holding_or_waiting_lock else "running"
+        return "waiting" if waiting_for_lock else "running"
     if t.state in ("ready", "ci", "landing", "paused"):
         return "waiting"
     if t.state == "queued":
@@ -187,6 +200,32 @@ class Daemon:
                     and self.start_nightly(nightly.Options(ui=self.config.nightly_ui))):
                 self.db.put("nightly_last_day", now.strftime("%Y-%m-%d"))
             await asyncio.sleep(60)
+
+    def gherkin_run(self, force: bool = False) -> gherkin_nightly.Decision:
+        """One Gherkin full-run decision (blocking: git and GitHub calls)."""
+        source = gherkin_nightly.git_source(self.engine.repo, self.config.base_branch,
+                                            lambda repo: ship.fetch(self.engine, repo))
+        return gherkin_nightly.run_once(self.db, self.engine.gh, self.config, source, force)
+
+    async def gherkin_nightly_loop(self) -> None:
+        retry_at = 0.0
+        while True:
+            now = datetime.now()
+            if (self.config.gherkin_nightly_enabled and time.time() >= retry_at
+                    and nightly.due(now, self.db.get("gherkin_nightly_last_day"), self.config.gherkin_nightly_start)):
+                decision = await asyncio.to_thread(self.gherkin_run)
+                if decision.action == "error":
+                    retry_at = time.time() + gherkin_nightly.RETRY_AFTER_ERROR_S  # not done for the day: try again, not every minute
+                else:
+                    self.db.put("gherkin_nightly_last_day", now.strftime("%Y-%m-%d"))
+            await asyncio.sleep(60)
+
+    def gherkin_info(self) -> dict[str, object] | None:
+        raw = self.db.get("gherkin_nightly_last")
+        if raw is None:
+            return None
+        info: dict[str, object] = json.loads(raw)
+        return {**info, "line": gherkin_nightly.summary_line(info)}
 
     def self_update_once(self, plist: Path | None = None, sync: selfupdate.Sync | None = None,
                          test: Callable[[Path], tuple[bool, str]] | None = None) -> str | None:
@@ -352,7 +391,7 @@ class Daemon:
                 "self_update": {"pending": self.db.get("self_update_pending"), "failed": self.update_failure()},
                 "resources": self.resources(), "pause": self.db.get("pause"), "muted": self.db.get("muted") == "1", "usage_pause_until": self.db.get("usage_pause_until"),
                 "heavy": {"holders": [h.__dict__ for h in hv.holders], "queue": [w.__dict__ for w in hv.queue]},
-                "tickets": tickets}
+                "tickets": tickets, "gherkin_nightly": self.gherkin_info()}
 
     def update_failure(self) -> dict[str, object] | None:
         raw = self.db.get("self_update_failed")
@@ -399,10 +438,10 @@ class Daemon:
 
     def snapshot(self) -> dict[str, object]:
         """Everything the monitor shows, in one document. The daemon decides groups and activity lines, not the client."""
-        base = {k: v for k, v in self.status().items() if k != "self_update"}  # the monitor's contract is pinned by a fixture
+        base = {k: v for k, v in self.status().items() if k not in ("self_update", "gherkin_nightly")}  # the monitor's contract is pinned by a fixture
         now = time.time()
         hv: dict[str, Any] = base["heavy"]  # type: ignore[assignment]
-        lock_tickets = {str(h["ticket"]) for h in hv["holders"]} | {str(w["ticket"]) for w in hv["queue"]}
+        lock_tickets = {str(w["ticket"]) for w in hv["queue"]}  # waiting for the lock; a holder is running its job
         tickets: list[dict[str, object]] = []
         for t in self.db.tickets():
             row = self.db._all("SELECT updated_at FROM tickets WHERE number=?", (t.number,))[0]  # pyright: ignore[reportPrivateUsage]
@@ -696,6 +735,12 @@ class Daemon:
                 raise web.HTTPConflict(text="a nightly is already running")
             return web.json_response({"result": "started"})
 
+        @r.post("/v1/gherkin/run")
+        async def gherkin_run(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            body = await body_of(req)
+            d = await asyncio.to_thread(self.gherkin_run, bool(body.get("force")))  # a manual run leaves today's schedule alone
+            return web.json_response(d.__dict__)
+
         @r.get("/v1/tickets/{n}/log")
         async def tail(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             return web.json_response({"lines": self.log_tail(int(req.match_info["n"]), int(req.query.get("lines", 60)))})
@@ -792,6 +837,7 @@ class Daemon:
         try:
             await asyncio.gather(self.supervise("poller", self.poller), self.supervise("scheduler", self.scheduler),
                                  self.supervise("watcher", self.watcher), self.supervise("nightly", self.nightly_loop),
+                                 self.supervise("gherkin-nightly", self.gherkin_nightly_loop),
                                  self.supervise("digest", self.digest_loop), self.supervise("update", self.update_loop),
                                  self.supervise("train", self.train.run_forever), self.supervise("cpu", self.cpu_loop))
         finally:

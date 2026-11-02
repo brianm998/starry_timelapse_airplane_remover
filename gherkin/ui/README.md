@@ -120,3 +120,34 @@ per Gradle run: a second in the same JVM trips over the first one's leftover cor
 
 Not written yet, from §6.3: the snapshots and the other probes, and the rest of the outlier features (E2 to E6, L6 to L8, L10), and the fixture
 `ui_small` (the in-repo `test_data/test_a7sii_10` stands in for it; the processed one is made by the cli, above).
+
+## macOS-only check: the Dock icon brings the desktop's window back (M10)
+
+A `@ui` feature cannot show this: the Compose test host has no AWT windows, so the window the Dock icon reopens does not exist there. `star-desktop/packaging/dock-reopen-check.sh`
+runs the packaged app instead, on a Mac, and is not a feature: it is not generated, not in `known-gaps.json` and not in CI.
+
+```
+cd star-desktop
+./gradlew createDistributable -Pstard=$PWD/../daemon/.build/debug/stard      # a packaged app: `./gradlew run` is a bare `java` with no bundle, which `open -a` cannot address
+packaging/dock-reopen-check.sh build/compose/binaries/main/app [work-dir]
+```
+
+It starts `Star.app` with no sequence (its `HOME` is in the work dir, so your preferences are not touched), brings it forward as a launch from the Dock does, and prints one line per state:
+
+| line | what it saw |
+|---|---|
+| `PASS 1/3` | the main window (layer 0, at least 200 by 200) is on screen and titled `Star`, the start screen's title |
+| `PASS 2/3` | after a click on the window's red close button (what `onCloseRequest`, `AppViewModel.requestCloseWindow`, answers; there is no work in progress, so no "Close Anyway" question), the process is still running and has no window on screen |
+| `PASS 3/3` | after `open -a Star.app` (what a Dock click sends: a reopen event, and the app is raised) the same process has its main window back, titled `Star`; if that brings nothing in 15 s the script tries a bare AppleScript `reopen` and says so |
+
+Exit codes: `0` all three passed; `1` a state failed (`FAIL:` says which, and what was seen: whether the process is running, every on-screen window of it with its size, and the app's last output); `77` skipped,
+with `SKIP: <why>` (not a Mac, no display or no GUI session on the console, no `Star.app` in the image, or System Events will not answer or cannot see the window, i.e. Automation or Accessibility is not granted to the terminal or runner).
+A skip is not a pass: nothing was looked at. The guard is at the top of the script.
+
+It does not tell the two listeners in `Main.kt` apart: `open -a` raises the app too, so `AppReopenedListener` (the Dock click) and `AppForegroundListener` (the app coming forward) could each have shown the window. The close is the
+window's own button, not Cmd-W (that is the menu's Close, `requestCloseSession`). The start screen is known by its title only, and the check starts with no sequence open, so it does not show that a loaded sequence is unloaded by the close
+(`MainWindowCloseTest` and `PendingWorkTest` hold the rule). It needs the packaged app to carry a `stard` and ffmpeg (`createDistributable` refuses otherwise), but the window does not depend on the engine.
+
+**Running it somewhere else** needs a macOS runner with a logged-in desktop session (a display, and the user on the console: not ssh, not a headless VM), Automation and Accessibility granted to the shell or runner that runs it,
+and the packaged app built first (`createDistributable`, with a built `stard`). System Events answers slowly under load (20 s a call seen here) and the app's
+window can take a minute to appear in the accessibility tree, so the script waits up to 120 s for it and a run takes two to four minutes.

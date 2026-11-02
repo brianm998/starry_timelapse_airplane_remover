@@ -1,0 +1,17 @@
+// Build settings for the Mac App Store variant of the gui, passed by gui/appstore_release.sh with -xcconfig.
+// Developer ID builds (gui/release.sh) do not read this file and keep the project's own settings.
+//
+// The bundle id, version, build number and signing are set by the script, which knows the team and the CI run.
+
+// The entitlements are not set here: a build setting from -xcconfig reaches the Swift package targets too, and the
+// StarCore resource bundle has no such file. gui/appstore_release.sh signs the app with star/star-appstore.entitlements
+// after the archive (it has to sign ffmpeg and ffprobe again then anyway).
+
+// A universal archive. release.sh flips this in project.pbxproj with perl; here it is a setting.
+ONLY_ACTIVE_ARCH = NO
+
+// The project generates its Info.plist (GENERATE_INFOPLIST_FILE), so extra keys come in as INFOPLIST_KEY_*.
+INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.photography
+// star bundles no encryption of its own and uses none beyond what the OS provides: no export-compliance prompt
+// on every TestFlight build.
+INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO

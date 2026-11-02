@@ -54,6 +54,14 @@ struct HeaderStrip: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 22) {
+            Button { store.goBack() } label: { Image(systemName: "chevron.left") }
+                .help("Back")
+                .disabled(!store.canGoBack)
+                .keyboardShortcut("[", modifiers: .command)
+            Button { store.goForward() } label: { Image(systemName: "chevron.right") }
+                .help("Forward")
+                .disabled(!store.canGoForward)
+                .keyboardShortcut("]", modifiers: .command)
             Button { store.showOverview() } label: { Image(systemName: "house") }
                 .help("Back to the Overview")
                 .disabled(store.selected == nil)

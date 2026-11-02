@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "Cho phép truy cập",
   "ui.render_options_after_processing_title": "Chọn cài đặt video",
   "ui.use_these_settings": "Dùng các cài đặt này",
-  "ui.settings": "Cài đặt"
+  "ui.settings": "Cài đặt",
+  "ui.menu_bar.tooltip.idle": "star — đang rảnh",
+  "ui.menu_bar.tooltip.processing": "star — đang xử lý {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — đang kết xuất video {0}%",
+  "ui.menu_bar.tooltip.finished": "star — hoàn tất",
+  "ui.menu_bar.tooltip.failed": "star — thất bại"
 }
