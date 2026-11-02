@@ -4,6 +4,7 @@ import asyncio
 import json
 import subprocess
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -918,3 +919,19 @@ async def test_full_matrix_gherkin_runs_are_still_cancelled_and_featureless_tick
     await rig.engine.drive(2)
     await rig.engine.drive(3)
     assert rig.state(2) == "landed" and rig.state(3) == "landed" and rig.gh.dispatches == []
+
+
+def test_a_feature_run_on_a_branch_without_a_run_name_is_matched_by_its_path_title_and_time() -> None:
+    sha, title, path = "abc", "Gherkin: uiX", ".github/workflows/gherkin.yml"
+    dispatched = datetime(2026, 11, 2, 12, 0, 0, tzinfo=UTC).timestamp()
+
+    def run(display_title: str, created: str | None, head: str = sha, event: str = "workflow_dispatch") -> dict[str, Any]:
+        return {"id": 1, "event": event, "head_sha": head, "display_title": display_title, "created_at": created}
+
+    assert ship._is_feature_run(run(title, None), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert ship._is_feature_run(run(path, "2026-11-02T12:00:05Z"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert not ship._is_feature_run(run(path, "2026-11-02T11:50:00Z"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert not ship._is_feature_run(run(path, None), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert not ship._is_feature_run(run(path, "2026-11-02T12:00:05Z", head="other"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert not ship._is_feature_run(run(path, "2026-11-02T12:00:05Z", event="push"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+    assert not ship._is_feature_run(run("Some PR title", "2026-11-02T12:00:05Z"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
