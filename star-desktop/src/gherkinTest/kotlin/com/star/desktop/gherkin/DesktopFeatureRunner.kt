@@ -993,11 +993,18 @@ class DesktopFeatureRunner {
         val source = resolveSequence(param("sequence"))
         val script = File(repoRoot(), "gherkin/ui/make-processed-fixture.sh")
         // A machine without a built cli builds it (the script's STAR_CLI_BUILD): the first feature of a run that needs the processed sequence waits for that.
-        val builder = ProcessBuilder("bash", script.path, source.path).redirectError(ProcessBuilder.Redirect.INHERIT)
+        // Its stderr is read here and put in the error: an inherited one goes to the JVM's own descriptor, which Gradle does not capture, so a failure left no trace in a CI log.
+        val builder = ProcessBuilder(bashExecutable(), script.path, source.path)
         builder.environment().putIfAbsent("STAR_CLI_BUILD", "1")
         val process = builder.start()
+        val messages = StringBuilder()
+        val reader = Thread { process.errorStream.bufferedReader().forEachLine { messages.appendLine(it) } }.apply { isDaemon = true; start() }
         val printed = process.inputStream.bufferedReader().readText().lines().lastOrNull { it.isNotBlank() }?.trim()
-        if (process.waitFor() != 0 || printed == null) throw RunnerError("could not make the processed sequence (the script's own message is above)")
+        val status = process.waitFor()
+        reader.join(5_000)
+        if (status != 0 || printed == null) {
+            throw RunnerError("could not make the processed sequence (${bashExecutable()} ${script.path} exited $status):\n$messages")
+        }
         val target = File(scratch, "processed")
         File(printed).copyRecursively(target)
         target.walkTopDown().filter { it.isFile && it.extension == "json" && it.length() < 8_000_000 }.forEach { f ->
@@ -1005,6 +1012,19 @@ class DesktopFeatureRunner {
             if (printed in text) f.writeText(text.replace(printed, target.path))
         }
         processedConfig = File(target, "input/star_temp_${source.name}/config.json")
+    }
+
+    /**
+     * The bash that runs the repo's scripts. On Windows a bare "bash" is looked up by CreateProcess in System32 before PATH, which finds WSL's
+     * launcher (or nothing) and not Git Bash, so the PATH is searched here, skipping Windows' own directory.
+     */
+    private fun bashExecutable(): String {
+        if (!System.getProperty("os.name").startsWith("Windows")) return "bash"
+        val windows = (System.getenv("SystemRoot") ?: "C:\\Windows").lowercase()
+        val onPath = System.getenv("PATH").orEmpty().split(File.pathSeparator).asSequence()
+            .filter { it.isNotBlank() && !it.lowercase().startsWith(windows) }
+            .map { File(it, "bash.exe") }.firstOrNull { it.isFile }
+        return onPath?.path ?: "bash"
     }
 
     /** Opens the processed copy as Load Config does; the reopened sequence says where it left off, which the feature closes. */

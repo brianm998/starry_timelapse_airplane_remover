@@ -63,5 +63,17 @@ if [ ! -f "$dest/input/star_temp_$name/config.json" ]; then
     rm -rf "$dest"
     exit 1
 fi
+# What the features start from is frames with outlier groups on disk (frame 0's among them). A cli that ran to the end without writing them
+# would leave every feature waiting on a table that never fills, so say so here, with the cli's own log, rather than 90 s into each feature.
+outliers="$dest/input/star_temp_$name/outliers"
+if [ ! -s "$outliers/0/outliers.bin" ]; then
+    echo "star finished but wrote no outlier groups for frame 0 ($outliers/0/outliers.bin); outliers dir:" >&2
+    ls -la "$outliers" "$outliers/0" >&2 2>&1 || true
+    echo "last output of star:" >&2
+    tail -60 "$dest/star.log" >&2
+    rm -rf "$dest"
+    exit 1
+fi
+echo "fixture: $(ls "$outliers" | wc -l | tr -d ' ') frames with outlier files, frame 0's outliers.bin is $(wc -c < "$outliers/0/outliers.bin" | tr -d ' ') bytes" >&2
 date -u +%Y-%m-%dT%H:%M:%SZ > "$dest/READY"
 echo "$shown"
