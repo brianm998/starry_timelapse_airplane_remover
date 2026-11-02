@@ -88,6 +88,9 @@ struct OverviewView: View {
                 if landing?.paused == true { Chip(text: "landing paused", color: .orange) }
                 if landing?.stopLine == nil && landing?.paused != true { Chip(text: "landing open", color: .green) }
             }
+            ForEach(Array(Overview.landingLines(landing).enumerated()), id: \.offset) { _, line in
+                Text(line.text).monospacedDigit().foregroundStyle(line.slow ? Color.orange : Color.secondary)
+            }
             if queue.isEmpty {
                 Text("Nothing is waiting to land.").foregroundStyle(.secondary)
             }
@@ -96,6 +99,7 @@ struct OverviewView: View {
                     Text("#\(t.number)").monospacedDigit().foregroundStyle(.secondary)
                     Text(t.title).lineLimit(1)
                     Spacer()
+                    if t.state == "ready" { Text(t.activity).scaledFont(.caption).foregroundStyle(.secondary).lineLimit(1) }
                     Chip(text: t.state, color: stateColor(t.state))
                     Button("Land now (skip tests)") { confirming = t }
                 }

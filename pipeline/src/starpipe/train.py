@@ -21,8 +21,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from . import ci, gitutil, landing, ship, worktrees
-from .db import Ticket
+from . import ci, gitutil, landing, ship, tickets, worktrees
+from .config import Config
+from .db import Database, Ticket
 from .github import GitHubError
 
 if TYPE_CHECKING:
@@ -30,6 +31,9 @@ if TYPE_CHECKING:
 
 WORKTREE = "pipe-batch"
 BACKOFF_S = 60.0
+SLOW_BUILDING_S = 600.0  # a batch still `building` after this long is marked slow in the snapshot
+ABANDONED_MEMORY_S = 3600.0  # how long the snapshot and status remember the last abandoned batch
+
 MAX_NOTED = 5  # files named in an abandon note
 
 
@@ -49,6 +53,21 @@ def batch_branch(batch: int) -> str:
     return f"pipe/batch-{batch}"
 
 
+def window_left(db: Database, config: Config, now: float) -> float | None:
+    """Seconds until the train forms its next batch (0: it is about to), or None when a batch is active or nothing is ready.
+
+    The same arithmetic as `Train._pick`: a batch forms once `batch_max` tickets are ready or the oldest has waited `batch_window_s`."""
+    if db.active_batch() is not None:
+        return None
+    ready = [t for t in db.tickets(("ready",)) if db.batch_of(t.number) is None]
+    if not ready:
+        return None
+    if len(ready) >= config.batch_max:
+        return 0.0
+    oldest = min(db.state_since(t.number, "ready") or t.updated_at for t in ready)
+    return max(0.0, config.batch_window_s - (now - oldest))
+
+
 @dataclass
 class Built:
     merged: list[int] = field(default_factory=lambda: list[int]())
@@ -61,6 +80,7 @@ class Train:
     def __init__(self, eng: Engine) -> None:
         self.eng = eng
         self._catch_ups: set[asyncio.Task[None]] = set()
+        self._gates: dict[int, asyncio.Task[None]] = {}  # a ticket's Gherkin feature run, beside the train, before it may be batched
 
     # the loop ------------------------------------------------------------------------------------------------------
     async def run_forever(self) -> None:
@@ -73,8 +93,8 @@ class Train:
         while steps < limit:
             if await self.step():
                 steps += 1
-            elif self._catch_ups:  # nothing to do but wait for a conflicted ticket to rejoin the queue
-                await asyncio.wait(self._catch_ups)
+            elif self._catch_ups or self._gates:  # nothing to do but wait for a conflicted ticket to rejoin, or a feature run to end
+                await asyncio.wait([*self._catch_ups, *self._gates.values()])
             else:
                 break
         return steps
@@ -88,6 +108,7 @@ class Train:
         eng = self.eng
         if eng.config.landing_mode != "batch":
             return False
+        self._start_gates()  # feature runs cost no landing slot, so they go ahead even while the train is held or busy
         batch = eng.db.active_batch()
         if batch is not None:
             await self._drive(int(batch["id"]))
@@ -101,9 +122,31 @@ class Train:
         return True
 
     # forming a batch -----------------------------------------------------------------------------------------------
+    def _gated(self, t: Ticket) -> bool:
+        """True while a ticket still owes a Gherkin feature run on its own branch: it is not batched until that is green."""
+        db = self.eng.db
+        return (bool(tickets.gherkin_features(t.body, t.plan)) and not db.get(f"gherkin_ok:{t.number}")
+                and not ship.land_now(self.eng, t.number))
+
+    def _start_gates(self) -> None:
+        """Start the feature run of each ready ticket that needs one. It runs on the ticket's own branch, once per ticket: the batch
+        branch is a new merge commit, so the batch's CI never carries a feature run."""
+        eng = self.eng
+        for t in eng.db.tickets(("ready",)):
+            if eng.db.batch_of(t.number) is None and self._gated(t) and t.number not in self._gates:
+                task = asyncio.create_task(self._gate_beside(t))
+                self._gates[t.number] = task
+                task.add_done_callback(lambda _t, n=t.number: self._gates.pop(n, None))
+
+    async def _gate_beside(self, t: Ticket) -> None:
+        try:
+            await ship.feature_gate(self.eng, t, rejoin=True)
+        except Exception as exc:  # noqa: BLE001 - one ticket's feature run must not take the train down
+            self.eng.db.event("train-gate-failed", t.number, error=str(exc)[:200])
+
     def _pick(self) -> list[int]:
         eng = self.eng
-        ready = [t for t in eng.db.tickets(("ready",)) if eng.db.batch_of(t.number) is None]
+        ready = [t for t in eng.db.tickets(("ready",)) if eng.db.batch_of(t.number) is None and not self._gated(t)]
         ids = [t.number for t in ready]
         groups: list[list[int]] = json.loads(eng.db.get("train_groups") or "[]")
         while groups:  # halves of a batch that went red: exactly these tickets, nothing else
@@ -129,12 +172,15 @@ class Train:
             return
         bid = eng.db.batch_create(base)
         tickets = [t for n in members if (t := eng.db.ticket(n)) is not None and t.state == "ready"]
+        for position, t in enumerate(tickets):  # members from the start, so the monitor can say "in batch N (building)"
+            eng.db.batch_add(bid, t.number, position)
         try:
             built = await asyncio.to_thread(self._build, bid, tickets, base)
         except (RuntimeError, OSError) as exc:
             await asyncio.to_thread(self._abandon, bid, f"could not build the batch: {exc}")
             await eng.sleep(BACKOFF_S)
             return
+        eng.db.batch_remove(bid, [*built.deferred, *built.catch_up])  # not in this batch after all
         if not built.merged:
             for n in built.catch_up:
                 await self._catch_up(n)
@@ -237,6 +283,7 @@ class Train:
         """Judge the batch's CI until it passes, is red, or must be given up on."""
         eng = self.eng
         while True:
+            self._start_gates()  # a ticket that became ready while this batch is in CI proves its features meanwhile
             batch = eng.db.batch(bid)
             assert batch is not None
             members = eng.db.batch_members(bid)
@@ -379,6 +426,11 @@ class Train:
                 eng.gh.add_labels(n, ["pipe:landed"])
             except GitHubError as exc:
                 eng.db.event("landing-bookkeeping-failed", n, error=str(exc)[:200])
+            if eng.db.get(f"gherkin_run:{n}"):  # its feature run needed the branch on origin
+                try:
+                    eng.gh.delete_branch(t.branch or "")
+                except GitHubError as exc:
+                    eng.db.event("landing-bookkeeping-failed", n, error=str(exc)[:200])
             worktrees.remove(eng.repo, n, keep_branch=False, branch=t.branch)
             eng._to_state(n, "landed")  # pyright: ignore[reportPrivateUsage]
             eng.db.event("landed", n, merge=sha, batch=bid)
