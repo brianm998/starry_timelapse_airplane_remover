@@ -29,6 +29,7 @@ BUDGET_S = {"explore": 45 * 60, "develop": 4 * 3600, "fix": 90 * 60, "review": 4
 STAGE_STATE = {"explore": "exploring", "develop": "developing", "fix": "verifying", "review": "review",
                "ci-fix": "ci", "conflict": "landing"}
 RETRY_STATE = {**STAGE_STATE, "publish": "ready", "ci": "ci", "land": "landing"}  # what `starpipe retry <n> <stage>` re-enters
+LANDING_STAGES = frozenset({"conflict", "ci-fix"})  # stages a ticket in the landing train waits on: they outrank new work for an LLM slot
 MAX_FIX_CYCLES, MAX_REVIEW_ROUNDS, MAX_CRASH_RESUMES = 2, 2, 3
 PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
 PRIORITY = {"p0": 0, "p1": 1, "p2": 2, "p3": 3}
@@ -68,6 +69,7 @@ class Engine:
     issue_memo: dict[int, tuple[str, bool, list[int]]] = field(default_factory=lambda: dict[int, tuple[str, bool, list[int]]]())
     land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
     publish_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-publish is one step
+    landing_waiting: set[int] = field(default_factory=lambda: set[int]())  # tickets whose landing stage is waiting for an LLM slot
 
     # intake --------------------------------------------------------------------------------------------------------
     def sync_issues(self) -> None:
@@ -147,13 +149,15 @@ class Engine:
         waiting = {w.ticket for w in heavy.status().queue}
         return len([s for s in self.db.running_stages() if str(s["ticket"]) not in waiting])
 
-    def llm_room(self) -> load.Room:
+    def llm_room(self, extra: int = 0) -> load.Room:
         sessions, cpu_limit = self.limits()
-        return load.room(self.llm_active(), self.cpu(), sessions, cpu_limit)
+        return load.room(self.llm_active(), self.cpu(), sessions + extra, cpu_limit)
 
     def claimable(self) -> Ticket | None:
         if self.db.get("pause") in ("all", "claims") or self.db.get("self_update_pending"):
             return None  # the second is the daemon waiting to swap to new code: nothing new starts, running stages finish
+        if self.landing_waiting:
+            return None  # a ticket in the landing train needs the next LLM slot
         if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
             return None
         for t in self.db.tickets(("queued",)):  # ordered by priority then age
@@ -276,14 +280,22 @@ class Engine:
     async def _begin_when_room(self, t: Ticket, stage: str, attempt: int, model: str) -> int:
         """Start a stage's session only while there is room: fewer than the limit of LLM sessions running and CPU not saturated.
         Waits (and says why, in the ticket's activity line) instead of starting a session the machine cannot afford."""
-        while True:
-            async with self.llm_lock:
-                room = self.llm_room()
-                if room.ok:
-                    self.db.put(f"llm_wait:{t.number}", None)
-                    return self.db.begin_stage(t.number, stage, attempt, model)
-            self.db.put(f"llm_wait:{t.number}", room.reason)
-            await self.sleep(15)
+        landing = stage in LANDING_STAGES
+        if landing:
+            self.landing_waiting.add(t.number)
+        try:
+            while True:
+                async with self.llm_lock:
+                    # A landing stage may take one session over the limit, at once; everything else waits while one is waiting.
+                    room = self.llm_room(extra=1 if landing else 0)
+                    if room.ok and (landing or not self.landing_waiting):
+                        self.db.put(f"llm_wait:{t.number}", None)
+                        return self.db.begin_stage(t.number, stage, attempt, model)
+                reason = room.reason if not room.ok else "a landing stage is waiting for a session"
+                self.db.put(f"llm_wait:{t.number}", reason)
+                await self.sleep(15)
+        finally:
+            self.landing_waiting.discard(t.number)
 
     def _undelivered_answer(self, t: Ticket) -> dict[str, Any] | None:
         rows = self.db._all("SELECT * FROM questions WHERE ticket=? AND answer IS NOT NULL ORDER BY id DESC LIMIT 1",  # pyright: ignore[reportPrivateUsage]

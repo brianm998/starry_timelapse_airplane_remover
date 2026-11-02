@@ -129,6 +129,38 @@ async def test_blockers_and_priority_decide_the_claim(rig: Rig) -> None:
     assert t and t.number == 1
 
 
+async def test_a_landing_stage_takes_a_session_over_the_limit_and_new_work_waits_for_it(rig: Rig) -> None:
+    rig.engine.config.max_llm_sessions = 1
+    rig.gh.add_issue(1, "running", labels=("pipeline", "p2"))
+    rig.gh.add_issue(2, "landing", labels=("pipeline", "p2"))
+    rig.gh.add_issue(3, "new", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    t1, t2, t3 = (rig.db.ticket(n) for n in (1, 2, 3))
+    assert t1 and t2 and t3
+    rig.db.begin_stage(1, "develop", 1, "sonnet")  # the one allowed session is busy
+    assert not rig.engine.llm_room().ok and rig.engine.llm_room(extra=1).ok
+    async def sleep(_: float) -> None:
+        await asyncio.sleep(0.01)
+
+    rig.engine.sleep = sleep
+    new_work = asyncio.create_task(rig.engine._begin_when_room(t3, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(0.05)
+    assert not new_work.done() and rig.db.get("llm_wait:3"), "no room for new work"
+    stage_id = await rig.engine._begin_when_room(t2, "conflict", 1, "sonnet")  # pyright: ignore[reportPrivateUsage]
+    assert stage_id and rig.engine.landing_waiting == set(), "the landing stage started at once, one over the limit"
+    rig.db.end_stage(1, "accepted", 0.0, "")  # stage rows are 1 (develop) and 2 (conflict): both end, room opens
+    rig.db.end_stage(2, "accepted", 0.0, "")
+    await asyncio.wait_for(new_work, 2)
+
+
+async def test_nothing_new_is_claimed_while_a_landing_stage_waits_for_a_session(rig: Rig) -> None:
+    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    assert rig.engine.claimable() is not None
+    rig.engine.landing_waiting.add(9)
+    assert rig.engine.claimable() is None
+
+
 async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Rig) -> None:
     assert rig.engine.max_active() == rig.engine.config.max_llm_sessions
     rig.db.put("max_active", "2")
