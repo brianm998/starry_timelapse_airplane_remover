@@ -189,11 +189,39 @@ class Engine:
             pass  # best effort: a stale base is fixed again when landing
         wt, branch = worktrees.create(self.repo, t.number, t.title, self.base_ref)
         self.db.set_fields(t.number, worktree=str(wt), branch=branch, claimed_at=self.clock())
-        self._to_state(t.number, "exploring")
         self.db.event("claimed", t.number, branch=branch)
         updated = self.db.ticket(t.number)
         assert updated is not None
-        return updated
+        self._to_state(t.number, "developing" if self._plan_from_ticket(updated) else "exploring")
+        refreshed = self.db.ticket(t.number)
+        assert refreshed is not None
+        return refreshed
+
+    def _plan_from_ticket(self, t: Ticket) -> bool:
+        """Take the plan an owner's interactive session wrote into the ticket, when it passes the checks EXPLORE's plan passes.
+
+        Only a ticket the owner filed from an interactive session qualifies; anything else, and any plan that does not parse or
+        validate against the fresh worktree, goes to EXPLORE (a rejected plan's reasons are appended to its prompt)."""
+        if not self._owner_filed(t) or (m := tickets.FILED_BY.search(t.body)) is None or m.group(1) != "interactive":
+            return False
+        self.db.put(f"plan_rejected:{t.number}", None)  # a stale reason from an earlier claim
+        supplied, errors = tickets.ticket_plan(t.body)
+        if supplied is not None:
+            contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db)
+            supplied, errors = contract.check_plan(supplied.model_dump())
+        if supplied is None and not errors:
+            return False  # no '## Plan': nothing was supplied, nothing to report
+        if supplied is None:
+            self.db.put(f"plan_rejected:{t.number}", "\n".join(f"- {e}" for e in errors))
+            self.db.event("ticket-plan-rejected", t.number, reasons=errors)
+            return False
+        self._store_plan(t, supplied.model_dump())
+        self.db.event("plan-from-ticket", t.number)
+        return True
+
+    def _store_plan(self, t: Ticket, plan: dict[str, Any]) -> None:
+        self.db.set_fields(t.number, plan_json=json.dumps(plan))
+        (worktrees.ticket_dir(t.number) / "plan.json").write_text(json.dumps(plan, indent=2))
 
     # model stages --------------------------------------------------------------------------------------------------
     def _usage_paused_until(self) -> float:
@@ -244,11 +272,14 @@ class Engine:
                 effort = chosen[key]
         return model, effort
 
+    def _owner_filed(self, t: Ticket) -> bool:
+        return t.author.lower() == self.config.owner.lower() and not self.db.get(f"auto:{t.number}")
+
     async def model_stage(self, t: Ticket, stage: str, prompt: str, *, fresh: bool = False,
                           allow_resolve: bool = True) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
         contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db, self.gh, self.check_runner,
-                            owner_filed=t.author.lower() == self.config.owner.lower() and not self.db.get(f"auto:{t.number}"))
+                            owner_filed=self._owner_filed(t))
         resume = None if fresh else self._last_session(t, stage)
         pending = self._undelivered_answer(t)
         if pending:
@@ -421,12 +452,13 @@ class Engine:
             await self.sleep(30)
 
     async def _explore(self, t: Ticket) -> bool:
-        result, _ = await self.model_stage(t, "explore", f"{self._ticket_text(t)}\n\nBase: {self.base_ref}")
+        rejected = self.db.get(f"plan_rejected:{t.number}")
+        note = f"\n\nThe plan this ticket carried was rejected, so plan it yourself. What was wrong with it:\n{rejected}" if rejected else ""
+        result, _ = await self.model_stage(t, "explore", f"{self._ticket_text(t)}{note}\n\nBase: {self.base_ref}")
         if not result.ok:
             return False
         if result.kind == "plan":
-            self.db.set_fields(t.number, plan_json=json.dumps(result.value))
-            (worktrees.ticket_dir(t.number) / "plan.json").write_text(json.dumps(result.value, indent=2))
+            self._store_plan(t, result.value)
             self._to_state(t.number, "developing")
             return True
         if result.kind == "close":
