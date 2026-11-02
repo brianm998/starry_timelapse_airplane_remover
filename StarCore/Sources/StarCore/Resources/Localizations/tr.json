@@ -763,7 +763,7 @@
   "ui.preview": "Önizleme",
   "ui.preview_creation_error": "{0}. karenin önizlemesi oluşturulurken hata: {1}",
   "ui.preview_first": "Önce önizleme",
-  "ui.preview_while_processing_help": "İşleme arka planda sürer. Önizleme, işlem sürerken tamamlanan kareleri görmenizi sağlar; buraya dönmek için İlerlemeyi Göster'i kullanın.",
+  "ui.preview_while_processing_help": "İşleme arka planda sürer. Önizleme, işlem sürerken tamamlanan kareleri görmenizi sağlar; buraya dönmek için «İlerlemeyi göster» seçeneğini kullanın.",
   "ui.process": "İşle",
   "ui.process_all_frames": "Tüm kareleri işle",
   "ui.process_all_frames_2": "Tüm kareleri işle",
