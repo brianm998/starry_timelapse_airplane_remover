@@ -238,7 +238,7 @@ fun SpeedSharpnessDialog(initial: Double, advice: KeypointDivisorAdvice?, onCanc
 
     // Return is the dialog's Update, and Esc its Cancel; the dialog sits over the cleanup dialog, so Return must not reach Start Processing.
     Box(
-        Modifier.fillMaxSize().background(StarColors.scrim).modalScrim().testTag("startup.speed.modal")
+        Modifier.fillMaxSize().background(StarColors.scrim).modalScrim()
             .defaultAction({ onUpdate(draft.committed()) }, onEscape = onCancel),
         contentAlignment = Alignment.Center,
     ) {
@@ -260,15 +260,13 @@ fun SpeedSharpnessDialog(initial: Double, advice: KeypointDivisorAdvice?, onCanc
                             checked = KeypointDivisor.matches(divisor, preset.divisor),
                             // Exclusive: checking one selects it, and unchecking the checked one does nothing.
                             onCheckedChange = { if (it) { draft.choose(preset.divisor); divisor = draft.current } },
-                            modifier = Modifier.testTag("startup.speed.preset.${KeypointDivisor.format(preset.divisor)}"),
                         )
                         Text(localized(preset.nameKey), color = StarColors.textPrimary, fontSize = 15.sp)
                         Text(KeypointDivisor.format(preset.divisor), color = StarColors.textDisabled, fontSize = 15.sp)
                         if (KeypointDivisor.isRecommended(advice, preset.divisor)) {
                             Text(
                                 localized("ui.recommended"), color = Color.White, fontSize = 11.sp,
-                                modifier = Modifier.clip(RoundedCornerShape(50)).background(StarColors.accent.copy(alpha = 0.7f)).padding(horizontal = 6.dp, vertical = 1.dp)
-                                    .testTag("startup.speed.recommended"),
+                                modifier = Modifier.clip(RoundedCornerShape(50)).background(StarColors.accent.copy(alpha = 0.7f)).padding(horizontal = 6.dp, vertical = 1.dp),
                             )
                         }
                     }
@@ -292,16 +290,12 @@ fun SpeedSharpnessDialog(initial: Double, advice: KeypointDivisorAdvice?, onCanc
                         .width(70.dp)
                         .background(StarColors.sidePanel)
                         .padding(horizontal = 6.dp, vertical = 4.dp)
-                        .onFocusChanged { customFocused = it.isFocused }
-                        .testTag("startup.speed.custom"),
+                        .onFocusChanged { customFocused = it.isFocused },
                 )
                 Text(localized("ui.any_number_from_1_to_8_1_is_full_size_2_is"), color = StarColors.textDisabled, fontSize = 11.sp)
             }
             if (KeypointDivisor.isTooHigh(divisor)) {
-                Text(
-                    localized("ui.keypoint_too_high", KeypointDivisor.format(divisor)), color = StarColors.yellow, fontSize = 13.sp,
-                    modifier = Modifier.testTag("startup.speed.toohigh"),
-                )
+                Text(localized("ui.keypoint_too_high", KeypointDivisor.format(divisor)), color = StarColors.yellow, fontSize = 13.sp)
             }
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 SecondaryButton(localized("ui.cancel"), "startup.speed.cancel") { onCancel() }

@@ -1,7 +1,13 @@
 package com.star.desktop.ui.dialogs
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.onNodeWithText
+import com.star.desktop.domain.KeypointDivisor
+import com.star.desktop.i18n.localized
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
@@ -33,15 +39,19 @@ class SpeedSharpnessDialogTest {
         setContent {
             if (open) SpeedSharpnessDialog(initial = 4.0, advice = advice(reduce = true), onCancel = { open = false }, onUpdate = { updated = it; open = false })
         }
-        // The whole of the old section: presets, the recommended badge, the custom field and the too-high warning (4 is the warning's threshold).
-        for (tag in listOf("startup.speed.preset.1", "startup.speed.preset.1.5", "startup.speed.preset.2", "startup.speed.recommended",
-                           "startup.speed.custom", "startup.speed.toohigh", "startup.speed.cancel", "startup.speed.update")) {
-            onNodeWithTag(tag, useUnmergedTree = true).assertIsDisplayed()
-        }
+        // The whole of the old section: explanation, the three presets with the recommended badge, the custom field and the too-high warning
+        // (4 is the warning's threshold), and both buttons. Found by what they say, so the registry of ids stays the ones both clients carry.
+        onNodeWithText(KeypointDivisor.explanation(advice(reduce = true))).assertIsDisplayed()
+        onAllNodes(isToggleable()).assertCountEquals(3)
+        for (p in KeypointDivisor.presets) onNodeWithText(localized(p.nameKey)).assertIsDisplayed()
+        onNodeWithText(localized("ui.recommended")).assertIsDisplayed()
+        onNode(hasSetTextAction()).assertIsDisplayed()
+        onNodeWithText(localized("ui.keypoint_too_high", "4")).assertIsDisplayed()
+        onNodeWithTag("startup.speed.cancel").assertIsDisplayed()
         onNodeWithTag("startup.speed.update").performClick()
         waitForIdle()
         assertEquals(4.0, updated)
-        onNodeWithTag("startup.speed.modal").assertDoesNotExist()
+        onNodeWithTag("startup.speed.update").assertDoesNotExist()
     }
 
     @Test fun cancelIsLeftOfUpdateAndBothClose() = runDesktopComposeUiTest {
@@ -56,20 +66,20 @@ class SpeedSharpnessDialogTest {
         assertTrue(cancel.right <= update.left, "Cancel is on the left: $cancel vs $update")
 
         // Cancel closes without handing a value over, even after the draft was edited.
-        onNodeWithTag("startup.speed.preset.2").performClick()
+        onAllNodes(isToggleable())[2].performClick()
         onNodeWithTag("startup.speed.cancel").performClick()
         waitForIdle()
-        onNodeWithTag("startup.speed.modal").assertDoesNotExist()
+        onNodeWithTag("startup.speed.update").assertDoesNotExist()
         assertEquals(1, cancelled)
         assertTrue(updated.isEmpty())
 
         // Update after typing a custom value hands that value over.
         open = true
         waitForIdle()
-        onNodeWithTag("startup.speed.custom").performTextReplacement("3.2")
+        onNode(hasSetTextAction()).performTextReplacement("3.2")
         onNodeWithTag("startup.speed.update").performClick()
         waitForIdle()
-        onNodeWithTag("startup.speed.modal").assertDoesNotExist()
+        onNodeWithTag("startup.speed.update").assertDoesNotExist()
         assertEquals(listOf(3.2), updated)
     }
 }
