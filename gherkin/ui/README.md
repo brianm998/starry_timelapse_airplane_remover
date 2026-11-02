@@ -31,7 +31,7 @@ The shared expectations for the macOS gui and the desktop client (see `plans/GUI
 * `known-gaps.json` — the parity backlog. A `@ui` feature that fails on a client where it is listed here passes, and says `KNOWN GAP`; one that
   fails where it is not listed fails; one that is listed and now passes fails until the entry is removed. `{"gaps": {"<feature>": {"mac-gui": "<why>", "desktop": "<why>"}}}`.
   Both runners read it (`GuiFeatureRunner.knownGap`, `DesktopFeatureRunner.knownGap`). It is empty. It held four features for the desktop for a while, which were gaps of the *test host*, not of the app
-  (the desktop has the same menu, windows, start screen and recents button, but the Compose test host has no AWT menu bar or window, and cannot start the JavaFX video the start screen embeds); they closed when
+  (the desktop has the same menu, windows, start screen and recents button, but the Compose test host has no AWT menu bar or window, and the start screen's ffmpeg video is turned off for a `@ui` feature); they closed when
   the runner learned to work on what the app draws those from (below). It then held one real difference, the decision-tree menu items, until the owner chose the gui's behaviour. A feature of the gui's that fails on the desktop for a real
   difference goes here with that difference as the reason.
 
@@ -98,7 +98,7 @@ The features so far (all pass on both clients): `uiStartupDefaults`, `uiStartupR
 **What the desktop's runner does where the gui has an AWT menu bar, windows and a video.** The desktop's menu bar and secondary windows are AWT, which the Compose test host does not have, so those steps work on what the
 app draws them from, and a test holds the drawing to that. The menus are data, `starMenus(app)` (titles, labels, enabled, handler), which `StarMenuBar` draws as the `MenuBar` and nothing else builds; the runner reads it
 with `starMenusNow` (on the UI thread, without composing anything) and chooses an item by calling its handler (a disabled item cannot be chosen, as in a menu). A window is open when the flag in the view model that `Main.kt` shows its `Window` for says so, and
-`SecondaryWindowsWiringTest` holds `Main.kt` to that. The start screen's JavaFX video is off for a `@ui` feature (`-Dstar.ui.noIntroVideo`, `NO_INTRO_VIDEO_PROPERTY`; the gui has a video too and plays it), the
+`SecondaryWindowsWiringTest` holds `Main.kt` to that. The start screen's ffmpeg video is off for a `@ui` feature (`-Dstar.ui.noIntroVideo`, `NO_INTRO_VIDEO_PROPERTY`; the gui has a video too and plays it), the
 preferences are the scratch `user.home`'s, and where a list has a control per row (the recents' remove button) a click on the id takes the first.
 
 **Two things about keys on the desktop's test host.** A click on a control with a hover tip (the neighbour field) leaves the tip up, and a tip is a second Compose root; the key step sends the pointer to a corner, which closes it, and then keys the first root, the window's. And a key sent after a number field gave up the keyboard (Return, Esc) did not reach the host's key handler, though the host held the focus (traced: no event arrived; cause not found), so `uiNumberFields` asks `has the keyboard` / `does not have the keyboard` and does not press an arrow after it.

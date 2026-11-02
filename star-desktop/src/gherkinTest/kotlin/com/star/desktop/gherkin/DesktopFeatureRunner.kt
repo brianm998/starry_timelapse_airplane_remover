@@ -159,7 +159,7 @@ class DesktopFeatureRunner {
         if (feature.steps.isEmpty()) throw RunnerError("feature \"${feature.name}\" has no steps: refusing to pass vacuously")
         // The client keeps its preferences in ~/.star.userprefs.json; a test must neither read nor write the real one.
         // a @ui feature may compare what the app says with the English catalogue
-        // and may show the start screen, which would otherwise embed a JavaFX video that cannot start headless
+        // and may show the start screen, which would otherwise spawn ffmpeg for its video background
         if ("@ui" in feature.tags) {
             // English, unless the feature says `the language is "<code>"`
             com.star.desktop.i18n.Strings.setOverride(feature.steps.firstOrNull { it.action == StepAction.LANGUAGE_IS }?.args?.firstOrNull() ?: "en")
@@ -313,7 +313,7 @@ class DesktopFeatureRunner {
         val model = newModel()
         model.openVideo(sequenceCopy.absolutePath)
 
-        // Only the dialog is composed: the start screen behind it embeds a JavaFX video background, and JavaFX cannot start headless.
+        // Only the dialog is composed: the start screen behind it plays an ffmpeg video background, which a test host should not spawn.
         t.setContent { VideoImportDialog(sequenceCopy.absolutePath, probe = { null }, onImport = model::confirmVideoImport, onCancel = model::cancelVideoImport) }
         val format = FrameFormatChoice.valueOf(param("frame_format").uppercase())
         waitFor(t, "the video import dialog", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("videoimport.import") }
@@ -583,8 +583,8 @@ class DesktopFeatureRunner {
 
     private fun finishOpening(t: ComposeUiTest, model: AppViewModel, answer: Boolean = true) {
         // The sequence opens in the background, driven by the view model and not by composition. Nothing is composed until it has:
-        // the start screen (the first thing StarApp would draw) embeds a JavaFX video background, and JavaFX cannot start headless, so
-        // composing it blocks the UI thread for good. (A @ui feature turns the video off, so one that wants the start screen can have it.)
+        // the start screen (the first thing StarApp would draw) plays an ffmpeg video background, which a test host should not spawn, so
+        // it is not composed. (A @ui feature turns the video off, so one that wants the start screen can have it.)
         val deadline = System.nanoTime() + OPEN_TIMEOUT_MS * 1_000_000
         while (model.screen.value !is AppScreen.Sequence) {
             model.error.value?.let { throw RunnerError("the app reported an error while opening: $it") }
