@@ -337,18 +337,12 @@ struct StarApp: App {
         // this shows up as stars and wand in the upper right of the menu bar
         // always there when app is running, even when another app is used
         MenuBarExtra {
-            ScrollView {
-                VStack(spacing: 0) {
-                    // maybe add buttons show show the different windows?
-                    // maybe show overall progress monitor of some type?
-                    Text(localized("ui.should_really_be_doing_something_here"))
-                    Text(localized("ui.what_exactly"))
-                    Text(localized("ui.not_sure"))
-                }
-            }
+            // The panel style, because the default menu cannot draw a progress bar.
+            MenuBarStatusView(viewModel: viewModel)
         } label: {
             Label(localized("ui.star"), systemImage: "wand.and.stars.inverse")
         }
+        .menuBarExtraStyle(.window)
 
     }
 }

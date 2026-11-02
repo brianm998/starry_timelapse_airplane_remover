@@ -177,13 +177,15 @@ async def test_the_event_stream_delivers_new_events_and_resumes_from_an_id(rig: 
 
 def test_the_ticket_detail_has_the_fields_the_monitor_decodes(rig: Rig) -> None:
     """monitor/.../Fixtures/detail.json is a real `GET /v1/tickets/28`; the Swift TicketDetail decodes it."""
+    rig.gh.deps[2] = [4]
     d = populate(rig)
     rig.db.set_fields(2, plan_json=json.dumps({"summary": "s", "acceptance": [{"id": "A1", "check": "c"}]}))
     rig.db.record_check(2, "abc", "t0:diff-check", "pass", {"executed": 0}, "/log")
     shown = d.show(2)
     assert shown is not None
     recorded = json.loads((FIXTURE.parent / "detail.json").read_text())
-    for key in ("number", "plan", "checks", "question"):
+    for key in ("number", "plan", "checks", "question", "blockers"):
         assert key in shown and key in recorded
+    assert set(shown["blockers"][0]) == {"number", "title"} == set(recorded["blockers"][0])  # type: ignore[index]
     assert {"summary", "acceptance"} <= set(shown["plan"]) and {"summary", "acceptance"} <= set(recorded["plan"])  # type: ignore[arg-type]
     assert {"check_id", "result"} <= set(shown["checks"][0]) and {"check_id", "result"} <= set(recorded["checks"][0])  # type: ignore[index]

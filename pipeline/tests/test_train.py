@@ -12,6 +12,7 @@ import pytest
 from starpipe import train as train_mod
 from starpipe.agent import StageOutcome, StageRequest
 from starpipe.daemon import activity
+from starpipe.db import Ticket
 from starpipe.github import GitHubError
 
 from .fakes import Ci, accepted, sh
@@ -125,6 +126,38 @@ async def test_a_member_that_conflicts_with_an_earlier_one_waits_for_the_next_ba
     assert [r.stage for r in rig.agent.requests] == ["conflict"]
     sh(rig.engine.repo, "git", "fetch", "-q")
     assert sh(rig.engine.repo, "git", "show", "origin/develop:docs/shared.md") == "from one\nfrom two\n"
+
+
+async def test_the_clean_members_publish_while_a_conflicted_one_is_still_being_caught_up(rig: Rig) -> None:
+    ready_ticket(rig, 1, "shared.md", "from one\n")
+    ready_ticket(rig, 2, "shared.md", "from two\n")
+    seen: list[int] = []
+    release = asyncio.Event()
+
+    t = train_of(rig)
+    started = asyncio.Event()
+
+    async def catch_up(n: int) -> None:
+        seen.append(len(rig.gh.prs))
+        started.set()
+        await release.wait()
+
+    t._catch_up = catch_up  # pyright: ignore[reportPrivateUsage]
+    real_build = t._build  # pyright: ignore[reportPrivateUsage]
+
+    def build(bid: int, tickets: list[Ticket], base: str) -> train_mod.Built:
+        built = real_build(bid, tickets, base)
+        built.catch_up, built.deferred = built.deferred, []  # as if #2 conflicted with develop itself
+        return built
+
+    t._build = build  # pyright: ignore[reportPrivateUsage]
+    assert await t.step() is True
+    await started.wait()
+    assert seen == [1], "the batch with #1 was already published when #2's catch-up began"
+    batch = rig.db.active_batch()
+    assert batch is not None and batch["state"] == "ci" and rig.db.batch_members(1) == [1]
+    release.set()
+    await asyncio.wait(t._catch_ups)  # pyright: ignore[reportPrivateUsage]
 
 
 async def test_a_red_batch_is_split_until_the_culprit_is_alone_and_the_rest_land(rig: Rig) -> None:

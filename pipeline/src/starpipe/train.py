@@ -51,6 +51,7 @@ class Built:
 class Train:
     def __init__(self, eng: Engine) -> None:
         self.eng = eng
+        self._catch_ups: set[asyncio.Task[None]] = set()
 
     # the loop ------------------------------------------------------------------------------------------------------
     async def run_forever(self) -> None:
@@ -60,8 +61,13 @@ class Train:
 
     async def run_until_idle(self, limit: int = 50) -> int:
         steps = 0
-        while steps < limit and await self.step():
-            steps += 1
+        while steps < limit:
+            if await self.step():
+                steps += 1
+            elif self._catch_ups:  # nothing to do but wait for a conflicted ticket to rejoin the queue
+                await asyncio.wait(self._catch_ups)
+            else:
+                break
         return steps
 
     def _held(self) -> bool:
@@ -120,9 +126,9 @@ class Train:
             await asyncio.to_thread(self._abandon, bid, f"could not build the batch: {exc}")
             await eng.sleep(BACKOFF_S)
             return
-        for n in built.catch_up:  # conflicts with develop itself: the CONFLICT stage, then back in the queue
-            await self._catch_up(n)
         if not built.merged:
+            for n in built.catch_up:
+                await self._catch_up(n)
             await asyncio.to_thread(self._abandon, bid, "nothing merged cleanly")
             return
         try:
@@ -130,6 +136,18 @@ class Train:
         except (GitHubError, RuntimeError) as exc:
             await asyncio.to_thread(self._abandon, bid, f"could not publish the batch: {exc}")
             await eng.sleep(BACKOFF_S)
+            return
+        for n in built.catch_up:  # conflicts with develop itself: the CONFLICT stage runs beside the batch, then back in the queue
+            task = asyncio.create_task(self._catch_up_beside(n))
+            self._catch_ups.add(task)
+            task.add_done_callback(self._catch_ups.discard)
+
+    async def _catch_up_beside(self, n: int) -> None:
+        """A conflicted ticket's catch-up, off the train's own path: the clean members publish and go through CI without waiting for it."""
+        try:
+            await self._catch_up(n)
+        except Exception as exc:  # noqa: BLE001 - one ticket's catch-up must not take the train down
+            self.eng.db.event("train-catch-up-failed", n, error=str(exc)[:200])
 
     def _build(self, bid: int, tickets: list[Ticket], base: str) -> Built:
         repo = self.eng.repo

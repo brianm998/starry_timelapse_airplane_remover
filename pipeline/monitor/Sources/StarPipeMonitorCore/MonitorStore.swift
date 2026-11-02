@@ -103,8 +103,19 @@ public final class MonitorStore {
 
     public func refreshSelected() async {
         guard let client, let n = selected else { detail = nil; logLines = []; return }
-        detail = try? await client.detail(n)
-        logLines = (try? await client.log(n)) ?? []
+        let fresh = try? await client.detail(n)
+        guard selected == n else { return }
+        detail = fresh
+        let lines = (try? await client.log(n)) ?? []
+        guard selected == n else { return }
+        logLines = lines
+    }
+
+    /// Back to the initial status screen: no ticket selected, nothing of the last ticket's detail kept.
+    public func showOverview() {
+        selected = nil
+        detail = nil
+        logLines = []
     }
 
     /// Poll the snapshot, follow the event stream, and reconnect with backoff. Safe to call once at launch.
