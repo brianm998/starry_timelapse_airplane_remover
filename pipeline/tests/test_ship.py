@@ -816,6 +816,15 @@ def test_the_audit_still_catches_a_line_that_was_really_deleted(tmp_path: Path) 
     assert [d.line for d in dropped] == ["checked = verify_the_landing(batch, merge_commit, develop_head)"]
 
 
+def test_the_audit_ignores_a_generated_files_source_hash_line(tmp_path: Path) -> None:
+    """#113 was parked for this: both sides added features, so the regenerated file carries a new hash, not either side's."""
+    base = "let a = 1\n// source-hash: aaaa1111bbbb2222\n"
+    develop = "let a = 1\n// source-hash: cccc3333dddd4444\n"
+    pr = "let a = 1\nlet b = 2\n// source-hash: eeee5555ffff6666\n"
+    resolved = "let a = 1\nlet b = 2\n// source-hash: 99990000aaaabbbb\n"
+    assert _audit_repo(tmp_path, base, develop, pr, resolved) == []
+
+
 def test_a_short_line_must_be_present_exactly(tmp_path: Path) -> None:
     base = "a = 1\n"
     develop = "a = 1\nreturn x\n"  # two words: too little to be matched loosely
