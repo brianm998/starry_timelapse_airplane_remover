@@ -149,6 +149,15 @@ class GitHub:
         data: dict[str, Any] = self.api("GET", f"actions/runs?{query}") or {}
         return data.get("workflow_runs", [])
 
+    def workflow_file_runs(self, file: str, branch: str, per_page: int = 50) -> list[dict[str, Any]]:
+        """One workflow's runs on a branch, newest first (workflow_runs lists every workflow's)."""
+        data: dict[str, Any] = self.api("GET", f"actions/workflows/{file}/runs?branch={branch}&per_page={per_page}") or {}
+        return data.get("workflow_runs", [])
+
+    def dispatch_workflow(self, file: str, ref: str, inputs: dict[str, str]) -> None:
+        """Start a workflow_dispatch run. GitHub answers 204 with no run id."""
+        self.api("POST", f"actions/workflows/{file}/dispatches", {"ref": ref, "inputs": inputs})
+
     def run_jobs(self, run_id: int, version: str | None = None) -> list[dict[str, Any]]:
         """A run's jobs. With a `version` (only for a completed run: its attempt and update time) the answer is remembered, since a
         completed run does not change until it is rerun, which changes the version. This is most of the polling cost."""
