@@ -82,6 +82,7 @@ struct ProcessingModalView: View {
           stepEstimates: estimates,
           showAlignment: showAlignment,
           cameraMoving: viewModel.cameraMotion == .moving,
+          cleanMethod: viewModel.cleanMethod,
           openAlignmentWindow: { openWindow(id: StarApp.alignmentWindowName) },
           stop: { viewModel.stopProcessing() },
           dismiss: { viewModel.processingModalShowing = false },
@@ -173,11 +174,17 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
     /// Whether the camera moved during the sequence; picks the wording of the alignment explanation.
     var cameraMoving: Bool = false
 
+    /// The run's processing mode; named in the opening line of the steps explanation.
+    var cleanMethod: CleanMethod = .selective
+
     /// Opens the alignment window; nil leaves the button out.
     var openAlignmentWindow: (() -> Void)? = nil
 
     /// Whether the explanation of the alignment charts is up over the panel.
     @State private var showingAlignmentInfo = false
+
+    /// Whether the explanation of the steps is up over the panel.
+    @State private var showingStepsInfo = false
 
     let stop: () -> Void
     let dismiss: () -> Void
@@ -229,12 +236,23 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
             if showingAlignmentInfo {
                 AlignmentInfoOverlay(cameraMoving: cameraMoving) { showingAlignmentInfo = false }
             }
+            if showingStepsInfo {
+                // What the Steps list below shows, in the order it stacks them: the canonical
+                // step order, which does not shuffle as steps move from Done to Processing.
+                StepsInfoOverlay(
+                  info: ProcessingStepsInfo.make(cameraMoving: cameraMoving,
+                                                 cleanMethod: cleanMethod,
+                                                 steps: steps.map(\.type),
+                                                 showsExtraction: extraction != nil)
+                ) { showingStepsInfo = false }
+            }
         }
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
-            ProcessingStepsView(steps: steps, extraction: extraction, estimates: stepEstimates)
+            ProcessingStepsView(steps: steps, extraction: extraction, estimates: stepEstimates,
+                                showInfo: { showingStepsInfo = true })
             Divider()
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -345,6 +363,8 @@ struct ProcessingStepsView: View {
     var extraction: FrameExtractionProgress? = nil
     /// Seconds left per step, for the column beside the bars.
     var estimates: [OperationType: TimeInterval] = [:]
+    /// Opens the explanation of the steps; nil leaves the info button out.
+    var showInfo: (() -> Void)? = nil
 
     private let doneColor: Color = .green
     private let runningColor: Color = .yellow
@@ -387,9 +407,14 @@ struct ProcessingStepsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(localized("ui.steps"))
-              .font(.headline)
-              .foregroundColor(.white)
+            HStack {
+                Text(localized("ui.steps"))
+                  .font(.headline)
+                  .foregroundColor(.white)
+                if let showInfo {
+                    StepsInfoButton(action: showInfo)
+                }
+            }
 
             if let extraction {
                 extractionRow(extraction)
@@ -554,5 +579,83 @@ struct ProcessingStepsView: View {
               .cornerRadius(4)
         }
           .frame(height: 14)
+    }
+}
+
+/// The circled "i" that asks for the explanation of the steps; the same button as
+/// `AlignmentInfoButton`, with its own tooltip.
+struct StepsInfoButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "info.circle")
+        }
+          .buttonStyle(.borderless)
+          .foregroundColor(.gray)
+          .help(localized("ui.steps_info_help"))
+    }
+}
+
+/// What each step the panel shows does, and which earlier step's results it relies on and why.
+struct StepsInfoContent: View {
+    let info: ProcessingStepsInfo
+    let close: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(localized("ui.steps_info_title"))
+              .font(.title2)
+            Text(info.intro)
+              .fixedSize(horizontal: false, vertical: true)
+            Text(info.subtitle)
+              .fixedSize(horizontal: false, vertical: true)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(info.entries) { entry in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(entry.name)
+                              .font(.headline)
+                            Text(entry.what)
+                              .fixedSize(horizontal: false, vertical: true)
+                            Text(entry.needs)
+                              .font(.caption)
+                              .foregroundColor(.secondary)
+                              .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                  .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            HStack {
+                Spacer()
+                Button(localized("ui.done"), action: close)
+                  .keyboardShortcut(.defaultAction)
+            }
+        }
+          .padding(24)
+    }
+}
+
+/// `StepsInfoContent` as a card over a dimmed backdrop, drawn on top of the processing modal
+/// the way `AlignmentInfoOverlay` is.
+struct StepsInfoOverlay: View {
+    let info: ProcessingStepsInfo
+    let close: () -> Void
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+              .fill(Color.black.opacity(0.5))
+              .contentShape(Rectangle())
+              .onTapGesture(perform: close)
+            StepsInfoContent(info: info, close: close)
+              .frame(width: 540)
+              .frame(maxHeight: 640)
+              .background(Color(white: 0.22))
+              .environment(\.colorScheme, .dark)
+              .cornerRadius(14)
+              .shadow(radius: 24)
+        }
     }
 }

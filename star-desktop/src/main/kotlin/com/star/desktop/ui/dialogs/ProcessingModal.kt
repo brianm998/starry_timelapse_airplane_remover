@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameStateCounts
 import com.star.desktop.domain.ProcessingHeadline
+import com.star.desktop.domain.ProcessingStepsInfo
 import com.star.desktop.domain.StepRateTracker
 import com.star.desktop.domain.StepRow
 import com.star.desktop.i18n.localized
@@ -48,6 +49,8 @@ import com.star.desktop.ui.components.AlignmentInfoButton
 import com.star.desktop.ui.components.AlignmentInfoOverlay
 import com.star.desktop.ui.components.DeviationChart
 import com.star.desktop.ui.components.HoverTip
+import com.star.desktop.ui.components.StepsInfoButton
+import com.star.desktop.ui.components.StepsInfoOverlay
 import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
@@ -89,6 +92,7 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
     val session by app.sessions.session.collectAsState()
     val cameraMoving = session?.config?.tripodHeadWasMoving == true
     var showingInfo by remember { mutableStateOf(false) }
+    var showingStepsInfo by remember { mutableStateOf(false) }
 
     // Return is the Preview button, the sheet's default one in the gui.
     // The tag is on the scrim, which merges the sheet's texts into its own node: one on a text inside it is not found.
@@ -118,7 +122,7 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
             HorizontalDivider(color = StarColors.cellDefault)
 
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                StepsView(rows, hasReport = report != null, extraction = extraction, estimates = estimates)
+                StepsView(rows, hasReport = report != null, extraction = extraction, estimates = estimates, onInfo = { showingStepsInfo = true })
                 HorizontalDivider(color = StarColors.cellDefault)
                 AlignmentSection(app, svm) { showingInfo = true }
             }
@@ -149,14 +153,26 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
             }
         }
         if (showingInfo) AlignmentInfoOverlay(cameraMoving) { showingInfo = false }
+        // What the Steps list shows, in the order the daemon sends the rows (which does not shuffle as steps move from Done to Processing).
+        if (showingStepsInfo) {
+            val info = ProcessingStepsInfo.of(cameraMoving, session?.config?.cleanMethod, rows.map { it.type }, extraction?.active == true)
+            StepsInfoOverlay(info) { showingStepsInfo = false }
+        }
     }
 }
 
 /** One bar per processing step, stacked in the order the daemon sends them (also drawn by the reopened-sequence panel, over what was found on disk). */
 @Composable
-internal fun StepsView(rows: List<StepRow>, hasReport: Boolean, extraction: com.star.proto.FrameExtraction? = null, estimates: Map<String, Double> = emptyMap()) {
+internal fun StepsView(
+    rows: List<StepRow>, hasReport: Boolean, extraction: com.star.proto.FrameExtraction? = null, estimates: Map<String, Double> = emptyMap(),
+    onInfo: (() -> Unit)? = null,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(localized("ui.steps"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(localized("ui.steps"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+            // The explanation of the steps; the reopened-sequence panel draws this list too, and has no run to explain.
+            if (onInfo != null) StepsInfoButton(onInfo)
+        }
         // Extracting the video's frames comes first, above the horizon, for frames that are being extracted from a video.
         if (extraction != null && extraction.active) ExtractionRowView(extraction)
         when {
