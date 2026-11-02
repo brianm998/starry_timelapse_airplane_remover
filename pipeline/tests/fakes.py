@@ -200,7 +200,7 @@ class FakeGitHub(GitHub):
                                      "title": f"Gherkin: {inputs.get('features') or 'full'}", "polls": self.feature_pending_polls}
 
     def _feature_run(self, r: dict[str, Any]) -> dict[str, Any]:
-        jobs = self.feature_attempts[min(r["attempt"], len(self.feature_attempts)) - 1]
+        jobs: FeatureJobs = self.feature_attempts[min(int(r["attempt"]), len(self.feature_attempts)) - 1]
         done = r["polls"] <= 0
         self.run_jobs_by_id[r["id"]] = [{"name": j, "status": "completed" if done else "in_progress",
                                          "conclusion": c if done else None, "completed_at": None} for j, c in jobs]
