@@ -3615,7 +3615,7 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    /// The outlier window's rows when no Information-tool box picked them (E6 of the parity plan): every group the current frame draws,
+    /// The outlier window's rows when no Information-tool box picked them (E6 of the parity plan): every large group (over 40 pixels, the ones the frame draws),
     /// largest first, and again when the frame changes, as the desktop client's window does.  The window opened from the menu listed
     /// nothing until the tool had filled it.  Rows an Information drag made for this frame are left alone.
     func fillOutlierGroupTableForCurrentFrame() async {
@@ -3623,7 +3623,7 @@ public final class ImageSequenceViewModel {
         guard let frame = frameView.frame, let views = frameView.outlierViews else { return }
         if outlierGroupWindowFrame?.frameIndex == frame.frameIndex, !outlierGroupTableRows.isEmpty { return }
         var rows: [OutlierGroupTableRow] = []
-        for view in views {
+        for view in views where view.group.size > 40 { // the draw rule (FrameEditImageView), and the desktop window's OutlierOverlay.isLarge
             rows.append(await OutlierGroupTableRow(view.group))
         }
         rows.sort { $0.size > $1.size }

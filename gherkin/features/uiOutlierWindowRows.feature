@@ -13,8 +13,8 @@ Feature: The outlier window lists the current frame's groups and follows the fra
       And I choose the menu command "outlierWindow"
     Then  the "outlier" window is open
       And the "outlier" window is titled "Outliers for frame 0"
-      And "outlier.rows" holds the number 0
+      And "outlier.rows" holds the number 18
     When  I click "mode.edit"
       And I press "right"
     Then  the "outlier" window is titled "Outliers for frame 1"
-      And "outlier.rows" holds the number 0
+      And "outlier.rows" holds the number 16
