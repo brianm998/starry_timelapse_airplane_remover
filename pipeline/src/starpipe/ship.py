@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from . import ci, gherkin_nightly, gitutil, landing, tickets, trust, worktrees
 from .db import Ticket
@@ -130,10 +131,22 @@ def _dispatch_features(eng: Engine, t: Ticket, sha: str, title: str, features: l
     eng.db.event("gherkin-dispatched", t.number, sha=sha, features=features)
 
 
-def _feature_verdict(eng: Engine, t: Ticket, sha: str, title: str, reran: set[tuple[str, str]]) -> ci.Verdict | None:
+def _is_feature_run(run: dict[str, Any], sha: str, title: str, since: float) -> bool:
+    """A dispatched run for this head: titled `title`, or, on a branch cut before gherkin.yml had a run-name, titled by the workflow's
+    name (the REST API) or path (`gh`) and created no earlier than the dispatch (GitHub's title for a run-name-less workflow; matching only by title redispatched
+    every ten minutes and each new run cancelled the last)."""
+    if run.get("event") != "workflow_dispatch" or run.get("head_sha") != sha:
+        return False
+    if run.get("display_title") == title:
+        return True
+    created = str(run.get("created_at") or "")
+    return (run.get("display_title") in (gherkin_nightly.WORKFLOW_PATH, run.get("name")) and bool(created)
+            and datetime.fromisoformat(created).timestamp() >= since)
+
+
+def _feature_verdict(eng: Engine, t: Ticket, sha: str, title: str, since: float, reran: set[tuple[str, str]]) -> ci.Verdict | None:
     """Judge the newest dispatched run for this head and title; None when GitHub does not list one yet. Worker thread."""
-    runs = [r for r in eng.gh.workflow_file_runs(gherkin_nightly.WORKFLOW_FILE, t.branch or "")
-            if r.get("event") == "workflow_dispatch" and r.get("head_sha") == sha and r.get("display_title") == title]
+    runs = [r for r in eng.gh.workflow_file_runs(gherkin_nightly.WORKFLOW_FILE, t.branch or "") if _is_feature_run(r, sha, title, since)]
     if not runs:
         return None
     run = max(runs, key=lambda r: int(r["id"]))
@@ -167,7 +180,7 @@ async def feature_gate(eng: Engine, t: Ticket, rejoin: bool = False) -> str:
                 await asyncio.to_thread(_dispatch_features, eng, cur, sha, title, features)
                 continue
             reran = {tuple(k) for k in json.loads(eng.db.get(f"gherkin_reran:{n}") or "[]")}
-            verdict = await asyncio.to_thread(_feature_verdict, eng, cur, sha, title, reran)
+            verdict = await asyncio.to_thread(_feature_verdict, eng, cur, sha, title, float(rec["at"]) - 60, reran)
         except (GitHubError, RuntimeError) as exc:
             eng.db.event("gherkin-poll-failed", n, error=str(exc)[:200])
             await eng.sleep(eng.config.ci_poll_s)
