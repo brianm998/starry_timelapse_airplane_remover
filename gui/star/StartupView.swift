@@ -407,9 +407,10 @@ struct RemovalView: View {
     @State private var autoSelective: Bool = false
     @State private var groundAlignment: Bool = true
 
-    /// Owned here rather than inside `KeypointDivisorStartupView` so that view can set the
-    /// initial state from the machine's advice and still be collapsed by the user.
-    @State private var showKeypointDivisor: Bool = false
+    /// The Speed vs. Sharpness sheet. Attached to this view, not to `BottomRightView`'s
+    /// edit-mode branch: this view is itself that branch's sheet, and a sheet hung off the
+    /// wrong mode silently does not show.
+    @State private var showSpeedSheet: Bool = false
 
     private var cleanMethod: CleanMethod {
         if selectiveMode { return .selective }
@@ -472,7 +473,9 @@ struct RemovalView: View {
             Space(height: 14)
             Divider()
             Space(height: 10)
-            KeypointDivisorStartupView(isExpanded: $showKeypointDivisor)
+            KeypointDivisorSummaryRow(divisor: viewModel.alignmentKeypointDetectionDivisor) {
+                showSpeedSheet = true
+            }
             Space(height: 10)
             Divider()
 
@@ -544,6 +547,14 @@ struct RemovalView: View {
                   .accessibilityIdentifier("startup.advanced")
             }
         }
+          .sheet(isPresented: $showSpeedSheet) {
+              KeypointDivisorStartupView(initial: viewModel.alignmentKeypointDetectionDivisor,
+                                         onCancel: { showSpeedSheet = false },
+                                         onUpdate: { value in
+                                             viewModel.alignmentKeypointDetectionDivisor = value
+                                             showSpeedSheet = false
+                                         })
+          }
     }
 }
 

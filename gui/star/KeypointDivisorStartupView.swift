@@ -2,17 +2,80 @@ import SwiftUI
 import StarCore
 import logging
 
+/// What the cleanup dialog's one-line "Speed vs. Sharpness" row says is in effect, and the
+/// button that opens the full choice (`KeypointDivisorStartupView`) in a sheet.
+///
+/// The value is the label from `KeypointDivisorStartupView.summaryLabel`: a preset's number
+/// and name, or the bare number for any other value.
+struct KeypointDivisorSummaryRow: View {
+    let divisor: Double
+    let onUpdate: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(localized("ui.speed_vs_sharpness"))
+              .font(.title2)
+              .foregroundColor(.white)
+            Text(KeypointDivisorStartupView.summaryLabel(divisor))
+              .font(.title3)
+              .foregroundColor(.white)
+              .opacity(0.7)
+              .accessibilityIdentifier("startup.removal.speed.value")
+            Spacer()
+            Button(action: onUpdate) {
+                Text(localized("ui.update"))
+                  .font(.title3)
+                  .foregroundColor(.white)
+                  .padding(.horizontal, 12)
+                  .padding(.vertical, 4)
+                  .background(RoundedRectangle(cornerRadius: 14).fill(Color.blue.opacity(0.7)))
+            }
+              .buttonStyle(PlainButtonStyle())
+              .accessibilityIdentifier("startup.removal.speed.update")
+        }
+          .frame(maxWidth: 640)
+    }
+}
+
+/// The value the Speed vs. Sharpness sheet edits: a draft of `original`, the value the sheet
+/// opened with. Nothing reaches the view model until `committed` is applied (Update);
+/// `cancelled` is what Cancel leaves in place.
+struct KeypointDivisorDraft {
+    let original: Double
+    private(set) var current: Double
+
+    init(original: Double) {
+        self.original = original
+        self.current = original
+    }
+
+    /// A preset picked.
+    mutating func choose(_ value: Double) { current = value }
+
+    /// The custom field's text, applied on every keystroke: text that is not (yet) a value
+    /// leaves the draft alone.
+    mutating func typed(_ text: String) {
+        if let value = KeypointDivisorStartupView.parse(text) { current = value }
+    }
+
+    /// What Update keeps: the draft, a typed custom value included.
+    var committed: Double { current }
+
+    /// What Cancel keeps.
+    var cancelled: Double { original }
+}
+
 /// The keypoint divisor, offered in the startup flow instead of only in Advanced settings.
 ///
 /// It is the one setting on this machine that decides whether a large sequence runs at a
 /// sensible speed or crawls, and it was three sheets deep — so it is here, in the last
 /// startup prompt, on the way to Start Processing.
 ///
-/// Collapsed to its title and left at full resolution when the machine can detect on this
-/// sequence at full resolution; expanded and pre-set to
-/// `Config.recommendedReducedKeypointDivisor` when it cannot. Which of those it is comes
-/// from `Config.keypointDivisorAdvice(physicalMemory:)` — see there for where the boundary
-/// is and why.
+/// The cleanup dialog shows a one-line `KeypointDivisorSummaryRow`; this is the sheet its
+/// Update button opens. It edits a draft: Update hands the draft to `onUpdate`, Cancel hands
+/// nothing over, so the value stays as it was when the sheet opened. The explanation and the
+/// "Recommended" badge come from `Config.keypointDivisorAdvice(physicalMemory:)` — see there
+/// for where the boundary is and why.
 ///
 /// Deliberately free of the words keypoint, homography, SIFT and descriptor: someone who
 /// just wants their video cleaned up has to be able to make this choice. The Advanced
@@ -20,19 +83,24 @@ import logging
 struct KeypointDivisorStartupView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
-    /// Owned by the parent so it survives this view's identity, and so the parent can
-    /// decide the initial state from the advice below.
-    @Binding var isExpanded: Bool
+    let onCancel: () -> Void
+    let onUpdate: (Double) -> Void
+
+    /// The value being edited. Seeded in `init` with the value the sheet opened with.
+    @State private var draft: KeypointDivisorDraft
 
     /// Text of the free-form field. Kept separate from the divisor rather than bound to
     /// it, because a value being typed goes through states the divisor should not be
     /// pushed into ("1.50" would be reformatted to "1.5" under the cursor).
-    @State private var customText: String = ""
+    @State private var customText: String
     @FocusState private var customFocused: Bool
 
-    /// Guards the one-shot default. `onAppear` can fire more than once for the same view,
-    /// and re-running this would stomp a choice the user just made.
-    @State private var hasConfigured = false
+    init(initial: Double, onCancel: @escaping () -> Void, onUpdate: @escaping (Double) -> Void) {
+        self.onCancel = onCancel
+        self.onUpdate = onUpdate
+        _draft = State(initialValue: KeypointDivisorDraft(original: initial))
+        _customText = State(initialValue: Self.format(initial))
+    }
 
     struct Preset {
         let divisor: Double
@@ -64,7 +132,7 @@ struct KeypointDivisorStartupView: View {
     /// that panel will also accept.
     static let maxDivisor: Double = 8.0
 
-    private var divisor: Double { viewModel.alignmentKeypointDetectionDivisor }
+    private var divisor: Double { draft.current }
 
     private var advice: Config.KeypointDivisorAdvice? {
         viewModel.config.config()
@@ -73,22 +141,24 @@ struct KeypointDivisorStartupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            titleRow
-            if isExpanded {
-                Space(height: 12)
-                explanation
-                Space(height: 14)
-                presetRows
-                Space(height: 12)
-                customRow
-                if divisor >= Self.tooHighDivisor {
-                    Space(height: 6)
-                    tooHighWarning
-                }
+            Text(localized("ui.speed_vs_sharpness"))
+              .font(.title2)
+              .foregroundColor(.white)
+            Space(height: 12)
+            explanation
+            Space(height: 14)
+            presetRows
+            Space(height: 12)
+            customRow
+            if divisor >= Self.tooHighDivisor {
+                Space(height: 6)
+                tooHighWarning
             }
+            Space(height: 20)
+            buttons
         }
           .frame(maxWidth: 640, alignment: .leading)
-          .onAppear { configureOnFirstAppearance() }
+          .padding(24)
           .onChange(of: customText) { applyCustomTextIfValid() }
           .onChange(of: divisor) {
               // Resync the field when a preset moved the value, but never while it is
@@ -97,38 +167,52 @@ struct KeypointDivisorStartupView: View {
           }
     }
 
-    private var titleRow: some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
-        } label: {
-            HStack(spacing: 8) {
-                Text(isExpanded ? "▼" : "▶")
-                  .font(.body)
-                  .foregroundColor(.white)
-                  .opacity(0.7)
-                Text(localized("ui.speed_vs_sharpness"))
-                  .font(.title2)
-                  .foregroundColor(.white)
-                if !isExpanded {
-                    Text(localized("ui.current_choice_suffix", currentChoiceName))
-                      .font(.title3)
-                      .foregroundColor(.white)
-                      .opacity(0.7)
-                }
-                Spacer()
+    /// Cancel on the left, Update on the right. Return is Update while this sheet is up, so it
+    /// does not reach Start Processing underneath.
+    private var buttons: some View {
+        HStack {
+            Button(action: onCancel) {
+                Text(localized("ui.cancel"))
+                  .font(.title3)
+                  .foregroundColor(.black)
+                  .padding(.horizontal, 12)
+                  .padding(.vertical, 6)
+                  .background(RoundedRectangle(cornerRadius: 16).fill(.white))
             }
+              .buttonStyle(PlainButtonStyle())
+              .accessibilityIdentifier("startup.speed.cancel")
+              .keyboardShortcut(.cancelAction)
+            Spacer()
+            Button { onUpdate(draft.committed) } label: {
+                Text(localized("ui.update"))
+                  .font(.title3)
+                  .foregroundColor(.white)
+                  .padding(.horizontal, 12)
+                  .padding(.vertical, 6)
+                  .background(RoundedRectangle(cornerRadius: 16).fill(Color.blue.opacity(0.7)))
+            }
+              .buttonStyle(PlainButtonStyle())
+              .accessibilityIdentifier("startup.speed.update")
+              .keyboardShortcut(.defaultAction)
         }
-          .buttonStyle(PlainButtonStyle())
-          .help(isExpanded ? localized("ui.hide_speed_settings") : localized("ui.show_speed_settings"))
     }
 
-    /// What the collapsed title says is in effect. A custom value has no preset name, so
-    /// it shows the number.
-    private var currentChoiceName: String {
-        if let preset = Self.presets.first(where: { matches($0.divisor) }) {
-            return preset.name
+    /// What the cleanup dialog's summary row says is in effect: "1 — Best quality",
+    /// "1.5 — Best balance" or "2 — Fastest" for a preset, and the bare number for any other
+    /// value — none of the three is what will run, so none is named.
+    static func summaryLabel(_ divisor: Double) -> String {
+        guard let preset = presets.first(where: { abs(divisor - $0.divisor) < 0.005 }) else {
+            return format(divisor)
         }
-        return localized("ui.divide_by", Self.format(divisor))
+        return "\(format(preset.divisor)) \u{2014} \(preset.name)"
+    }
+
+    /// What the field holds as a value, or nil while it is not one: the digits and points of
+    /// `text`, read as a number from 1 to `maxDivisor`.
+    static func parse(_ text: String) -> Double? {
+        let filtered = text.filter { $0.isNumber || $0 == "." }
+        guard let value = Double(filtered), value >= 1.0, value <= maxDivisor else { return nil }
+        return value
     }
 
     private var explanation: some View {
@@ -234,7 +318,7 @@ struct KeypointDivisorStartupView: View {
         Binding(
           get: { matches(value) },
           set: { isOn in
-              if isOn { viewModel.alignmentKeypointDetectionDivisor = value }
+              if isOn { draft.choose(value) }
           }
         )
     }
@@ -249,45 +333,16 @@ struct KeypointDivisorStartupView: View {
         return abs(advice.recommendedDivisor - value) < 0.005
     }
 
-    /// Set up this section the first time it appears.
-    ///
-    /// It used to apply the recommended divisor as well.
-    /// `Config.resolveAutomaticKeypointDivisor` does that now, from `set(imageInfo:)`,
-    /// so the cli and the daemon get the same default instead of it living in one
-    /// client's startup view — and it logs the reasoning there too. By the time this
-    /// runs the value is already whatever the advice asked for, so there is nothing
-    /// left here to apply.
-    ///
-    /// What remains is presentation: seed the custom field, and open the section
-    /// whenever it holds something worth seeing — a reduction this machine needs, or a
-    /// value somebody already set. Someone who wants full resolution back changes it
-    /// here, which marks it chosen and stops `Config` deciding again.
-    private func configureOnFirstAppearance() {
-        guard !hasConfigured else { return }
-        hasConfigured = true
-        customText = Self.format(divisor)
-        isExpanded = advice?.reduceRecommended == true || divisor > 1.0
-    }
-
-    /// Applies the field on every keystroke rather than on commit.
-    ///
-    /// Start Processing is right below this field, and a value typed but not committed
-    /// would be silently dropped when the button takes focus. Every prefix of a number
-    /// being typed is itself a valid number, so applying continuously costs nothing.
+    /// Applies the field to the draft on every keystroke rather than on commit, so a value
+    /// typed but not committed is still what Update keeps. Every prefix of a number being
+    /// typed is itself a valid number, so applying continuously costs nothing.
     private func applyCustomTextIfValid() {
-        let filtered = customText.filter { $0.isNumber || $0 == "." }
-        guard let value = Double(filtered),
-              value >= 1.0,
-              value <= Self.maxDivisor
-        else { return }
-        if abs(value - divisor) >= 0.0001 {
-            viewModel.alignmentKeypointDetectionDivisor = value
-        }
+        draft.typed(customText)
     }
 
     /// "1", "1.5", "1.75" — no trailing zeros, because this text goes in a field the user
     /// then edits.
-    private static func format(_ value: Double) -> String {
+    static func format(_ value: Double) -> String {
         if value == value.rounded() { return String(Int(value)) }
         return String(format: "%g", value)
     }
