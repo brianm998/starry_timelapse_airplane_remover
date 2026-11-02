@@ -66,6 +66,7 @@
     "startup.removal.groundalignment",
     "startup.removal.selective",
     "startup.removal.speed.update",
+    "startup.removal.speed.value",
     "startup.removal.start",
     "startup.selecthorizon.no",
     "startup.selecthorizon.yes",
