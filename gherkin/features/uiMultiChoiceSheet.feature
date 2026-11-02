@@ -5,7 +5,7 @@ Feature: With Multi Choice on, a click on a decided group opens the sheet; Cance
   the other frames, instead of flipping that one. The sheet starts on the opposite of what the group has (a removed group offers Keep), for all the
   frames, and says what applying it will do: Clear overlapping outliers in all 19 frames. Cancel puts it away and leaves every decision as it was;
   applying puts it away and keeps the group, and whatever overlaps it, in every frame of the range. (No group of this sequence's other frames lies
-  where the first group does, so what happens to those frames is not seen here: the daemon's and StarCore's tests hold it.) Starts from the
+  where the first group does, so what happens to those frames is seen in uiMultiChoiceOtherFrames.) Starts from the
   processed sequence the cli made once, so the frame has groups.
 
   Scenario: Remove every group, then look at the sheet, cancel it, and apply it

@@ -146,6 +146,7 @@ class DesktopFeatureRunner {
         StepAction.MENU_THERE to { t -> expectMenu(t, args[0], there = true) },
         StepAction.MENU_NOT_THERE to { t -> expectMenu(t, args[0], there = false) },
         StepAction.PROCESSED_COPY to { processedCopyStep() },
+        StepAction.PLANT_OUTLIERS to { plantOutliers(args[0].toInt(), args[1].toInt()) },
         StepAction.OPEN_PROCESSED to { t -> openProcessedCopy(t) },
         StepAction.CONFIRM_CLOSE_IF_ASKED to { t -> confirmClosingIfAsked(t) },
         StepAction.WINDOW_OPEN to { t -> expectWindow(t, args[0], open = true) },
@@ -1000,6 +1001,21 @@ class DesktopFeatureRunner {
             if (printed in text) f.writeText(text.replace(printed, target.path))
         }
         processedConfig = File(target, "input/star_temp_${source.name}/config.json")
+    }
+
+    /**
+     * Replaces frame [to]'s outlier directory of the processed copy with a copy of frame [from]'s: the groups of [to] are then the groups of [from], pixel
+     * for pixel, so every group of one has a twin in the other, which the frames of a static sky never have. Only the scratch copy changes; the shared
+     * fixture does not, so the other features' counts stay what they were.
+     */
+    private fun plantOutliers(from: Int, to: Int) {
+        val config = processedConfig ?: throw RunnerError("\"a processed copy of the sequence\" has not run")
+        val outliers = File(config.parentFile, "outliers")
+        val source = File(outliers, from.toString())
+        if (!source.isDirectory) throw RunnerError("frame $from has no outlier directory at ${source.path} to copy into frame $to")
+        val destination = File(outliers, to.toString())
+        destination.deleteRecursively()
+        source.copyRecursively(destination)
     }
 
     /** Opens the processed copy as Load Config does; the reopened sequence says where it left off, which the feature closes. */

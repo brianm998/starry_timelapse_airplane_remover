@@ -68,6 +68,7 @@
   { "case": "menuThere"             , "text": "the menu \"<menu>\" is there" },
   { "case": "menuNotThere"          , "text": "the menu \"<menu>\" is not there" },
   { "case": "processedCopy"         , "text": "a processed copy of the sequence {sequence}" },
+  { "case": "plantOutliers"         , "text": "the processed copy has the outliers of frame <from:int> copied into frame <to:int>" },
   { "case": "openProcessed"         , "text": "I open the processed copy" },
   { "case": "confirmCloseIfAsked"   , "text": "I confirm closing if it is asked" }
 ]

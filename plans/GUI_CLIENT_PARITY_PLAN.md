@@ -540,7 +540,7 @@ Every snapshot step also saves a window PNG; see §6.6.
 | `uiOutlierClicks` | E1, E2, E3 |
 | `uiDecisionsSavedOnClose` | L3 |
 | `uiMultiSelectSheet` | E5 (done, thirteenth batch) |
-| `uiMultiChoiceSheet` | E4 (done in part, seventeenth batch) |
+| `uiMultiChoiceSheet`, `uiMultiChoiceOtherFrames`, `uiMultiChoiceOtherFramesRangeExcludesFrame` | E4 (done in part, seventeenth batch; the other frames and the range added after) |
 | `uiReprocessNonContiguous` | L6 |
 | `uiReprocessCurrentFrame` | L7 |
 | `uiStartDuringRun` (was planned as `uiProcessFromHereDuringRun`: the menu's "process from here" has nothing to do on frames that are complete, so a re-process is the second start) | L8 (done, sixteenth batch) |

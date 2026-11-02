@@ -112,6 +112,7 @@ final class GuiFeatureRunner {
         .idStillSays: { try $0.expectStillSays($0.args[0], text: $0.args[1]) },
         .idStopsSaying: { try $0.expectStopsSaying($0.args[0], text: $0.args[1]) },
         .processedCopy: { try $0.makeProcessedCopy() },
+        .plantOutliers: { try $0.plantOutliers(from: Int($0.args[0]) ?? -1, into: Int($0.args[1]) ?? -1) },
         .openProcessed: { try $0.openProcessedCopy() },
         .confirmCloseIfAsked: { try $0.confirmClosingIfAsked() },
         .windowOpen: { try $0.expectWindow($0.args[0], open: true) },
@@ -569,6 +570,21 @@ final class GuiFeatureRunner {
             }
         }
         processedConfig = target.appendingPathComponent("input/star_temp_\(source.lastPathComponent)/config.json")
+    }
+
+    /// Replaces frame `to`'s outlier directory of the processed copy with a copy of frame `from`'s: the groups of `to` are then the groups of `from`, pixel
+    /// for pixel, so every group of one has a twin in the other, which the frames of a static sky never have. Only the scratch copy changes; the shared
+    /// fixture does not, so the other features' counts stay what they were.
+    private func plantOutliers(from: Int, into to: Int) throws {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        let outliers = config.deletingLastPathComponent().appendingPathComponent("outliers")
+        let source = outliers.appendingPathComponent(String(from)), destination = outliers.appendingPathComponent(String(to))
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: source.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            throw RunnerError("frame \(from) has no outlier directory at \(source.path) to copy into frame \(to)")
+        }
+        if FileManager.default.fileExists(atPath: destination.path) { try FileManager.default.removeItem(at: destination) }
+        try FileManager.default.copyItem(at: source, to: destination)
     }
 
     /// Opens the processed copy as Load Config does, with the views a test finds one outlier group by labelled.

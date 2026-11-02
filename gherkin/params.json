@@ -164,6 +164,12 @@
     },
     "uiMultiChoiceSheet": {
       "sequence": "test_data/test_a7sii_10"
+    },
+    "uiMultiChoiceOtherFrames": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiMultiChoiceOtherFramesRangeExcludesFrame": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }

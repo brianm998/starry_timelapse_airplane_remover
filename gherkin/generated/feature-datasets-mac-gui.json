@@ -20,6 +20,8 @@
   "uiMenuCommandsWhilePainting": [],
   "uiMenusNeedASequence": [],
   "uiModePickers": [],
+  "uiMultiChoiceOtherFrames": [],
+  "uiMultiChoiceOtherFramesRangeExcludesFrame": [],
   "uiMultiChoiceSheet": [],
   "uiMultiSelectSheet": [],
   "uiNumberFields": [],
