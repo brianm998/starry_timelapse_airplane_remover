@@ -471,13 +471,17 @@ struct RemovalView: View {
               .frame(maxWidth: .infinity, alignment: .leading)
 
             Space(height: 14)
-            Divider()
-            Space(height: 6)
-            KeypointDivisorSummaryRow(divisor: viewModel.alignmentKeypointDetectionDivisor) {
-                showSpeedSheet = true
+            // One group with no spacing of its own: this VStack puts 8pt between every child, and
+            // the Space()s that used to pad the row on top of that left Back (and Start) below
+            // y 725 of a 768pt screen, in the Dock's zone, where a click is lost.
+            VStack(spacing: 0) {
+                Divider()
+                KeypointDivisorSummaryRow(divisor: viewModel.alignmentKeypointDetectionDivisor) {
+                    showSpeedSheet = true
+                }
+                  .padding(.vertical, 4)
+                Divider()
             }
-            Space(height: 6)
-            Divider()
 
             Space(height: 10)
             HStack {
