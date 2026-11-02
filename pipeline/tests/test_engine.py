@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from pathlib import Path
 
 import pytest
 
-from starpipe import guards, negctl
+from starpipe import guards, negctl, worktrees
 from starpipe.agent import StageOutcome, StageRequest
 from starpipe.config import Config
 from starpipe.db import Database
 from starpipe.engine import Engine
 from starpipe.notify import Notifier
+from starpipe.tickets import filed_by
 
 from .fakes import (
     GOOD_BODY,
@@ -603,3 +605,93 @@ def test_the_real_announcer_swallows_missing_binaries_and_never_blocks(monkeypat
     announce.SayAnnouncer.play("landed", 1)  # no exception
     a = announce.SayAnnouncer()
     a.announce("attention", 2)  # returns at once; the worker thread swallows the failure
+
+
+PLAN_TICKET = """## Goal
+Tidy the docs.
+
+## Context
+docs/a.md.
+
+## Acceptance criteria
+- A1: the docs file has a second line — check: review: docs/a.md
+
+## Tests
+none: docs only
+
+## Out of scope
+Everything else.
+
+## Plan
+summary: Add a line to the docs file.
+parity: neither
+localization: no
+- approach: edit docs/a.md
+- file: docs/a.md:1 — the one line there
+- risk: none
+
+## Pipeline
+gherkin: no
+"""
+
+
+async def test_owner_ticket_with_a_valid_plan_skips_explore(rig: Rig) -> None:
+    rig.gh.add_issue(7, "Tidy the docs", PLAN_TICKET + filed_by("interactive"))
+    rig.engine.sync_issues()
+    t = rig.engine.claim(rig.db.ticket(7))  # type: ignore[arg-type]
+    assert t.state == "developing"
+    assert t.plan and t.plan["summary"] == "Add a line to the docs file." and t.plan["findings"][0]["line"] == 1
+    assert json.loads((worktrees.ticket_dir(7) / "plan.json").read_text()) == t.plan
+    assert [e["kind"] for e in rig.db.events_since() if e["ticket"] == 7 and e["kind"].startswith(("plan", "ticket-plan"))] \
+        == ["plan-from-ticket"]
+    rig.agent.on("develop", develop_ok)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    assert rig.state(7) == "landed"
+    assert not [r for r in rig.agent.requests if r.stage == "explore"]
+
+
+async def test_an_invalid_ticket_plan_falls_back_to_explore_with_reasons(rig: Rig) -> None:
+    past_eof = PLAN_TICKET.replace("docs/a.md:1 —", "docs/a.md:99 —").replace(
+        "none: docs only", "unit: pipeline/tests/test_x.py test_x — shows: A1")
+    rig.gh.add_issue(7, "Fix the docs crash", past_eof + filed_by("interactive"))
+    rig.engine.sync_issues()
+    rig.agent.on("explore", explore_ok)
+    rig.agent.on("develop", develop_ok)
+    rig.agent.on("review", review_ok)
+    rig.engine.claim(rig.db.ticket(7))  # type: ignore[arg-type]
+    assert rig.state(7) == "exploring" and not rig.db.ticket(7).plan  # type: ignore[union-attr]
+    rejected = [e for e in rig.db.events_since() if e["kind"] == "ticket-plan-rejected"]
+    assert len(rejected) == 1 and rejected[0]["ticket"] == 7
+    reasons = rejected[0]["data"]["reasons"]
+    assert any("docs/a.md has fewer than 99 lines" in r for r in reasons)
+    assert any("fails_before_fix" in r for r in reasons)
+    await rig.engine.drive(7)
+    (req,) = [r for r in rig.agent.requests if r.stage == "explore"]
+    assert "was rejected" in req.prompt and all(r in req.prompt for r in reasons)
+    assert rig.state(7) == "landed"
+
+    rig.gh.add_issue(8, "Tidy the docs again", PLAN_TICKET.replace("## Plan", "## Plan\nbogus: 1")
+                     + filed_by("interactive"))
+    rig.engine.sync_issues()
+    rig.engine.claim(rig.db.ticket(8))  # type: ignore[arg-type]
+    assert rig.state(8) == "exploring" and "unknown key" in (rig.db.get("plan_rejected:8") or "")
+
+
+async def test_pipeline_and_agent_filed_tickets_always_explore(rig: Rig) -> None:
+    mine = PLAN_TICKET + filed_by("interactive")
+    rig.gh.add_issue(1, "labelled by the pipeline", mine, labels=("pipeline", "pipe:filed-by-pipeline"))
+    rig.gh.add_issue(2, "filed by an agent", PLAN_TICKET + filed_by("nightly-review"))
+    rig.gh.add_issue(3, "filed by a stranger", mine, author="stranger")
+    rig.gh.add_issue(4, "no marker at all", PLAN_TICKET)
+    rig.engine.sync_issues()
+    for n in (1, 2, 3, 4):
+        assert tickets_ok(rig, n)
+
+
+def tickets_ok(rig: Rig, n: int) -> bool:
+    assert rig.db.ticket(n), f"#{n} was not taken up"
+    t = rig.engine.claim(rig.db.ticket(n))  # type: ignore[arg-type]
+    assert t.state == "exploring" and t.plan is None, f"#{n} skipped EXPLORE"
+    assert rig.db.get(f"plan_rejected:{n}") is None
+    return True
