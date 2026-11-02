@@ -763,7 +763,7 @@
   "ui.preview": "预览",
   "ui.preview_creation_error": "创建第 {0} 帧预览时出错：{1}",
   "ui.preview_first": "先预览",
-  "ui.preview_while_processing_help": "处理会在后台继续进行。预览可以让你在处理过程中查看已完成的帧；使用左侧的“显示进度”即可回到这里。",
+  "ui.preview_while_processing_help": "处理会在后台继续进行。预览可以让你在处理过程中查看已完成的帧；使用“显示进度”即可回到这里。",
   "ui.process": "处理",
   "ui.process_all_frames": "处理所有帧",
   "ui.process_all_frames_2": "处理所有帧",

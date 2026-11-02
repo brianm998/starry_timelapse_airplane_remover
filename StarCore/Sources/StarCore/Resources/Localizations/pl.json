@@ -763,7 +763,7 @@
   "ui.preview": "Podgląd",
   "ui.preview_creation_error": "błąd przy tworzeniu podglądu klatki {0}: {1}",
   "ui.preview_first": "Najpierw podgląd",
-  "ui.preview_while_processing_help": "Przetwarzanie trwa w tle. Podgląd pozwala oglądać gotowe klatki w trakcie pracy; aby wrócić tutaj, użyj opcji Pokaż postęp po lewej.",
+  "ui.preview_while_processing_help": "Przetwarzanie trwa w tle. Podgląd pozwala oglądać gotowe klatki w trakcie pracy; aby wrócić tutaj, użyj opcji Pokaż postęp.",
   "ui.process": "Przetwórz",
   "ui.process_all_frames": "Przetwórz wszystkie klatki",
   "ui.process_all_frames_2": "Przetwórz wszystkie klatki",

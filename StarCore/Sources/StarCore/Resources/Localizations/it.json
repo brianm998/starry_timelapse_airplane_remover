@@ -763,7 +763,7 @@
   "ui.preview": "Anteprima",
   "ui.preview_creation_error": "errore nella creazione dell'anteprima del fotogramma {0}: {1}",
   "ui.preview_first": "Prima l'anteprima",
-  "ui.preview_while_processing_help": "L'elaborazione continua in background. L'anteprima permette di vedere i fotogrammi finiti mentre l'elaborazione è in corso; usa Mostra avanzamento a sinistra per tornare qui.",
+  "ui.preview_while_processing_help": "L'elaborazione continua in background. L'anteprima permette di vedere i fotogrammi finiti mentre l'elaborazione è in corso; usa Mostra avanzamento per tornare qui.",
   "ui.process": "Elabora",
   "ui.process_all_frames": "Elabora tutti i fotogrammi",
   "ui.process_all_frames_2": "Elabora tutti i fotogrammi",
