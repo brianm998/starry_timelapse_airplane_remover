@@ -237,6 +237,28 @@ public enum Overview {
         return byModel.keys.sorted().map { ModelGroup(model: $0, sessions: byModel[$0]!.sorted { $0.ticket.number < $1.ticket.number }) }
     }
 
+    /// One top-bar counter: how many tickets sit in the daemon states it covers.
+    public struct StageCount: Equatable, Sendable, Identifiable {
+        public var label: String
+        public var states: [String]
+        public var count: Int
+        public var id: String { label }
+    }
+
+    /// The top bar's seven buckets, in display order. `paused` and terminal states belong to none.
+    public static let topBarBuckets: [(label: String, states: [String])] = [
+        ("Needs input", ["needs-input"]), ("Queued", ["queued"]), ("Exploring", ["exploring"]),
+        ("Developing", ["developing"]), ("Testing", ["verifying"]), ("Review", ["review"]),
+        ("Landing", landingStates),
+    ]
+
+    /// Tickets per top-bar bucket, zeros included.
+    public static func topBarCounts(_ tickets: [TicketSnap]) -> [StageCount] {
+        topBarBuckets.map { bucket in
+            StageCount(label: bucket.label, states: bucket.states, count: tickets.filter { bucket.states.contains($0.state) }.count)
+        }
+    }
+
     public static func landingQueue(_ tickets: [TicketSnap]) -> [TicketSnap] {
         landingStates.flatMap { state in tickets.filter { $0.state == state }.sorted { $0.number < $1.number } }
     }

@@ -53,6 +53,28 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(Overview.landingQueue(tickets).map(\.number), [6, 8, 2, 4])
     }
 
+    func testTopBarCountsBucketTicketStates() throws {
+        let base = try XCTUnwrap(try Self.snapshot().tickets.first)
+        func ticket(_ n: Int, _ state: String) -> TicketSnap {
+            var t = base
+            t.number = n; t.state = state
+            return t
+        }
+        let live = ["queued", "exploring", "developing", "verifying", "review", "ready", "ci", "landing", "needs-input", "paused"]
+        let terminal = ["landed", "failed", "closed", "cancelled"]
+        // two needs-input tickets and two ci tickets to tell a count from a presence check
+        let states = live + terminal + ["needs-input", "ci"]
+        let counts = Overview.topBarCounts(states.enumerated().map { ticket($0.offset + 1, $0.element) })
+        XCTAssertEqual(counts.map(\.label), ["Needs input", "Queued", "Exploring", "Developing", "Testing", "Review", "Landing"])
+        XCTAssertEqual(counts.map(\.count), [2, 1, 1, 1, 1, 1, 4])
+        // every live state but paused is in exactly one bucket; paused and terminal states in none
+        for state in live + terminal {
+            let hits = counts.filter { $0.states.contains(state) }.count
+            XCTAssertEqual(hits, live.contains(state) && state != "paused" ? 1 : 0, state)
+        }
+        XCTAssertEqual(Overview.topBarCounts([]).map(\.count), [0, 0, 0, 0, 0, 0, 0])
+    }
+
     func testEveryTicketIsInAKnownGroupAndStagesCarryTheirLockWait() throws {
         let s = try Self.snapshot()
         for t in s.tickets { XCTAssertTrue(s.groups.contains(t.group), "\(t.number) is in \(t.group)") }
