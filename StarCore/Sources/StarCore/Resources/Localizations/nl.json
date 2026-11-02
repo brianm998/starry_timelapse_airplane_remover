@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "Toegang toestaan",
   "ui.render_options_after_processing_title": "Kies de video-instellingen",
   "ui.use_these_settings": "Deze instellingen gebruiken",
-  "ui.settings": "Instellingen"
+  "ui.settings": "Instellingen",
+  "ui.menu_bar.tooltip.idle": "star — inactief",
+  "ui.menu_bar.tooltip.processing": "star — verwerken {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — video renderen {0}%",
+  "ui.menu_bar.tooltip.finished": "star — voltooid",
+  "ui.menu_bar.tooltip.failed": "star — mislukt"
 }

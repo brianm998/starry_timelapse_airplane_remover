@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "Povolit přístup",
   "ui.render_options_after_processing_title": "Vyberte nastavení videa",
   "ui.use_these_settings": "Použít tato nastavení",
-  "ui.settings": "Nastavení"
+  "ui.settings": "Nastavení",
+  "ui.menu_bar.tooltip.idle": "star — nečinný",
+  "ui.menu_bar.tooltip.processing": "star — zpracování {0} %",
+  "ui.menu_bar.tooltip.rendering": "star — vykreslování videa {0} %",
+  "ui.menu_bar.tooltip.finished": "star — hotovo",
+  "ui.menu_bar.tooltip.failed": "star — selhalo"
 }

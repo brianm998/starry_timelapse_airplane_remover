@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "Erişime İzin Ver",
   "ui.render_options_after_processing_title": "Video ayarlarını seçin",
   "ui.use_these_settings": "Bu ayarları kullan",
-  "ui.settings": "Ayarlar"
+  "ui.settings": "Ayarlar",
+  "ui.menu_bar.tooltip.idle": "star — boşta",
+  "ui.menu_bar.tooltip.processing": "star — işleniyor %{0}",
+  "ui.menu_bar.tooltip.rendering": "star — video işleniyor %{0}",
+  "ui.menu_bar.tooltip.finished": "star — tamamlandı",
+  "ui.menu_bar.tooltip.failed": "star — başarısız"
 }

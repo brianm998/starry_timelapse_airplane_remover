@@ -41,6 +41,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import com.star.desktop.domain.MenuBarOutcome
+import com.star.desktop.domain.RunOutcome
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
@@ -399,6 +401,13 @@ class AppViewModel(
     //
     // Held here and not in the dialog so that anything that has to know whether a render is going can ask: closing the window will.
     private val _renderState = MutableStateFlow<RenderState>(RenderState.Choosing)
+
+    // How the last run ended, for the tray icon: cleared when the tray is clicked or a run starts (macOS `ViewModel.menuBarOutcome`).
+    private val _menuBarOutcome = MutableStateFlow(MenuBarOutcome())
+    val menuBarOutcome: StateFlow<MenuBarOutcome> = _menuBarOutcome.asStateFlow()
+    private fun startRun() = _menuBarOutcome.update { it.runStarted() }
+    private fun endRun(outcome: RunOutcome) = _menuBarOutcome.update { it.runEnded(outcome) }
+    fun menuOpened() = _menuBarOutcome.update { it.menuOpened() }
     val renderState: StateFlow<RenderState> = _renderState.asStateFlow()
     private var renderJob: Job? = null
 
@@ -417,6 +426,7 @@ class AppViewModel(
         consumeRenderVideoAutoStart()
         pendingRenderSettings = null
         _renderState.value = RenderState.Rendering(fileName, 0, 0)
+        startRun()
         renderJob = scope.launch {
             try {
                 var writtenTo: String? = null
@@ -430,12 +440,14 @@ class AppViewModel(
                 }
                 val path = writtenTo?.takeIf { it.isNotEmpty() }
                 _renderState.value = RenderState.Succeeded(path?.let { RenderVideo.fileName(it) } ?: fileName, path)
+                endRun(RunOutcome.FINISHED)
             } catch (e: CancellationException) {
                 _renderState.value = RenderState.Choosing   // the user stopped it
                 throw e
             } catch (e: Throwable) {
                 Log.w("App") { "render failed: ${e.message}" }
                 _renderState.value = RenderState.Failed(e.message ?: e.toString())
+                endRun(RunOutcome.FAILED)
             } finally {
                 renderJob = null
             }
@@ -1336,13 +1348,15 @@ class AppViewModel(
         sessionScope.launch {
             proc.sequenceState.collect {
                 when (it) {
-                    "done" -> handleProcessingDone()
+                    "done" -> { endRun(RunOutcome.FINISHED); handleProcessingDone() }
                     // A stopped or failed run is not one to offer a render for.
-                    "cancelled", "error" -> renderQuestion.disarm()
+                    "error" -> { endRun(RunOutcome.FAILED); renderQuestion.disarm() }
+                    "cancelled" -> renderQuestion.disarm()
                 }
             }
         }
         sessionScope.launch { proc.errors.collect(::report) }
+        sessionScope.launch { proc.processing.collect { if (it) startRun() } }
         val svm = SequenceViewModel(sessionScope, info, frameRepo, proc, outlierRepo, imageCache, export, horizonRepo, onError = ::report, prefs = prefs,
             alignmentSource = { alignmentRepo.sequence(info.sessionId, includeHomography = false, includePreviews = false) })
         // A source opened for the first time starts in edit mode (macOS); one resumed from its config in scrub mode, where it was left.

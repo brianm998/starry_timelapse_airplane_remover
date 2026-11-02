@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "접근 허용",
   "ui.render_options_after_processing_title": "영상 설정 선택",
   "ui.use_these_settings": "이 설정 사용",
-  "ui.settings": "설정"
+  "ui.settings": "설정",
+  "ui.menu_bar.tooltip.idle": "star — 대기 중",
+  "ui.menu_bar.tooltip.processing": "star — 처리 중 {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — 비디오 렌더링 중 {0}%",
+  "ui.menu_bar.tooltip.finished": "star — 완료",
+  "ui.menu_bar.tooltip.failed": "star — 실패"
 }

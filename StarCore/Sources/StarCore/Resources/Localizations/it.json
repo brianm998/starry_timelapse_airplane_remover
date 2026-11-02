@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "Consenti accesso",
   "ui.render_options_after_processing_title": "Scegli le impostazioni del video",
   "ui.use_these_settings": "Usa queste impostazioni",
-  "ui.settings": "Impostazioni"
+  "ui.settings": "Impostazioni",
+  "ui.menu_bar.tooltip.idle": "star — inattivo",
+  "ui.menu_bar.tooltip.processing": "star — elaborazione {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — rendering del video {0}%",
+  "ui.menu_bar.tooltip.finished": "star — completato",
+  "ui.menu_bar.tooltip.failed": "star — non riuscito"
 }
