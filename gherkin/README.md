@@ -1,7 +1,8 @@
 # Gherkin features
 
 One Gherkin corpus drives the same user flow through three Star clients, each run on GitHub
-Actions (`.github/workflows/gherkin.yml`):
+Actions (`.github/workflows/gherkin.yml`; a PR runs only the smoke subset of it, see
+[The smoke subset on a PR](#the-smoke-subset-on-a-pr)):
 
 | Client | Tag | Driver | Runs |
 |---|---|---|---|
@@ -216,6 +217,38 @@ Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<clie
   `AppViewModel` auto-open hook (any `autoMode` skips the startup prompts, which is how the desktop once tested selective
   while the others tested auto): it opens through `openSequence` / `openVideo` and answers the prompts. A render is waited
   for on `AppViewModel.renderState`.
+
+## The smoke subset on a PR
+
+The full matrix takes about 3 hours, so it is not what a PR runs. What runs when:
+
+| Workflow (name) | File | Runs on | The pipeline |
+|---|---|---|---|
+| **Gherkin smoke** | `gherkin-smoke.yml`, which calls `gherkin.yml` with `smoke: true` | every PR touching program code, pushes to `develop`, by hand | waits for it and blocks on it |
+| **Gherkin** (the full matrix) | `gherkin.yml` | pushes to `develop`/`main`, by hand (`workflow_dispatch`, optionally `features`) | does not wait for it on a PR (`ci_post_merge_workflows` in `pipeline/src/starpipe/config.py` lists this name only); a red run on `develop` is found by the post-merge watch |
+
+`gherkin/smoke.json` is the subset, a client name to a list of feature names:
+
+```json
+{ "cli": ["autoHorizonJpeg"], "mac-gui": ["autoHorizonJpeg"], "desktop": ["autoHorizonJpeg"] }
+```
+
+Each listed feature runs on every OS its client has: cli and desktop on ubuntu, windows and macOS, the mac gui on macOS: seven jobs of
+one feature each. `autoHorizonJpeg` is the cheapest real flow (one 46 MB JPEG dataset, no video, no 16-bit, no trail verifier build). The
+target is about 30 minutes on a PR; the slow part is the queue for the macOS runners, which is why only three jobs are macOS.
+
+**Changing it:** edit `gherkin/smoke.json`. A name must be a feature of that client (a name in `generated/features-<client>.json`) and
+no list may be empty; the `feature matrix` job fails with an `::error::` otherwise, so a rename cannot leave the smoke run green having
+run nothing. To cover more, add a feature to a list (a `ui…` feature of mac-gui or desktop becomes its own `ui` shard and builds Star.app
+or stard a second time; `removeAirplanes` also builds the trail verifier). Nothing else needs to change: the matrix, the shard job
+names and the legs are the full matrix's.
+
+**How the pipeline judges it:** like any workflow. A smoke job that is red on the PR and green on `develop` gets one rerun, then blocks
+the landing; one that is also red on `develop` does not block. The `develop` baseline comes from the push run of the same workflow, so
+smoke runs on `develop` too, and a feature newly added to the list has no baseline (so cannot block) until its first run there.
+
+**Each chosen feature keeps its "Prove the scenario ran" step**: smoke mode only changes which features the `feature matrix` job deals
+into shards; every leg's proof step (see below) is the full matrix's.
 
 ## Guarding against vacuous greens
 
