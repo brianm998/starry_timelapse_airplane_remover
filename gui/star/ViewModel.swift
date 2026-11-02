@@ -296,7 +296,6 @@ public final class ViewModel {
     ///   see `restartAbandonedRun()`.
     func report(warning: StarWarning, restartableConfigPath: String? = nil) {
         self.latestWarning = warning
-        if warning.severity == .critical { menuBarOutcome.runEnded(.failed) }
         guard warning.severity == .critical else {
             show(inBanner: warning)
             return

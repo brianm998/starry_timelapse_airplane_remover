@@ -107,6 +107,13 @@ enum MenuBarIcon: String, Equatable {
     /// A template ring filled to `fraction`, in 5% steps so it is redrawn only when that changes.
     static func ringImage(fraction: Double) -> NSImage {
         let step = Int((min(1, max(0, fraction)) * 20).rounded(.down))
+        // One image per step, so an unchanged step is the same image and SwiftUI has nothing to redraw.
+        return ringImages[step]
+    }
+
+    private static let ringImages: [NSImage] = (0...20).map { drawRing(step: $0) }
+
+    private static func drawRing(step: Int) -> NSImage {
         let size = NSSize(width: 18, height: 18)
         let image = NSImage(size: size, flipped: false) { rect in
             let c = NSPoint(x: rect.midX, y: rect.midY)
@@ -197,6 +204,26 @@ extension ImageSequenceViewModel {
     }
 }
 
+/// Holds the window the panel is shown in.
+final class PanelWindowBox {
+    weak var window: NSWindow?
+}
+
+/// Finds the window hosting the view it is the background of.
+struct PanelWindowReader: NSViewRepresentable {
+    let window: PanelWindowBox
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { window.window = view.window }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async { window.window = view.window }
+    }
+}
+
 /// The body of the menu-bar wand's panel.
 struct MenuBarStatusView: View {
     let viewModel: ViewModel
@@ -205,13 +232,17 @@ struct MenuBarStatusView: View {
         let status = viewModel.imageSequence?.menuBarStatus ?? .idle
         content(status)
           .onAppear { viewModel.menuBarOutcome.menuOpened() }
+          .background(PanelWindowReader(window: panelWindow))
           .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { note in
-              // The panel may stay alive between openings, so onAppear fires only once.
-              if let window = note.object as? NSWindow, window is NSPanel {
+              // The panel may stay alive between openings, so onAppear fires only once.  Only this panel's
+              // window counts: an alert or sheet becoming key is not the menu being opened.
+              if let window = note.object as? NSWindow, window === panelWindow.window {
                   viewModel.menuBarOutcome.menuOpened()
               }
           }
     }
+
+    @State private var panelWindow = PanelWindowBox()
 
     @ViewBuilder
     private func content(_ status: MenuBarStatus) -> some View {
