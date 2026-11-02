@@ -63,7 +63,9 @@ class Config(BaseModel):
     # so waiting for it capped landings at a few a day (2026-10-31). Any run of it on the PR is cancelled at once, to free those runners;
     # the push to develop runs it, and the post-merge watch files a regression ticket if it goes red. What a PR runs instead is
     # "Gherkin smoke" (gherkin-smoke.yml, the features of gherkin/smoke.json): it is deliberately NOT listed here (names match exactly),
-    # so the judge waits for it and blocks on it like any other workflow.
+    # so the judge waits for it and blocks on it like any other workflow. A ticket that names Gherkin features (`gherkin:` in its
+    # Pipeline section, or the plan's gherkin_features_to_run) additionally has ship.feature_gate dispatch gherkin.yml on its own branch
+    # with just those features, recognise the run by its display_title, and wait for it.
     ci_post_merge_workflows: tuple[str, ...] = ("Gherkin",)
     heavy_wait_report_s: float = 60.0
     api_port: int = 47231
