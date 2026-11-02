@@ -1,6 +1,8 @@
 package com.star.desktop.ui.dialogs
 
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -744,6 +746,9 @@ private val NEEDS_HORIZON: (SettingsEdit) -> Boolean = { !it.skyOnly }
 /** The reference-horizon rows: they smooth between horizons the user painted, which only a camera that moved has. */
 private val NEEDS_MOVING_HORIZON: (SettingsEdit) -> Boolean = { !it.skyOnly && !it.cameraFixed }
 
+/** The number fields a UI test can reach: the box's id and its message line's id (literals, for the id registry). */
+private val NUMBER_FIELD_TAGS: Map<String, Pair<String, String>> = mapOf("Max keypoints" to Pair("settings.alignment.maxkeypoints", "settings.alignment.maxkeypoints.message"))
+
 // The gui's order (P8): ... the base image threshold, the keypoint divisor, earth alignment, the debug images, and the smoothing last.
 internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
     IntField("Neighbor frames", "ui.neighbor_frame_count", { it.numberAlignedNeighborFrames }, { b, v -> b.setNumberAlignedNeighborFrames(v) }, 1, 1000, { it.hasNumberAlignedNeighborFrames() },
@@ -903,6 +908,7 @@ private fun ExpertGroup(
                     is BoolField -> ToggleRow(label, boolEdits[f.label] ?: f.get(cfg), enabled = enabled) { boolEdits[f.label] = it }
                     is IntField -> NumberRow(
                         label, shown.orEmpty(), enabled,
+                        tag = NUMBER_FIELD_TAGS[f.label]?.first, messageTag = NUMBER_FIELD_TAGS[f.label]?.second,
                         problem = if (f.isValid(shown.orEmpty(), frameCount)) null
                         else localized("ui.enter_a_whole_number_from_a_to_b", f.min, f.maxFor(frameCount)),
                         onCommit = commit, onRevert = revert,
@@ -976,6 +982,8 @@ private fun GPUHardwareStatusRow(available: Boolean, device: String?) {
 @Composable
 private fun NumberRow(
     label: String, value: String, enabled: Boolean, problem: String?,
+    /** The ids a UI test finds the box and its message line by (`gherkin/ui/ids.json`), when it has them. */
+    tag: String? = null, messageTag: String? = null,
     /** Return or leaving the box takes the typed text in; Esc puts back what was there (the number-field rule of both clients). */
     onCommit: () -> Unit, onRevert: () -> Unit,
     onChange: (String) -> Unit,
@@ -997,9 +1005,13 @@ private fun NumberRow(
                     .background(StarColors.sidePanel)
                     .border(1.dp, if (shownProblem != null) StarColors.red else StarColors.cellDefault, RoundedCornerShape(4.dp))
                     .padding(horizontal = 8.dp, vertical = 6.dp)
-                    .numberFieldRules(commit = onCommit, revert = onRevert),
+                    .numberFieldRules(commit = onCommit, revert = onRevert)
+                    .let { if (tag != null) it.testTag(tag) else it },
             )
         }
-        if (shownProblem != null) Text(shownProblem, color = StarColors.red, fontSize = 10.sp, modifier = Modifier.align(Alignment.End))
+        if (shownProblem != null) Text(
+            shownProblem, color = StarColors.red, fontSize = 10.sp,
+            modifier = Modifier.align(Alignment.End).let { if (messageTag != null) it.semantics(mergeDescendants = true) { testTag = messageTag } else it },
+        )
     }
 }

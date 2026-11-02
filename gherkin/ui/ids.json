@@ -44,6 +44,8 @@
     "sequencelocation.open",
     "sequenceprogress.close",
     "sequenceprogress.settings",
+    "settings.alignment.maxkeypoints",
+    "settings.alignment.maxkeypoints.message",
     "settings.dismiss",
     "settings.process",
     "settings.tab.alignment",
