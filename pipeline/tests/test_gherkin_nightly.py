@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from starpipe import gherkin_nightly as gn
-from starpipe import nightly
+from starpipe import nightly, tickets
 from starpipe.config import Config
 from starpipe.daemon import Daemon
 from starpipe.github import GitHubError
@@ -58,6 +58,9 @@ class GH(FakeGitHub):
         self.runs: list[dict[str, Any]] = []
         self.dispatched: list[tuple[str, str, dict[str, str]]] = []
         self.fail_dispatch = False
+        self.jobs: dict[int, list[dict[str, Any]]] = {}  # the latest attempt's jobs, by run id
+        self.second: dict[str, str] = {}  # job name -> its conclusion on attempt 2 (default: failure again)
+        self.rerun_started = False
 
     def workflow_file_runs(self, file: str, branch: str, per_page: int = 50) -> list[dict[str, Any]]:
         return list(reversed(self.runs))
@@ -67,6 +70,29 @@ class GH(FakeGitHub):
             raise GitHubError("HTTP 422")
         self.dispatched.append((file, ref, inputs))
         self.runs.append(run(max(r["id"] for r in self.runs) + 1 if self.runs else 1, TIP, "queued", None))
+
+    def run_jobs(self, run_id: int, version: str | None = None) -> list[dict[str, Any]]:
+        return self.jobs.get(run_id, [])
+
+    def rerun_failed(self, run_id: int) -> None:
+        latest = next(r for r in self.runs if r["id"] == run_id)
+        if latest["status"] != "completed" or latest.get("run_attempt", 1) > 1:
+            raise GitHubError("HTTP 403: run cannot be rerun")
+        self.reruns.append(run_id)
+        self.rerun_started = True  # GitHub still says "completed, attempt 1" until the rerun is under way: see finish_rerun
+
+    def finish_rerun(self, run_id: int) -> None:
+        """The rerun has run: attempt 2, failed jobs have their second result, the others are untouched."""
+        latest = next(r for r in self.runs if r["id"] == run_id)
+        latest["run_attempt"] = 2
+        for j in self.jobs[run_id]:
+            if j["conclusion"] not in ("success", "skipped"):
+                j["conclusion"] = self.second.get(j["name"], "failure")
+
+    def failed_log(self, run_id: int, limit: int = 12000) -> str:
+        attempt = next(r for r in self.runs if r["id"] == run_id).get("run_attempt", 1)
+        return "\n".join(f"{j['name']}\tRun feature\tattempt {attempt}: {j['name']} broke" for j in self.jobs.get(run_id, [])
+                         if j["conclusion"] not in ("success", "skipped"))
 
 
 class Setup:
@@ -293,3 +319,162 @@ def test_git_source_diffs_against_the_tip_and_notices_a_missing_sha(tmp_path: Pa
     assert gn.relevant_globs(src.workflow_text())[0] == "cli/**"
     assert src.changed(base) == [".github/workflows/gherkin.yml", "cli/b.swift"]
     assert src.changed("f" * 40) is None
+
+
+# the results of a nightly run ---------------------------------------------------------------------------------------------
+LINUX = "desktop (ubuntu-24.04)"
+MAC = "desktop (macos-14)"
+WIN = "cli (windows-2022)"
+
+
+def finished_nightly(rig: Rig, first: dict[str, str], second: dict[str, str] | None = None) -> Setup:
+    """A nightly dispatched by the daemon and completed with these job conclusions on attempt 1; `second` is what the rerun gives."""
+    s = Setup(rig)
+    s.gh.runs = [run(1, GREEN)]
+    assert s.go().run_id == 2
+    s.gh.runs[-1].update(status="completed", conclusion="failure" if set(first.values()) - {"success"} else "success")
+    s.gh.jobs[2] = [{"name": n, "status": "completed", "conclusion": c, "completed_at": None} for n, c in first.items()]
+    s.gh.second = second or {}
+    return s
+
+
+def follow(s: Setup, config: Config | None = None) -> str | None:
+    return gn.follow_once(s.rig.db, s.gh, config or Config(), s.rig.engine.notifier, clock=lambda: 1_700_000_000.0)
+
+
+def alerts(s: Setup) -> list[str]:
+    return [e["data"]["text"] for e in s.rig.db.events_since(0) if e["kind"] == "alert" and e["data"]["key"].startswith("gherkin-nightly")]
+
+
+def labels(s: Setup, number: int) -> set[str]:
+    return {lab["name"] for lab in s.gh.issues[number]["labels"]}
+
+
+def test_nightly_failed_jobs_are_rerun_once_and_cancelled_never_ticketed(rig: Rig) -> None:
+    s = finished_nightly(rig, {f"{LINUX} · hangs": "timed_out", f"{MAC} · hangs": "success", f"{WIN} · runnerLost": "cancelled"})
+    assert follow(s) == "rerun"
+    assert s.gh.reruns == [2]  # the run, once (GitHub reruns only its failed jobs)
+    assert follow(s) is None and follow(s) is None and s.gh.reruns == [2]  # attempt 1 is still what is reported: nothing is read as the rerun
+    assert s.gh.issues == {}
+    s.gh.finish_rerun(2)  # the cancelled job fails for real on the rerun: still the runner's job on attempt 1, never ticketed
+    assert follow(s) == "done"
+    assert [i["title"] for i in s.gh.issues.values()] == ["Gherkin nightly red: hangs"]  # timed_out is a failure
+    assert s.gh.reruns == [2] and rig.db.get(gn.FOLLOW_KEY) is None
+    assert "1 job(s) cancelled" in alerts(s)[0]
+    assert follow(s) is None  # finished: nothing more to do
+
+    # a refused rerun is retried next tick instead of being lost
+    s = finished_nightly(rig, {f"{LINUX} · a": "failure"})
+    s.gh.runs[-1]["run_attempt"] = 1
+    original = s.gh.rerun_failed
+    s.gh.rerun_failed = lambda _id: (_ for _ in ()).throw(GitHubError("HTTP 502"))  # type: ignore[method-assign]
+    assert follow(s) is None and s.gh.reruns == []
+    s.gh.rerun_failed = original  # type: ignore[method-assign]
+    assert follow(s) == "rerun" and s.gh.reruns == [2]
+
+
+def test_red_on_both_attempts_files_one_lint_clean_ticket_per_feature_across_legs(rig: Rig) -> None:
+    s = finished_nightly(rig, {f"{LINUX} · removeAirplanes": "failure", f"{MAC} · removeAirplanes": "failure",
+                               f"{WIN} · removeAirplanes": "failure", f"{LINUX} · shard 3: autoHorizon, autoMovingTiff16": "failure",
+                               f"{LINUX} · ok": "success"})
+    follow(s)
+    s.gh.finish_rerun(2)
+    assert follow(s) == "done"
+    titles = {i["title"]: n for n, i in s.gh.issues.items()}
+    assert set(titles) == {"Gherkin nightly red: removeAirplanes", "Gherkin nightly red: autoHorizon, autoMovingTiff16"}
+    n = titles["Gherkin nightly red: removeAirplanes"]
+    assert labels(s, n) == {"pipeline", "p1", "pipe:filed-by-pipeline"}
+    body = s.gh.issues[n]["body"]
+    assert tickets.lint(body, "Gherkin nightly red: removeAirplanes").ok, tickets.lint(body).errors
+    assert tickets.parse_pipeline(body)["gherkin"] == "removeAirplanes"
+    for leg in (LINUX, MAC, WIN):  # one ticket, every leg listed with its own log tail (of the rerun)
+        assert f"### {leg}\n```\nattempt 2: {leg} · removeAirplanes broke" in body
+    assert "A1: `removeAirplanes` passes on every listed leg" in body
+    assert "filed-by:pipeline" in body
+    assert "2 red (#" in alerts(s)[0]
+
+
+def test_red_then_green_is_recorded_as_flaky_and_files_a_flaky_ticket(rig: Rig) -> None:
+    rig.db.add_flake("autoMovingTiff16", MAC, 1, "2026-10-29")  # an earlier night
+    s = finished_nightly(rig, {f"{LINUX} · autoMovingTiff16": "failure", f"{MAC} · autoMovingTiff16": "failure"},
+                         {f"{LINUX} · autoMovingTiff16": "success", f"{MAC} · autoMovingTiff16": "success"})
+    follow(s)
+    s.gh.finish_rerun(2)
+    assert follow(s) == "done"
+    hist = rig.db.flake_history("autoMovingTiff16")
+    assert [(h["leg"], h["run_id"], h["day"]) for h in hist][1:] == [(LINUX, "2", "2023-11-14"), (MAC, "2", "2023-11-14")]
+    (n, issue), = s.gh.issues.items()
+    assert issue["title"] == f"Gherkin flaky: autoMovingTiff16 ({LINUX}, {MAC})"
+    assert labels(s, n) == {"pipeline", "p2", "pipe:filed-by-pipeline"}
+    body = issue["body"]
+    assert tickets.lint(body, issue["title"]).ok
+    assert "fails intermittently" in body and "A retry or a longer timeout alone is not a fix" in body
+    assert "attempt 1: " + f"{LINUX} · autoMovingTiff16 broke" in body and "2026-10-29" in body  # the log tail and the history
+    assert "1 flaky (#" in alerts(s)[0] and "red" not in alerts(s)[0]
+    # a flake is recorded once per run, however often it is processed
+    rig.db.add_flake("autoMovingTiff16", LINUX, 2, "2023-11-14")
+    assert len(rig.db.flake_history("autoMovingTiff16")) == 3
+
+
+def test_an_open_issue_naming_the_feature_gets_a_comment_instead_of_a_ticket(rig: Rig) -> None:
+    s = finished_nightly(rig, {f"{LINUX} · autoMovingTiff16": "failure", f"{LINUX} · removeAirplanes": "failure"},
+                         {f"{LINUX} · autoMovingTiff16": "success"})
+    s.gh.add_issue(53, "stard stalls on the desktop Linux leg", "autoMovingTiff16 hangs in the stard handshake")
+    s.gh.add_issue(54, "autoMovingTiff1 is slow", "unrelated: a longer name must not match a prefix of it")
+    follow(s)
+    s.gh.finish_rerun(2)
+    assert follow(s) == "done"
+    assert sorted(s.gh.issues) == [53, 54, 55]  # only removeAirplanes (red, nothing covers it) got a ticket
+    assert s.gh.issues[55]["title"] == "Gherkin nightly red: removeAirplanes"
+    (comment,) = s.gh.comment_list[53]
+    assert "actions/runs/2" in comment["body"] and "autoMovingTiff16" in comment["body"] and "flaky" in comment["body"]
+    assert "broke" in comment["body"] and s.gh.comment_list[54] == []
+    assert len(rig.db.flake_history("autoMovingTiff16")) == 1  # recorded even though no ticket was filed
+    assert "#53" in alerts(s)[0]
+    # the same title on a later night is the same issue
+    s.gh.issues[55]["state"] = "open"
+    item = gn.Item("red", "removeAirplanes", {LINUX: "x"}, {LINUX: "y"})
+    covering = gn.covering_issue(s.gh, item)
+    assert covering is not None and covering["number"] == 55
+
+
+def test_per_night_cap_files_only_n_tickets_red_before_flaky(rig: Rig, tmp_path: Path) -> None:
+    first = {f"{LINUX} · flakyA": "failure", f"{LINUX} · flakyB": "failure", f"{LINUX} · redA": "failure", f"{LINUX} · redB": "failure"}
+    s = finished_nightly(rig, first, {f"{LINUX} · flakyA": "success", f"{LINUX} · flakyB": "success"})
+    follow(s, Config(gherkin_nightly_max_tickets=3))
+    s.gh.finish_rerun(2)
+    assert follow(s, Config(gherkin_nightly_max_tickets=3)) == "done"
+    assert [i["title"] for i in s.gh.issues.values()] == ["Gherkin nightly red: redA", "Gherkin nightly red: redB",
+                                                          f"Gherkin flaky: flakyA ({LINUX})"]
+    assert "left unfiled: flakyB" in alerts(s)[0]
+    assert len(rig.db.flake_history("flakyB")) == 1  # still recorded: the next night files it if it is still failing
+
+    # never past max_open_tickets, whatever the nightly cap
+    (tmp_path / "second").mkdir()
+    rig2 = Rig(tmp_path / "second")
+    s = finished_nightly(rig2, {f"{LINUX} · redA": "failure", f"{LINUX} · redB": "failure"})
+    s.gh.add_issue(7, "something else", labels=("pipeline",))
+    cfg = Config(max_open_tickets=2, gherkin_nightly_max_tickets=6)
+    follow(s, cfg)
+    s.gh.finish_rerun(2)
+    follow(s, cfg)
+    assert [i["title"] for n, i in s.gh.issues.items() if n != 7] == ["Gherkin nightly red: redA"]
+    assert "left unfiled: redB" in alerts(s)[0]
+
+
+def test_green_nightly_files_nothing_and_next_night_is_skipped(rig: Rig) -> None:
+    s = finished_nightly(rig, {f"{LINUX} · a": "success", f"{MAC} · a": "skipped"})
+    assert follow(s) == "green"
+    assert s.gh.reruns == [] and s.gh.issues == {} and rig.db.get(gn.FOLLOW_KEY) is None
+    assert alerts(s) == ["Gherkin nightly 2: green"]
+    assert follow(s) is None
+    # the next night: the tip was tested and passed, so nothing is dispatched
+    d = s.go()
+    assert d.action == "skip" and len(s.gh.dispatched) == 1 and "already tested" in d.reason
+
+
+def test_split_job_takes_the_leg_and_the_feature_and_drops_the_shard_number() -> None:
+    assert gn.split_job("desktop (ubuntu-24.04) · autoMovingTiff16") == ("desktop (ubuntu-24.04)", "autoMovingTiff16")
+    assert gn.split_job("cli (windows-2022) · shard 12: a, b") == ("cli (windows-2022)", "a, b")
+    assert gn.split_job("gui (macos-14) · ui") == ("gui (macos-14)", "ui")
+    assert gn.split_job("lonely") == ("", "lonely")

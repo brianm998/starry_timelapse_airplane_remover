@@ -61,7 +61,7 @@ class Config(BaseModel):
     ci_blocking_wait_s: int = 4 * 3600
     # Workflows whose result a PR does not wait for. Gherkin's matrix takes ~3 h and is mostly queueing for GitHub's few macOS runners,
     # so waiting for it capped landings at a few a day (2026-10-31). Its runs on the PR are cancelled at once, to free those runners;
-    # the push to develop runs it, and the post-merge watch files a regression ticket if it goes red.
+    # the nightly full run (gherkin_nightly.py) runs it, reruns its failures once and files the tickets.
     ci_post_merge_workflows: tuple[str, ...] = ("Gherkin",)
     heavy_wait_report_s: float = 60.0
     api_port: int = 47231
@@ -70,6 +70,7 @@ class Config(BaseModel):
     ci_poll_s: float = 60.0
     ci_settle_s: float = 90.0
     max_auto_tickets: int = 2
+    gherkin_nightly_max_tickets: int = 6  # new tickets one Gherkin nightly may file (red before flaky); the rest wait for the next night
     max_open_tickets: int = 30  # open issues labelled `pipeline`: `ticket new` and `approve` refuse past this
     max_proposed: int = 10  # open issues labelled `pipe:proposed`: waiting on the owner
     poll_s: float = 60.0

@@ -281,7 +281,8 @@ def merge(eng: Engine, t: Ticket, head: str) -> bool:
 # post-merge watch and stop-the-line ---------------------------------------------------------------------------------
 def watch_develop(eng: Engine) -> None:
     """Refresh the develop baseline from the latest run of each workflow that ended success or failure; react to new reds
-    (§10.3). A run cancelled by a newer push is completed but says nothing about the code, so it is skipped: the workflow's
+    (§10.3). Gherkin's baseline is kept but never ticketed here: its nightly full run reruns and files its own (gherkin_nightly.py).
+    A run cancelled by a newer push is completed but says nothing about the code, so it is skipped: the workflow's
     earlier success/failure run stays the baseline."""
     base = eng.config.base_branch
     runs = [r for r in eng.gh.workflow_runs(branch=base)
@@ -295,11 +296,14 @@ def watch_develop(eng: Engine) -> None:
             before = eng.db.baseline(job.workflow, job.job)
             now = job.conclusion or "failure"
             eng.db.set_baseline(job.workflow, job.job, str(run.get("head_sha")), now)
+            pending = f"red_pending:{job.workflow}/{job.job}"
+            if job.workflow.lower() == "gherkin":
+                eng.db.put(pending, None)
+                continue  # the nightly owns Gherkin's tickets
             if seeding or before is None:
                 continue  # reds present when the pipeline first started are the known-red ledger, not tickets
             sha = str(run.get("head_sha"))
             infra = (job.conclusion or "failure") in ci.INFRA_CONCLUSIONS  # cancelled / timed out is the runner, not a regression
-            pending = f"red_pending:{job.workflow}/{job.job}"
             if job.red and not infra:
                 if job.workflow == ci.GATE:
                     if before == "success":
