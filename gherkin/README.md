@@ -158,10 +158,10 @@ branch (a newer push used to cancel the older run, and on a busy day none finish
 
 * **Nightly, 23:00 this Mac's local time**, dispatched by the starpipe daemon (`pipeline/src/starpipe/gherkin_nightly.py`,
   `gherkin_nightly_enabled` / `gherkin_nightly_start` in the pipeline config), at most once a day. It dispatches a full run only when a
-  file matching `.github/workflows/gherkin.yml`'s own `on.pull_request.paths` list changed since the last green full run, or when
+  file matching `.github/workflows/gherkin-smoke.yml`'s `on.pull_request.paths` list (the PR workflow; `gherkin.yml` has no PR trigger) changed since the last green full run, or when
   there has never been a green full run. It skips, and records why, when nothing relevant changed, when a full run is already queued or
   running, or when the last full run (green or red) already tested the current tip. `starpipe status` shows the last decision.
-* On a **push to `main`** (releases), on a **pull request** that touches those paths, and on **`workflow_dispatch`**.
+* On a **push to `main`** (releases) and on **`workflow_dispatch`**. A pull request runs the smoke subset instead (below).
 
 Run by hand, on the base branch:
 
