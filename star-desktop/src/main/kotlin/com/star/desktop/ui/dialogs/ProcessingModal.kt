@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -149,14 +150,19 @@ val PREVIEW_BUTTON_MIN_WIDTH = 104.dp
 /** The footer's right-hand side: what Preview does, and the Preview button (Return is the same button, from the scrim). */
 @Composable
 fun PreviewFooter(onPreview: () -> Unit, modifier: Modifier = Modifier, label: String = localized("ui.preview")) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+        // The button is measured first and keeps the width its label needs; the help text is the part that wraps when the dialog is narrow.
         Text(
             localized("ui.preview_while_processing_help"), color = StarColors.white, fontSize = 11.sp,
-            textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(max = 320.dp).testTag("processing.previewHelp"),
+            textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1f, fill = false).widthIn(max = 320.dp).testTag("processing.previewHelp"),
         )
         HoverTip(localized("ui.preview_while_processing_help")) {
-            Button(onClick = onPreview, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent), modifier = Modifier.testTag("processing.previewButton")) {
-                Text(label, modifier = Modifier.testTag("processing.previewLabel"))
+            Button(onClick = onPreview, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.widthIn(min = PREVIEW_BUTTON_MIN_WIDTH).testTag("processing.previewButton"),
+            ) {
+                // One line in any language: the button is as wide as the label, not the label as wide as the room left over.
+                Text(label, maxLines = 1, softWrap = false, modifier = Modifier.testTag("processing.previewLabel"))
             }
         }
     }
