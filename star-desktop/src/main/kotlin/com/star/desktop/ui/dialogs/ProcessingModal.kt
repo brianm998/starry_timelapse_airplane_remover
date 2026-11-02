@@ -136,19 +136,29 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
                             .padding(horizontal = 10.dp, vertical = 5.dp),
                     )
                 }
-                Box(Modifier.weight(1f))
-                Text(
-                    localized("ui.preview_while_processing_help"), color = StarColors.white, fontSize = 11.sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(max = 320.dp),
-                )
-                HoverTip(localized("ui.preview_while_processing_help")) {
-                    Button(onClick = svm::dismissProcessingModal, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
-                        Text(localized("ui.preview"))
-                    }
-                }
+                PreviewFooter(svm::dismissProcessingModal, Modifier.weight(1f))
             }
         }
         if (showingInfo) AlignmentInfoOverlay(cameraMoving) { showingInfo = false }
+    }
+}
+
+/** The Preview button's least width: wide enough for "Preview" at the button's padding, and the floor for a short translation. */
+val PREVIEW_BUTTON_MIN_WIDTH = 104.dp
+
+/** The footer's right-hand side: what Preview does, and the Preview button (Return is the same button, from the scrim). */
+@Composable
+fun PreviewFooter(onPreview: () -> Unit, modifier: Modifier = Modifier, label: String = localized("ui.preview")) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            localized("ui.preview_while_processing_help"), color = StarColors.white, fontSize = 11.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(max = 320.dp).testTag("processing.previewHelp"),
+        )
+        HoverTip(localized("ui.preview_while_processing_help")) {
+            Button(onClick = onPreview, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent), modifier = Modifier.testTag("processing.previewButton")) {
+                Text(label, modifier = Modifier.testTag("processing.previewLabel"))
+            }
+        }
     }
 }
 
