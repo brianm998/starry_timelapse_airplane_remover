@@ -213,7 +213,29 @@ async def test_a_ticket_cancelled_while_its_batch_is_in_ci_is_left_out_and_the_o
     assert rig.db.batch(1)["state"] == "abandoned"  # type: ignore[index]
 
 
-async def test_develop_moving_with_overlapping_changes_rebuilds_the_batch_on_the_new_base(rig: Rig) -> None:
+async def test_develop_moving_with_a_clean_overlap_keeps_the_batch_and_its_pr(rig: Rig) -> None:
+    ready_ticket(rig, 1, "mine.py", "x = 1\n", folder="pipeline/src")
+    real_sleep = rig.engine.sleep
+    moved: list[bool] = []
+    first_head: list[str] = []
+
+    async def sleep(s: float) -> None:
+        if not moved:
+            moved.append(True)
+            first_head.append(str(rig.db.batch(1)["head_sha"]))  # type: ignore[index]
+            advance_develop_in(rig, "pipeline/src/other.py", "y = 2\n")  # a different file, but the same T1 checks
+        await real_sleep(s)
+
+    rig.engine.sleep = sleep
+    await train_of(rig).run_until_idle()
+    batch = rig.db.batch(1)
+    assert batch and batch["state"] == "landed" and rig.db.batch_members(1) == [1], "the same batch landed"
+    assert rig.db.batch(2) is None and len(rig.gh.prs) == 1, "no rebuild and no second PR"
+    assert batch["head_sha"] != first_head[0], "the batch head is the merge of develop"
+    assert rig.state(1) == "landed" and develop_has(rig, "pipeline/src/mine.py") and develop_has(rig, "pipeline/src/other.py")
+
+
+async def test_develop_moving_with_a_conflicting_overlap_abandons_and_names_the_file(rig: Rig) -> None:
     ready_ticket(rig, 1, "mine.py", "x = 1\n", folder="pipeline/src")
     real_sleep = rig.engine.sleep
     moved: list[bool] = []
@@ -221,13 +243,34 @@ async def test_develop_moving_with_overlapping_changes_rebuilds_the_batch_on_the
     async def sleep(s: float) -> None:
         if not moved:
             moved.append(True)
-            advance_develop_in(rig, "pipeline/src/other.py", "y = 2\n")  # a different file, but the same T1 checks
+            advance_develop_in(rig, "pipeline/src/mine.py", "x = 2\n")  # the same file, differently
         await real_sleep(s)
 
     rig.engine.sleep = sleep
-    await train_of(rig).run_until_idle()
-    assert rig.state(1) == "landed" and len(rig.gh.prs) == 2, "CI ran again on the rebuilt batch"
-    assert rig.db.batch(1)["state"] == "abandoned" and "rebuilding" in rig.db.batch(1)["note"]  # type: ignore[index]
+    t = train_of(rig)
+    for _ in range(10):
+        await t.step()
+        if rig.db.batch(1)["state"] != "ci":  # type: ignore[index]
+            break
+    batch = rig.db.batch(1)
+    assert batch and batch["state"] == "abandoned" and "rebuilding" in batch["note"]
+    assert "pipeline/src/mine.py" in batch["note"], "the note names the overlapping file"
+    assert rig.gh.prs[int(batch["pr_number"])]["state"] == "closed"
+    assert rig.state(1) == "ready"
+    status = sh(batch_wt(rig), "git", "status", "--porcelain") if batch_wt(rig).exists() else ""
+    assert "UU" not in status and not (batch_wt(rig) / ".git").is_dir()
+
+
+def batch_wt(rig: Rig) -> Path:
+    return train_mod.batch_worktree(rig.engine.repo)
+
+
+def test_the_overlap_note_names_at_most_five_files() -> None:
+    files = [f"pipeline/src/f{i}.py" for i in range(7)]
+    note = train_mod.overlap_note(train_mod.landing.Overlap(files, ["t1"]))
+    assert all(f in note for f in files[:5]) and not any(f in note for f in files[5:]) and note.endswith("and 2 more")
+    assert train_mod.overlap_note(train_mod.landing.Overlap(files[:1], [])) == files[0]
+    assert "same checks: t1" == train_mod.overlap_note(train_mod.landing.Overlap([], ["t1"]))
 
 
 def advance_develop_in(rig: Rig, path: str, text: str) -> None:
