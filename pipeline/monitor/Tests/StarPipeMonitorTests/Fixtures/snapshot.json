@@ -11,7 +11,7 @@
     },
     "known_red": 1
   },
-  "events_cursor": 14,
+  "events_cursor": 16,
   "groups": [
     "needs_you",
     "running",
@@ -44,6 +44,24 @@
     "answer": 1
   },
   "landing": {
+    "batch": {
+      "age_s": 90,
+      "members": [
+        3
+      ],
+      "number": 2,
+      "phase": "ci",
+      "pr_number": 12,
+      "slow": false
+    },
+    "last_abandoned": {
+      "ago_s": 60,
+      "ended": 1940.0,
+      "number": 1,
+      "reason": "develop moved",
+      "state": "abandoned"
+    },
+    "next_batch_in_s": null,
     "paused": false,
     "stop_line": null
   },
@@ -118,7 +136,7 @@
       "worktree": null
     },
     {
-      "activity": "ci",
+      "activity": "CI \u00b7 batch #2 (1 tickets together)",
       "blocked_by": [],
       "branch": null,
       "group": "waiting",
