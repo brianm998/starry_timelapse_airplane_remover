@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "Allow Access",
   "ui.render_options_after_processing_title": "Choose Video Settings",
   "ui.use_these_settings": "Use These Settings",
-  "ui.settings": "Settings"
+  "ui.settings": "Settings",
+  "ui.menu_bar.tooltip.idle": "star — idle",
+  "ui.menu_bar.tooltip.processing": "star — processing {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — rendering video {0}%",
+  "ui.menu_bar.tooltip.finished": "star — finished",
+  "ui.menu_bar.tooltip.failed": "star — failed"
 }

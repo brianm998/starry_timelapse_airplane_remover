@@ -61,6 +61,23 @@ def parse_pipeline(body: str) -> dict[str, str]:
     return {k: v for k, v, _ in pipeline_entries(split_sections(body).get("Pipeline", "")) if k}
 
 
+NO_FEATURES = ("", "no", "none", "-")
+
+
+def gherkin_features(body: str, plan: dict[str, Any] | None) -> list[str]:
+    """The Gherkin features to prove on a ticket's own branch: the Pipeline `gherkin:` value, then the plan's
+    `gherkin_features_to_run`, de-duplicated in first-seen order. `gherkin: no` (or none named) is an empty list."""
+    named = parse_pipeline(body).get("gherkin", "")
+    wanted = [f for f in re.split(r"[,\s]+", named) if f] if named.strip().lower() not in NO_FEATURES else []
+    wanted += [str(f).strip() for f in (plan or {}).get("gherkin_features_to_run", []) if str(f).strip()]
+    return list(dict.fromkeys(wanted))
+
+
+def feature_title(features: list[str]) -> str:
+    """The display_title of a dispatched subset run: gherkin.yml's run-name is `Gherkin: <features input>`."""
+    return "Gherkin: " + ",".join(features)
+
+
 def allowed_models(allow_fable: bool = False) -> tuple[str, ...]:
     return (*ALLOWED_MODELS, *((FABLE,) if allow_fable else ()))
 

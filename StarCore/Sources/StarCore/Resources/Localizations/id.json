@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "Izinkan Akses",
   "ui.render_options_after_processing_title": "Pilih pengaturan video",
   "ui.use_these_settings": "Gunakan pengaturan ini",
-  "ui.settings": "Pengaturan"
+  "ui.settings": "Pengaturan",
+  "ui.menu_bar.tooltip.idle": "star — menganggur",
+  "ui.menu_bar.tooltip.processing": "star — memproses {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — merender video {0}%",
+  "ui.menu_bar.tooltip.finished": "star — selesai",
+  "ui.menu_bar.tooltip.failed": "star — gagal"
 }

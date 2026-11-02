@@ -4682,6 +4682,42 @@ final class MenuBarStatusTests: XCTestCase {
         return run
     }
 
+    private let runningStatus = MenuBarStatus.rendering(fraction: 0.25)
+
+    func testIconIdForEachState() {
+        XCTAssertEqual(MenuBarIcon.of(.idle, outcome: nil).rawValue, "idle")
+        XCTAssertEqual(MenuBarIcon.of(runningStatus, outcome: nil).rawValue, "running")
+        XCTAssertEqual(MenuBarIcon.of(status(steps: steps), outcome: nil).rawValue, "running")
+        XCTAssertEqual(MenuBarIcon.of(.idle, outcome: .finished).rawValue, "finished")
+        XCTAssertEqual(MenuBarIcon.of(.idle, outcome: .failed).rawValue, "failed")
+        // A run in progress beats a stale outcome.
+        XCTAssertEqual(MenuBarIcon.of(runningStatus, outcome: .failed).rawValue, "running")
+    }
+
+    func testFinishedAndFailedClearOnMenuOpenAndRunStart() {
+        var o = MenuBarOutcome()
+        XCTAssertNil(o.outcome)
+        o.runEnded(.finished)
+        XCTAssertEqual(o.outcome, .finished)
+        o.menuOpened()
+        XCTAssertNil(o.outcome)
+        o.runEnded(.failed)
+        XCTAssertEqual(o.outcome, .failed)
+        o.runStarted()
+        XCTAssertNil(o.outcome)
+        // Opening the menu with nothing latched changes nothing.
+        o.menuOpened()
+        XCTAssertNil(o.outcome)
+    }
+
+    func testTooltipNamesTheState() throws {
+        XCTAssertEqual(MenuBarStatus.idle.tooltip(outcome: nil), "star — idle")
+        XCTAssertEqual(MenuBarStatus.idle.tooltip(outcome: .finished), "star — finished")
+        XCTAssertEqual(MenuBarStatus.idle.tooltip(outcome: .failed), "star — failed")
+        XCTAssertEqual(status(steps: steps).tooltip(outcome: nil), "star — processing 25%")
+        XCTAssertEqual(runningStatus.tooltip(outcome: nil), "star — rendering video 25%")
+    }
+
     func testIdleWhenNothingIsRunning() {
         // No sequence open: idle, even with stale flags.
         XCTAssertEqual(status(sequenceName: nil, steps: steps), .idle)

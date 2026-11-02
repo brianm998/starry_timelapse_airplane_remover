@@ -1,0 +1,52 @@
+name: Gherkin smoke
+
+# What a PR runs of Gherkin: gherkin.yml in smoke mode, the features of gherkin/smoke.json (one per client, on every OS the client
+# has), about 30 minutes instead of the full matrix's ~3 h. The pipeline's CI judge waits for and blocks on this workflow like any
+# other; the full "Gherkin" workflow is post-merge only (ci_post_merge_workflows in pipeline/src/starpipe/config.py).
+#
+# It also runs on pushes to develop: the judge blocks a red job only when develop has it green, so a smoke job that never ran on
+# develop could never block anything. This is a separate workflow file because a workflow's `name:` cannot be an expression, and the
+# name is how the pipeline tells smoke from full. See "The smoke subset on a PR" in gherkin/README.md.
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'gherkin/**'
+      - 'test_data/**'
+      - 'cli/**'
+      - 'gui/**'
+      - 'star-desktop/**'
+      - 'daemon/**'
+      - 'StarCore/**'
+      - 'StarCpp/**'
+      - 'trail_tools/**'
+      - '.github/workflows/gherkin.yml'
+      - '.github/workflows/gherkin-smoke.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'gherkin/**'
+      - 'test_data/**'
+      - 'cli/**'
+      - 'gui/**'
+      - 'star-desktop/**'
+      - 'daemon/**'
+      - 'StarCore/**'
+      - 'StarCpp/**'
+      - 'trail_tools/**'
+      - '.github/workflows/gherkin.yml'
+      - '.github/workflows/gherkin-smoke.yml'
+  workflow_dispatch:
+
+# not the group gherkin.yml uses inside this call (it includes github.workflow, which is this workflow's name here): a caller and the
+# workflow it calls must not share a concurrency group, or the called one is cancelled
+concurrency:
+  group: gherkin-smoke-caller-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
+
+jobs:
+  smoke:
+    uses: ./.github/workflows/gherkin.yml
+    with:
+      smoke: true

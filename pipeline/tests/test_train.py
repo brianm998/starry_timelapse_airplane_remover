@@ -17,7 +17,7 @@ from starpipe.github import GitHubError
 
 from .fakes import Ci, accepted, sh
 from .test_engine import Rig
-from .test_ship import advance_develop, ready_ticket
+from .test_ship import advance_develop, ready_ticket, with_gherkin
 
 PASS: Ci = [("pr-gate", "linux", "completed", "success")]
 RED: Ci = [("pr-gate", "linux", "completed", "failure")]
@@ -213,7 +213,29 @@ async def test_a_ticket_cancelled_while_its_batch_is_in_ci_is_left_out_and_the_o
     assert rig.db.batch(1)["state"] == "abandoned"  # type: ignore[index]
 
 
-async def test_develop_moving_with_overlapping_changes_rebuilds_the_batch_on_the_new_base(rig: Rig) -> None:
+async def test_develop_moving_with_a_clean_overlap_keeps_the_batch_and_its_pr(rig: Rig) -> None:
+    ready_ticket(rig, 1, "mine.py", "x = 1\n", folder="pipeline/src")
+    real_sleep = rig.engine.sleep
+    moved: list[bool] = []
+    first_head: list[str] = []
+
+    async def sleep(s: float) -> None:
+        if not moved:
+            moved.append(True)
+            first_head.append(str(rig.db.batch(1)["head_sha"]))  # type: ignore[index]
+            advance_develop_in(rig, "pipeline/src/other.py", "y = 2\n")  # a different file, but the same T1 checks
+        await real_sleep(s)
+
+    rig.engine.sleep = sleep
+    await train_of(rig).run_until_idle()
+    batch = rig.db.batch(1)
+    assert batch and batch["state"] == "landed" and rig.db.batch_members(1) == [1], "the same batch landed"
+    assert rig.db.batch(2) is None and len(rig.gh.prs) == 1, "no rebuild and no second PR"
+    assert batch["head_sha"] != first_head[0], "the batch head is the merge of develop"
+    assert rig.state(1) == "landed" and develop_has(rig, "pipeline/src/mine.py") and develop_has(rig, "pipeline/src/other.py")
+
+
+async def test_develop_moving_with_a_conflicting_overlap_abandons_and_names_the_file(rig: Rig) -> None:
     ready_ticket(rig, 1, "mine.py", "x = 1\n", folder="pipeline/src")
     real_sleep = rig.engine.sleep
     moved: list[bool] = []
@@ -221,13 +243,34 @@ async def test_develop_moving_with_overlapping_changes_rebuilds_the_batch_on_the
     async def sleep(s: float) -> None:
         if not moved:
             moved.append(True)
-            advance_develop_in(rig, "pipeline/src/other.py", "y = 2\n")  # a different file, but the same T1 checks
+            advance_develop_in(rig, "pipeline/src/mine.py", "x = 2\n")  # the same file, differently
         await real_sleep(s)
 
     rig.engine.sleep = sleep
-    await train_of(rig).run_until_idle()
-    assert rig.state(1) == "landed" and len(rig.gh.prs) == 2, "CI ran again on the rebuilt batch"
-    assert rig.db.batch(1)["state"] == "abandoned" and "rebuilding" in rig.db.batch(1)["note"]  # type: ignore[index]
+    t = train_of(rig)
+    for _ in range(10):
+        await t.step()
+        if rig.db.batch(1)["state"] != "ci":  # type: ignore[index]
+            break
+    batch = rig.db.batch(1)
+    assert batch and batch["state"] == "abandoned" and "rebuilding" in batch["note"]
+    assert "pipeline/src/mine.py" in batch["note"], "the note names the overlapping file"
+    assert rig.gh.prs[int(batch["pr_number"])]["state"] == "closed"
+    assert rig.state(1) == "ready"
+    status = sh(batch_wt(rig), "git", "status", "--porcelain") if batch_wt(rig).exists() else ""
+    assert "UU" not in status and not (batch_wt(rig) / ".git").is_dir()
+
+
+def batch_wt(rig: Rig) -> Path:
+    return train_mod.batch_worktree(rig.engine.repo)
+
+
+def test_the_overlap_note_names_at_most_five_files() -> None:
+    files = [f"pipeline/src/f{i}.py" for i in range(7)]
+    note = train_mod.overlap_note(train_mod.landing.Overlap(files, ["t1"]))
+    assert all(f in note for f in files[:5]) and not any(f in note for f in files[5:]) and note.endswith("and 2 more")
+    assert train_mod.overlap_note(train_mod.landing.Overlap(files[:1], [])) == files[0]
+    assert "same checks: t1" == train_mod.overlap_note(train_mod.landing.Overlap([], ["t1"]))
 
 
 def advance_develop_in(rig: Rig, path: str, text: str) -> None:
@@ -349,11 +392,30 @@ async def test_drive_leaves_ready_and_batched_tickets_to_the_train(rig: Rig) -> 
     assert rig.state(1) == "ci" and len(rig.gh.prs) == 1
 
 
+async def test_members_are_recorded_while_building_and_deferred_ones_dropped(rig: Rig) -> None:
+    ready_ticket(rig, 1, "same.md", "one\n")
+    ready_ticket(rig, 2, "same.md", "two\n")  # conflicts with #1: it waits for the next batch
+    ready_ticket(rig, 3, "f3.md", "3\n")
+    seen: list[list[int]] = []
+    t = train_of(rig)
+    real = t._build  # pyright: ignore[reportPrivateUsage]
+
+    def watched(bid: int, tickets: list[Any], base: str) -> Any:
+        seen.append(rig.db.batch_members(bid))  # what the monitor reads while the batch is `building`
+        return real(bid, tickets, base)
+
+    t._build = watched  # type: ignore[method-assign]  # pyright: ignore[reportPrivateUsage]
+    await t._start([1, 2, 3])  # pyright: ignore[reportPrivateUsage]
+    assert seen == [[1, 2, 3]]
+    assert rig.db.batch_members(1) == [1, 3], "the deferred ticket is no longer shown in the batch"
+    assert rig.db.batch_of(2) is None
+
+
 async def test_the_activity_line_names_the_batch(rig: Rig) -> None:
     for n in (1, 2):
         ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
     ticket = rig.db.ticket(1)
-    assert ticket and activity(rig.db, ticket) == "ready · waiting for the next batch"
+    assert ticket and activity(rig.db, ticket, config=rig.engine.config) == "ready · waiting for the next batch (starting)"
     assert activity(rig.db, ticket, mode="single") == "ready to publish"
     await train_of(rig)._start([1, 2])  # pyright: ignore[reportPrivateUsage]
     ticket = rig.db.ticket(1)
@@ -442,3 +504,33 @@ async def test_abandoning_a_batch_cancels_its_queued_ci_runs_too(rig: Rig) -> No
     await train_of(rig).run_until_idle()
     assert "pipe/batch-1" in rig.gh.cancelled_branches, "the abandoned batch's runs were cancelled, not just its PR closed"
     assert rig.gh.closed_prs and rig.state(1) == "landed"
+
+
+async def test_a_feature_run_happens_per_ticket_before_batching_not_per_batch(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoHorizonJpeg"))
+    rig.gh.feature_pending_polls = 2
+    t1, t2 = rig.db.ticket(1), rig.db.ticket(2)
+    assert t1 and t2
+    at_publish: list[list[tuple[str, str, dict[str, str]]]] = []
+    real_create = rig.gh.create_pr
+
+    def create_pr(title: str, body: str, head: str, base: str) -> dict[str, Any]:
+        at_publish.append(list(rig.gh.dispatches))
+        return real_create(title, body, head, base)
+
+    rig.gh.create_pr = create_pr  # type: ignore[method-assign]
+    await train_of(rig).run_until_idle()
+    assert sorted((ref, inputs["features"]) for _, ref, inputs in rig.gh.dispatches) == sorted(
+        [(t1.branch, "autoMovingTiff16"), (t2.branch, "autoHorizonJpeg")]), "one run per ticket, each on its own branch"
+    assert len(at_publish) == 1 and len(at_publish[0]) == 2, "both feature runs were done before the one batch was published"
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2 and len(rig.gh.prs) == 1, "still one PR and one CI for the two"
+    assert rig.gh.cancelled_runs == []
+
+
+async def test_a_ticket_still_owing_a_feature_run_is_not_batched(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    train = train_of(rig)
+    assert train._gated(rig.db.ticket(1)) and train._pick() == []  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
+    rig.db.put("gherkin_ok:1", "x")
+    assert train._pick() == [1]  # pyright: ignore[reportPrivateUsage]

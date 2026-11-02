@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "Zezwól na dostęp",
   "ui.render_options_after_processing_title": "Wybierz ustawienia filmu",
   "ui.use_these_settings": "Użyj tych ustawień",
-  "ui.settings": "Ustawienia"
+  "ui.settings": "Ustawienia",
+  "ui.menu_bar.tooltip.idle": "star — bezczynny",
+  "ui.menu_bar.tooltip.processing": "star — przetwarzanie {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — renderowanie wideo {0}%",
+  "ui.menu_bar.tooltip.finished": "star — zakończono",
+  "ui.menu_bar.tooltip.failed": "star — niepowodzenie"
 }

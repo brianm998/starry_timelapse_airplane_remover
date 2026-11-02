@@ -34,27 +34,21 @@ name: Gherkin
 # `star-removal-verify` as a subprocess, so the shards holding one (`trail` in the matrix entry: the list is in the `features` job)
 # build trail_tools in release first. Its reports and crops ride on each job's gherkin-artifacts upload. See gherkin/README.md.
 #
+# The full matrix above runs on pushes to develop/main and by hand; it is NOT what a PR runs (the pipeline would not wait for ~3 h).
+# A PR runs "Gherkin smoke" (gherkin-smoke.yml), this same file in smoke mode: one feature per leg from gherkin/smoke.json, which
+# the CI judge waits for and blocks on. See "The smoke subset on a PR" in gherkin/README.md.
+#
 # DUPLICATED ON PURPOSE (collapse into reusable workflows later, see gherkin/README.md): the apt/Eigen/
 # Swift/MSVC/OpenCV/StarDecisionTrees setup of cli.yml's `linux`/`macos`/`windows` jobs, the stard build
 # steps of kotlin-client.yml's linux-package/windows-package/macos-signed jobs, and cli.yml's
 # ci-assets fetch for the GUI. Their cache keys are shared with those jobs.
 
+# A push to develop does NOT start it any more: the full matrix takes 3-4 h and a newer push cancelled the older run, so on a busy day
+# none finished. The starpipe daemon dispatches ONE full run a night (23:00 local, pipeline/src/starpipe/gherkin_nightly.py) when
+# a file this workflow's own `paths` list names changed since the last green full run. See gherkin/README.md, "When the full matrix runs".
 on:
   push:
-    branches: [main, develop]
-    paths:
-      - 'gherkin/**'
-      - 'test_data/**'
-      - 'cli/**'
-      - 'gui/**'
-      - 'star-desktop/**'
-      - 'daemon/**'
-      - 'StarCore/**'
-      - 'StarCpp/**'
-      - 'trail_tools/**'
-      - '.github/workflows/gherkin.yml'
-  pull_request:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'gherkin/**'
       - 'test_data/**'
@@ -72,13 +66,29 @@ on:
         description: 'Comma-separated feature names to run (default: all), e.g. autoHorizonJpeg,selectiveHorizonTiff16'
         required: false
         default: ''
+  # gherkin-smoke.yml ("Gherkin smoke", what a PR runs) calls this file with `smoke: true`: the features come from gherkin/smoke.json
+  # instead of the full lists. There is no pull_request trigger here: a PR gets the smoke workflow, and the full matrix runs on pushes.
+  workflow_call:
+    inputs:
+      smoke:
+        description: 'Run only the features of gherkin/smoke.json'
+        type: boolean
+        default: false
+      features:
+        description: 'Comma-separated feature names to run (default: all)'
+        type: string
+        default: ''
+
+# The run name tells a full run from a subset: the daemon counts only `Gherkin: full` (or a push, which was always full) as a
+# green full run, never `Gherkin: <features>`. Other events keep GitHub's own title (the PR title, the head commit message).
+run-name: ${{ github.event_name == 'workflow_dispatch' && format('Gherkin: {0}', inputs.features || 'full') || github.event.pull_request.title || github.event.head_commit.message }}
 
 concurrency:
   group: gherkin-${{ github.workflow }}-${{ github.ref }}
-  # a newer push to develop supersedes the older develop runs still going, so a burst of pushes does not queue several
-  # long runs; release tags have their own group and are never cancelled. The pipeline's develop watch skips cancelled
-  # runs, so the CI judge's baseline stays the last run that ended success or failure.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
+  # a newer push to a PR supersedes the older run still going; the nightly dispatch on the base branch and release pushes to main
+  # are never cancelled by a newer one. The pipeline's watch skips cancelled runs, so the CI judge's baseline stays the last
+  # run that ended success or failure.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ─── The matrix: which features each client runs, in which shards ────────────
@@ -99,6 +109,7 @@ jobs:
       - id: m
         env:
           ONLY: ${{ inputs.features }}
+          SMOKE: ${{ inputs.smoke }}
           # shards per client: the knob for trading job count (setup paid once per shard) against how long one shard runs serially
           SHARDS_CLI: 4
           SHARDS_MAC_GUI: 3
@@ -126,7 +137,17 @@ jobs:
                 features: (.features | join(" "))
               })'
           for c in cli mac-gui desktop; do
-            if [ -n "$ONLY" ]; then
+            if [ "$SMOKE" = true ]; then
+              # smoke mode: the features listed for this client in gherkin/smoke.json. A listed name that is not a feature of the client
+              # (renamed, removed, never tagged for it) or an empty list is an error: either would leave the leg with no shards, skipped,
+              # and the smoke run would be green having run nothing.
+              arr=$(jq -c --arg c "$c" '.[$c] // []' gherkin/smoke.json)
+              missing=$(jq -nr --argjson s "$arr" --slurpfile a "gherkin/generated/features-$c.json" '$s - $a[0] | join(", ")')
+              if [ "$arr" = '[]' ] || [ -n "$missing" ]; then
+                echo "::error::gherkin/smoke.json: the list for $c is empty or names features $c does not run: ${missing:-(none listed)}"
+                exit 1
+              fi
+            elif [ -n "$ONLY" ]; then
               arr=$(jq -c --arg only "$ONLY" '[ .[] | select(. as $f | ($only | split(",") | map(gsub("[ ]";"")) | index($f)) != null) ]' "gherkin/generated/features-$c.json")
             else
               arr=$(jq -c . "gherkin/generated/features-$c.json")

@@ -1561,6 +1561,7 @@ public final class ImageSequenceViewModel {
         // run is going — that run's bars would otherwise measure from the wrong place.
         let showsModal = !isProcessingFrames
         isProcessingFrames = true
+        topViewModel?.menuBarOutcome.runStarted()
         if showsModal {
             startProcessingModal(
               steps: steps,
@@ -3001,6 +3002,7 @@ public final class ImageSequenceViewModel {
         // and dismissed is still a change the frames on disk have not had.
         self.settingsSnapshot = config.config()
         self.isProcessingFrames = true
+        self.topViewModel?.menuBarOutcome.runStarted()
         self.startProcessingModal()
         processingGeneration += 1
         let capturedGen = processingGeneration
@@ -3020,9 +3022,11 @@ public final class ImageSequenceViewModel {
                         self.isProcessingFrames = false
                         switch processingState {
                         case .done:
+                            self.topViewModel?.menuBarOutcome.runEnded(.finished)
                             self.handleProcessingDone()
                         case .error(let errorString):
                             Log.e("Error: \(errorString)")
+                            self.topViewModel?.menuBarOutcome.runEnded(.failed)
                             self.topViewModel?.report(error: errorString)
                         default:
                             break
@@ -3362,6 +3366,7 @@ public final class ImageSequenceViewModel {
         processingGeneration += 1
         let runGeneration = processingGeneration
         isProcessingFrames = true
+        topViewModel?.menuBarOutcome.runStarted()
         startProcessingModal()
 
         Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
@@ -3972,6 +3977,7 @@ public final class ImageSequenceViewModel {
 
         videoRenderTask?.cancel()
         isRenderingVideo = true
+        topViewModel?.menuBarOutcome.runStarted()
         videoRenderFraction = 0
         let token = UUID()
         videoRenderToken = token
@@ -4024,10 +4030,20 @@ public final class ImageSequenceViewModel {
                 }
             }
             await self?.videoRenderEnded(token)
+            await self?.noteRenderOutcome(outcome)
             switch outcome {
             case .success: completion()
             case .failure(let error): errorCallback(error)
             }
+        }
+    }
+
+    /// Latches how a render ended on the menu-bar wand; a cancelled one sets nothing.
+    private func noteRenderOutcome(_ outcome: Result<Void, Error>) {
+        switch outcome {
+        case .success: topViewModel?.menuBarOutcome.runEnded(.finished)
+        case .failure(let error):
+            if !(error is CancellationError) { topViewModel?.menuBarOutcome.runEnded(.failed) }
         }
     }
 

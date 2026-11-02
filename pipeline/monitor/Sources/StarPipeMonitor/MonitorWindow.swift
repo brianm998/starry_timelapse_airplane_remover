@@ -54,6 +54,14 @@ struct HeaderStrip: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 22) {
+            Button { store.goBack() } label: { Image(systemName: "chevron.left") }
+                .help("Back")
+                .disabled(!store.canGoBack)
+                .keyboardShortcut("[", modifiers: .command)
+            Button { store.goForward() } label: { Image(systemName: "chevron.right") }
+                .help("Forward")
+                .disabled(!store.canGoForward)
+                .keyboardShortcut("]", modifiers: .command)
             Button { store.showOverview() } label: { Image(systemName: "house") }
                 .help("Back to the Overview")
                 .disabled(store.selected == nil)
@@ -74,6 +82,7 @@ struct HeaderStrip: View {
             if let week = store.snapshot?.interventionsWeek, !week.isEmpty {
                 item("Interventions (7 d)", week.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", "), color: .secondary)
             }
+            counters
             Button { enqueueing = true } label: { Image(systemName: "plus") }
                 .help("Enqueue GitHub issues from links")
             let muted = store.snapshot?.muted ?? false
@@ -83,6 +92,23 @@ struct HeaderStrip: View {
         .sheet(isPresented: $enqueueing) { EnqueueSheet(store: store) }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .scaledFont(.caption)
+    }
+
+    /// The pipeline's load by stage; a dash for each while there is no snapshot (never stale or zero).
+    private var counters: some View {
+        HStack(alignment: .top, spacing: 12) {
+            if let snapshot = store.snapshot {
+                ForEach(Overview.topBarCounts(snapshot.tickets)) { c in
+                    item(c.label, "\(c.count)", color: stateColor(c.states[0]))
+                        .help("Counts tickets in: \(c.states.joined(separator: ", "))")
+                }
+            } else {
+                ForEach(Overview.topBarBuckets, id: \.label) { b in
+                    item(b.label, "—", color: .secondary)
+                        .help("Counts tickets in: \(b.states.joined(separator: ", "))")
+                }
+            }
+        }
     }
 
     private func item(_ label: String, _ value: String, color: Color) -> some View {

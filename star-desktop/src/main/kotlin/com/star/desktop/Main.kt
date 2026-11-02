@@ -96,6 +96,14 @@ private fun runApp(args: Array<String>) = application {
         onKeyEvent = { handleGlobalKey(it, vm) },
     ) {
         StarMenuBar(vm)
+        // Fallback for the tray icon's finished/failed badge where the tray gives no mouse events: looking at the main window clears it too.
+        androidx.compose.runtime.DisposableEffect(window) {
+            val l = object : java.awt.event.WindowAdapter() {
+                override fun windowGainedFocus(e: java.awt.event.WindowEvent) = vm.menuOpened()
+            }
+            window.addWindowFocusListener(l)
+            onDispose { window.removeWindowFocusListener(l) }
+        }
         StarApp(vm)
     }
 

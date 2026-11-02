@@ -87,8 +87,42 @@ public struct RuntimeInfo: Codable, Sendable, Equatable {
 public struct Landing: Codable, Sendable, Equatable {
     public var paused: Bool
     public var stopLine: String?
+    public var batch: BatchInfo?
+    public var lastAbandoned: AbandonedBatch?
+    public var nextBatchInS: Int?
 
-    enum CodingKeys: String, CodingKey { case paused; case stopLine = "stop_line" }
+    enum CodingKeys: String, CodingKey {
+        case paused, batch
+        case stopLine = "stop_line"
+        case lastAbandoned = "last_abandoned"
+        case nextBatchInS = "next_batch_in_s"
+    }
+}
+
+/// The landing train's active batch, as the daemon computed it.
+public struct BatchInfo: Codable, Sendable, Equatable {
+    public var number: Int
+    public var phase: String
+    public var ageS: Int
+    public var members: [Int]
+    public var prNumber: Int?
+    public var slow: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case number, phase, members, slow
+        case ageS = "age_s"
+        case prNumber = "pr_number"
+    }
+}
+
+/// The most recent batch the train gave up on (kept by the daemon for an hour).
+public struct AbandonedBatch: Codable, Sendable, Equatable {
+    public var number: Int
+    public var state: String
+    public var reason: String
+    public var agoS: Int
+
+    enum CodingKeys: String, CodingKey { case number, state, reason; case agoS = "ago_s" }
 }
 
 public struct Develop: Codable, Sendable, Equatable {
@@ -235,6 +269,55 @@ public enum Overview {
             byModel[model, default: []].append(Session(ticket: t, stage: stage))
         }
         return byModel.keys.sorted().map { ModelGroup(model: $0, sessions: byModel[$0]!.sorted { $0.ticket.number < $1.ticket.number }) }
+    }
+
+    /// One top-bar counter: how many tickets sit in the daemon states it covers.
+    public struct StageCount: Equatable, Sendable, Identifiable {
+        public var label: String
+        public var states: [String]
+        public var count: Int
+        public var id: String { label }
+    }
+
+    /// The top bar's seven buckets, in display order. `paused` and terminal states belong to none.
+    public static let topBarBuckets: [(label: String, states: [String])] = [
+        ("Needs input", ["needs-input"]), ("Queued", ["queued"]), ("Exploring", ["exploring"]),
+        ("Developing", ["developing"]), ("Testing", ["verifying"]), ("Review", ["review"]),
+        ("Landing", landingStates),
+    ]
+
+    /// Tickets per top-bar bucket, zeros included.
+    public static func topBarCounts(_ tickets: [TicketSnap]) -> [StageCount] {
+        topBarBuckets.map { bucket in
+            StageCount(label: bucket.label, states: bucket.states, count: tickets.filter { bucket.states.contains($0.state) }.count)
+        }
+    }
+
+    public struct LandingLine: Equatable, Sendable {
+        public var text: String
+        public var slow: Bool
+    }
+
+    static func span(_ seconds: Int) -> String { seconds >= 60 ? "\(seconds / 60)m" : "\(seconds)s" }
+
+    /// What the landing queue section says about the train: the active batch (flagged when slow), the last abandoned batch and why,
+    /// and the countdown to the next batch while none is active. Pure, so it is tested on a decoded snapshot.
+    public static func landingLines(_ landing: Landing?) -> [LandingLine] {
+        guard let landing else { return [] }
+        var lines: [LandingLine] = []
+        if let b = landing.batch {
+            let members = b.members.map { "#\($0)" }.joined(separator: " ")
+            let text = "batch \(b.number): \(b.phase) · age \(span(b.ageS))" + (members.isEmpty ? "" : " · \(members)")
+                + (b.slow ? " · SLOW" : "")
+            lines.append(LandingLine(text: text, slow: b.slow))
+        } else if let next = landing.nextBatchInS {
+            lines.append(LandingLine(text: "no batch yet: the next one starts in \(next)s", slow: false))
+        }
+        if let a = landing.lastAbandoned {
+            let verb = a.state == "failed" ? "failed" : "abandoned"
+            lines.append(LandingLine(text: "batch \(a.number) \(verb) \(span(a.agoS)) ago: \(a.reason)", slow: false))
+        }
+        return lines
     }
 
     public static func landingQueue(_ tickets: [TicketSnap]) -> [TicketSnap] {

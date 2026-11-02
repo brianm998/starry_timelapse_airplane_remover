@@ -1235,5 +1235,10 @@
   "ui.folder_access_grant": "Дозволити доступ",
   "ui.render_options_after_processing_title": "Виберіть налаштування відео",
   "ui.use_these_settings": "Використати ці налаштування",
-  "ui.settings": "Налаштування"
+  "ui.settings": "Налаштування",
+  "ui.menu_bar.tooltip.idle": "star — простоює",
+  "ui.menu_bar.tooltip.processing": "star — обробка {0}%",
+  "ui.menu_bar.tooltip.rendering": "star — рендеринг відео {0}%",
+  "ui.menu_bar.tooltip.finished": "star — завершено",
+  "ui.menu_bar.tooltip.failed": "star — збій"
 }
