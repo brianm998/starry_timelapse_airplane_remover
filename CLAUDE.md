@@ -46,3 +46,7 @@ apply to it: don't translate it and don't build a Kotlin twin.
 - `pipeline/bin/starpipe check --explain` says which builds and tests a change needs;
   `starpipe check` runs them and proves each from its own output.
 - To queue work for the pipeline, use the file-tickets skill (`.claude/skills/file-tickets`).
+- **Every ticket you file carries a `## Plan`** so the pipeline skips its EXPLORE agent: the agent filing the
+  ticket *is* the exploration agent. Open the files you name, settle the approach, and write the plan into the
+  ticket (format and checks: "Carrying a plan" in `.claude/skills/file-tickets/SKILL.md`; `starpipe ticket lint`
+  verifies it). Omit it only when you genuinely haven't explored the code. A guessed plan is worse than none.
