@@ -763,7 +763,7 @@
   "ui.preview": "Aperçu",
   "ui.preview_creation_error": "erreur lors de la création de l'aperçu de l'image {0} : {1}",
   "ui.preview_first": "Aperçu d'abord",
-  "ui.preview_while_processing_help": "Le traitement se poursuit en arrière-plan. L'aperçu permet de voir les images terminées pendant qu'il s'exécute ; utilisez Afficher la progression, à gauche, pour revenir ici.",
+  "ui.preview_while_processing_help": "Le traitement se poursuit en arrière-plan. L'aperçu permet de voir les images terminées pendant qu'il s'exécute ; utilisez Afficher la progression pour revenir ici.",
   "ui.process": "Traiter",
   "ui.process_all_frames": "Traiter toutes les images",
   "ui.process_all_frames_2": "Traiter toutes les images",
