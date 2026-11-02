@@ -23,6 +23,9 @@ import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.Image
 import org.jetbrains.skia.ImageInfo
 
+/** How many decoded frames stay open (about a tenth of a second at 25 fps) before the oldest is closed. */
+private const val FRAMES_KEPT_OPEN = 4
+
 private const val INTRO_VIDEO_NAME = "11_30_2024-fx3-aurora-topaz-star.mp4"
 
 /** Set (to anything) by a UI test host to have the start screen draw no video; see [IntroVideoBackground]. */
@@ -67,6 +70,7 @@ private fun kotlinx.coroutines.CoroutineScope.playIntroVideo(file: File, onFrame
     val (w, h) = parseVideoSize(probeIntroVideo(ffmpeg, file)) ?: return
     val height = introVideoHeight(w, h)
     val process = ProcessBuilder(introVideoFfmpegArgs(ffmpeg.path, file.path, height)).start()
+    val recent = ArrayDeque<Image>()
     val hook = Thread { process.destroyForcibly() }
     Runtime.getRuntime().addShutdownHook(hook)
     try {
@@ -76,12 +80,20 @@ private fun kotlinx.coroutines.CoroutineScope.playIntroVideo(file: File, onFrame
         val reader = RawFrameReader(process.inputStream.buffered(1 shl 20), INTRO_VIDEO_WIDTH, height)
         val buf = ByteArray(reader.frameBytes)
         val info = ImageInfo(INTRO_VIDEO_WIDTH, height, ColorType.BGRA_8888, ColorAlphaType.OPAQUE)
+        // Every frame is a native Skia picture of ~3.7 MB, ~90 MB/s at video rate. The JVM-side wrappers are tiny, so the garbage collector
+        // would hardly ever run the cleaners that free them and native memory would climb for as long as the start screen is open. So each
+        // picture is closed explicitly once it is a few frames old: long enough that the draw which took it has finished with it.
         while (reader.nextInto(buf)) {
             ensureActive()
             // makeRaster copies the pixels, so buf is free to be refilled while the picture just handed over is still being drawn.
-            onFrame(Image.makeRaster(info, buf, INTRO_VIDEO_WIDTH * 4).toComposeImageBitmap())
+            val image = Image.makeRaster(info, buf, INTRO_VIDEO_WIDTH * 4)
+            recent.addLast(image)
+            onFrame(image.toComposeImageBitmap())
+            if (recent.size > FRAMES_KEPT_OPEN) recent.removeFirst().close()
         }
     } finally {
+        // all but the newest, which the canvas may still be drawing; that one is left to the garbage collector
+        while (recent.size > 1) recent.removeFirst().close()
         process.destroyForcibly()
         runCatching { Runtime.getRuntime().removeShutdownHook(hook) }
     }

@@ -31,7 +31,7 @@ The shared expectations for the macOS gui and the desktop client (see `plans/GUI
 * `known-gaps.json` — the parity backlog. A `@ui` feature that fails on a client where it is listed here passes, and says `KNOWN GAP`; one that
   fails where it is not listed fails; one that is listed and now passes fails until the entry is removed. `{"gaps": {"<feature>": {"mac-gui": "<why>", "desktop": "<why>"}}}`.
   Both runners read it (`GuiFeatureRunner.knownGap`, `DesktopFeatureRunner.knownGap`). It is empty. It held four features for the desktop for a while, which were gaps of the *test host*, not of the app
-  (the desktop has the same menu, windows, start screen and recents button, but the Compose test host has no AWT menu bar or window, and cannot start the JavaFX video the start screen embeds); they closed when
+  (the desktop has the same menu, windows, start screen and recents button, but the Compose test host has no AWT menu bar or window, and the start screen's ffmpeg video is turned off for a `@ui` feature); they closed when
   the runner learned to work on what the app draws those from (below). It then held one real difference, the decision-tree menu items, until the owner chose the gui's behaviour. A feature of the gui's that fails on the desktop for a real
   difference goes here with that difference as the reason.
 
