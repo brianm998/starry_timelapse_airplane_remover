@@ -427,6 +427,13 @@ struct RemovalView: View {
 
     var body: some View {
         VStack {
+            // Back is the first row, not beside Start: on a 768pt screen this sheet runs past the bottom,
+            // where the Dock's zone swallows clicks, and Back sat in it.
+            HStack {
+                StartupBackButton { self.state = self.previousStartupState }
+                Spacer()
+            }
+              .padding(.bottom, -6)
             Text(localized("ui.startup_mode_title"))
               .font(.largeTitle)
               .foregroundColor(.white)
@@ -470,7 +477,6 @@ struct RemovalView: View {
             }
               .frame(maxWidth: .infinity, alignment: .leading)
 
-            Space(height: 14)
             // One group with no spacing of its own: this VStack puts 8pt between every child, and
             // the Space()s that used to pad the row on top of that left Back (and Start) below
             // y 725 of a 768pt screen, in the Dock's zone, where a click is lost.
@@ -483,9 +489,7 @@ struct RemovalView: View {
                 Divider()
             }
 
-            Space(height: 10)
             HStack {
-                StartupBackButton { self.state = self.previousStartupState }
                 Spacer()
                 Button {
                     withAnimation {

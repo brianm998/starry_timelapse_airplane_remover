@@ -173,6 +173,8 @@ private fun RemovalPrompt(app: AppViewModel, onOpenSpeedModal: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // Back is the first row (macOS `RemovalView`): beside Start it sat in the Dock's zone on a 768pt screen.
+        Row(Modifier.fillMaxWidth()) { BackButton { app.startupGoBack(StartupStep.REMOVAL) } }
         Title(localized("ui.startup_mode_title"))
         HorizontalDivider(color = StarColors.cellDefault)
         ModeChoice(localized("ui.startup_mode_automatic"), localized("ui.startup_mode_automatic_desc"), !selective, "startup.removal.automatic") { selective = false }
@@ -189,7 +191,7 @@ private fun RemovalPrompt(app: AppViewModel, onOpenSpeedModal: () -> Unit) {
         HorizontalDivider(color = StarColors.cellDefault)
         KeypointDivisorSummaryRow(app, onOpenSpeedModal)
         HorizontalDivider(color = StarColors.cellDefault)
-        AnswerRow(back = { app.startupGoBack(StartupStep.REMOVAL) }, advanced = { app.startupOpenAdvanced() }) {
+        AnswerRow(advanced = { app.startupOpenAdvanced() }) {
             SecondaryButton(localized("ui.close")) { app.dismissStartup() }
             PrimaryButton(localized("ui.start_processing"), "startup.removal.start") { app.startupStartProcessing(cleanMethod, allowEarthAlignment = groundAlignment) }
         }
