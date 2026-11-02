@@ -25,6 +25,8 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(s.nightly?.line, "Sat 03:00 · aaaaaaaa · 1 red")
         XCTAssertEqual(s.nightly?.running, false)
         XCTAssertNil(s.usagePauseUntil)
+        XCTAssertEqual(s.usageWindows, UsageWindows(fiveHour: UsageWindow(utilization: 0.1, resetsAt: 3600),
+                                                    sevenDay: UsageWindow(utilization: 0.24, resetsAt: 90000)))
     }
 
     func testLandingQueueSectionShowsTheBatchTheAbandonedBatchAndTheSlowFlag() throws {
@@ -621,5 +623,47 @@ final class UpdateTests: XCTestCase {
         answer(#"{"behind": null, "latest": null}"#)
         let unknown = try await client().monitorUpdate(sha: "abc123")
         XCTAssertEqual(unknown, MonitorUpdateInfo(behind: nil, latest: nil))
+    }
+}
+
+final class UsageLimitTextTests: XCTestCase {
+    let zone = TimeZone(identifier: "America/Los_Angeles")!
+    /// Wednesday 2026-11-04 12:00 in Los Angeles (UTC-8).
+    let now = Date(timeIntervalSince1970: 1_793_822_400)
+
+    func window(_ utilization: Double, in seconds: TimeInterval) -> UsageWindow {
+        UsageWindow(utilization: utilization, resetsAt: now.timeIntervalSince1970 + seconds)
+    }
+
+    func line(_ kind: UsageLimitText.Kind, _ w: UsageWindow?) -> (text: String, level: UsageLimitText.Level) {
+        UsageLimitText.line(kind: kind, window: w, now: now, timeZone: zone)
+    }
+
+    func testUsageLineFormat() {
+        XCTAssertEqual(line(.fiveHour, window(0.10, in: 4 * 3600)).text, "5 hour: 10% resets in 4 hours (4pm)")
+        XCTAssertEqual(line(.fiveHour, window(0.10, in: 3600)).text, "5 hour: 10% resets in 1 hour (1pm)")
+        XCTAssertEqual(line(.fiveHour, window(0.42, in: 2 * 3600 + 40 * 60)).text, "5 hour: 42% resets in 3 hours (2:40pm)")
+        XCTAssertEqual(line(.fiveHour, window(0.5, in: 30 * 60)).text, "5 hour: 50% resets in 30 min (12:30pm)")
+        XCTAssertEqual(line(.fiveHour, window(0.5, in: 22 * 3600 + 30 * 60)).text, "5 hour: 50% resets in 23 hours (10:30am)")
+        XCTAssertEqual(line(.fiveHour, window(0.5, in: 12 * 3600)).text, "5 hour: 50% resets in 12 hours (12am)")
+        // Friday 10:00 in Los Angeles is one day and 22 hours after Wednesday noon.
+        XCTAssertEqual(line(.weekly, window(0.24, in: (24 + 22) * 3600)).text, "weekly: 24% resets at 10am friday")
+        XCTAssertEqual(line(.weekly, window(0.24, in: (24 + 22) * 3600 + 30 * 60)).text, "weekly: 24% resets at 10:30am friday")
+    }
+
+    func testUsageLineColourBands() {
+        let levels = [0.79, 0.80, 0.89, 0.90].map { line(.fiveHour, window($0, in: 3600)).level }
+        XCTAssertEqual(levels, [.ok, .warn, .warn, .critical])
+        XCTAssertEqual(line(.weekly, window(0.0, in: 3600)).level, .ok)
+        XCTAssertEqual(line(.weekly, window(1.0, in: 3600)).level, .critical)
+    }
+
+    func testUsageLineStaleOrMissing() {
+        XCTAssertEqual(line(.fiveHour, nil).text, "5 hour: —")
+        XCTAssertEqual(line(.weekly, nil).text, "weekly: —")
+        XCTAssertEqual(line(.fiveHour, nil).level, .unknown)
+        XCTAssertEqual(line(.weekly, window(0.95, in: -1)).text, "weekly: —")  // reset already: the old 95% no longer applies
+        XCTAssertEqual(line(.weekly, window(0.95, in: -1)).level, .unknown)
+        XCTAssertEqual(line(.fiveHour, window(0.95, in: 0)).level, .unknown)
     }
 }

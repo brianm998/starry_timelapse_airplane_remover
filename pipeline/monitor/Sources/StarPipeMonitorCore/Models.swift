@@ -12,6 +12,8 @@ public struct Snapshot: Codable, Sendable, Equatable {
     /// How many tickets may run at once (the owner's override, else config.toml).
     public var maxActive: Int
     public var usagePauseUntil: String?
+    /// The latest five-hour and weekly usage windows a stage's stream reported; nil before any event.
+    public var usageWindows: UsageWindows?
     public var heavy: HeavyState
     public var tickets: [TicketSnap]
     public var groups: [String]
@@ -28,9 +30,33 @@ public struct Snapshot: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey {
         case daemon, pause, muted, heavy, tickets, groups, runtime, landing, develop, now, version, repo, nightly
         case usagePauseUntil = "usage_pause_until"
+        case usageWindows = "usage_windows"
         case maxActive = "max_active"
         case interventionsWeek = "interventions_week"
         case eventsCursor = "events_cursor"
+    }
+}
+
+public struct UsageWindows: Codable, Sendable, Equatable {
+    public var fiveHour: UsageWindow?
+    public var sevenDay: UsageWindow?
+
+    public init(fiveHour: UsageWindow? = nil, sevenDay: UsageWindow? = nil) {
+        self.fiveHour = fiveHour
+        self.sevenDay = sevenDay
+    }
+
+    enum CodingKeys: String, CodingKey { case fiveHour = "five_hour", sevenDay = "seven_day" }
+}
+
+/// `utilization` is a fraction (0.08 = 8%); `resetsAt` is epoch seconds, spelled as the daemon stores it.
+public struct UsageWindow: Codable, Sendable, Equatable {
+    public var utilization: Double
+    public var resetsAt: Double
+
+    public init(utilization: Double, resetsAt: Double) {
+        self.utilization = utilization
+        self.resetsAt = resetsAt
     }
 }
 

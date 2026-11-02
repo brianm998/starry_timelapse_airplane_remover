@@ -79,6 +79,7 @@ struct HeaderStrip: View {
             item("Last nightly", store.snapshot?.nightly?.line ?? "none yet",
                  color: (store.snapshot?.nightly?.reds ?? 0) > 0 || store.snapshot?.nightly?.status == "error" ? .orange : .secondary)
             Spacer()
+            usageLines
             if let week = store.snapshot?.interventionsWeek, !week.isEmpty {
                 item("Interventions (7 d)", week.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", "), color: .secondary)
             }
@@ -92,6 +93,30 @@ struct HeaderStrip: View {
         .sheet(isPresented: $enqueueing) { EnqueueSheet(store: store) }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .scaledFont(.caption)
+    }
+
+    /// The account's 5-hour and weekly usage limits, stacked; always shown ("—" until a stage reports) so the bar does not jump.
+    private var usageLines: some View {
+        let windows = store.snapshot?.usageWindows
+        let now = Date.now
+        let lines = [UsageLimitText.line(kind: .fiveHour, window: windows?.fiveHour, now: now, timeZone: .current),
+                     UsageLimitText.line(kind: .weekly, window: windows?.sevenDay, now: now, timeZone: .current)]
+        return VStack(alignment: .leading, spacing: 1) {
+            ForEach(lines.indices, id: \.self) { i in
+                Text(lines[i].text).foregroundStyle(usageColor(lines[i].level)).lineLimit(1)
+            }
+        }
+        .fixedSize()
+        .layoutPriority(1)
+    }
+
+    private func usageColor(_ level: UsageLimitText.Level) -> Color {
+        switch level {
+        case .ok: .green
+        case .warn: .yellow
+        case .critical: .red
+        case .unknown: .secondary
+        }
     }
 
     /// The pipeline's load by stage; a dash for each while there is no snapshot (never stale or zero).

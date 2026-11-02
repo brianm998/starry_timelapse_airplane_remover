@@ -279,6 +279,28 @@ async def test_a_usage_limit_pauses_without_counting_an_attempt(rig: Rig) -> Non
     assert rig.db.get("usage_pause_until") is None
 
 
+async def test_rate_limit_windows_are_recorded(rig: Rig, tmp_path: Path) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    both = {"five_hour": {"utilization": 0.08, "resetsAt": 1793493600, "status": "allowed"},
+            "seven_day": {"utilization": 0.25, "resetsAt": 1793984400, "status": "allowed"}}
+
+    def explore(req: StageRequest) -> StageOutcome:
+        req.on_usage(both)
+        req.on_usage({"five_hour": {"utilization": 0.1, "resetsAt": 1793497200}})  # one window: the other stays
+        req.on_usage({"seven_day": {"utilization": "lots", "resetsAt": None}, "five_hour": "x"})  # malformed: ignored
+        return explore_ok(req)
+
+    rig.agent.on("explore", explore)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    stored = json.loads(rig.db.get("usage_windows") or "null")
+    assert stored == {"five_hour": {"utilization": 0.1, "resetsAt": 1793497200},
+                      "seven_day": {"utilization": 0.25, "resetsAt": 1793984400}}
+    reopened = Database(tmp_path / "state.db")  # it survives a daemon restart
+    assert json.loads(reopened.get("usage_windows") or "null") == stored
+
+
 async def test_a_question_the_resolver_can_answer_resumes_the_session(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()

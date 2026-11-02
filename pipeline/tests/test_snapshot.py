@@ -108,6 +108,9 @@ def test_the_snapshot_has_the_shape_the_monitors_fixture_records(rig: Rig) -> No
     """The Swift tests decode FIXTURE. If the daemon's snapshot gains or loses a key, this fails until the fixture and the
     Swift models are updated together. Regenerate with STARPIPE_REGEN_FIXTURE=1."""
     d = populate(rig)
+    assert d.snapshot()["usage_windows"] is None  # nothing reported yet
+    rig.db.put("usage_windows", json.dumps({"five_hour": {"utilization": 0.1, "resetsAt": 3600.0},
+                                            "seven_day": {"utilization": 0.24, "resetsAt": 90000.0}}))
     rig.db.batch_update(rig.db.batch_create("0" * 40), state="abandoned", ended=rig.now - 60, note="develop moved")
     live = rig.db.batch_create("1" * 40)
     rig.db.batch_update(live, state="ci", pr_number=12)
