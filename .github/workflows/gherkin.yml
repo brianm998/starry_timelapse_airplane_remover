@@ -81,7 +81,7 @@ on:
 
 # The run name tells a full run from a subset: the daemon counts only `Gherkin: full` (or a push, which was always full) as a
 # green full run, never `Gherkin: <features>`. Other events keep GitHub's own title (the PR title, the head commit message).
-run-name: ${{ github.event_name == 'workflow_dispatch' && format('Gherkin: {0}', inputs.features || 'full') || github.event.pull_request.title || github.event.head_commit.message }}
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('Gherkin: {0}', inputs.features || 'full') || github.event.pull_request.title || github.event.head_commit.message }}"
 
 concurrency:
   group: gherkin-${{ github.workflow }}-${{ github.ref }}
