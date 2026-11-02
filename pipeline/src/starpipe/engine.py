@@ -13,7 +13,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from . import gitutil, guards, load, negctl, ship, tickets, trust, worktrees
 from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
@@ -281,16 +281,18 @@ class Engine:
         stored: dict[str, Any] = {}
         raw = self.db.get("usage_windows")
         try:
-            loaded: Any = json.loads(raw) if raw else {}
-            stored = loaded if isinstance(loaded, dict) else {}
+            loaded: object = json.loads(raw) if raw else {}
+            if isinstance(loaded, dict):
+                stored = cast("dict[str, Any]", loaded)
         except ValueError:
-            stored = {}
+            pass
         changed = False
         for key in ("five_hour", "seven_day"):
-            w: Any = windows.get(key)
+            w: object = windows.get(key)
             if not isinstance(w, dict):
                 continue
-            u, r = w.get("utilization"), w.get("resetsAt")
+            fields = cast("dict[str, Any]", w)
+            u, r = fields.get("utilization"), fields.get("resetsAt")
             if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (u, r)):
                 stored[key] = {"utilization": u, "resetsAt": r}
                 changed = True
