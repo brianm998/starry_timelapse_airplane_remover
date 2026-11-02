@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ from typing import Any
 
 from . import gitutil, guards, load, negctl, ship, tickets, trust, worktrees
 from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
+from .announce import Announcer, Kind, SilentAnnouncer
 from .checks import impact, ledger
 from .config import Config, home
 from .contracts import CheckRunner, Contract
@@ -24,11 +26,13 @@ from .github import GitHub, GitHubError
 from .notify import Notifier
 from .tickets import PROPOSED, filed_by
 
+log = logging.getLogger("starpipe.engine")
 BUDGET_S = {"explore": 45 * 60, "develop": 4 * 3600, "fix": 90 * 60, "review": 45 * 60, "resolve": 20 * 60,
             "ci-fix": 90 * 60, "conflict": 60 * 60}
 STAGE_STATE = {"explore": "exploring", "develop": "developing", "fix": "verifying", "review": "review",
                "ci-fix": "ci", "conflict": "landing"}
 RETRY_STATE = {**STAGE_STATE, "publish": "ready", "ci": "ci", "land": "landing"}  # what `starpipe retry <n> <stage>` re-enters
+LANDING_STAGES = frozenset({"conflict", "ci-fix"})  # stages a ticket in the landing train waits on: they outrank new work for an LLM slot
 MAX_FIX_CYCLES, MAX_REVIEW_ROUNDS, MAX_CRASH_RESUMES = 2, 2, 3
 PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
 PRIORITY = {"p0": 0, "p1": 1, "p2": 2, "p3": 3}
@@ -68,6 +72,8 @@ class Engine:
     issue_memo: dict[int, tuple[str, bool, list[int]]] = field(default_factory=lambda: dict[int, tuple[str, bool, list[int]]]())
     land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
     publish_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-publish is one step
+    landing_waiting: set[int] = field(default_factory=lambda: set[int]())  # tickets whose landing stage is waiting for an LLM slot
+    announcer: Announcer = field(default_factory=SilentAnnouncer)  # spoken alerts; the daemon injects the real one
 
     # intake --------------------------------------------------------------------------------------------------------
     def sync_issues(self) -> None:
@@ -121,11 +127,24 @@ class Engine:
     def _to_state(self, n: int, state: str, reason: str | None = None) -> None:
         self.db.set_state(n, state, reason)
         self._label(n, state)
+        if state == "landed":
+            self.announce("landed", n)
+
+    def announce(self, kind: Kind, n: int) -> None:
+        """Say it aloud unless the owner muted the pipeline. Audio never reaches the stage: it queues, and any failure is swallowed."""
+        if self.db.get("muted") == "1":
+            return
+        try:
+            self.announcer.announce(kind, n)
+        except Exception:
+            log.warning("announcing %s #%d failed", kind, n, exc_info=True)
 
     def park(self, t: Ticket, reason: str, state: str = "failed") -> StageResult:
         self._to_state(t.number, state, reason)
         self.notifier.alert("needs-input" if state == "needs-input" else "ticket-failed", t.number,
                             f"#{t.number} {t.title}: {reason}")
+        if state == "needs-input":
+            self.announce("attention", t.number)
         return StageResult(False, reason=reason)
 
     # claim ---------------------------------------------------------------------------------------------------------
@@ -147,13 +166,15 @@ class Engine:
         waiting = {w.ticket for w in heavy.status().queue}
         return len([s for s in self.db.running_stages() if str(s["ticket"]) not in waiting])
 
-    def llm_room(self) -> load.Room:
+    def llm_room(self, extra: int = 0) -> load.Room:
         sessions, cpu_limit = self.limits()
-        return load.room(self.llm_active(), self.cpu(), sessions, cpu_limit)
+        return load.room(self.llm_active(), self.cpu(), sessions + extra, cpu_limit)
 
     def claimable(self) -> Ticket | None:
         if self.db.get("pause") in ("all", "claims") or self.db.get("self_update_pending"):
             return None  # the second is the daemon waiting to swap to new code: nothing new starts, running stages finish
+        if self.landing_waiting:
+            return None  # a ticket in the landing train needs the next LLM slot
         if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
             return None
         for t in self.db.tickets(("queued",)):  # ordered by priority then age
@@ -168,11 +189,39 @@ class Engine:
             pass  # best effort: a stale base is fixed again when landing
         wt, branch = worktrees.create(self.repo, t.number, t.title, self.base_ref)
         self.db.set_fields(t.number, worktree=str(wt), branch=branch, claimed_at=self.clock())
-        self._to_state(t.number, "exploring")
         self.db.event("claimed", t.number, branch=branch)
         updated = self.db.ticket(t.number)
         assert updated is not None
-        return updated
+        self._to_state(t.number, "developing" if self._plan_from_ticket(updated) else "exploring")
+        refreshed = self.db.ticket(t.number)
+        assert refreshed is not None
+        return refreshed
+
+    def _plan_from_ticket(self, t: Ticket) -> bool:
+        """Take the plan an owner's interactive session wrote into the ticket, when it passes the checks EXPLORE's plan passes.
+
+        Only a ticket the owner filed from an interactive session qualifies; anything else, and any plan that does not parse or
+        validate against the fresh worktree, goes to EXPLORE (a rejected plan's reasons are appended to its prompt)."""
+        if not self._owner_filed(t) or (m := tickets.FILED_BY.search(t.body)) is None or m.group(1) != "interactive":
+            return False
+        self.db.put(f"plan_rejected:{t.number}", None)  # a stale reason from an earlier claim
+        supplied, errors = tickets.ticket_plan(t.body)
+        if supplied is not None:
+            contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db)
+            supplied, errors = contract.check_plan(supplied.model_dump())
+        if supplied is None and not errors:
+            return False  # no '## Plan': nothing was supplied, nothing to report
+        if supplied is None:
+            self.db.put(f"plan_rejected:{t.number}", "\n".join(f"- {e}" for e in errors))
+            self.db.event("ticket-plan-rejected", t.number, reasons=errors)
+            return False
+        self._store_plan(t, supplied.model_dump())
+        self.db.event("plan-from-ticket", t.number)
+        return True
+
+    def _store_plan(self, t: Ticket, plan: dict[str, Any]) -> None:
+        self.db.set_fields(t.number, plan_json=json.dumps(plan))
+        (worktrees.ticket_dir(t.number) / "plan.json").write_text(json.dumps(plan, indent=2))
 
     # model stages --------------------------------------------------------------------------------------------------
     def _usage_paused_until(self) -> float:
@@ -223,11 +272,14 @@ class Engine:
                 effort = chosen[key]
         return model, effort
 
+    def _owner_filed(self, t: Ticket) -> bool:
+        return t.author.lower() == self.config.owner.lower() and not self.db.get(f"auto:{t.number}")
+
     async def model_stage(self, t: Ticket, stage: str, prompt: str, *, fresh: bool = False,
                           allow_resolve: bool = True) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
         contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db, self.gh, self.check_runner,
-                            owner_filed=t.author.lower() == self.config.owner.lower() and not self.db.get(f"auto:{t.number}"))
+                            owner_filed=self._owner_filed(t))
         resume = None if fresh else self._last_session(t, stage)
         pending = self._undelivered_answer(t)
         if pending:
@@ -276,14 +328,22 @@ class Engine:
     async def _begin_when_room(self, t: Ticket, stage: str, attempt: int, model: str) -> int:
         """Start a stage's session only while there is room: fewer than the limit of LLM sessions running and CPU not saturated.
         Waits (and says why, in the ticket's activity line) instead of starting a session the machine cannot afford."""
-        while True:
-            async with self.llm_lock:
-                room = self.llm_room()
-                if room.ok:
-                    self.db.put(f"llm_wait:{t.number}", None)
-                    return self.db.begin_stage(t.number, stage, attempt, model)
-            self.db.put(f"llm_wait:{t.number}", room.reason)
-            await self.sleep(15)
+        landing = stage in LANDING_STAGES
+        if landing:
+            self.landing_waiting.add(t.number)
+        try:
+            while True:
+                async with self.llm_lock:
+                    # A landing stage may take one session over the limit, at once; everything else waits while one is waiting.
+                    room = self.llm_room(extra=1 if landing else 0)
+                    if room.ok and (landing or not self.landing_waiting):
+                        self.db.put(f"llm_wait:{t.number}", None)
+                        return self.db.begin_stage(t.number, stage, attempt, model)
+                reason = room.reason if not room.ok else "a landing stage is waiting for a session"
+                self.db.put(f"llm_wait:{t.number}", reason)
+                await self.sleep(15)
+        finally:
+            self.landing_waiting.discard(t.number)
 
     def _undelivered_answer(self, t: Ticket) -> dict[str, Any] | None:
         rows = self.db._all("SELECT * FROM questions WHERE ticket=? AND answer IS NOT NULL ORDER BY id DESC LIMIT 1",  # pyright: ignore[reportPrivateUsage]
@@ -392,12 +452,13 @@ class Engine:
             await self.sleep(30)
 
     async def _explore(self, t: Ticket) -> bool:
-        result, _ = await self.model_stage(t, "explore", f"{self._ticket_text(t)}\n\nBase: {self.base_ref}")
+        rejected = self.db.get(f"plan_rejected:{t.number}")
+        note = f"\n\nThe plan this ticket carried was rejected, so plan it yourself. What was wrong with it:\n{rejected}" if rejected else ""
+        result, _ = await self.model_stage(t, "explore", f"{self._ticket_text(t)}{note}\n\nBase: {self.base_ref}")
         if not result.ok:
             return False
         if result.kind == "plan":
-            self.db.set_fields(t.number, plan_json=json.dumps(result.value))
-            (worktrees.ticket_dir(t.number) / "plan.json").write_text(json.dumps(result.value, indent=2))
+            self._store_plan(t, result.value)
             self._to_state(t.number, "developing")
             return True
         if result.kind == "close":

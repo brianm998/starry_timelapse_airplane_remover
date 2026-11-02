@@ -142,6 +142,7 @@ struct RightPanel: View {
 
                 Toggle(localized("ui.multi_choice"), isOn: $viewModel.multiChoice)
                   .foregroundColor(.white)
+                  .accessibilityIdentifier("right.multichoice")
                   .help(localized("ui.multi_choice_help"))
 
                 Toggle(localized("ui.show_trash"), isOn: $viewModel.shouldShowTrash)

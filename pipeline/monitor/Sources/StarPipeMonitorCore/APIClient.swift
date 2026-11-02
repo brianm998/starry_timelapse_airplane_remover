@@ -150,6 +150,7 @@ public struct APIClient: Sendable {
     public func cancel(_ number: Int, reason: String) async throws { try await post("/v1/tickets/\(number)/cancel", body: ["reason": reason]) }
     public func setPriority(_ number: Int, _ priority: Int) async throws { try await post("/v1/tickets/\(number)/prio", body: ["priority": priority]) }
     public func landNow(_ number: Int) async throws { try await post("/v1/tickets/\(number)/land-now") }
+    public func setMuted(_ muted: Bool) async throws { try await post("/v1/mute", body: ["muted": muted]) }
     public func setMaxActive(_ n: Int) async throws { try await post("/v1/settings", body: ["max_active": n]) }
 
     /// The server-sent event stream, from `after`. Ends (throwing) when the connection drops; the caller reconnects.

@@ -29,16 +29,12 @@ final class UserPreferencesStore {
 struct UserPreferences: Codable, Sendable {
     static let filename = ".star.userprefs.json"
 
-    static var fullPath: String { // XXX act like a real app and put this in the right place
-        let env = ProcessInfo.processInfo.environment
-        if let homedir = env["HOME"] {
-            return "\(homedir)/\(filename)"
-        } else {
-            // with no homedir, put it in tmp?
-            return "/tmp/\(filename)"
-        }
+    /// `~/.star.userprefs.json`, which the Kotlin client reads and writes too.  `NSHomeDirectory()` is `$HOME` as it always was, and
+    /// under the App Sandbox it is the app's container instead, so there the file moves with it (and is not shared).
+    static var fullPath: String {
+        URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).appendingPathComponent(filename).path
     }
-    
+
     // other things can be saved here too if needed
     
     var recentlyOpenedSequencelist:
@@ -49,6 +45,12 @@ struct UserPreferences: Codable, Sendable {
             // XXX Add logic here to limit the size of the list to some parameter
             self.save()
         }
+    }
+
+    /// Security-scoped bookmarks (see `BookmarkStore`) for the folders a sandboxed build has been granted, by path.  Written as base64
+    /// text, only by a sandboxed process, and ignored by the Kotlin client, which leaves it in the file.
+    var folderBookmarks: [String: Data]? {
+        didSet { self.save() }
     }
 
     var processingType: DetectionType? {
@@ -229,9 +231,16 @@ struct UserPreferences: Codable, Sendable {
         return rest.isEmpty ? "" : rest[min(index, rest.count - 1)]
     }
 
-    mutating func pruneNonExistentFromRecentList() {
-        let missing = recentlyOpenedSequencelist.keys.filter {
-            !FileManager.default.fileExists(atPath: $0)
+    /// Under the sandbox `fileExists` is false for everything not granted this launch, which after a relaunch is every recent: an
+    /// entry stays when a bookmark that still leads somewhere covers it.
+    mutating func pruneNonExistentFromRecentList(sandboxed: Bool = BookmarkStore.processIsSandboxed) {
+        let bookmarks = folderBookmarks ?? [:]
+        let missing = recentlyOpenedSequencelist.keys.filter { path in
+            if FileManager.default.fileExists(atPath: path) { return false }
+            guard sandboxed,
+                  let key = BookmarkStore.key(covering: path, in: Array(bookmarks.keys)),
+                  let data = bookmarks[key] else { return true }
+            return !BookmarkStore.stillResolves(data)
         }
         for filename in missing {
             recentlyOpenedSequencelist.removeValue(forKey: filename)

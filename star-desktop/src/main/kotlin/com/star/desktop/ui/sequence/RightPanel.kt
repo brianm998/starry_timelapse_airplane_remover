@@ -115,7 +115,7 @@ private fun SelectiveToolsSection(vm: SequenceViewModel) {
     }
     // With this on, clicking a group that has a decision opens the multi-choice sheet whatever the tool (macOS "multi choice").
     val multiChoice by vm.multiChoiceMode.collectAsState()
-    SwitchRow(localized("ui.multi_choice"), localized("ui.multi_choice_help"), multiChoice, vm::setMultiChoiceMode)
+    SwitchRow(localized("ui.multi_choice"), localized("ui.multi_choice_help"), multiChoice, vm::setMultiChoiceMode, tag = "right.multichoice")
 
     // The outlier counts, the trash count, Keep All / Remove All / Clear Undecided and the decision trees are menu commands only, as in the gui
     // (owner decision D8); this panel used to carry them as buttons.
@@ -340,10 +340,13 @@ private fun SectionDivider() {
 
 /** A switch and its label, with hover help when [help] is given. */
 @Composable
-private fun SwitchRow(label: String, help: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun SwitchRow(label: String, help: String?, checked: Boolean, onChange: (Boolean) -> Unit, tag: String? = null) {
     val row = @Composable {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            androidx.compose.material3.Switch(checked = checked, onCheckedChange = onChange)
+            androidx.compose.material3.Switch(
+                checked = checked, onCheckedChange = onChange,
+                modifier = if (tag == null) Modifier else Modifier.testTag(tag),   // the id a UI test finds the switch by (`gherkin/ui/ids.json`)
+            )
             Spacer(Modifier.width(6.dp))
             Text(label, color = StarColors.white, fontSize = 11.sp)
         }

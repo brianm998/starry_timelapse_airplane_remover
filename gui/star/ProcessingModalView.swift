@@ -21,25 +21,9 @@ import logging
 /// its own.
 struct ProcessingModalView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    @Environment(FrameGraphViewModel.self) var frameGraphViewModel: FrameGraphViewModel
     @Environment(\.openWindow) private var openWindow
 
-    private var steps: [ProcessingStepProgress] {
-        // `alreadyDone` describes whichever graph was built last, so until this run's is
-        // the one that was, it is the previous run's answer and belongs to nobody.  The
-        // same number gates the filtering below for the same reason.
-        let graphIsBuilt = frameGraphViewModel.graphBuildsCompleted
-                             > viewModel.processingBuildCount
-        return ProcessingSteps.visible(
-          ProcessingSteps.progress(
-            for: viewModel.processingStepTypes,
-            counts: frameGraphViewModel.operations,
-            since: viewModel.processingStepBaseline,
-            alreadyDone: graphIsBuilt ? frameGraphViewModel.alreadyDone : [:]
-          ),
-          graphIsBuilt: graphIsBuilt
-        )
-    }
+    private var steps: [ProcessingStepProgress] { viewModel.processingSteps }
 
     private var hasStarAlignmentData: Bool {
         viewModel.starAlignmentInfo.contains { !$0.isEmpty }
@@ -63,17 +47,18 @@ struct ProcessingModalView: View {
     /// `.numberOfFramesToProcessConcurrently` without fighting over the keyboard.
     @FocusState private var focusedField: FocusedField?
 
-    /// How fast each step is going, for the estimate in the header.  A reference type that
-    /// `body` feeds each time the counts change: it is not state the view draws, so
-    /// updating it does not ask for another pass.
-    @State private var rates = StepRateTracker()
+    /// How fast each step is going, for the estimate in the header: the view model's, which
+    /// the menu-bar wand reads too.  `body` also feeds it as it draws, which is harmless
+    /// next to the view model's own feed, and not state the view draws, so updating it does
+    /// not ask for another pass.
+    private var rates: StepRateTracker { viewModel.stepRates }
 
     /// What star is doing now, across every running step.
     private func headline(for steps: [ProcessingStepProgress]) -> String? {
         return ProcessingHeadline.text(
           steps: steps,
           extraction: viewModel.extractionProgress,
-          hasPlan: frameGraphViewModel.graphBuildsCompleted > viewModel.processingBuildCount,
+          hasPlan: viewModel.processingHasPlan,
           framesComplete: viewModel.count(for: .complete),
           frameCount: viewModel.frames.count
         )

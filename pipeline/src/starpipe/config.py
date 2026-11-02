@@ -49,15 +49,23 @@ class Config(BaseModel):
     digest_hour: int = 8
     nightly_enabled: bool = False  # a multi-hour job that has never run unattended: the owner turns it on
     nightly_ui: bool = False  # the mac gui @ui features: need UI automation permission and the display
+    # NOT the T4 nightly above: the daemon dispatches ONE full run of the "Gherkin" workflow on GitHub, local time, once a day, only
+    # when code Gherkin covers changed since the last green full run (gherkin_nightly.py). A push to develop no longer runs Gherkin.
+    gherkin_nightly_enabled: bool = True
+    gherkin_nightly_start: str = "23:00"
     test_data: str = ""  # shared dataset cache; empty: $STAR_TEST_DATA, else ~/.star-test-data
     quiet_start: str = "22:00"
     quiet_end: str = "07:00"
     # Gherkin's matrix takes about 3 h (median 174, slowest 214 min, 2026-10-31): a job still running after this stops blocking, so the
     # limit has to sit clear of a normal Gherkin run
     ci_blocking_wait_s: int = 4 * 3600
-    # Workflows whose result a PR does not wait for. Gherkin's matrix takes ~3 h and is mostly queueing for GitHub's few macOS runners,
-    # so waiting for it capped landings at a few a day (2026-10-31). Its runs on the PR are cancelled at once, to free those runners;
-    # the push to develop runs it, and the post-merge watch files a regression ticket if it goes red.
+    # Workflows whose result a PR does not wait for. Gherkin's full matrix takes ~3 h and is mostly queueing for GitHub's few macOS runners,
+    # so waiting for it capped landings at a few a day (2026-10-31). Any run of it on the PR is cancelled at once, to free those runners;
+    # the push to develop runs it, and the post-merge watch files a regression ticket if it goes red. What a PR runs instead is
+    # "Gherkin smoke" (gherkin-smoke.yml, the features of gherkin/smoke.json): it is deliberately NOT listed here (names match exactly),
+    # so the judge waits for it and blocks on it like any other workflow. A ticket that names Gherkin features (`gherkin:` in its
+    # Pipeline section, or the plan's gherkin_features_to_run) additionally has ship.feature_gate dispatch gherkin.yml on its own branch
+    # with just those features, recognise the run by its display_title, and wait for it.
     ci_post_merge_workflows: tuple[str, ...] = ("Gherkin",)
     heavy_wait_report_s: float = 60.0
     api_port: int = 47231

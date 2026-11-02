@@ -78,6 +78,7 @@ final class GuiFeatureRunner {
         .commandClickId: { try $0.clickId($0.args[0], how: .command) },
         .rightClickId: { try $0.clickId($0.args[0], how: .right) },
         .processingFinishes: { try $0.waitForProcessingToFinish() },
+        .processingStops: { try $0.waitForProcessingToStop() },
         .pressKey: { try $0.press($0.args[0]) },
         .idShown: { try $0.expectShown($0.args[0], shown: true) },
         .idNotShown: { try $0.expectShown($0.args[0], shown: false) },
@@ -382,6 +383,23 @@ final class GuiFeatureRunner {
             guard parts.count == 3, let complete = Int(parts[0]), let total = Int(parts[1]) else { return false }
             if parts[2] == "running" { sawRunning = true }
             return sawRunning && parts[2] == "idle" && total > 0 && complete == total
+        }
+    }
+
+    /// Waits for the run to be idle, whether or not every frame is complete (a run that another start put an end to leaves the frames it cleared
+    /// unfinished). Idle has to be read twice, a poll apart, so the moment between a run being stopped and the next one starting is not taken
+    /// for the end; the line is only in the left panel of the edit and scrub screens.
+    private func waitForProcessingToStop() throws {
+        let progress = element("processing.progress")
+        var idleLooks = 0
+        var last = "(none)"
+        try waitFor("processing to stop", timeout: 20 * 60, interval: 3, detail: { "(last progress: \(last))" }) {
+            guard progress.exists else { idleLooks = 0; return false }
+            last = progress.label
+            let parts = last.split(separator: "/").map(String.init)
+            guard parts.count == 3, parts[2] == "idle" else { idleLooks = 0; return false }
+            idleLooks += 1
+            return idleLooks >= 2
         }
     }
 

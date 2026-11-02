@@ -248,6 +248,24 @@ def _post(path: str, body: dict[str, object] | None = None) -> None:
     click.echo("ok")
 
 
+def _span(seconds: float) -> str:
+    return f"{int(seconds // 60)}m" if seconds >= 60 else f"{int(seconds)}s"
+
+
+def landing_lines(landing: dict[str, Any]) -> list[str]:
+    """The landing train's lines for `status`: the active batch, then the last abandoned one. The daemon computed all of it."""
+    lines: list[str] = []
+    if b := landing.get("batch"):
+        members = " ".join(f"#{n}" for n in b["members"])
+        lines.append(f"batch {b['number']}: {b['phase']} · age {_span(b['age_s'])}" + (f" · {members}" if members else "")
+                     + (" · SLOW" if b.get("slow") else ""))
+    elif landing.get("next_batch_in_s") is not None:
+        lines.append(f"no batch yet: the next one starts in {landing['next_batch_in_s']}s")
+    if a := landing.get("last_abandoned"):
+        lines.append(f"batch {a['number']} {'failed' if a['state'] == 'failed' else 'abandoned'} {_span(a['ago_s'])} ago: {a['reason']}")
+    return lines
+
+
 @main.command()
 @click.option("--json", "as_json", is_flag=True)
 def status(as_json: bool) -> None:
@@ -274,6 +292,8 @@ def status(as_json: bool) -> None:
         click.echo(f"PAUSED: {data['pause']}")
     if data.get("usage_pause_until"):
         click.echo(f"usage limit: model stages wait until {time.ctime(float(data['usage_pause_until']))}")
+    for line in landing_lines(data.get("landing") or {}):
+        click.echo(line)
     heavy_state: dict[str, Any] = data.get("heavy") or {}
     for h in heavy_state.get("holders", []):
         click.echo(f"heavy lock: {h['ticket'] or 'interactive'}  {h['cmd']}")
@@ -283,6 +303,8 @@ def status(as_json: bool) -> None:
         click.echo(f"#{t['number']:<5} p{t['priority']}  {t['title'][:48]:<48}  {t['activity']}")
     if not data["tickets"]:
         click.echo("no tickets in flight")
+    if data.get("gherkin_nightly"):
+        click.echo(data["gherkin_nightly"]["line"])
 
 
 @main.command()
@@ -406,6 +428,26 @@ def logs(number: int, stage: str | None, lines: int) -> None:
     for line in files[-1].read_text().splitlines()[-lines:]:
         row = json.loads(line)
         click.echo(f"{time.strftime('%H:%M:%S', time.localtime(row['t']))} {row['type']:<18} {row['repr'][:200]}")
+
+
+@main.group()
+def gherkin() -> None:
+    """The nightly dispatch of the full Gherkin matrix on GitHub (not the local T4 nightly)."""
+
+
+@gherkin.command("run")
+@click.option("--force", is_flag=True, help="Skip the change gate and the tip-already-tested check (never the in-flight check).")
+def gherkin_run(force: bool) -> None:
+    """Make the nightly's decision now, and dispatch a full run on the base branch if it says so."""
+    from . import client as client_mod
+
+    try:
+        d = _client().call("POST", "/v1/gherkin/run", {"force": force})
+    except (client_mod.DaemonDown, RuntimeError) as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"{d['action']}: {d['reason']}" + (f" (run {d['run_id']})" if d.get("run_id") is not None else ""))
+    if d["action"] == "error":
+        raise SystemExit(1)
 
 
 @main.group()

@@ -87,6 +87,9 @@ fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoic
         actionButtonLabel = { localized(if (it.shouldRemove) "ui.remove" else "ui.keep") },
         onCancel = vm::dismissMultiSheets,
         onApply = { a, range, n, _ -> vm.applyMultiChoice(a.shouldRemove, range, n) },
+        summaryTag = "multichoice.summary",
+        cancelTag = "multichoice.cancel",
+        applyTag = "multichoice.apply",
         actionTag = { "multichoice.paint.${it.name}" },
         rangeTag = { "multichoice.range.${it.key}" },
         countTag = "multichoice.count",
@@ -145,9 +148,10 @@ private fun MultiFrameSheet(
     onApply: (MultiAction, MultiFrameRange, Int, Boolean) -> Unit,
     /** null: no trash option (the multi-choice sheet acts on a chosen group); else whether it starts on, which is whether the trash is showing. */
     trashInitially: Boolean? = null,
-    /** The ids a UI test finds the sheet's sentence and its Cancel button by; none for a sheet no feature looks at. */
+    /** The ids a UI test finds the sheet's sentence, its Cancel button and its action button by; none for a sheet no feature looks at. */
     summaryTag: String? = null,
     cancelTag: String? = null,
+    applyTag: String? = null,
     /** The ids of the action choice, of each range choice and of the number-of-frames field (the two sheets have their own, `multiselect.*` and `multichoice.*`). */
     actionTag: (MultiAction) -> String,
     rangeTag: (MultiFrameRange) -> String,
@@ -207,6 +211,7 @@ private fun MultiFrameSheet(
                 Button(
                     onClick = apply,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                    modifier = Modifier.tagged(applyTag),
                 ) { Text(actionButtonLabel(action)) }
             }
         }
