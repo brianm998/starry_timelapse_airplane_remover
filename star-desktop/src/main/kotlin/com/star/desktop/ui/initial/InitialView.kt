@@ -2,7 +2,7 @@ package com.star.desktop.ui.initial
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,7 +40,13 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,7 +54,6 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.theme.StarColors
-import com.star.desktop.ui.theme.StarShapes
 import java.awt.datatransfer.DataFlavor
 import java.io.File
 import com.star.desktop.engine.EngineStatus
@@ -61,10 +67,11 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxSize().background(StarColors.appBackground)) {
         IntroVideoBackground()
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            // The whole window, as the gui's VStack is: the header, then a drop zone that takes the room there is, then the Load buttons.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(20.dp),
-                modifier = Modifier.widthIn(max = 560.dp).padding(40.dp),
+                modifier = Modifier.fillMaxSize().padding(40.dp),
             ) {
                 // The version is the engine's, which is Star's (macOS shows its own); until the engine has said, the heading waits.
                 val engineStatus by vm.engineStatus.collectAsState()
@@ -76,7 +83,14 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
                     OutlinedButton(onClick = vm::openInfoDialog) { Text(localized("ui.learn_about_star")) }
                 }
 
-                DropZone(vm = vm, onOpenSequence = { open(vm, OpenKind.SEQUENCE) })
+                // The gui's Spacer / FinderStyleDropZone / Spacer, its zone capped at 1200x800 and at least 280x150 inside 16dp of padding.
+                Box(Modifier.weight(1f).fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                    Box(Modifier.widthIn(min = 280.dp, max = 1200.dp).heightIn(min = 150.dp, max = 800.dp).fillMaxSize()) {
+                        HoverTip(localized("ui.load_an_image_sequence_yet_to_be_processed")) {
+                            DropZone(vm = vm, onOpenSequence = { open(vm, OpenKind.SEQUENCE) })
+                        }
+                    }
+                }
 
                 // The gui's labels, order and hover texts (S8): Load Video, Load Image Sequence, Load Config.
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -128,27 +142,45 @@ private fun DropZone(vm: AppViewModel, onOpenSequence: () -> Unit) {
             }
         }
     }
+    val borderColor = if (isHovering) StarColors.accent else Color.White
+    val shape = RoundedCornerShape(8.dp)
+    // The gui's FinderStyleDropZone: a 2pt dashed 8pt-cornered border, white until a drag is over it, then accent with a 0.15 fill.
     Box(
         Modifier
-            .fillMaxWidth()
-            .height(160.dp)
-            .clip(StarShapes.card)
-            .border(
-                2.dp,
-                SolidColor(if (isHovering) StarColors.accent else StarColors.textDisabled),
-                StarShapes.card,
-            )
-            .background(StarColors.sidePanel.copy(alpha = if (isHovering) 0.55f else 0.35f))
+            .fillMaxSize()
+            .testTag("startup.dropzone")
+            .clip(shape)
+            .background(if (isHovering) StarColors.accent.copy(alpha = 0.15f) else Color.Transparent)
+            .drawBehind {
+                val stroke = 2.dp.toPx()
+                drawRoundRect(
+                    color = borderColor,
+                    topLeft = Offset(stroke / 2, stroke / 2),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    cornerRadius = CornerRadius(8.dp.toPx()),
+                    style = Stroke(stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(5.dp.toPx(), 5.dp.toPx()))),
+                )
+            }
             .clickable(onClick = onOpenSequence)
             // Accept every drag; the actual file extraction + validation happens in onDrop.
             .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = target),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            localized("ui.drop_an_image_sequence_folder_video_or"),
-            color = StarColors.textSecondary,
-            fontSize = 13.sp,
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            DropZoneIcon()
+            Text(localized("ui.drop_a_video_an_image_sequence_or_an"), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/** The gui's `doc.on.doc` at 32pt: one document outline behind another, drawn rather than shipped as a resource. */
+@Composable
+private fun DropZoneIcon() {
+    Canvas(Modifier.size(32.dp)) {
+        val stroke = Stroke(1.6.dp.toPx())
+        val radius = CornerRadius(3.dp.toPx())
+        drawRoundRect(Color.White, topLeft = Offset(3.dp.toPx(), 2.dp.toPx()), size = Size(15.dp.toPx(), 19.dp.toPx()), cornerRadius = radius, style = stroke)
+        drawRoundRect(Color.White, topLeft = Offset(12.dp.toPx(), 9.dp.toPx()), size = Size(17.dp.toPx(), 21.dp.toPx()), cornerRadius = radius, style = stroke)
     }
 }
 
