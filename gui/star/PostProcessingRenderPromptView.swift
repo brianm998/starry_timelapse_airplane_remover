@@ -16,6 +16,7 @@ struct PostProcessingRenderPromptView: View {
                 Button(localized("ui.cancel")) {
                     viewModel.postProcessingRenderPromptShowing = false
                 }
+                  .accessibilityIdentifier("prompt.post.cancel")
 
                 Spacer()
 

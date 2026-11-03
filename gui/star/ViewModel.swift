@@ -182,6 +182,14 @@ public final class ViewModel {
         UserDefaults.standard.string(forKey: "StarUITestOpenVideo").flatMap { $0.isEmpty ? nil : $0 }
     }
 
+    /// Test seam: `-StarUITestSequenceLocation <dir>` does what picking the directory in "Load Image Sequence"'s open panel does
+    /// (`InitialView.loadImageSequence`): raises the sheet that asks where the output and working files go.
+    func openSequenceLocationFromUITestArgument() {
+        guard let path = UserDefaults.standard.string(forKey: "StarUITestSequenceLocation"), !path.isEmpty,
+              imageSequence == nil, !isLoadingImageSequence else { return }
+        pendingSequenceOpen = PendingSequenceOpen(path: path)
+    }
+
     /// Test seam: `-StarUITestOpenVideo <file>` does what picking the file in "Load Video"'s open panel does
     /// (`InitialView.startupWithVideoToProcess`): raises the import sheet, which asks how the frames are written.
     func openVideoFromUITestArgument() {

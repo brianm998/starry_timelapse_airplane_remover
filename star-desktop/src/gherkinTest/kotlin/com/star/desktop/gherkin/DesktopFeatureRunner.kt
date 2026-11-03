@@ -159,6 +159,9 @@ class DesktopFeatureRunner {
         StepAction.CONFIRM_CLOSE_IF_ASKED to { t -> confirmClosingIfAsked(t) },
         StepAction.WINDOW_OPEN to { t -> expectWindow(t, args[0], open = true) },
         StepAction.WINDOW_NOT_OPEN to { t -> expectWindow(t, args[0], open = false) },
+        StepAction.OPEN_PREFERENCES to { t -> openPreferences(t) },
+        StepAction.OPEN_LOCATION_QUESTION to { t -> openCopiedSequenceAtItsLocationQuestion(t) },
+        StepAction.OPEN_VIDEO_IMPORT to { t -> openVideoAtItsImportDialog(t) },
         StepAction.SAVE_SCREENSHOT to { t -> saveScreenshot(t, args[0]) },
         StepAction.SAVE_WINDOW_SCREENSHOT to { t -> saveScreenshot(t, args[1], window = args[0]) },
     )
@@ -1089,6 +1092,39 @@ class DesktopFeatureRunner {
     }
 
     // ---- the parity gallery ----
+
+    /** What the AWT preferences handler of `Main.kt` calls (a Mac's Preferences item; the test host has no menu bar). */
+    private fun openPreferences(t: ComposeUiTest) {
+        val model = vm ?: throw RunnerError("no app is running")
+        t.runOnUiThread { model.openPreferences() }
+        t.waitForIdle()
+    }
+
+    /** The start screen with the question that asks where a chosen image sequence's files go up, as the Load Image Sequence button leads to. */
+    private fun openCopiedSequenceAtItsLocationQuestion(t: ComposeUiTest) {
+        if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
+        val model = newModel()
+        showApp(t, model)
+        t.runOnUiThread { model.requestSequence(sequenceCopy.absolutePath) }
+        waitFor(t, "the sequence location question", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("sequencelocation.open") }
+    }
+
+    /** A short video made from the copied sequence's frames with the bundled ffmpeg, opened as Load Video opens one: the import dialog comes up. */
+    private fun openVideoAtItsImportDialog(t: ComposeUiTest) {
+        if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
+        val ffmpeg = File(repoRoot(), "external_binaries/bin/ffmpeg").takeIf { it.canExecute() } ?: File("ffmpeg")
+        val video = File(scratch, "gallery-video.mp4")
+        val process = ProcessBuilder(
+            ffmpeg.path, "-y", "-loglevel", "error", "-framerate", "5", "-pattern_type", "glob", "-i", File(sequenceCopy, "*.jpg").path,
+            "-vf", "scale=1280:-2", "-c:v", "libx264", "-pix_fmt", "yuv420p", video.path,
+        ).redirectErrorStream(true).start()
+        val log = process.inputStream.bufferedReader().readText()
+        if (process.waitFor() != 0 || !video.isFile) throw RunnerError("could not make a video from $sequenceCopy: $log")
+        val model = newModel()
+        showApp(t, model)
+        t.runOnUiThread { model.openVideo(video.absolutePath) }
+        waitFor(t, "the video import dialog", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("videoimport.import") }
+    }
 
     /** `<dir>/<client>/<name>.png`, where dir is `STAR_GALLERY_DIR` (the gui's runner reads the same), else `<repo>/.test-data/gallery/latest`. */
     private fun galleryFile(name: String): File {

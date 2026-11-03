@@ -105,7 +105,7 @@ fun PostProcessingRenderPrompt(app: AppViewModel) {
         Text(localized("ui.processing_complete"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
         Text(localized("ui.render_video_now"), color = StarColors.textSecondary, fontSize = 15.sp)
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = app::dismissPostRenderPrompt) { Text(localized("ui.cancel")) }
+            OutlinedButton(onClick = app::dismissPostRenderPrompt, modifier = Modifier.testTag("prompt.post.cancel")) { Text(localized("ui.cancel")) }
             Box(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(onClick = app::previewFinalFrames) { Text(localized("ui.preview_first")) }

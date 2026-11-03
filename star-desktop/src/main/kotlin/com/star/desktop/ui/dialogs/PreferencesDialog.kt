@@ -85,7 +85,10 @@ fun PreferencesDialog(app: AppViewModel) {
                 ) { processingWindow = it; prefs.showProcessingWindow = it }
             }
             Row(Modifier.fillMaxWidth()) {
-                Button(onClick = app::closePreferences, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.close")) }
+                Button(
+                    onClick = app::closePreferences, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                    modifier = Modifier.testTag("preferences.close"),
+                ) { Text(localized("ui.close")) }
             }
         }
     }

@@ -116,6 +116,9 @@ final class GuiFeatureRunner {
         .confirmCloseIfAsked: { try $0.confirmClosingIfAsked() },
         .windowOpen: { try $0.expectWindow($0.args[0], open: true) },
         .windowNotOpen: { try $0.expectWindow($0.args[0], open: false) },
+        .openPreferences: { try $0.openPreferences() },
+        .openLocationQuestion: { try $0.openCopiedSequenceAtItsLocationQuestion() },
+        .openVideoImport: { try $0.openVideoAtItsImportDialog() },
         .saveScreenshot: { try $0.saveScreenshot(named: $0.args[0]) },
         .saveWindowScreenshot: { try $0.saveScreenshot(named: $0.args[1], ofWindow: $0.args[0]) },
     ]
@@ -637,6 +640,33 @@ final class GuiFeatureRunner {
     }
 
     // MARK: the parity gallery
+
+    /// The Preferences item of the app menu (Command-comma), as a user opens them.
+    private func openPreferences() throws {
+        guard app.state != .notRunning else { throw RunnerError("the app is not running") }
+        app.typeKey(",", modifierFlags: .command)
+    }
+
+    /// Launches on the start screen with the question that asks where a chosen image sequence's files go up (what the open panel leads to).
+    private func openCopiedSequenceAtItsLocationQuestion() throws {
+        guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
+        try launch(arguments: ["-StarUITestSequenceLocation", copy.path])
+    }
+
+    /// A short video made from the copied sequence's frames with the bundled ffmpeg, opened as "Load Video" opens one: the import sheet comes up.
+    private func openVideoAtItsImportDialog() throws {
+        guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
+        let ffmpeg = Self.repoRoot.appendingPathComponent("external_binaries/bin/ffmpeg")
+        let video = scratch.appendingPathComponent("gallery-video.mp4")
+        let process = Process()
+        process.executableURL = ffmpeg
+        process.arguments = ["-y", "-loglevel", "error", "-framerate", "5", "-pattern_type", "glob", "-i", copy.appendingPathComponent("*.jpg").path,
+                             "-vf", "scale=1280:-2", "-c:v", "libx264", "-pix_fmt", "yuv420p", video.path]
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: video.path) else { throw RunnerError("could not make a video from \(copy.path)") }
+        try launch(arguments: ["-StarUITestOpenVideo", video.path])
+    }
 
     /// The main window's content size the gallery is taken at (points), which is the desktop client's test window in pixels.
     static let galleryWindowSize = "1400x1100"

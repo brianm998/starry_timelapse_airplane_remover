@@ -318,6 +318,7 @@ struct StarApp: App {
                   viewModel.openSequenceFromUITestArgument()
                   viewModel.openConfigFromUITestArgument()
                   viewModel.openVideoFromUITestArgument()
+                  viewModel.openSequenceLocationFromUITestArgument()
               }
               // the windows about the sequence go with it (D11)
               .onChange(of: viewModel.imageSequence == nil) { _, unloaded in

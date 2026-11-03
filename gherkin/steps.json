@@ -70,6 +70,9 @@
   { "case": "processedCopy"         , "text": "a processed copy of the sequence {sequence}" },
   { "case": "openProcessed"         , "text": "I open the processed copy" },
   { "case": "confirmCloseIfAsked"   , "text": "I confirm closing if it is asked" },
+  { "case": "openPreferences"       , "text": "I open the preferences" },
+  { "case": "openLocationQuestion"  , "text": "I open the copied sequence at its location question" },
+  { "case": "openVideoImport"       , "text": "I open a video of the copied sequence at its import dialog" },
   { "case": "saveScreenshot"        , "text": "I save a screenshot named \"<name>\"" },
   { "case": "saveWindowScreenshot"  , "text": "I save a screenshot of the \"<window>\" window named \"<name>\"" }
 ]
