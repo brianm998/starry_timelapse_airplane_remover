@@ -89,7 +89,8 @@ struct TicketDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(rows) { row in
                         HStack(alignment: .firstTextBaseline) {
-                            Link(row.label, destination: row.url).monospacedDigit().help(row.url.absoluteString)
+                            Button(row.label) { store.selectIssue(row.number, title: row.title) }
+                                .buttonStyle(.link).monospacedDigit().help("Show \(row.label) here")
                             Text(row.title).foregroundStyle(.secondary).textSelection(.enabled)
                         }
                     }
