@@ -98,6 +98,36 @@ async def test_retry_and_answer_ask_for_a_catch_up(rig: Rig) -> None:
         await client.close()
 
 
+async def test_retry_when_unblocked_records_instead_of_retrying(rig: Rig) -> None:
+    rig.gh.add_issue(7, "failed one")
+    rig.gh.add_issue(174, "first blocker")
+    rig.gh.add_issue(199, "second blocker")
+    rig.gh.deps[7] = [174, 199]
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "failed", "CI still red after 2 fix cycles")
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/tickets/7/retry", json={"stage": "ci", "when_unblocked": True}, headers=AUTH)
+        assert r.status == 200 and "waiting for #174, #199" in (await r.json())["result"]
+        assert rig.state(7) == "failed" and rig.db.get("held_retry:7") == "ci"
+        shown = await (await client.get("/v1/tickets/7", headers=AUTH)).json()
+        assert shown["held_retry"] == "retry from ci when unblocked"
+        assert shown["activity"] == "failed · waiting for #174, #199 → retry from ci"
+        assert [r["kind"] for r in rig.db._all("SELECT kind FROM interventions")] == ["hold-retry"]  # pyright: ignore[reportPrivateUsage]
+
+        rig.db.set_state(174, "landed")  # a blocker landing is reflected at once
+        assert activity(rig.db, rig.db.ticket(7)) == "failed · waiting for #199 → retry from ci"  # type: ignore[arg-type]
+
+        rig.db.set_state(7, "developing")  # only a failed or cancelled ticket can hold a retry
+        r = await client.post("/v1/tickets/7/retry", json={"stage": "ci", "when_unblocked": True}, headers=AUTH)
+        assert r.status == 409
+        rig.db.set_state(7, "failed")
+        await client.post("/v1/tickets/7/cancel", json={}, headers=AUTH)
+        assert rig.db.get("held_retry:7") is None, "cancelling drops the hold"
+    finally:
+        await client.close()
+
+
 async def test_activity_lists_open_blockers_of_a_queued_ticket(rig: Rig) -> None:
     for n, title in [(7, "blocked"), (8, "free"), (84, "first blocker"), (85, "second blocker")]:
         rig.gh.add_issue(n, title)
@@ -849,3 +879,33 @@ async def test_restart_finishes_an_escalation_it_cut_short(rig: Rig) -> None:
     Daemon(rig.engine, Config(), token="tok").reconcile()
     assert rig.state(7) == "needs-input"
     assert rig.db.open_question(7)["comment_id"] is not None  # type: ignore[index]
+
+
+async def test_hung_heavy_job_raises_an_alert(rig: Rig) -> None:
+    from starpipe.checks import ledger
+
+    def hung_runner(worktree: Path, base: str) -> list[ledger.Result]:
+        return [ledger.Result("test:daemon", "hung", "abc", 1.0,
+                              detail="hung: `swift test --package-path daemon` made no progress for 900s and was killed")]
+
+    rig.engine.check_runner = hung_runner
+    rig.gh.add_issue(7, "Tidy the docs")
+    rig.engine.sync_issues()
+    rig.agent.on("explore", explore_ok)
+
+    def develop(req: StageRequest) -> StageOutcome:
+        req.contract.run_checks({})
+        return StageOutcome("no-result")
+
+    rig.agent.on("develop", develop)
+    await rig.engine.drive(7)
+
+    assert "heavy-hung:7" in [a["key"] for a in rig.db.open_alerts()]
+    client, _ = await api(rig)
+    try:
+        status = await (await client.get("/v1/status", headers=AUTH)).json()
+    finally:
+        await client.close()
+    alert = next(a for a in status["alerts"] if a["key"] == "heavy-hung:7")
+    assert "#7" in alert["text"] and "swift test --package-path daemon" in alert["text"]
+    assert [t for t, _ in rig.pages].count("star pipeline: heavy-hung") == 1
