@@ -76,6 +76,9 @@ final class DirtyCleanMethodTests: FrameHarnessTestCase {
         let h = try await FrameHarness.make(frameCount: 1, width: width, height: height,
                                             horizonRow: horizon, named: name)
         harness = h
+        // CLAUDE.md: the GPU median merge crashes this Mac, so tests here never use it (this path does not merge, but the
+        // default is on whenever a GPU is detected)
+        await h.updateConfig { $0.useGPUForMerge = false }
         let base = FrameHarness.syntheticFrame(width: width, height: height, horizonRow: horizon)
         let original = image(from: base) { x, y, pixel in
             if self.isDot(x, y, self.skyDot) { pixel = self.skyDotColour }
