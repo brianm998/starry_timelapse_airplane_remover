@@ -19,6 +19,7 @@ from . import plan as planmod
 from .checks import impact, ledger
 from .db import Database, Ticket
 from .github import GitHub, GitHubError
+from .notify import Notifier
 
 ACCEPTED = "accepted. End your turn now."
 CLOSE_REASONS = ("duplicate-of", "already-done", "no-defect", "not-this-repo")
@@ -66,6 +67,7 @@ class Contract:
     db: Database
     gh: GitHub | None = None
     check_runner: CheckRunner | None = None
+    notifier: Notifier | None = None
     owner_filed: bool = True
     result: tuple[str, Any] | None = None
     lock_wait_s: float = 0.0  # seconds spent waiting for the heavy lock; stage budgets are net of it
@@ -125,6 +127,8 @@ class Contract:
         for r in results:
             self.db.record_check(self.ticket.number, sha, r.check, r.status,
                                  {"executed": r.executed, "failed": r.failed, "skipped": r.skipped}, r.log)
+        if self.notifier:
+            self.notifier.hung_checks(self.ticket.number, results)
         lines = [f"{'PASS' if r.green else r.status.upper()} {r.check} ({r.executed} tests, {r.failed} failed)"
                  + ("" if r.green else f" — {r.detail} log: {r.log}") for r in results]
         return "\n".join(lines) or "no checks needed for this diff"

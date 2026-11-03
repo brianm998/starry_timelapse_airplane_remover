@@ -362,5 +362,8 @@ class Database:
         self.event("alert", None, key=key, text=text)
         return True
 
+    def open_alerts(self) -> list[dict[str, Any]]:
+        return [dict(r) for r in self._all("SELECT key,text,opened FROM alerts WHERE closed IS NULL ORDER BY opened")]
+
     def close_alert(self, key: str) -> None:
         self._exec("UPDATE alerts SET closed=? WHERE key=? AND closed IS NULL", (self.clock(), key))

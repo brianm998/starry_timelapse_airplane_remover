@@ -437,6 +437,7 @@ class Daemon:
                 "self_update": {"pending": self.db.get("self_update_pending"), "failed": self.update_failure()},
                 "resources": self.resources(), "pause": self.db.get("pause"), "muted": self.db.get("muted") == "1", "usage_pause_until": self.db.get("usage_pause_until"),
                 "usage_windows": self.usage_windows(),
+                "alerts": self.db.open_alerts(),
                 "heavy": {"holders": [h.__dict__ for h in hv.holders], "queue": [w.__dict__ for w in hv.queue]},
                 "landing": train_info(self.db, self.config, self.engine.clock()),
                 "tickets": tickets, "gherkin_nightly": self.gherkin_info()}
@@ -494,7 +495,7 @@ class Daemon:
 
     def snapshot(self) -> dict[str, object]:
         """Everything the monitor shows, in one document. The daemon decides groups and activity lines, not the client."""
-        base = {k: v for k, v in self.status().items() if k not in ("self_update", "gherkin_nightly", "landing")}  # the monitor's contract is pinned by a fixture
+        base = {k: v for k, v in self.status().items() if k not in ("self_update", "gherkin_nightly", "landing", "alerts")}  # the monitor's contract is pinned by a fixture
         now = self.engine.clock()
         hv: dict[str, Any] = base["heavy"]  # type: ignore[assignment]
         lock_tickets = {str(w["ticket"]) for w in hv["queue"]}  # waiting for the lock; a holder is running its job
