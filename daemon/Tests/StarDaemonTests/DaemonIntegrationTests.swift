@@ -97,10 +97,11 @@ final class DaemonProcess: @unchecked Sendable {
     private let lock = NSLock()
 
     /// `environment` replaces the daemon's whole environment if given; nil is this process's own.
-    init(binaryPath: String, scratchDir: String, environment: [String: String]? = nil) throws {
+    init(binaryPath: String, scratchDir: String, environment: [String: String]? = nil,
+         arguments: [String]? = nil, idleTimeout: TimeInterval = 60) throws {
         process = Process()
         process.executableURL = URL(fileURLWithPath: binaryPath)
-        process.arguments = ["--scratch", scratchDir]
+        process.arguments = arguments ?? ["--scratch", scratchDir]
         if let environment { process.environment = environment }
         stdinPipe  = Pipe()
         stdoutPipe = Pipe()
