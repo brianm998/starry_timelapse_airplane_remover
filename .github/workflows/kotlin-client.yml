@@ -46,6 +46,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       - name: Check proto is in sync with the daemon
         run: ./gradlew checkProtoSync --no-daemon
@@ -106,6 +109,11 @@ jobs:
         with:
           swift-version: '6.0'
 
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
       # Same cache keys as cli.yml's `linux` job so the OpenCV / StarDecisionTrees
       # builds are shared instead of rebuilt.
       - name: Cache OpenCV
@@ -114,7 +122,7 @@ jobs:
           path: |
             opencv/lib/linux
             opencv/include
-          key: opencv-linux-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-linux-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -151,6 +159,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       - name: Download source-built ffmpeg/ffprobe
         uses: actions/download-artifact@v4
@@ -278,6 +289,11 @@ jobs:
               }
           }
 
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
       # Same cache keys as cli.yml's `windows` job (including the toolset/SDK
       # pin in the key, so changing that pin invalidates these automatically).
       - name: Cache OpenCV
@@ -286,7 +302,7 @@ jobs:
           path: |
             opencv/lib/windows
             opencv/include
-          key: opencv-windows-msvc14.40-sdk22621-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-windows-msvc14.40-sdk22621-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -324,6 +340,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       - name: Download source-built ffmpeg/ffprobe
         uses: actions/download-artifact@v4
@@ -438,6 +457,14 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
+
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
 
       # Same cache keys as cli.yml's macos-signed-release (also macos-14) so the
       # universal OpenCV / StarDecisionTrees builds are shared instead of rebuilt.
@@ -448,7 +475,7 @@ jobs:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4

@@ -229,6 +229,10 @@ class Database:
         rows = self._all("SELECT conclusion FROM develop_baseline WHERE workflow=? AND job=?", (workflow, job))
         return rows[0]["conclusion"] if rows else None
 
+    def baseline_sha(self, workflow: str, job: str) -> str | None:
+        rows = self._all("SELECT sha FROM develop_baseline WHERE workflow=? AND job=?", (workflow, job))
+        return rows[0]["sha"] if rows else None
+
     def set_baseline(self, workflow: str, job: str, sha: str, conclusion: str) -> None:
         self._exec("INSERT INTO develop_baseline(workflow,job,sha,conclusion,at) VALUES (?,?,?,?,?) "
                    "ON CONFLICT(workflow,job) DO UPDATE SET sha=excluded.sha, conclusion=excluded.conclusion, at=excluded.at",

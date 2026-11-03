@@ -38,6 +38,40 @@ struct Chip: View {
     }
 }
 
+/// One top-bar stage counter: a big bold count over a one-line label on a rounded tinted tile.
+/// Fixed-size, so a narrow window squeezes the header's text items instead of breaking the label inside a word.
+struct CounterTile: View {
+    let value: String
+    let label: String
+    let color: Color
+    let emphasis: Overview.TileEmphasis
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(value)
+                .scaledFont(.counter, weight: .bold)
+                .foregroundStyle(emphasis == .idle ? Color.secondary : color)
+                .lineLimit(1)
+            Text(label)
+                .scaledFont(.callout)
+                .foregroundStyle(emphasis == .attention ? color : Color.secondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .frame(minWidth: 56)
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 8)
+            if emphasis == .attention {
+                shape.fill(color.opacity(0.15))
+                shape.strokeBorder(color.opacity(0.6), lineWidth: 1)
+            } else {
+                shape.fill(Color.secondary.opacity(0.1))
+            }
+        }
+        .fixedSize()
+    }
+}
+
 func stateColor(_ state: String) -> Color {
     switch state {
     case "needs-input": .orange
@@ -53,7 +87,7 @@ struct HeaderStrip: View {
     @State private var enqueueing = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 22) {
+        HStack(alignment: .center, spacing: 22) {
             Button { store.goBack() } label: { Image(systemName: "chevron.left") }
                 .help("Back")
                 .disabled(!store.canGoBack)
@@ -121,15 +155,15 @@ struct HeaderStrip: View {
 
     /// The pipeline's load by stage; a dash for each while there is no snapshot (never stale or zero).
     private var counters: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 6) {
             if let snapshot = store.snapshot {
                 ForEach(Overview.topBarCounts(snapshot.tickets)) { c in
-                    item(c.label, "\(c.count)", color: stateColor(c.states[0]))
+                    CounterTile(value: "\(c.count)", label: c.label, color: stateColor(c.states[0]), emphasis: c.emphasis)
                         .help("Counts tickets in: \(c.states.joined(separator: ", "))")
                 }
             } else {
                 ForEach(Overview.topBarBuckets, id: \.label) { b in
-                    item(b.label, "—", color: .secondary)
+                    CounterTile(value: "—", label: b.label, color: .secondary, emphasis: .idle)
                         .help("Counts tickets in: \(b.states.joined(separator: ", "))")
                 }
             }
@@ -138,7 +172,7 @@ struct HeaderStrip: View {
 
     private func item(_ label: String, _ value: String, color: Color) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(label).foregroundStyle(.secondary)
+            Text(label).foregroundStyle(.secondary).lineLimit(1)
             Text(value).foregroundStyle(color).lineLimit(2)
         }
     }

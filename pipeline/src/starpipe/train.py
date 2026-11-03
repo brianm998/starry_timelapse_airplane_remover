@@ -416,6 +416,7 @@ class Train:
         changed = gitutil.git(wt, "diff", "--name-only", f"{sha}^1", sha, check=False).split() if wt.exists() else []
         if any(p.startswith("pipeline/") and not p.startswith("pipeline/monitor/") for p in changed):
             eng.db.put("self_update_wanted", sha)
+        self._seed_baseline(bid, sha, wt)
         for n in eng.db.batch_members(bid):
             t = eng.db.ticket(n)
             if t is None or t.state == "landed":
@@ -439,6 +440,28 @@ class Train:
             eng.gh.delete_branch(str(batch["branch"]))
         self._remove_worktree()
         eng.db.batch_update(bid, state="landed", ended=eng.clock())
+
+    def _seed_baseline(self, bid: int, sha: str, wt: Path) -> None:
+        """The batch PR's finished jobs become develop's baseline at the merge commit: develop's own push run may skip its jobs
+        because this PR already tested the same tree, and a baseline lost that way weakens the judge. A baseline already at a
+        commit that descends from the merge (or at the merge itself) is newer or equal and stays. Safe to run twice."""
+        eng = self.eng
+        batch = eng.db.batch(bid)
+        if not batch or not batch["head_sha"]:
+            return
+        try:
+            jobs = ship.fetch_jobs(eng, str(batch["head_sha"]))
+        except GitHubError as exc:
+            eng.db.event("baseline-seed-failed", None, batch=bid, error=str(exc)[:200])
+            return
+        root = wt if wt.exists() else eng.repo
+        for job in jobs:
+            if not job.done or job.conclusion == "skipped":
+                continue
+            have = eng.db.baseline_sha(*job.key)
+            if have and (have == sha or gitutil.is_ancestor(root, sha, have)):
+                continue
+            eng.db.set_baseline(job.workflow, job.job, sha, job.conclusion or "failure")
 
     # when it does not land -----------------------------------------------------------------------------------------
     async def _on_red(self, bid: int, verdict: ci.Verdict) -> None:

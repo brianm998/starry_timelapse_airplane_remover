@@ -303,13 +303,22 @@ public enum Overview {
         public var states: [String]
         public var count: Int
         public var id: String { label }
+
+        /// How loudly the tile draws: the owner's queue when it is non-empty, a muted tile for zero, otherwise normal.
+        public var emphasis: TileEmphasis {
+            if count == 0 { return .idle }
+            return states.contains("needs-input") ? .attention : .active
+        }
     }
 
+    public enum TileEmphasis: Equatable, Sendable { case attention, active, idle }
+
     /// The top bar's seven buckets, in display order. `paused` and terminal states belong to none.
+    /// Labels are short and lowercase so they fit a tile on one line.
     public static let topBarBuckets: [(label: String, states: [String])] = [
-        ("Needs input", ["needs-input"]), ("Queued", ["queued"]), ("Exploring", ["exploring"]),
-        ("Developing", ["developing"]), ("Testing", ["verifying"]), ("Review", ["review"]),
-        ("Landing", landingStates),
+        ("need you", ["needs-input"]), ("queued", ["queued"]), ("exploring", ["exploring"]),
+        ("developing", ["developing"]), ("testing", ["verifying"]), ("review", ["review"]),
+        ("landing", landingStates),
     ]
 
     /// Tickets per top-bar bucket, zeros included.

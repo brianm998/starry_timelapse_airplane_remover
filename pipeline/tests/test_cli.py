@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import importlib.metadata
+import os
 import plistlib
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
@@ -110,3 +112,21 @@ def test_status_prints_the_active_batch_and_the_abandoned_one() -> None:
                                       "batch 7 abandoned 18m ago: develop moved with overlapping changes"]
     assert landing_lines({"batch": None, "last_abandoned": None, "next_batch_in_s": 45}) == ["no batch yet: the next one starts in 45s"]
     assert landing_lines({}) == []
+
+
+def test_daemon_run_holds_off_idle_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    from starpipe import cli
+
+    hold_off = getattr(cli, "_hold_off_idle_sleep")  # noqa: B009 - private on purpose
+    calls: list[list[str]] = []
+
+    def record(argv: list[str], **_kw: Any) -> None:
+        calls.append(argv)
+    monkeypatch.setattr(cli.subprocess, "Popen", record)
+    hold_off()
+    assert calls == [["caffeinate", "-i", "-w", str(os.getpid())]]
+
+    def missing(*_a: Any, **_kw: Any) -> None:
+        raise FileNotFoundError
+    monkeypatch.setattr(cli.subprocess, "Popen", missing)
+    hold_off()  # no caffeinate: not an error
