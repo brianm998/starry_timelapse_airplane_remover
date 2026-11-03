@@ -208,8 +208,13 @@ public struct TicketDetail: Codable, Sendable, Equatable {
     public var question: QuestionRow?
     /// The open issues this ticket waits for; empty from a daemon that predates the field.
     public var blockers: [BlockerRef]
+    /// `retry from ci when unblocked` while a `starpipe retry --when-unblocked` waits; nil from a daemon that predates it.
+    public var heldRetry: String?
 
-    enum CodingKeys: String, CodingKey { case number, plan, checks, question, blockers }
+    enum CodingKeys: String, CodingKey {
+        case number, plan, checks, question, blockers
+        case heldRetry = "held_retry"
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -218,6 +223,7 @@ public struct TicketDetail: Codable, Sendable, Equatable {
         checks = try c.decode([CheckRow].self, forKey: .checks)
         question = try c.decodeIfPresent(QuestionRow.self, forKey: .question)
         blockers = try c.decodeIfPresent([BlockerRef].self, forKey: .blockers) ?? []
+        heldRetry = try c.decodeIfPresent(String.self, forKey: .heldRetry)
     }
 }
 

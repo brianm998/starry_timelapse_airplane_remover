@@ -158,14 +158,17 @@ final class DetailTests: XCTestCase {
         XCTAssertEqual(d.checks.first?.result, "pass")
         XCTAssertNil(d.question)
         XCTAssertEqual(d.blockers, [BlockerRef(number: 27, title: "Processing Frames dialog: remember the window size")])
+        XCTAssertEqual(d.heldRetry, "retry from ci when unblocked")
     }
 
     func testADetailWithoutBlockersFromAnOlderDaemonDecodesToNone() throws {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "detail", withExtension: "json", subdirectory: "Fixtures"))
         var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         raw["blockers"] = nil
+        raw["held_retry"] = nil
         let d = try JSONDecoder().decode(TicketDetail.self, from: JSONSerialization.data(withJSONObject: raw))
         XCTAssertEqual(d.blockers, [])
+        XCTAssertNil(d.heldRetry)
         XCTAssertEqual(d.number, 28)
     }
 }

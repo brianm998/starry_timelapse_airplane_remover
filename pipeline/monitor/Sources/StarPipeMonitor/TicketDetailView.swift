@@ -80,13 +80,18 @@ struct TicketDetailView: View {
         }
     }
 
-    /// The open issues this ticket waits for, one link per line; absent when nothing blocks it.
+    /// The open issues this ticket waits for, one link per line, and the retry held for them; absent when there is neither.
     @ViewBuilder
     private var blockedBy: some View {
-        let rows = store.detail.map { $0.number == ticket.number ? BlockerLinks.detailRows(blockers: $0.blockers, repo: repo) : [] } ?? []
-        if !rows.isEmpty {
+        let current = store.detail.flatMap { $0.number == ticket.number ? $0 : nil }
+        let rows = current.map { BlockerLinks.detailRows(blockers: $0.blockers, repo: repo) } ?? []
+        let held = current?.heldRetry
+        if !rows.isEmpty || held != nil {
             GroupBox("Blocked by") {
                 VStack(alignment: .leading, spacing: 4) {
+                    if let held {
+                        Text(held).textSelection(.enabled)
+                    }
                     ForEach(rows) { row in
                         HStack(alignment: .firstTextBaseline) {
                             Button(row.label) { store.selectIssue(row.number, title: row.title) }
