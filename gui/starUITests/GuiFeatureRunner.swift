@@ -317,10 +317,11 @@ final class GuiFeatureRunner {
         let home = scratch.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         app.launchEnvironment["HOME"] = home.path
+        if savesScreenshots { try keepGPUMergeOff() }
         // Ignore the windows the last run of the app left open (macOS restores them): a feature starts from the app as it opens, not from where an earlier one quit.
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"] + arguments
         // The parity gallery's window is 1400 by 1100 points, as the desktop client's test window is: XCUITest cannot size a window, so the app does (`ViewModel.uiTestWindowSize`).
-        if feature?.steps.contains(where: { $0.action == .saveScreenshot || $0.action == .saveWindowScreenshot }) == true {
+        if savesScreenshots {
             app.launchArguments += ["-StarUITestWindowSize", "\(Self.galleryWindowSize)"]
         }
         app.launch()
@@ -666,6 +667,18 @@ final class GuiFeatureRunner {
         process.waitUntilExit()
         guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: video.path) else { throw RunnerError("could not make a video from \(copy.path)") }
         try launch(arguments: ["-StarUITestOpenVideo", video.path])
+    }
+
+    private var savesScreenshots: Bool {
+        feature?.steps.contains(where: { $0.action == .saveScreenshot || $0.action == .saveWindowScreenshot }) == true
+    }
+
+    /// A gallery feature can start a run (the processing modal), and this Mac must never run the GPU merge (CLAUDE.md): the scratch preferences
+    /// say so, whatever else they hold (a `recent sequences` seed is kept).
+    private func keepGPUMergeOff() throws {
+        var object = ((try? Data(contentsOf: preferencesFile)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }) ?? [:]
+        object["useGPUForMerge"] = false
+        try JSONSerialization.data(withJSONObject: object).write(to: preferencesFile)
     }
 
     /// The main window's content size the gallery is taken at (points), which is the desktop client's test window in pixels.

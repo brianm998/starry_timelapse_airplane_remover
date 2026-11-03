@@ -292,6 +292,14 @@ class DesktopFeatureRunner {
             preferences.addProperty("language", code)
             file.writeText(preferences.toString())
         }
+        // A gallery feature can start a run (the processing modal), and this Mac must never run the GPU merge (CLAUDE.md): the scratch preferences say so,
+        // whatever else they hold.
+        if (feature.steps.any { it.action == StepAction.SAVE_SCREENSHOT || it.action == StepAction.SAVE_WINDOW_SCREENSHOT }) {
+            val file = preferencesFile()
+            val preferences = runCatching { JsonParser.parseString(file.readText()).asJsonObject }.getOrElse { JsonObject() }
+            preferences.addProperty("useGPUForMerge", false)
+            file.writeText(preferences.toString())
+        }
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         scope = appScope
         // No auto-open hook and no autoMode: either one suppresses the startup prompts, and the prompts are how a user sets the

@@ -167,6 +167,36 @@
     },
     "uiMultiChoiceSheet": {
       "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryStartup": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryProcessing": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGallerySequence": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryProcessed": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryMultiSelect": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryMultiChoice": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryPostRender": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryWindows": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryVideoImport": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryLocation": {
+      "sequence": "test_data/test_a7sii_10"
     }
   }
 }
