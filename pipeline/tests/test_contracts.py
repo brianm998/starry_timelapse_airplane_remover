@@ -169,7 +169,10 @@ def _red_contract(tmp: Path, monkeypatch: pytest.MonkeyPatch, head: list[str], b
     """A branch whose diff needs `test:StarCpp`, which is red at HEAD with `head` failing; `base` is what the merge-base gives."""
     c = contract(tmp)
     commit_change_for(c)
-    monkeypatch.setattr(impact, "plan_for", lambda _paths: impact.Plan(tests=["test:StarCpp"]))
+    def needs_the_test(_paths: list[str]) -> impact.Plan:
+        return impact.Plan(tests=["test:StarCpp"])
+
+    monkeypatch.setattr(impact, "plan_for", needs_the_test)
     sha = gitutil.head_sha(c.worktree)
     red = ledger.Result("test:StarCpp", "fail", sha, 0.0, executed=10, failed=len(head) if failed is None else failed, failures=head)
     ledger.record(red)
