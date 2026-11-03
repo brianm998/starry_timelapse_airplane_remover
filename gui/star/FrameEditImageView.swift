@@ -168,6 +168,13 @@ public struct FrameEditImageView: View {
         }
     }
 
+    /// The id of the group a UI test clicks, only under `-StarUITestProbes YES` (`OutlierGroupView.probeGroupId`).
+    private func probeGroupId(drawn: [OutlierGroupViewModel]) -> String? {
+        guard ViewModel.uiTestProbes else { return nil }
+        let candidates = drawn.map { OutlierGroupView.ProbeCandidate(id: $0.group.id, bounds: $0.group.bounds, size: $0.group.size) }
+        return OutlierGroupView.probeGroupId(groups: candidates, pointsPerPixel: viewModel.currentZoomScale)
+    }
+
     public var body: some View {
         @Bindable var viewModel = viewModel
 
@@ -229,11 +236,7 @@ public struct FrameEditImageView: View {
                             }
                             // a test finds one group, one a click can hit at the size the frame is shown at
                             // (`-StarUITestProbes YES`, `outlier.first` in `gherkin/ui/ids.json`, `OutlierGroupView.probeGroupId`)
-                            let probe = ViewModel.uiTestProbes
-                              ? OutlierGroupView.probeGroupId(
-                                groups: sorted.map { .init(id: $0.group.id, bounds: $0.group.bounds, size: $0.group.size) },
-                                pointsPerPixel: viewModel.currentZoomScale)
-                              : nil
+                            let probe = self.probeGroupId(drawn: sorted)
                             ForEach(sorted) { outlierViewModel in
                                 if outlierViewModel.group.size > 40 { // XXX use a constant here
                                     OutlierGroupView(groupViewModel: outlierViewModel,
