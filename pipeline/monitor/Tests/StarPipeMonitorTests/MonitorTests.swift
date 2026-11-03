@@ -767,3 +767,100 @@ final class UsageLimitTextTests: XCTestCase {
         XCTAssertEqual(line(.fiveHour, window(0.95, in: 0)).level, .unknown)
     }
 }
+
+@MainActor
+final class ProposalTests: XCTestCase {
+    private func client() -> APIClient {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [StubProtocol.self]
+        return APIClient(config: APIConfig(baseURL: URL(string: "http://127.0.0.1:1")!, token: "tok"), session: URLSession(configuration: cfg))
+    }
+
+    /// The recorded snapshot with `proposals` removed, as an older daemon sends it.
+    private func olderDaemonsSnapshot() throws -> Snapshot {
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: FixtureTests.fixture()) as? [String: Any])
+        json.removeValue(forKey: "proposals")
+        return try JSONDecoder().decode(Snapshot.self, from: JSONSerialization.data(withJSONObject: json))
+    }
+
+    private func withProposals(_ list: [ProposalSnap]) throws -> Snapshot {
+        var s = try FixtureTests.snapshot()
+        s.proposalList = list
+        return s
+    }
+
+    func testProposalsDecodeAndOldSnapshotsStillDo() throws {
+        XCTAssertEqual(try FixtureTests.snapshot().proposals,
+                       [ProposalSnap(number: 31, title: "Show the retry budget", by: "review agent")])
+        let old = try olderDaemonsSnapshot()
+        XCTAssertEqual(old.proposals, [])
+        XCTAssertEqual(old.tickets.count, 6)
+    }
+
+    func testProposalRowsComeFromTheSnapshot() throws {
+        let store = MonitorStore()
+        XCTAssertEqual(store.proposals, [])
+        store.apply(try FixtureTests.snapshot())
+        XCTAssertEqual(store.proposals.map(\.number), [31])
+        XCTAssertEqual(store.proposals.first?.title, "Show the retry budget")
+        XCTAssertEqual(store.proposals.first?.by, "review agent")
+        store.apply(try olderDaemonsSnapshot())
+        XCTAssertEqual(store.proposals, [])
+    }
+
+    func testSelectingAProposalIsShowableAndClearsWhenItGoes() throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        store.selected = 31
+        XCTAssertEqual(store.selectedProposal?.title, "Show the retry budget")
+        XCTAssertNil(store.selectedTicket)
+        XCTAssertNil(store.selectedIssue, "a proposal has its own pane, not the generic issue one")
+        store.apply(try FixtureTests.snapshot())   // survives a refresh while it exists
+        XCTAssertEqual(store.selected, 31)
+        store.apply(try olderDaemonsSnapshot())    // gone: approved, rejected or closed elsewhere
+        XCTAssertNil(store.selected)
+        XCTAssertNil(store.selectedProposal)
+    }
+
+    func testApproveAndRejectPostThenRefresh() async throws {
+        let fixture = try FixtureTests.fixture()
+        final class Seen: @unchecked Sendable { var requests: [(String, String, String)] = [] }
+        let seen = Seen()
+        func body(_ r: URLRequest) -> String {
+            let data = r.httpBodyStream.flatMap { stream -> Data in
+                stream.open()
+                defer { stream.close() }
+                var data = Data()
+                var buf = [UInt8](repeating: 0, count: 1024)
+                while stream.hasBytesAvailable {
+                    let n = stream.read(&buf, maxLength: buf.count)
+                    if n <= 0 { break }
+                    data.append(buf, count: n)
+                }
+                return data
+            } ?? r.httpBody ?? Data()
+            return String(decoding: data, as: UTF8.self)
+        }
+        StubProtocol.handler = { request in
+            seen.requests.append((request.httpMethod ?? "", request.url?.path ?? "", body(request)))
+            return request.url?.path == "/v1/snapshot" ? (200, fixture) : (200, Data(#"{"result": "ok"}"#.utf8))
+        }
+        let store = MonitorStore(client: client())
+        await store.approve(31, priority: "p1")
+        XCTAssertNil(store.lastError)
+        XCTAssertEqual(seen.requests.first?.1, "/v1/proposals/31/approve")
+        XCTAssertEqual(seen.requests.first?.0, "POST")
+        XCTAssertTrue(seen.requests.first?.2.contains("\"p1\"") ?? false)
+        XCTAssertEqual(store.snapshot?.proposals.map(\.number), [31], "the snapshot is refreshed after the post")
+        await store.reject(31, reason: "not now")
+        let reject = try XCTUnwrap(seen.requests.first { $0.1 == "/v1/proposals/31/reject" })
+        XCTAssertTrue(reject.2.contains("not now"))
+
+        StubProtocol.handler = { request in
+            request.url?.path == "/v1/snapshot" ? (200, fixture) : (409, Data("3 tickets are already open for the pipeline".utf8))
+        }
+        await store.approve(31)
+        XCTAssertEqual(store.lastError, APIError.status(409, "3 tickets are already open for the pipeline").localizedDescription)
+        XCTAssertTrue(store.lastError?.contains("already open") ?? false)
+    }
+}

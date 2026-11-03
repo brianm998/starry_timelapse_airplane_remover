@@ -65,7 +65,7 @@
     "paused": false,
     "stop_line": null
   },
-  "max_active": 3,
+  "max_active": 2,
   "muted": false,
   "nightly": {
     "at": 1500.0,

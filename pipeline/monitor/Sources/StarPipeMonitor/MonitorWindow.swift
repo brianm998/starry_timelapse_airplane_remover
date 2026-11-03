@@ -15,6 +15,9 @@ struct MonitorWindow: View {
                 if let ticket = store.selectedTicket {
                     TicketDetailView(store: store, ticket: ticket)
                         .id(ticket.number)
+                } else if let proposal = store.selectedProposal {
+                    ProposalDetailView(store: store, proposal: proposal)
+                        .id(proposal.number)
                 } else if let issue = store.selectedIssue {
                     IssuePanelView(number: issue.number, title: issue.title, repo: store.snapshot?.repo ?? "")
                         .id(issue.number)
@@ -199,15 +202,37 @@ struct Sidebar: View {
                         }
                     }
                 }
+                if !store.proposals.isEmpty {
+                    Section {
+                        ForEach(store.proposals) { ProposalRow(proposal: $0).tag($0.number) }
+                    } header: {
+                        Text("Proposed").scaledFont(.body, weight: .semibold)
+                    }
+                }
             }
             .overlay {
-                if store.snapshot?.tickets.isEmpty == true {
+                if store.snapshot?.tickets.isEmpty == true && store.proposals.isEmpty {
                     ContentUnavailableView {
                         Label("No tickets in flight", systemImage: "tray").scaledFont(.title2, weight: .bold)
                     }
                 }
             }
         }
+    }
+}
+
+struct ProposalRow: View {
+    let proposal: ProposalSnap
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text("#\(proposal.number)").monospacedDigit().foregroundStyle(.secondary)
+                Text(proposal.title).lineLimit(1)
+            }
+            Text("by \(proposal.by)").scaledFont(.caption).foregroundStyle(.secondary).lineLimit(1)
+        }
+        .padding(.vertical, 2)
     }
 }
 
