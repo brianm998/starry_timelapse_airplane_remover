@@ -18,7 +18,7 @@ from typing import Any, cast
 from . import gitutil, guards, landing, load, negctl, ship, tickets, trust, worktrees
 from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
 from .announce import Announcer, Kind, SilentAnnouncer
-from .checks import impact, ledger
+from .checks import baseline, impact, ledger
 from .config import Config, home
 from .contracts import CheckRunner, Contract
 from .db import ACTIVE_STATES, Database, Ticket
@@ -68,6 +68,7 @@ class Engine:
     sleep: Sleep = asyncio.sleep
     negative_control: Callable[[Path, str, list[str]], list[negctl.Control]] = negctl.run
     shim: str = ""
+    baseline_runner: baseline.BaselineRunner = baseline.result_at_base
     parked: set[int] = field(default_factory=lambda: set[int]())
     cpu: Callable[[], float] = lambda: 0.0  # the rolling CPU average; the daemon injects its meter
     llm_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-start is one step
@@ -354,7 +355,7 @@ class Engine:
                           allow_resolve: bool = True, as_landing: bool | None = None) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
         contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db, self.gh, self.check_runner,
-                            self.notifier, owner_filed=self._owner_filed(t))
+                            self.notifier, owner_filed=self._owner_filed(t), baseline_runner=self.baseline_runner)
         resume = None if fresh else self._last_session(t, stage)
         note = self.db.get(f"catch_up_note:{t.number}")
         if note:  # develop was merged into the branch while the ticket was stopped: the resumed session did not make those commits
@@ -699,6 +700,13 @@ class Engine:
         self._to_state(t.number, "review")
         return True
 
+    def _known_red(self, t: Ticket, sha: str, wt: Path, r: ledger.Result) -> bool:
+        """A red test check whose failing tests develop shares is not this change's (checks/baseline.py)."""
+        found = baseline.known_red(wt, self.base_ref, r, self.baseline_runner, self.notifier)
+        if found:
+            baseline.note(self.db, t.number, sha, found)
+        return found is not None
+
     def _run_verification(self, t: Ticket, wt: Path) -> str:
         """The daemon's own run of T0+T1 at HEAD and the negative control. Empty string means green."""
         sha = gitutil.head_sha(wt)
@@ -709,7 +717,7 @@ class Engine:
             self.db.record_check(t.number, sha, r.check, r.status,
                                  {"executed": r.executed, "failed": r.failed, "skipped": r.skipped}, r.log)
         self.notifier.hung_checks(t.number, results)
-        red = [r for r in results if not r.green]
+        red = [r for r in results if not r.green and not self._known_red(t, sha, wt, r)]
         if red:
             return "\n".join(f"{r.status.upper()} {r.check}: {r.detail} (log {r.log})" for r in red)
         plan = t.plan or {}
