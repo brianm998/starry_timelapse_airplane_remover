@@ -4160,7 +4160,7 @@ final class ClickRuleTests: XCTestCase {
     func testTheProbeGroupIsOneAClickCanHit() {
         typealias C = OutlierGroupView.ProbeCandidate
         func box(_ x: Int, _ y: Int, _ w: Int, _ h: Int) -> BoundingBox {
-            BoundingBox(min: Coord(x: x, y: y), max: Coord(x: x + w - 1, y: y + h - 1))
+            BoundingBox(between: CGPoint(x: x, y: y), and: CGPoint(x: x + w - 1, y: y + h - 1))
         }
         let pointsPerPixel: CGFloat = 0.03
         // ids: big 1, tiny 2, thin 3, few 4, middle 5, cover 6
