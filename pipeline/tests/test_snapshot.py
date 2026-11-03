@@ -95,7 +95,8 @@ def test_the_snapshot_ticket_carries_the_running_stages_model(rig: Rig) -> None:
 
 def test_snapshot_rows_carry_body(rig: Rig) -> None:
     d = populate(rig)
-    rows = {t["number"]: t for t in d.snapshot()["tickets"]}  # type: ignore[index, union-attr]
+    rows: dict[int, dict[str, Any]] = {t["number"]: t for t in d.snapshot()["tickets"]}  # type: ignore[index, union-attr, misc]
+    assert len(rows) == 6
     for n, row in rows.items():
         ticket = rig.db.ticket(n)
         assert ticket and ticket.body and row["body"] == ticket.body
