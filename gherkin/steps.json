@@ -69,5 +69,7 @@
   { "case": "menuNotThere"          , "text": "the menu \"<menu>\" is not there" },
   { "case": "processedCopy"         , "text": "a processed copy of the sequence {sequence}" },
   { "case": "openProcessed"         , "text": "I open the processed copy" },
-  { "case": "confirmCloseIfAsked"   , "text": "I confirm closing if it is asked" }
+  { "case": "confirmCloseIfAsked"   , "text": "I confirm closing if it is asked" },
+  { "case": "saveScreenshot"        , "text": "I save a screenshot named \"<name>\"" },
+  { "case": "saveWindowScreenshot"  , "text": "I save a screenshot of the \"<window>\" window named \"<name>\"" }
 ]

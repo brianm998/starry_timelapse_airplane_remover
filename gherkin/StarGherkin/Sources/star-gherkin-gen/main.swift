@@ -397,12 +397,16 @@ func loadUIReferences(root: URL) throws -> UIReferences {
     return UIReferences(ids: ids, catalogueKeys: Set(en.keys), commandIds: Set(commands.compactMap { $0["id"] }), prefsFixtures: prefsFixtures, languages: languages, menus: Set(menus.keys))
 }
 
+/// The secondary windows a step may name (`the "<window>" window is open`, `I save a screenshot of the "<window>" window ...`).
+let knownWindows: Set<String> = ["debug", "outlier", "alignment", "blob"]
+
 func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], featureParams: [String: String], references: UIReferences) throws {
     try validateUITags(f)
     if !f.tags.contains("@ui") { try validateSettings(f, steps: steps) }
     if !isLowerCamel(f.basename) { throw GenError("\(f.file): basename `\(f.basename)` must be lowerCamelCase") }
     if !f.tags.contains("@\(f.basename)") { throw GenError("\(f.file): missing its own tag @\(f.basename)") }
     if f.steps.isEmpty { throw GenError("\(f.file): the scenario has no steps") }
+    var screenshotNames = Set<String>()
     for s in f.steps {
         guard stepKeywords.contains(s.keyword) else {
             throw GenError("\(f.file):\(s.line): step keyword `\(s.keyword)` is not one of \(stepKeywords.joined(separator: ", "))")
@@ -425,6 +429,18 @@ func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], 
             }
             if name == "fixture" && !references.prefsFixtures.contains(arg) {
                 throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a file of gherkin/ui/fixtures/prefs/ (without .json)")
+            }
+            if name == "window" && !knownWindows.contains(arg) {
+                throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a window (\(knownWindows.sorted().joined(separator: ", ")))")
+            }
+            if name == "name" && found.def.caseName.hasPrefix("save") && found.def.caseName.hasSuffix("Screenshot") {
+                // a screenshot is a file `<name>.png` of the gallery: a plain stem, and one screen of a feature has one name
+                guard arg.range(of: "^[A-Za-z0-9_-]+$", options: .regularExpression) != nil else {
+                    throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a file name for a screenshot (letters, digits, - and _ only)")
+                }
+                if !screenshotNames.insert(arg).inserted {
+                    throw GenError("\(f.file):\(s.line): the screenshot \"\(arg)\" is saved twice in this feature (the second would overwrite the first)")
+                }
             }
             if name == "key" && ["idReads", "clickLabel"].contains(found.def.caseName) && !references.catalogueKeys.contains(arg) {
                 throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a key of the English catalogue")
