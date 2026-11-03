@@ -139,6 +139,13 @@ class FakeGitHub(GitHub):
     def blocked_by(self, number: int) -> list[int]:
         return self.deps.get(number, [])
 
+    def block(self, number: int, blocked_by: int) -> None:
+        self.issue(blocked_by)
+        self.deps.setdefault(number, []).append(blocked_by)
+
+    def unblock(self, number: int, blocked_by: int) -> None:
+        self.deps[number].remove(blocked_by)
+
     def comment(self, number: int, body: str) -> int:
         return self.say(number, OWNER, body)  # the pipeline posts with the owner's token
 

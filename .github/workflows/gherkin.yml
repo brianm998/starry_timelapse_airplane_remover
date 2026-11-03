@@ -23,7 +23,7 @@ name: Gherkin
 # Test data is fetched from the `test-data` release (test_data/datasets.json) into .test-data by every job, and is NOT cached:
 # one actions/cache entry per (client, feature) held 7.6 GiB of the ~9.9 GiB in use against the repository's 10 GB Actions cache limit
 # (the same dataset stored once per feature that uses it), so every save evicted something that was expensive to rebuild (the
-# macOS and Windows ffmpeg, the Windows OpenCV and StarDecisionTrees) and those rebuilt on every run.  A release download is seconds; see
+# macOS and Windows ffmpeg, StarDecisionTrees) and those rebuilt on every run.  A release download is seconds; see
 # https://docs.github.com/actions/using-workflows/caching-dependencies-to-speed-up-workflows#usage-limits-and-eviction-policy
 #
 # Every leg ends with a "vacuous green" check: it fails the job unless the log (or the Gradle XML) shows that every feature of the
@@ -39,9 +39,10 @@ name: Gherkin
 # the CI judge waits for and blocks on. See "The smoke subset on a PR" in gherkin/README.md.
 #
 # DUPLICATED ON PURPOSE (collapse into reusable workflows later, see gherkin/README.md): the apt/Eigen/
-# Swift/MSVC/OpenCV/StarDecisionTrees setup of cli.yml's `linux`/`macos`/`windows` jobs, the stard build
+# Swift/MSVC/StarDecisionTrees setup of cli.yml's `linux`/`macos`/`windows` jobs, the stard build
 # steps of kotlin-client.yml's linux-package/windows-package/macos-signed jobs, and cli.yml's
-# ci-assets fetch for the GUI. Their cache keys are shared with those jobs.
+# ci-assets fetch for the GUI. Their cache keys are shared with those jobs. OpenCV is not duplicated: it comes from opencv.yml
+# (jobs opencv-linux/-macos/-windows below), the artifact opencv-<os> downloaded into opencv/.
 
 # A push to develop does NOT start it any more: the full matrix takes 3-4 h and a newer push cancelled the older run, so on a busy day
 # none finished. The starpipe daemon dispatches ONE full run a night (23:00 local, pipeline/src/starpipe/gherkin_nightly.py) when
@@ -82,6 +83,11 @@ on:
 # The run name tells a full run from a subset: the daemon counts only `Gherkin: full` (or a push, which was always full) as a
 # green full run, never `Gherkin: <features>`. Other events keep GitHub's own title (the PR title, the head commit message).
 run-name: "${{ github.event_name == 'workflow_dispatch' && format('Gherkin: {0}', inputs.features || 'full') || github.event.pull_request.title || github.event.head_commit.message }}"
+
+# gherkin-smoke.yml grants its caller job contents: write so the opencv-<os> jobs can save a build as a release asset; every other job here
+# only reads
+permissions:
+  contents: read
 
 concurrency:
   group: gherkin-${{ github.workflow }}-${{ github.ref }}
@@ -196,7 +202,7 @@ jobs:
   cli-linux:
     name: cli (ubuntu-24.04) · ${{ matrix.shard.label }}
     runs-on: ubuntu-24.04
-    needs: [features, ffmpeg-linux]
+    needs: [features, ffmpeg-linux, opencv-linux]
     if: needs.features.outputs.cli != '[]'
     strategy:
       fail-fast: false
@@ -229,18 +235,11 @@ jobs:
         with:
           swift-version: '6.0'
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/linux
-            opencv/include
-          key: opencv-linux-${{ steps.opencv-key.outputs.key }}
+          name: opencv-linux
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -249,10 +248,6 @@ jobs:
             StarDecisionTrees/lib/release/linux
             StarDecisionTrees/include/release/linux
           key: dt-linux-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/linux/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -321,7 +316,7 @@ jobs:
   cli-windows:
     name: cli (windows-2022) · ${{ matrix.shard.label }}
     runs-on: windows-2022
-    needs: [features, ffmpeg-windows]
+    needs: [features, ffmpeg-windows, opencv-windows]
     if: needs.features.outputs.cli != '[]'
     strategy:
       fail-fast: false
@@ -426,18 +421,11 @@ jobs:
               }
           }
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/windows
-            opencv/include
-          key: opencv-windows-msvc14.40-sdk22621-${{ steps.opencv-key.outputs.key }}
+          name: opencv-windows
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -446,10 +434,6 @@ jobs:
             StarDecisionTrees/lib/release/windows
             StarDecisionTrees/include/release/windows
           key: dt-windows-msvc14.40-sdk22621-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/windows/opencv2.lib ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -533,7 +517,7 @@ jobs:
   cli-macos:
     name: cli (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
-    needs: [features, ffmpeg-macos]
+    needs: [features, ffmpeg-macos, opencv-macos]
     if: needs.features.outputs.cli != '[]'
     strategy:
       fail-fast: false
@@ -567,18 +551,11 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/macos
-            opencv/include
-          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
+          name: opencv-macos
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -587,10 +564,6 @@ jobs:
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
           key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/macos/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -672,10 +645,35 @@ jobs:
     with:
       platforms: windows
 
+  # opencv.yml once per OS (cache, then the opencv-prebuilt release, then a build), so a leg waits for the OpenCV of its own OS only.
+  opencv-linux:
+    name: OpenCV (linux)
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: linux
+
+  opencv-macos:
+    name: OpenCV (macos)
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: macos
+
+  opencv-windows:
+    name: OpenCV (windows)
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: windows
+
   mac-gui:
     name: mac gui (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
-    needs: [features, ffmpeg-macos]
+    needs: [features, ffmpeg-macos, opencv-macos]
     if: needs.features.outputs.macgui != '[]'
     strategy:
       fail-fast: false
@@ -723,18 +721,11 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/macos
-            opencv/include
-          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
+          name: opencv-macos
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -743,10 +734,6 @@ jobs:
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
           key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/macos/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -855,7 +842,7 @@ jobs:
   desktop-linux:
     name: desktop (ubuntu-24.04) · ${{ matrix.shard.label }}
     runs-on: ubuntu-24.04
-    needs: [features, ffmpeg-linux]
+    needs: [features, ffmpeg-linux, opencv-linux]
     if: needs.features.outputs.desktop != '[]'
     strategy:
       fail-fast: false
@@ -889,18 +876,11 @@ jobs:
         with:
           swift-version: '6.0'
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/linux
-            opencv/include
-          key: opencv-linux-${{ steps.opencv-key.outputs.key }}
+          name: opencv-linux
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -909,10 +889,6 @@ jobs:
             StarDecisionTrees/lib/release/linux
             StarDecisionTrees/include/release/linux
           key: dt-linux-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/linux/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -954,10 +930,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-
-      # release.sh cloned OpenCV above, and its Android sample wrapper jar is not one setup-gradle recognises.
-      - name: Drop OpenCV's vendored Android Gradle wrapper
-        run: rm -rf opencv/opencv/platforms/android
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -1015,7 +987,7 @@ jobs:
   desktop-windows:
     name: desktop (windows-2022) · ${{ matrix.shard.label }}
     runs-on: windows-2022
-    needs: [features, ffmpeg-windows]
+    needs: [features, ffmpeg-windows, opencv-windows]
     if: needs.features.outputs.desktop != '[]'
     strategy:
       fail-fast: false
@@ -1123,18 +1095,11 @@ jobs:
               }
           }
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/windows
-            opencv/include
-          key: opencv-windows-msvc14.40-sdk22621-${{ steps.opencv-key.outputs.key }}
+          name: opencv-windows
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -1143,10 +1108,6 @@ jobs:
             StarDecisionTrees/lib/release/windows
             StarDecisionTrees/include/release/windows
           key: dt-windows-msvc14.40-sdk22621-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/windows/opencv2.lib ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -1190,9 +1151,6 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Drop OpenCV's vendored Android Gradle wrapper
-        run: rm -rf opencv/opencv/platforms/android
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -1234,7 +1192,7 @@ jobs:
   desktop-macos:
     name: desktop (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
-    needs: [features, ffmpeg-macos]
+    needs: [features, ffmpeg-macos, opencv-macos]
     if: needs.features.outputs.desktop != '[]'
     strategy:
       fail-fast: false
@@ -1270,18 +1228,11 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/macos
-            opencv/include
-          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
+          name: opencv-macos
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -1290,10 +1241,6 @@ jobs:
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
           key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/macos/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -1335,9 +1282,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-
-      - name: Drop OpenCV's vendored Android Gradle wrapper
-        run: rm -rf opencv/opencv/platforms/android
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4

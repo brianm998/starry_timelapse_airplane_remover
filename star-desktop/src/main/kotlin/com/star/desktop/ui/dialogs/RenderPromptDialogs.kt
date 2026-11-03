@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
@@ -49,8 +50,10 @@ fun PreProcessingRenderPrompt(app: AppViewModel) {
             color = StarColors.textSecondary, fontSize = 13.sp,
         )
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = { app.confirmStartProcessing(autoRender = false, dontAskAgain = true) }) {
-                Text(localized("ui.don_t_ask_me_again"))
+            HoverTip(localized("ui.start_processing_now_and_stop_showing_render")) {
+                OutlinedButton(onClick = { app.confirmStartProcessing(autoRender = false, dontAskAgain = true) }) {
+                    Text(localized("ui.don_t_ask_me_again"))
+                }
             }
             Box(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -108,11 +111,15 @@ fun PostProcessingRenderPrompt(app: AppViewModel) {
             OutlinedButton(onClick = app::dismissPostRenderPrompt, modifier = Modifier.testTag("prompt.post.cancel")) { Text(localized("ui.cancel")) }
             Box(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = app::previewFinalFrames) { Text(localized("ui.preview_first")) }
-                Button(
-                    onClick = app::confirmRenderAfterProcessing,
-                    colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                ) { Text(localized("ui.yes")) }
+                HoverTip(localized("ui.play_the_final_processed_frames_from_the")) {
+                    OutlinedButton(onClick = app::previewFinalFrames) { Text(localized("ui.preview_first")) }
+                }
+                HoverTip(localized("ui.render_now_using_the_current_settings")) {
+                    Button(
+                        onClick = app::confirmRenderAfterProcessing,
+                        colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                    ) { Text(localized("ui.yes")) }
+                }
             }
         }
     }
