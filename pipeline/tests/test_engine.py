@@ -166,6 +166,30 @@ async def test_nothing_new_is_claimed_while_a_landing_stage_waits_for_a_session(
     assert rig.engine.claimable() is None
 
 
+async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
+    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    rig.db.begin_stage(5, "develop", 1, "sonnet")
+    rig.db.put("self_update_pending", "e3c559f6aabb")
+    rig.db.put("self_update_pending_since", str(rig.now))
+    drain = rig.engine.config.self_update_drain_s
+    assert drain == 600
+
+    assert rig.engine.claimable() is None, "nothing new is claimed inside the window"
+    hold = rig.engine.update_hold()
+    assert hold == {"sha": "e3c559f6aabb", "left_s": drain, "waiting_on": [5]}
+
+    rig.now += drain - 60
+    assert rig.engine.claimable() is None and rig.engine.update_hold()["left_s"] == 60  # type: ignore[index]
+    rig.now += 61
+    assert rig.engine.update_hold() is None and rig.engine.claimable() is not None, "the window has passed: the daemon swaps, no hold"
+
+    rig.now -= 100  # back inside the window
+    assert rig.engine.claimable() is None
+    rig.db.put("self_update_pending", None)
+    assert rig.engine.claimable() is not None, "no pending update, no hold"
+
+
 async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Rig) -> None:
     assert rig.engine.max_active() == rig.engine.config.max_llm_sessions
     rig.db.put("max_active", "2")
