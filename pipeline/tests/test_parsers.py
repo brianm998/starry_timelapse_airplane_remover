@@ -44,7 +44,13 @@ def test_skips_for_missing_fixtures_and_opt_in_measurements_are_expected() -> No
                 "Test Case '-[StarCoreTests.T d]' skipped (0.001 seconds).\n"
                 "/w/Q.swift:41: -[StarCppBridgeTests.Q e] : Test skipped - GCD's width narrowing for DISPATCH_APPLY_AUTO was only "
                 "measured on Apple silicon\n"
-                "Test Case '-[StarCppBridgeTests.Q e]' skipped (0.001 seconds).\n")
+                "Test Case '-[StarCppBridgeTests.Q e]' skipped (0.001 seconds).\n"
+                "/w/G.swift:327: -[StarCppBridgeTests.G f] : Test skipped - run with 'swift test -c release' -- see doc comment\n"
+                "Test Case '-[StarCppBridgeTests.G f]' skipped (0.001 seconds).\n"
+                "/w/U.swift:528: -[StarCppBridgeTests.U g] : Test skipped - a discrete GPU always copies\n"
+                "Test Case '-[StarCppBridgeTests.U g]' skipped (0.001 seconds).\n"
+                "/w/K.swift:24: -[StarCppBridgeTests.K h] : Test skipped - set STAR_KP_MEASURE=1\n"
+                "Test Case '-[StarCppBridgeTests.K h]' skipped (0.000 seconds).\n")
     assert parsers.parse_xctest(XC_GREEN + expected).skipped == 0
     other = ("/w/X.swift:9: -[StarCoreTests.X e] : Test skipped - the decoder is not available\n"
              "Test Case '-[StarCoreTests.X e]' skipped (0.001 seconds).\n")

@@ -12,6 +12,12 @@ import StarCpp
 /// `DISPATCH_APPLY_AUTO` a `.background` caller got 6 worker threads where the unpatched
 /// queue spread the same work across all 18, so Light actually takes fewer cores.
 /// `testLowQoSUsesFewerWorkersThanNormalQoS` is the one that fails without the patch.
+///
+/// That width test is only meaningful on Apple silicon, the only hardware the narrowing has
+/// been measured on. On x86_64 (an iMac Pro, macOS 15.8) GCD gives `.background` the same
+/// worker count as `.utility` (36 vs 36) even with the patch compiled in, so the test is
+/// skipped there. The inheritance tests do not prove the patch, so on Intel nothing in this
+/// file guards it.
 final class OpenCVQoSTests: XCTestCase {
 
     /// [user-interactive, user-initiated, default, utility, background, unspecified, threads]
@@ -33,6 +39,10 @@ final class OpenCVQoSTests: XCTestCase {
     func testLowQoSUsesFewerWorkersThanNormalQoS() throws {
         #if !os(macOS)
         throw XCTSkip("QoS classes are Apple-only")
+        #elseif arch(x86_64)
+        throw XCTSkip("GCD's width narrowing for DISPATCH_APPLY_AUTO was only measured on Apple "
+                      + "silicon; on Intel it gives .background the same worker count as .utility, "
+                      + "so this test cannot tell whether the OpenCV patch is present")
         #else
         guard ProcessInfo.processInfo.activeProcessorCount >= 8 else {
             throw XCTSkip("too few cores for the worker counts to differ")
