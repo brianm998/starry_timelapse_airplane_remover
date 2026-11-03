@@ -988,11 +988,25 @@ class DesktopFeatureRunner {
         val source = resolveSequence(param("sequence"))
         val script = File(repoRoot(), "gherkin/ui/make-processed-fixture.sh")
         // A machine without a built cli builds it (the script's STAR_CLI_BUILD): the first feature of a run that needs the processed sequence waits for that.
-        val builder = ProcessBuilder("bash", script.path, source.path).redirectError(ProcessBuilder.Redirect.INHERIT)
+        val builder = ProcessBuilder("bash", script.path, source.path)
         builder.environment().putIfAbsent("STAR_CLI_BUILD", "1")
         val process = builder.start()
+        // The script's stderr (its own messages, the cli build) is read as it comes, passed on to the log, and its tail goes into the error: an inherited
+        // stderr never reached the CI log of the Gradle test worker, which left a script that exited at once with nothing to say why.
+        val errTail = ArrayDeque<String>()
+        val errReader = Thread {
+            process.errorStream.bufferedReader().forEachLine { line ->
+                System.out.println("processed fixture: $line")
+                synchronized(errTail) { errTail.addLast(line); if (errTail.size > 40) errTail.removeFirst() }
+            }
+        }.apply { isDaemon = true; start() }
         val printed = process.inputStream.bufferedReader().readText().lines().lastOrNull { it.isNotBlank() }?.trim()
-        if (process.waitFor() != 0 || printed == null) throw RunnerError("could not make the processed sequence (the script's own message is above)")
+        val exit = process.waitFor()
+        errReader.join(5_000)
+        if (exit != 0 || printed == null) {
+            val said = synchronized(errTail) { errTail.joinToString("\n") }
+            throw RunnerError("could not make the processed sequence (the script exited $exit, printed ${printed ?: "nothing"}); its stderr:\n$said")
+        }
         val target = File(scratch, "processed")
         val fixture = nativeFixturePath(printed, System.getProperty("os.name").startsWith("Windows"))
         File(fixture).copyRecursively(target)
