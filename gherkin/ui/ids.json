@@ -39,6 +39,7 @@
     "render.custom_frame_rate",
     "render.done",
     "render.error",
+    "render.start",
     "right.changemode",
     "right.mode",
     "right.multichoice",

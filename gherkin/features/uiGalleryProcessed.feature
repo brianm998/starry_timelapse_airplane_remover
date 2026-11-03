@@ -20,5 +20,5 @@ Feature: The screens of a processed sequence are saved for the gallery
       And I click "changemode.ok"
     Then  "changemode.ok" is not shown
     When  I choose the menu command "renderVideo"
-    Then  "render.cancel" is shown
+    Then  "render.start" is shown
     When  I save a screenshot named "render-video"
