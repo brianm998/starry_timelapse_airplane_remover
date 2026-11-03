@@ -169,7 +169,7 @@ public struct FrameEditImageView: View {
     }
 
     /// The id of the group a UI test clicks, only under `-StarUITestProbes YES` (`OutlierGroupView.probeGroupId`).
-    private func probeGroupId(drawn: [OutlierGroupViewModel]) -> String? {
+    private func probeGroupId(drawn: [OutlierGroupViewModel]) -> UInt16? {
         guard ViewModel.uiTestProbes else { return nil }
         let candidates = drawn.map { OutlierGroupView.ProbeCandidate(id: $0.group.id, bounds: $0.group.bounds, size: $0.group.size) }
         return OutlierGroupView.probeGroupId(groups: candidates, pointsPerPixel: viewModel.currentZoomScale)

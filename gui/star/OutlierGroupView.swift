@@ -39,7 +39,7 @@ struct OutlierGroupView: View {
     /// A group as the probe choice sees it: its id, its bounds in frame pixels and its pixel count, in the order the groups are drawn
     /// (the last one is on top).
     struct ProbeCandidate: Equatable {
-        let id: String
+        let id: UInt16
         let bounds: BoundingBox
         let size: UInt
     }
@@ -55,7 +55,7 @@ struct OutlierGroupView: View {
     static func probeGroupId(groups: [ProbeCandidate],
                              pointsPerPixel: CGFloat,
                              minSize: UInt = 40,
-                             minPoints: CGFloat = 6) -> String?
+                             minPoints: CGFloat = 6) -> UInt16?
     {
         let big = groups.indices.filter { groups[$0].size > minSize }
         func area(_ i: Int) -> Int { groups[i].bounds.size }
