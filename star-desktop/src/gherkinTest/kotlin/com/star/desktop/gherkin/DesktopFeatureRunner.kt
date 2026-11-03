@@ -1153,10 +1153,15 @@ class DesktopFeatureRunner {
         try {
             fun capture(): java.awt.image.BufferedImage {
                 // The Debug window follows the log with a `while (true) { delay(200) }`, so the test clock always has work pending and waitForIdle
-                // never returns: its frames are stepped by hand instead.
-                if (kind == SecondaryWindow.DEBUG) repeat(5) { t.mainClock.advanceTimeByFrame() } else t.waitForIdle()
-                val node = if (kind != null) t.onNodeWithTag(WINDOW_SHOT_TAG) else t.onAllNodes(isRoot())[0]
-                return node.captureToImage().toAwtImage()
+                // (which captureToImage calls too) never returns while the clock advances itself: its frames are stepped by hand, with it off.
+                val following = kind == SecondaryWindow.DEBUG
+                if (following) { t.mainClock.autoAdvance = false; repeat(5) { t.mainClock.advanceTimeByFrame() } } else t.waitForIdle()
+                try {
+                    val node = if (kind != null) t.onNodeWithTag(WINDOW_SHOT_TAG) else t.onAllNodes(isRoot())[0]
+                    return node.captureToImage().toAwtImage()
+                } finally {
+                    if (following) t.mainClock.autoAdvance = true
+                }
             }
             var image = capture()
             var steady = 0
