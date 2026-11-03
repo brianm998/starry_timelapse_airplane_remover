@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -20,6 +21,8 @@ if TYPE_CHECKING:
     from .engine import Engine
 
 MAX_CI_FIX = 2
+GATE_ERROR_LIMIT = 5  # the same feature-gate error on the same head this many polls in a row parks the ticket
+TRANSIENT_ERROR = re.compile(r"HTTP 5\d\d|timed out|timeout|connection|network|temporar|rate limit|could not resolve", re.I)
 FEATURE_RUN_WAIT_S = 600.0  # a dispatched feature run that has not appeared by then is dispatched again
 LANDING_STATES = ("ci", "landing")
 BYPASS_NOTE = "The owner landed this with land-now: CI, the overlap re-test and the stop-line wait were bypassed."
@@ -156,6 +159,50 @@ def _feature_verdict(eng: Engine, t: Ticket, sha: str, title: str, since: float,
                                 run_conclusion=run.get("conclusion"), run_id=rid)
 
 
+def _is_transient(message: str) -> bool:
+    return bool(TRANSIENT_ERROR.search(message))
+
+
+def _behind_develop(eng: Engine, wt: Path) -> tuple[str, str] | None:
+    """(base, merge-base) when the ticket's head is missing commits of develop, else None. Worker thread."""
+    try:
+        fetch(eng, wt)
+    except RuntimeError:  # offline or no ssh here: judge by the origin/develop we already have
+        pass
+    base = f"origin/{eng.config.base_branch}"
+    mb = gitutil.git(wt, "merge-base", base, "HEAD").strip()
+    return None if mb == gitutil.git(wt, "rev-parse", base).strip() else (base, mb)
+
+
+async def _gate_error(eng: Engine, t: Ticket, sha: str, exc: Exception, rejoin: bool) -> str:
+    """The feature gate's dispatch or poll raised. Returns 'sleep' (try again after a poll), 'again' (the head is new: loop at once)
+    or 'stop' (parked, or the catch-up did not end well).
+
+    A 422 saying the workflow has no workflow_dispatch trigger is a branch that has fallen behind develop (its gherkin.yml is
+    unparsable there): merge develop in, as the train does, and dispatch on the new head. The same error on the same head
+    GATE_ERROR_LIMIT polls in a row parks the ticket, except an error that may clear by itself (5xx, network), which retries."""
+    n, message = t.number, str(exc)
+    eng.db.event("gherkin-poll-failed", n, error=message[:200])
+    rec = json.loads(eng.db.get(f"gherkin_err:{n}") or "null")
+    count = rec["count"] + 1 if rec and rec["sha"] == sha and rec["error"] == message else 1
+    eng.db.put(f"gherkin_err:{n}", json.dumps({"sha": sha, "error": message, "count": count}))
+    if _is_transient(message):
+        return "sleep"
+    if count >= GATE_ERROR_LIMIT:
+        eng.db.put(f"gherkin_err:{n}", None)
+        eng.park(t, f"the Gherkin feature gate failed {count} times in a row on {sha[:10]}: {message[:300]}")
+        return "stop"
+    if "workflow_dispatch" in message and "422" in message:
+        behind = await asyncio.to_thread(_behind_develop, eng, Path(t.worktree or ""))
+        if behind is not None:
+            base, mb = behind
+            eng.db.event("gherkin-catch-up", n, sha=sha, base=base)
+            if not await catch_up(eng, t, base, mb, sha, landing.Overlap([], []), rejoin=rejoin):
+                return "stop"
+            return "again"
+    return "sleep"
+
+
 async def feature_gate(eng: Engine, t: Ticket, rejoin: bool = False) -> str:
     """Prove the ticket's Gherkin features (its `gherkin:` Pipeline value plus the plan's gherkin_features_to_run) on its own branch.
 
@@ -178,13 +225,18 @@ async def feature_gate(eng: Engine, t: Ticket, rejoin: bool = False) -> str:
         try:
             if not rec or rec["sha"] != sha or rec["title"] != title:
                 await asyncio.to_thread(_dispatch_features, eng, cur, sha, title, features)
+                eng.db.put(f"gherkin_err:{n}", None)
                 continue
             reran = {tuple(k) for k in json.loads(eng.db.get(f"gherkin_reran:{n}") or "[]")}
             verdict = await asyncio.to_thread(_feature_verdict, eng, cur, sha, title, float(rec["at"]) - 60, reran)
         except (GitHubError, RuntimeError) as exc:
-            eng.db.event("gherkin-poll-failed", n, error=str(exc)[:200])
-            await eng.sleep(eng.config.ci_poll_s)
+            step = await _gate_error(eng, cur, sha, exc, rejoin)
+            if step == "stop":
+                return "stop"
+            if step == "sleep":
+                await eng.sleep(eng.config.ci_poll_s)
             continue
+        eng.db.put(f"gherkin_err:{n}", None)
         age = eng.clock() - float(rec["at"])
         if verdict is None:
             if age > FEATURE_RUN_WAIT_S:  # dispatched, but no such run ever showed up: dispatch again
