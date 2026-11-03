@@ -74,6 +74,36 @@ async def test_retry_and_answer_ask_for_a_catch_up(rig: Rig) -> None:
         await client.close()
 
 
+async def test_retry_when_unblocked_records_instead_of_retrying(rig: Rig) -> None:
+    rig.gh.add_issue(7, "failed one")
+    rig.gh.add_issue(174, "first blocker")
+    rig.gh.add_issue(199, "second blocker")
+    rig.gh.deps[7] = [174, 199]
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "failed", "CI still red after 2 fix cycles")
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/tickets/7/retry", json={"stage": "ci", "when_unblocked": True}, headers=AUTH)
+        assert r.status == 200 and "waiting for #174, #199" in (await r.json())["result"]
+        assert rig.state(7) == "failed" and rig.db.get("held_retry:7") == "ci"
+        shown = await (await client.get("/v1/tickets/7", headers=AUTH)).json()
+        assert shown["held_retry"] == "retry from ci when unblocked"
+        assert shown["activity"] == "failed · waiting for #174, #199 → retry from ci"
+        assert [r["kind"] for r in rig.db._all("SELECT kind FROM interventions")] == ["hold-retry"]  # pyright: ignore[reportPrivateUsage]
+
+        rig.db.set_state(174, "landed")  # a blocker landing is reflected at once
+        assert activity(rig.db, rig.db.ticket(7)) == "failed · waiting for #199 → retry from ci"  # type: ignore[arg-type]
+
+        rig.db.set_state(7, "developing")  # only a failed or cancelled ticket can hold a retry
+        r = await client.post("/v1/tickets/7/retry", json={"stage": "ci", "when_unblocked": True}, headers=AUTH)
+        assert r.status == 409
+        rig.db.set_state(7, "failed")
+        await client.post("/v1/tickets/7/cancel", json={}, headers=AUTH)
+        assert rig.db.get("held_retry:7") is None, "cancelling drops the hold"
+    finally:
+        await client.close()
+
+
 async def test_activity_lists_open_blockers_of_a_queued_ticket(rig: Rig) -> None:
     for n, title in [(7, "blocked"), (8, "free"), (84, "first blocker"), (85, "second blocker")]:
         rig.gh.add_issue(n, title)

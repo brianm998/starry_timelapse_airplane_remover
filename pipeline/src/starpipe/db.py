@@ -164,6 +164,16 @@ class Database:
         cols = ", ".join(f"{k}=?" for k in fields)
         self._exec(f"UPDATE tickets SET {cols}, updated_at=? WHERE number=?", (*fields.values(), self.clock(), number))
 
+    def set_blocked_by(self, number: int, blocked_by: list[int]) -> None:
+        t = self.ticket(number)
+        if t is not None and t.blocked_by != blocked_by:
+            self._exec("UPDATE tickets SET blocked_by=? WHERE number=?", (json.dumps(blocked_by), number))
+
+    def held_retries(self) -> list[tuple[int, str]]:
+        """(ticket, stage) for every `retry --when-unblocked` still waiting."""
+        return [(int(r["key"].split(":", 1)[1]), r["value"])
+                for r in self._all("SELECT key, value FROM kv WHERE key LIKE 'held_retry:%' ORDER BY key")]
+
     def open_blockers(self, number: int) -> list[int]:
         """Blockers that have not landed or closed yet."""
         t = self.ticket(number)

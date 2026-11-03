@@ -178,9 +178,6 @@ public final class ImageSequenceViewModel {
 
     var frameStateMap: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
 
-    // XXX report this from processAll
-    var sequenceProcessingState: SequenceProcessingState = .unprocessed
-
     // bumped on Stop so in-flight processAll closures know to ignore their final state write
     private var processingGeneration = 0
 
@@ -2842,7 +2839,6 @@ public final class ImageSequenceViewModel {
     func cancelProcessing() {
         processingGeneration += 1
         isProcessingFrames = false
-        sequenceProcessingState = .unprocessed
         processingModalShowing = false
         processingStatusText = nil
         returnInFlightHorizonRefinement()
@@ -3043,7 +3039,6 @@ public final class ImageSequenceViewModel {
                         default:
                             break
                         }
-                        self.sequenceProcessingState = processingState
                     }
                 }
             }
