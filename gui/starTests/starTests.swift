@@ -4193,6 +4193,29 @@ final class StartScreenTests: XCTestCase {
         StarLocalization.shared.languageOverride = "de"
         XCTAssertNotEqual(localized(key), english, "\(key) is English in German")
     }
+
+    private func zoneSource() throws -> String {
+        try String(contentsOf: Self.root.appendingPathComponent("gui/star/FinderStyleDropZone.swift"), encoding: .utf8)
+    }
+
+    /// The drop zone is the reference for the desktop's: this key, a document icon and a dashed border that turns accent while a drag is over it.
+    func testTheDropZoneSaysItsKey() throws {
+        let source = try zoneSource()
+        XCTAssertTrue(source.contains("localized(\"ui.drop_a_video_an_image_sequence_or_an\")"))
+        XCTAssertTrue(source.contains("doc.on.doc"))
+        XCTAssertTrue(source.contains("dash: [5]"))
+        XCTAssertTrue(source.contains("isTargeted ? Color.accentColor"))
+    }
+
+    /// Clicking the zone opens the image sequence chooser (as the desktop's does), and hovering says so.
+    func testTheDropZoneIsClickable() throws {
+        let source = try zoneSource()
+        XCTAssertTrue(source.contains(".onTapGesture(perform: onTap)"), "the zone has no click handler")
+        XCTAssertTrue(source.contains(".help(localized(\"ui.load_an_image_sequence_yet_to_be_processed\"))"), "the zone has no hover text")
+        XCTAssertTrue(source.contains("accessibilityIdentifier(\"startup.dropzone\")"))
+        let view = try String(contentsOf: Self.root.appendingPathComponent("gui/star/InitialView.swift"), encoding: .utf8)
+        XCTAssertTrue(view.contains("onTap: loadImageSequence"), "the zone's click does not load an image sequence")
+    }
 }
 
 /// Layer 0 of the parity plan (§6.2.4): the outlier table's columns are the ones `gherkin/ui/vectors/outlierColumns.json` lists, in the
@@ -4771,5 +4794,31 @@ final class MenuBarStatusTests: XCTestCase {
         // Rendering wins over a stale processing flag, and the fraction stays in 0...1.
         XCTAssertEqual(status(isRendering: true, renderFraction: 1.7, steps: steps), .rendering(fraction: 1))
         XCTAssertEqual(localized("ui.menu_bar.rendering_video"), "Rendering video")
+    }
+}
+
+/// The gui's bottom status bar no longer carries the old sequence-alignment phase line the
+/// desktop never had; the "N frames processing" line and Stop stay.
+final class BottomStatusTests: XCTestCase {
+    private static var root: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private func source(_ path: String) throws -> String {
+        try String(contentsOf: Self.root.appendingPathComponent(path), encoding: .utf8)
+    }
+
+    func testTheAlignmentPhaseLineIsGone() throws {
+        let bar = try source("gui/star/BottomRightView.swift")
+        XCTAssertFalse(bar.contains("sequenceProcessingState"), "the bottom bar still reads sequenceProcessingState")
+        for key in ["ui.detecting_horizons", "ui.star_keypoints", "ui.earth_keypoints", "ui.first_alignment",
+                    "ui.second_alignment", "ui.alignment_done", "ui.alignment_error", "ui.n_frames_left"] {
+            XCTAssertFalse(bar.contains("\"\(key)\""), "\(key) is still drawn in the bottom bar")
+        }
+        XCTAssertTrue(bar.contains("localized(\"ui.n_frames_processing\""), "the N frames processing line is gone")
+        XCTAssertTrue(bar.contains("viewModel.stopProcessing()"), "the Stop button is gone")
+
+        let model = try source("gui/star/ImageSequenceViewModel.swift")
+        XCTAssertFalse(model.contains("sequenceProcessingState"), "nothing reads it, so the view model should not keep it")
     }
 }

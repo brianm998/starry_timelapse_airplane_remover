@@ -38,7 +38,7 @@ from . import (
 )
 from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
-from .engine import CATCH_UP_STATES, RETRY_STATE, STAGE_STATE, Engine
+from .engine import CATCH_UP_STATES, HOLDABLE_STATES, RETRY_STATE, STAGE_STATE, Engine
 from .github import GitHubError
 
 log = logging.getLogger("starpiped")
@@ -86,6 +86,15 @@ def ready_activity(db: Database, t: Ticket, config: Config, now: float) -> str:
     return f"ready · waiting for the next batch (starts in {math.ceil(left)}s)"
 
 
+def held_retry_line(db: Database, n: int) -> str | None:
+    """`waiting for #174, #199 → retry from ci` for a ticket with a `retry --when-unblocked` pending."""
+    stage = db.get(f"held_retry:{n}")
+    if stage is None:
+        return None
+    waiting = ", ".join(f"#{b}" for b in db.open_blockers(n))
+    return f"waiting for {waiting} → retry from {stage}" if waiting else f"retry from {stage} at the next poll"
+
+
 def activity(db: Database, t: Ticket, now: float | None = None, mode: str = "batch", config: Config | None = None) -> str:
     """The one-line "what is it doing" the CLI and monitor both show (computed here, never by a client)."""
     now = now or time.time()
@@ -94,6 +103,8 @@ def activity(db: Database, t: Ticket, now: float | None = None, mode: str = "bat
     if t.state == "needs-input":
         q = db.open_question(t.number)
         return f"needs you · asked {int((now - q['asked_at']) / 60)}m ago" if q else "needs you"
+    if t.state in HOLDABLE_STATES and (held := held_retry_line(db, t.number)):
+        return f"{t.state} · {held}"
     if t.state in ("failed", "cancelled", "closed", "paused") and t.park_reason:
         return f"{t.state} · {t.park_reason}"
     wait = db.get(f"llm_wait:{t.number}")
@@ -177,6 +188,7 @@ class Daemon:
     async def poll_once(self) -> None:
         try:
             await asyncio.to_thread(self.engine.sync_issues)
+            await asyncio.to_thread(self.engine.release_held_retries)
             await asyncio.to_thread(self.engine.close_due)
             await asyncio.to_thread(ship.watch_develop, self.engine)
             self.last_poll = time.time()
@@ -434,6 +446,7 @@ class Daemon:
                                 "failed": self.update_failure()},
                 "resources": self.resources(), "pause": self.db.get("pause"), "muted": self.db.get("muted") == "1", "usage_pause_until": self.db.get("usage_pause_until"),
                 "usage_windows": self.usage_windows(),
+                "alerts": self.db.open_alerts(),
                 "heavy": {"holders": [h.__dict__ for h in hv.holders], "queue": [w.__dict__ for w in hv.queue]},
                 "landing": train_info(self.db, self.config, self.engine.clock()),
                 "tickets": tickets, "gherkin_nightly": self.gherkin_info()}
@@ -491,7 +504,7 @@ class Daemon:
 
     def snapshot(self) -> dict[str, object]:
         """Everything the monitor shows, in one document. The daemon decides groups and activity lines, not the client."""
-        base = {k: v for k, v in self.status().items() if k not in ("self_update", "gherkin_nightly", "landing")}  # the monitor's contract is pinned by a fixture
+        base = {k: v for k, v in self.status().items() if k not in ("self_update", "gherkin_nightly", "landing", "alerts")}  # the monitor's contract is pinned by a fixture
         now = self.engine.clock()
         hv: dict[str, Any] = base["heavy"]  # type: ignore[assignment]
         lock_tickets = {str(w["ticket"]) for w in hv["queue"]}  # waiting for the lock; a holder is running its job
@@ -562,7 +575,8 @@ class Daemon:
                 "park_reason": t.park_reason, "plan": t.plan,
                 "activity": activity(self.db, t, self.engine.clock(), self.config.landing_mode, self.config),
                 "stages": self.db.stages(n), "checks": self.db.checks(n), "question": self.db.open_question(n),
-                "blockers": [{"number": b, "title": self.blocker_title(b)} for b in self.db.open_blockers(n)]}
+                "blockers": [{"number": b, "title": self.blocker_title(b)} for b in self.db.open_blockers(n)],
+                "held_retry": f"retry from {held} when unblocked" if (held := self.db.get(f"held_retry:{n}")) else None}
 
     def blocker_title(self, n: int) -> str:
         """A blocker's title: the pipeline ticket's, else the GitHub issue's (cached; a failed lookup is retried later)."""
@@ -598,12 +612,16 @@ class Daemon:
             stage = str(body.get("stage") or "explore")
             if stage not in RETRY_STATE:
                 raise web.HTTPBadRequest(text=f"stage must be one of {', '.join(RETRY_STATE)}")
-            self.db.intervention(n, "retry", stage)
-            self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
-            self.engine.parked.discard(n)
-            if RETRY_STATE[stage] in CATCH_UP_STATES:
-                self.db.put(f"catch_up:{n}", "1")  # drive merges develop in before the stage resumes
-            self.engine._to_state(n, RETRY_STATE[stage])  # pyright: ignore[reportPrivateUsage]
+            blockers = self.db.open_blockers(n)
+            if body.get("when_unblocked") and blockers:
+                if t.state not in HOLDABLE_STATES:
+                    raise web.HTTPConflict(text=f"#{n} is {t.state}: only a failed or cancelled ticket can hold a retry")
+                self.db.put(f"held_retry:{n}", stage)
+                self.db.intervention(n, "hold-retry", stage)
+                return f"held: waiting for {', '.join(f'#{b}' for b in blockers)} → retry from {stage}"
+            self.engine.retry_ticket(n, stage)
+            if blockers and not body.get("when_unblocked"):
+                return f"note: #{n} is still blocked by {', '.join(f'#{b}' for b in blockers)}; retried anyway"
         elif action == "allow-opus":
             self.db.put(f"opus_ok:{n}", "1")  # the ticket's own `model_<stage>: opus` choices now apply
             self.db.intervention(n, "allow-opus", t.state)
@@ -613,6 +631,7 @@ class Daemon:
                 task.cancel()
             self.db.intervention(n, "cancel", t.state)
             self.db.put(f"land_now:{n}", None)
+            self.db.put(f"held_retry:{n}", None)
             self.engine._to_state(n, "cancelled", str(body.get("reason") or "cancelled by the owner"))  # pyright: ignore[reportPrivateUsage]
         elif action == "requeue":
             if t.state not in ("ci", "landing") or self.db.batch_of(n) is not None:
@@ -851,6 +870,8 @@ class Daemon:
         async def act(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             body = await body_of(req)
             n = int(req.match_info["n"])
+            if req.match_info["action"] == "retry" and body.get("when_unblocked"):
+                await asyncio.to_thread(self.engine.refresh_blockers, n)  # a link added a moment ago must count
             if req.match_info["action"] == "requeue":
                 await asyncio.to_thread(self._close_pr_for_requeue, n)  # the GitHub call off the loop; the state change on it
             return web.json_response({"result": self.mutate(n, req.match_info["action"], body)})
