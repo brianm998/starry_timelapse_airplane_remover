@@ -936,6 +936,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
       # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.
@@ -1162,6 +1165,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
       # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.
@@ -1300,6 +1306,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
       # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.
