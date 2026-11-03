@@ -9,13 +9,13 @@ final class StepCoverageTests: XCTestCase {
     /// The repository root, from this file: gherkin/StarGherkin/Tests/StarGherkinTests/StepCoverageTests.swift.
     private static let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().deletingLastPathComponent()
 
-    private struct Runner {
+    private struct Runner: Sendable {
         let tag: String
         let path: String
         /// How a dispatch-table entry for [action] starts in this runner's source: `.clickId:` (Swift), `StepAction.CLICK_ID to` (Kotlin).
-        let entry: (StepAction) -> [String]
+        let entry: @Sendable (StepAction) -> [String]
     }
 
     private static func snake(_ camel: String) -> String {
