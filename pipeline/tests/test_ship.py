@@ -196,7 +196,7 @@ async def test_a_resolution_that_drops_a_landed_line_is_caught(rig: Rig) -> None
         req.contract.submit_change({"summary": "resolved"})
         return accepted(req, "S-conflict")
 
-    rig.agent.on("conflict", drop)
+    rig.agent.on("conflict", drop, drop)  # the second round, given the line, still does not restore it
     await rig.engine.drive(1)
     assert rig.state(1) == "failed"
     assert [r.stage for r in rig.agent.requests] == ["conflict", "conflict"], "one more round, then parked"
@@ -221,7 +221,7 @@ async def test_dropped_lines_go_back_to_the_conflict_stage_once(rig: Rig) -> Non
         req.contract.submit_change({"summary": "resolved"})
         return accepted(req, "S-conflict")
 
-    rig.agent.on("conflict", conflict)
+    rig.agent.on("conflict", conflict, conflict)
     await rig.engine.drive(1)
     assert rig.state(1) == "landed"  # a clean second audit carries on as after a clean first one
     assert [r.stage for r in rig.agent.requests] == ["conflict", "conflict"]

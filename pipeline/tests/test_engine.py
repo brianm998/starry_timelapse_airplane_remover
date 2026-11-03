@@ -857,11 +857,18 @@ async def test_a_retried_branch_with_conflicts_goes_through_the_conflict_stage(r
     assert behind_at_develop == [False], "the resumed stage continues on the merged branch"
 
 
+def still_dropped(req: StageRequest) -> StageOutcome:
+    """A conflict stage that, asked to restore a dropped line, changes nothing and submits what is already there."""
+    req.contract.run_checks({})
+    req.contract.submit_change({"summary": "left as it was"})
+    return accepted(req, "S-conflict-2")
+
+
 async def test_a_dropped_develop_line_parks_a_retried_branch(rig: Rig) -> None:
     stopped_ticket(rig, "shared.md", "mine\n")
     develop_moves(rig, "shared.md", "develop's line\n")
     rig.db.put("catch_up:7", "1")
-    rig.agent.on("conflict", resolver("mine\n"))
+    rig.agent.on("conflict", resolver("mine\n"), still_dropped)  # the second round restores nothing
     await rig.engine.drive(7)
     t = rig.db.ticket(7)
     assert t and t.state == "failed" and "dropped 1 landed line" in (t.park_reason or "")
@@ -889,7 +896,7 @@ async def test_restart_catch_up_retries_dropped_lines_once(rig: Rig) -> None:
         req.contract.submit_change({"summary": "restored"})
         return accepted(req, "S-conflict-2")
 
-    rig.agent.on("conflict", conflict)
+    rig.agent.on("conflict", conflict, conflict)
     rig.agent.on("develop", develop_ok)
     rig.agent.on("review", review_ok)
     await rig.engine.drive(7)
