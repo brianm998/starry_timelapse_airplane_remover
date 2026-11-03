@@ -592,6 +592,49 @@ async def test_a_passing_smoke_check_holds_new_work_and_swaps_only_when_idle(rig
     assert rig.db.get("self_update_pending") is None and rig.engine.claimable() is not None
 
 
+async def test_pending_update_swaps_after_the_drain_window_with_stages_running(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    rig.gh.add_issue(1, "running")
+    rig.gh.add_issue(2, "waiting")
+    rig.engine.sync_issues()
+    rig.db.begin_stage(1, "develop", 1, "sonnet")
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    drain = rig.engine.config.self_update_drain_s
+
+    assert pin.once() == "pending" and rig.db.get("self_update_pending_since") == str(rig.now)
+    rig.now += drain - 1
+    assert pin.once() == "pending" and pin.current_sha() == pin.base and rig.engine.claimable() is None, "inside the window"
+
+    rig.now += 2
+    assert pin.once() == "swapped", "past the window it swaps with the stage still running"
+    assert pin.current_sha() == target and len(rig.db.running_stages()) == 1
+    events = [e for e in rig.db.events_since() if e["kind"] == "self-update"]
+    assert events[0]["data"] == {"old": pin.base, "new": target, "interrupted": [1]}
+    assert rig.db.get("self_update_pending") is None and rig.db.get("self_update_pending_since") is None
+
+    pin.daemon.reconcile()  # the restarted process marks the stage interrupted; drive() resumes it by session id
+    assert rig.db.running_stages() == [] and rig.db.stages(1)[0]["outcome"] == "interrupted"
+
+
+async def test_self_update_still_waits_for_the_nightly(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    rig.db.begin_stage(1, "develop", 1, "sonnet")
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    assert pin.once() == "pending"
+    rig.now += rig.engine.config.self_update_drain_s + 1  # past the window, with a stage running
+    gate = asyncio.Event()
+
+    async def nightly() -> int:
+        await gate.wait()
+        return 0
+
+    pin.daemon.nightly_task = asyncio.create_task(nightly())
+    assert pin.once() is None and pin.current_sha() == pin.base, "a nightly is running: no swap even past the window"
+    gate.set()
+    await pin.daemon.nightly_task
+    assert pin.once() == "swapped" and pin.current_sha() == target
+
+
 async def test_a_pending_update_holds_the_next_model_stage(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()

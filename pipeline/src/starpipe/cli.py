@@ -267,6 +267,15 @@ def landing_lines(landing: dict[str, Any]) -> list[str]:
     return lines
 
 
+def update_hold_line(hold: dict[str, Any] | None) -> str | None:
+    """The `status` line for a self-update that is holding new work, or None when nothing is held."""
+    if not hold:
+        return None
+    waiting = " ".join(f"#{n}" for n in hold.get("waiting_on", []))
+    return (f"self-update to {hold['sha'][:8]} pending: holding new work"
+            + (f", waiting on {waiting}" if waiting else "") + f", swaps in {_span(hold['left_s'])}")
+
+
 @main.command()
 @click.option("--json", "as_json", is_flag=True)
 def status(as_json: bool) -> None:
@@ -293,6 +302,9 @@ def status(as_json: bool) -> None:
         click.echo(f"PAUSED: {data['pause']}")
     if data.get("usage_pause_until"):
         click.echo(f"usage limit: model stages wait until {time.ctime(float(data['usage_pause_until']))}")
+    update: dict[str, Any] = data.get("self_update") or {}
+    if line := update_hold_line(update.get("hold")):
+        click.echo(line)
     for line in landing_lines(data.get("landing") or {}):
         click.echo(line)
     heavy_state: dict[str, Any] = data.get("heavy") or {}

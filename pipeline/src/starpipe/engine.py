@@ -171,9 +171,23 @@ class Engine:
         sessions, cpu_limit = self.limits()
         return load.room(self.llm_active(), self.cpu(), sessions + extra, cpu_limit)
 
+    def update_hold(self) -> dict[str, Any] | None:
+        """The self-update holding new work, while its drain window is open: {sha, left_s, waiting_on}; None otherwise.
+
+        The window runs from `self_update_pending_since` (missing counts as just started). Once it has passed the daemon swaps
+        regardless of running stages, so the hold ends here too."""
+        sha = self.db.get("self_update_pending")
+        if not sha:
+            return None
+        since = self.db.get("self_update_pending_since")
+        left = self.config.self_update_drain_s - (self.clock() - float(since)) if since else float(self.config.self_update_drain_s)
+        if left <= 0:
+            return None
+        return {"sha": sha, "left_s": left, "waiting_on": [s["ticket"] for s in self.db.running_stages()]}
+
     def claimable(self) -> Ticket | None:
-        if self.db.get("pause") in ("all", "claims") or self.db.get("self_update_pending"):
-            return None  # the second is the daemon waiting to swap to new code: nothing new starts, running stages finish
+        if self.db.get("pause") in ("all", "claims") or self.update_hold():
+            return None  # the second is the daemon waiting to swap to new code: nothing new starts for at most the drain window
         if self.landing_waiting:
             return None  # a ticket in the landing train needs the next LLM slot
         if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
@@ -236,7 +250,7 @@ class Engine:
         self.db.put("usage_pause_until", None)
 
     async def _wait_for_update_hold(self) -> None:
-        while self.db.get("self_update_pending"):
+        while self.update_hold():
             await self.sleep(5)
 
     def _fence(self, t: Ticket, stage: str) -> guards.Fence:
