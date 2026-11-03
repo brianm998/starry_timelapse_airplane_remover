@@ -2,6 +2,7 @@ package com.star.desktop.ui.dialogs
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +16,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -28,9 +28,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.components.modalScrim
@@ -61,18 +64,18 @@ class MultiSheetMemory {
  * entry the sentence saying what it will do to which frames is built from (`ui.overlap.paint`, `ui.area.keep_overlaps`, …).
  */
 private data class MultiAction(
-    val label: String, val shouldRemove: Boolean, val overlapping: Boolean, val accent: Color, val summaryPrefix: String,
+    val label: String, val shouldRemove: Boolean, val overlapping: Boolean, val summaryPrefix: String,
 )
 
 /** Multi-choice sheet (macOS `MultiChoiceSheetView`): propagate a decision to overlapping outliers. */
 @Composable
 fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoiceTarget) {
     val actions = listOf(
-        MultiAction(localized("multi_paint.remove"), true, false, StarColors.red, "ui.overlap.paint"),
-        MultiAction(localized("multi_paint.keep"), false, false, StarColors.green, "ui.overlap.clear"),
+        MultiAction(localized("multi_paint.remove"), true, false, "ui.overlap.paint"),
+        MultiAction(localized("multi_paint.keep"), false, false, "ui.overlap.clear"),
     )
     MultiFrameSheet(
-        title = localized("ui.change_overlapping_outliers_in_other_frames"),
+        title = localized("ui.change_all_overlapping_outliers_in_other"),
         actions = actions,
         defaultIndex = if (target.currentlyRemoves) 1 else 0,   // pre-select the opposite of the clicked group
         initialRange = vm.multiSheetMemory.choiceRange,
@@ -93,13 +96,13 @@ fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoic
 @Composable
 fun MultiSelectSheet(vm: SequenceViewModel, @Suppress("UNUSED_PARAMETER") sel: SequenceViewModel.RectSelection) {
     val actions = listOf(
-        MultiAction(localized("multi_removal.remove"), true, false, StarColors.red, "ui.area.remove"),
-        MultiAction(localized("multi_removal.keep"), false, false, StarColors.green, "ui.area.keep"),
-        MultiAction(localized("multi_removal.removeOverlaps"), true, true, StarColors.red, "ui.area.remove_overlaps"),
-        MultiAction(localized("multi_removal.keepOverlaps"), false, true, StarColors.green, "ui.area.keep_overlaps"),
+        MultiAction(localized("multi_removal.remove"), true, false, "ui.area.remove"),
+        MultiAction(localized("multi_removal.keep"), false, false, "ui.area.keep"),
+        MultiAction(localized("multi_removal.removeOverlaps"), true, true, "ui.area.remove_overlaps"),
+        MultiAction(localized("multi_removal.keepOverlaps"), false, true, "ui.area.keep_overlaps"),
     )
     MultiFrameSheet(
-        title = localized("ui.change_outliers_in_the_selected_area_across"),
+        title = localized("ui.change_removing_in_the_selected_area_across"),
         actions = actions,
         defaultIndex = vm.multiSheetMemory.selectAction,
         initialRange = vm.multiSheetMemory.selectRange,
@@ -120,7 +123,6 @@ fun MultiSelectSheet(vm: SequenceViewModel, @Suppress("UNUSED_PARAMETER") sel: S
     )
 }
 
-@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun MultiFrameSheet(
     title: String,
@@ -164,11 +166,7 @@ private fun MultiFrameSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(title, color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                actions.forEachIndexed { i, a ->
-                    Pill(a.label, selected = i == actionIdx, accent = a.accent) { actionIdx = i }
-                }
-            }
+            SegmentedRow(actions.map { it.label }, actionIdx) { actionIdx = it }
             Text(localized("ui.what_frames_should_we_modify"), color = StarColors.textSecondary, fontSize = 12.sp)
             MultiFrameRange.entries.forEach { r ->
                 RadioRow(r.label, selected = r == range) { range = r }
@@ -177,28 +175,25 @@ private fun MultiFrameSheet(
             range.summary(action.summaryPrefix, current, frameCount)?.let {
                 Text(it, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.tagged(summaryTag))
             }
-            if (range.needsCount) {
-                OutlinedTextField(
-                    value = nText,
-                    onValueChange = { nText = it.filter(Char::isDigit) },
-                    label = { Text(localized("ui.number_of_frames")) },
-                    singleLine = true,
-                    modifier = Modifier.width(180.dp),
-                )
-            }
             if (trashInitially != null) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     androidx.compose.material3.Switch(checked = includingTrash, onCheckedChange = { includingTrash = it })
                     Text(localized("ui.trash"), color = StarColors.textPrimary, fontSize = 12.sp)
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedButton(onClick = onCancel, modifier = Modifier.tagged(cancelTag)) { Text(localized("ui.cancel")) }
                 Button(
                     onClick = apply,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     modifier = Modifier.tagged(applyTag),
                 ) { Text(actionButtonLabel(action)) }
+                // "the next [N] frames", beside the button as in the gui
+                if (range.needsCount) {
+                    Text(localized(if (range == MultiFrameRange.SOME_BEFORE) "ui.the_previous" else "ui.the_next"), color = StarColors.textPrimary, fontSize = 12.sp)
+                    CountField(nText) { nText = it }
+                    Text(localized("ui.frames"), color = StarColors.textPrimary, fontSize = 12.sp)
+                }
             }
         }
     }
@@ -210,17 +205,36 @@ private fun MultiFrameSheet(
  */
 private fun Modifier.tagged(tag: String?): Modifier = if (tag == null) this else semantics(mergeDescendants = true) { testTag = tag }
 
+/** The action as one row of equal segments, the selected one filled (the gui's `.segmented` picker). */
 @Composable
-private fun Pill(label: String, selected: Boolean, accent: Color, onClick: () -> Unit) {
-    Text(
-        label,
-        color = if (selected) Color.White else StarColors.textPrimary,
-        fontSize = 12.sp,
-        modifier = Modifier
-            .clip(RoundedCornerShape(5.dp))
-            .background(if (selected) accent else StarColors.cellDefault)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 6.dp),
+private fun SegmentedRow(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(StarColors.cellDefault), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+        labels.forEachIndexed { i, label ->
+            Text(
+                label,
+                color = if (i == selected) Color.White else StarColors.textPrimary,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .background(if (i == selected) StarColors.accent else Color.Transparent)
+                    .clickable { onSelect(i) }
+                    .padding(horizontal = 6.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
+
+/** The number of frames of a next/previous range: a short digits-only field (the gui's 40pt `TextField`). */
+@Composable
+private fun CountField(value: String, onChange: (String) -> Unit) {
+    BasicTextField(
+        value = value,
+        onValueChange = { onChange(it.filter(Char::isDigit)) },
+        singleLine = true,
+        textStyle = TextStyle(color = StarColors.textPrimary, fontSize = 12.sp, textAlign = TextAlign.Center),
+        cursorBrush = SolidColor(StarColors.textPrimary),
+        modifier = Modifier.width(40.dp).clip(RoundedCornerShape(4.dp)).background(StarColors.cellDefault).padding(vertical = 5.dp),
     )
 }
 

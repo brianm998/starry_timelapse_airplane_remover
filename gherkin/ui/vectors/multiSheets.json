@@ -1,0 +1,8 @@
+{
+  "comment": "The two multi-frame sheets (the Multi tool's overlap sheet and the area sheet) in both clients, the gui's design being the reference (D1): their titles, a Trash switch in the area sheet (D12: the gui gained the desktop's, starting at the right panel's Show Trash), and the count of a \"next/previous N\" range shown inline as `countLead[i]` [N] `countTrail`. Each client's test reads its own sheet sources for these keys.",
+  "overlapTitle": "ui.change_all_overlapping_outliers_in_other",
+  "areaTitle": "ui.change_removing_in_the_selected_area_across",
+  "trashLabel": "ui.trash",
+  "countLead": ["ui.the_next", "ui.the_previous"],
+  "countTrail": "ui.frames"
+}

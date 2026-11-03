@@ -37,6 +37,9 @@ struct MultiSelectSheetView: View {
     @Binding var selectionEnd: CGPoint?
     @Binding var number_of_frames: Int
 
+    /// Whether the trash is part of the area: starts at the right panel's Show Trash (as the desktop's switch does) and the apply uses this.
+    @State private var includingTrash = false
+
     var body: some View {
         VStack {
             Spacer()
@@ -59,6 +62,8 @@ struct MultiSelectSheetView: View {
             }
               .pickerStyle(.inline)
               .frame(minWidth: 280)
+
+            Toggle(localized("ui.trash"), isOn: $includingTrash)
 
             // what the choices above will do, in words: the id a UI test reads the sheet's action and frames by
             Group {
@@ -242,6 +247,7 @@ struct MultiSelectSheetView: View {
             }
             Spacer()
         }.frame(minWidth: 300, idealWidth: 450, maxWidth: 800)
+          .onAppear { includingTrash = viewModel.shouldShowTrash }
     }
 
     private func updateFrames(shouldRemove: Bool,
@@ -265,7 +271,7 @@ struct MultiSelectSheetView: View {
                         await frame.userSelectAllOutliers(toShouldRemove: new_value,
                                                           between: selectionStart,
                                                           and: selectionEnd,
-                                                          includingTrash: viewModel.shouldShowTrash)
+                                                          includingTrash: includingTrash)
                         // save outlier removeability changes here
                         await frame.writeOutliersRemoveReasons()
 
@@ -310,7 +316,7 @@ struct MultiSelectSheetView: View {
                             let new_value = shouldRemove
                             await frame.foreachOutlierGroupMulti(between: selectionStart,
                                                                  and: selectionEnd,
-                                                                 includingTrash: viewModel.shouldShowTrash)
+                                                                 includingTrash: includingTrash)
                             { group, isInTrash in
                                 await frame.userSelectAllOutliers(toShouldRemove: new_value,
                                                                   overlapping: group)

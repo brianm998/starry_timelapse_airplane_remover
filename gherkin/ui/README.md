@@ -24,6 +24,7 @@ The shared expectations for the macOS gui and the desktop client (see `plans/GUI
   | `outlierColumns.json` | the outlier table's columns, order, defaults and header keys | `OutlierColumnsTests` | `OutlierColumnsTest` |
   | `clickRules.json` | what a click on an outlier group does (the decision it leaves; apply the tool or open the multi-choice sheet) | `ClickRuleTests` | `ClickRulesVectorTest` |
   | `startScreen.json` | the start screen's controls, in order, with their labels and hover texts | `StartScreenTests` | `StartScreenTest` |
+  | `multiSheets.json` | the two multi-frame sheets' titles, the area sheet's Trash switch and the inline "the next [N] frames" count | `MultiSheetLayoutTests` | `MultiSheetLayoutTest` |
 
   A vector that changes on purpose is changed in the same commit as both clients. Gradle's `test` task declares `gherkin/ui` and the
   catalogue as inputs, so a changed file reruns the desktop tests; an Xcode run reads them from the source tree.
