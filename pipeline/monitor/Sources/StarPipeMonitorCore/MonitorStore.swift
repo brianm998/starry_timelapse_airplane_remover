@@ -30,6 +30,8 @@ public final class MonitorStore {
         didSet { if !navigating { record(selected, was: oldValue) } }
     }
     public var lastError: String?
+    /// The sidebar's ticket search. Only the sidebar rows read it; counts, badges and the Overview use every ticket.
+    public var search = TicketSearch()
 
     /// Most views the back/forward history keeps; the oldest are dropped first.
     public static let historyLimit = 100
@@ -77,6 +79,15 @@ public final class MonitorStore {
     public var pipelineState: PipelineState { .of(snapshot: snapshot, daemonDown: daemonDown) }
 
     public func tickets(in group: String) -> [TicketSnap] { snapshot?.tickets.filter { $0.group == group } ?? [] }
+
+    /// The tickets of a group that the sidebar search lets through.
+    public func visibleTickets(in group: String) -> [TicketSnap] { search.filter(tickets(in: group)) }
+
+    /// True when there are tickets but the search hides every one of them.
+    public var searchHidesEverything: Bool {
+        guard let all = snapshot?.tickets, !all.isEmpty else { return false }
+        return search.filter(all).isEmpty
+    }
 
     public var selectedTicket: TicketSnap? { snapshot?.tickets.first { $0.number == selected } }
 

@@ -174,14 +174,35 @@ public struct TicketSnap: Codable, Sendable, Equatable, Identifiable {
     public var parkReason: String?
     public var question: String?
     public var stages: [StageSnap]
+    /// The GitHub issue body, for the sidebar search; empty from a daemon that predates the field.
+    public var body: String
 
     public var id: Int { number }
 
     enum CodingKeys: String, CodingKey {
-        case number, title, state, priority, group, activity, model, branch, worktree, question, stages
+        case number, title, state, priority, group, activity, model, branch, worktree, question, stages, body
         case blockedBy = "blocked_by"
         case prNumber = "pr_number"
         case parkReason = "park_reason"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        number = try c.decode(Int.self, forKey: .number)
+        title = try c.decode(String.self, forKey: .title)
+        state = try c.decode(String.self, forKey: .state)
+        priority = try c.decode(Int.self, forKey: .priority)
+        group = try c.decode(String.self, forKey: .group)
+        activity = try c.decode(String.self, forKey: .activity)
+        model = try c.decodeIfPresent(String.self, forKey: .model)
+        blockedBy = try c.decode([Int].self, forKey: .blockedBy)
+        prNumber = try c.decodeIfPresent(Int.self, forKey: .prNumber)
+        branch = try c.decodeIfPresent(String.self, forKey: .branch)
+        worktree = try c.decodeIfPresent(String.self, forKey: .worktree)
+        parkReason = try c.decodeIfPresent(String.self, forKey: .parkReason)
+        question = try c.decodeIfPresent(String.self, forKey: .question)
+        stages = try c.decode([StageSnap].self, forKey: .stages)
+        body = try c.decodeIfPresent(String.self, forKey: .body) ?? ""
     }
 }
 

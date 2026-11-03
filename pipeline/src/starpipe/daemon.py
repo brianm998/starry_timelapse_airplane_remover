@@ -497,7 +497,7 @@ class Daemon:
             running = [s["model"] for s in stages if s["ended"] is None]  # the open stage's model, else none
             tickets.append({"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
                             "group": group, "model": running[-1] if running else None, "activity": activity(self.db, t, now, self.config.landing_mode, self.config), "blocked_by": self.db.open_blockers(t.number),
-                            "pr_number": t.pr_number, "branch": t.branch, "worktree": t.worktree,
+                            "pr_number": t.pr_number, "branch": t.branch, "worktree": t.worktree, "body": t.body,
                             "park_reason": t.park_reason, "question": question["text"] if question else None,
                             "stages": [{k: s[k] for k in ("stage", "attempt", "model", "started", "ended", "lock_wait_s", "outcome")}
                                        for s in stages]})

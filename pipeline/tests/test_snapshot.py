@@ -93,6 +93,18 @@ def test_the_snapshot_ticket_carries_the_running_stages_model(rig: Rig) -> None:
     assert {t["number"]: t["model"] for t in d.snapshot()["tickets"]}[2] == "sonnet"  # type: ignore[index, union-attr]
 
 
+def test_snapshot_rows_carry_body(rig: Rig) -> None:
+    d = populate(rig)
+    rows = {t["number"]: t for t in d.snapshot()["tickets"]}  # type: ignore[index, union-attr]
+    for n, row in rows.items():
+        ticket = rig.db.ticket(n)
+        assert ticket and ticket.body and row["body"] == ticket.body
+    rig.gh.add_issue(7, "has its own words", body=rig.gh.issues[1]["body"] + "\nmentions zebra crossings")
+    rig.engine.sync_issues()
+    seven = {t["number"]: t for t in d.snapshot()["tickets"]}[7]  # type: ignore[index, union-attr]
+    assert "zebra crossings" in seven["body"]  # type: ignore[operator]
+
+
 def test_the_snapshot_carries_develop_landing_and_interventions(rig: Rig) -> None:
     d = populate(rig)
     rig.db.put("stop_line", "pr-gate/linux")

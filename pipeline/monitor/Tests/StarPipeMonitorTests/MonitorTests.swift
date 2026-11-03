@@ -194,10 +194,89 @@ final class BlockerLinksTests: XCTestCase {
         XCTAssertEqual(rows.map(\.url.absoluteString), [84, 85].map { "https://github.com/\(repo)/issues/\($0)" })
         XCTAssertEqual(BlockerLinks.detailRows(blockers: [], repo: repo), [])
     }
+
+    // sidebar search ---------------------------------------------------------------------------------------------------
+    private static func searchTickets() throws -> [TicketSnap] {
+        let base = try XCTUnwrap(try snapshot().tickets.first)
+        func t(_ n: Int, title: String, branch: String?, body: String) -> TicketSnap {
+            var t = base
+            t.number = n; t.title = title; t.branch = branch; t.body = body
+            return t
+        }
+        return [t(123, title: "Fix the Horizon", branch: "pipe/123-horizon", body: "the mask is wrong"),
+                t(45, title: "Search bar", branch: nil, body: "mentions ZEBRA crossings"),
+                t(7, title: "Unrelated", branch: "pipe/7-misc", body: "")]
+    }
+
+    func testSearchQueryMatchesCheckedFields() throws {
+        let tickets = try Self.searchTickets()
+        func hits(_ q: String) -> [Int] { TicketSearch(query: q).filter(tickets).map(\.number) }
+        XCTAssertEqual(hits(""), [123, 45, 7])
+        XCTAssertEqual(hits("horizon"), [123])          // title, case-insensitive (and the branch)
+        XCTAssertEqual(hits("#123"), [123])             // number with hash
+        XCTAssertEqual(hits("123"), [123])              // number without hash
+        XCTAssertEqual(hits("pipe/7"), [7])             // branch
+        XCTAssertEqual(hits("zebra"), [45])             // body, case-insensitive
+        XCTAssertEqual(hits("nothing like it"), [])
+    }
+
+    func testSearchFieldTogglesAndNoFields() throws {
+        let tickets = try Self.searchTickets()
+        func hits(_ q: String, name: Bool = true, title: Bool = true, body: Bool = true) -> [Int] {
+            TicketSearch(query: q, matchName: name, matchTitle: title, matchBody: body).filter(tickets).map(\.number)
+        }
+        XCTAssertEqual(hits("mask", body: false), [])
+        XCTAssertEqual(hits("mask", name: false, title: false), [123])
+        XCTAssertEqual(hits("Search", title: false), [])
+        XCTAssertEqual(hits("123", name: false), [])
+        XCTAssertEqual(hits("pipe/", name: false, title: false, body: true), [])
+        XCTAssertEqual(hits("horizon", name: false, body: false), [123])
+        XCTAssertEqual(hits("horizon", name: false, title: false, body: false), [])
+        XCTAssertEqual(hits("", name: false, title: false, body: false), [123, 45, 7])  // empty query still shows all
+    }
+
+    func testSearchClear() throws {
+        let tickets = try Self.searchTickets()
+        var search = TicketSearch(query: "zebra", matchName: true, matchTitle: false, matchBody: true)
+        XCTAssertEqual(search.filter(tickets).map(\.number), [45])
+        search.clear()
+        XCTAssertEqual(search.query, "")
+        XCTAssertFalse(search.isActive)
+        XCTAssertEqual(search.matchTitle, false)  // toggles survive
+        XCTAssertEqual(search.filter(tickets).count, tickets.count)
+    }
+
+    func testTicketSnapDecodesBody() throws {
+        let s = try Self.snapshot()
+        XCTAssertTrue(try XCTUnwrap(s.tickets.first).body.contains("## Goal"))
+        // a daemon that predates the field: drop the key and decode again
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.fixture()) as? [String: Any])
+        var rows = try XCTUnwrap(object["tickets"] as? [[String: Any]])
+        for i in rows.indices { rows[i].removeValue(forKey: "body") }
+        object["tickets"] = rows
+        let old = try JSONDecoder().decode(Snapshot.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertEqual(old.tickets.map(\.body), Array(repeating: "", count: old.tickets.count))
+    }
 }
 
 @MainActor
 final class StoreTests: XCTestCase {
+    func testSearchDoesNotAffectCounts() throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        let before = (store.needsYouCount, Overview.topBarCounts(store.snapshot!.tickets).map(\.count))
+        store.selected = 5
+        store.search.query = "no ticket contains this text"
+        XCTAssertTrue(store.searchHidesEverything)
+        XCTAssertEqual(store.snapshot!.groups.flatMap { store.visibleTickets(in: $0) }.count, 0)
+        XCTAssertEqual(store.needsYouCount, before.0)
+        XCTAssertEqual(Overview.topBarCounts(store.snapshot!.tickets).map(\.count), before.1)
+        XCTAssertEqual(store.tickets(in: "needs_you").count, 1)
+        XCTAssertEqual(store.selected, 5)  // a filtered-out selection stays selected
+        store.search.clear()
+        XCTAssertFalse(store.searchHidesEverything)
+        XCTAssertEqual(store.visibleTickets(in: "needs_you").count, 1)
+    }
     func testTheMenuBarCountMatchesTheNeedsYouGroup() throws {
         let store = MonitorStore()
         XCTAssertEqual(store.needsYouCount, 0)
