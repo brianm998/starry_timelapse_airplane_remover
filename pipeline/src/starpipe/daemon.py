@@ -164,6 +164,7 @@ class Daemon:
         engine.cpu = self.cpu.average
         self._update_lock = threading.Lock()
         self._blocker_titles: dict[int, str] = {}  # GitHub titles of blockers, fetched once per daemon
+        self.proposals: list[dict[str, object]] = []  # open pipe:proposed issues from the last poll; snapshot() never asks GitHub
         self.exit: Callable[[int], None] = hard_exit  # replaced in tests
 
     # supervision ---------------------------------------------------------------------------------------------------
@@ -191,6 +192,7 @@ class Daemon:
     async def poll_once(self) -> None:
         try:
             await asyncio.to_thread(self.engine.sync_issues)
+            self.proposals = await asyncio.to_thread(self.fetch_proposals)  # a GitHubError keeps the previous list
             await asyncio.to_thread(self.engine.release_held_retries)
             await asyncio.to_thread(self.engine.close_due)
             await asyncio.to_thread(ship.watch_develop, self.engine)
@@ -505,6 +507,27 @@ class Daemon:
             behind = int(count) if count.isdigit() else None
         return {"behind": behind, "latest": latest}
 
+    def fetch_proposals(self) -> list[dict[str, object]]:
+        return [{"number": p.number, "title": p.title, "by": p.by} for p in tickets.proposals(self.engine.gh)]
+
+    def settle_proposal(self, n: int, action: str, priority: str | None = None, reason: str = "") -> str:
+        """Approve or reject one proposal (blocking: GitHub calls). Only a live `pipe:proposed` issue qualifies, so an
+        arbitrary issue number can never be labelled `pipeline` from here. Raises FilingError with the user-facing message."""
+        gh = self.engine.gh
+        try:
+            live = {p.number for p in tickets.proposals(gh)}
+        except GitHubError as exc:
+            raise tickets.FilingError(f"could not read the proposals: {exc}") from exc
+        if n not in live:
+            self.proposals = [p for p in self.proposals if p["number"] != n]
+            raise tickets.FilingError(f"#{n} is not a proposal")
+        if action == "approve":
+            tickets.approve(gh, n, priority, self.config.max_open_tickets)
+        else:
+            tickets.reject(gh, n, reason)
+        self.proposals = [p for p in self.proposals if p["number"] != n]
+        return "approved" if action == "approve" else "rejected"
+
     def snapshot(self) -> dict[str, object]:
         """Everything the monitor shows, in one document. The daemon decides groups and activity lines, not the client."""
         base = {k: v for k, v in self.status().items() if k not in ("self_update", "gherkin_nightly", "landing", "alerts")}  # the monitor's contract is pinned by a fixture
@@ -536,7 +559,7 @@ class Daemon:
                 "develop": {"gate": {r["job"]: r["conclusion"] for r in gate}, "known_red": int(reds[0]["n"])},
                 "interventions_week": {r["kind"]: r["n"] for r in week}, "events_cursor": int(cursor), "now": now,
                 "version": "starpipe 1", "repo": f"{self.config.owner}/{self.config.repo}",
-                "nightly": self.nightly_info()}
+                "nightly": self.nightly_info(), "proposals": [dict(p) for p in self.proposals]}
 
     def nightly_info(self) -> dict[str, object] | None:
         run = self.db.nightly_run()
@@ -868,6 +891,26 @@ class Daemon:
                 raise web.HTTPBadRequest(text="models must be an object of stage to model name")
             models = cast("dict[str, str]", chosen)
             return web.json_response({"results": await asyncio.to_thread(self.enqueue, numbers, models)})
+
+        @r.post("/v1/proposals/{n}/{action}")
+        async def settle(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            action = req.match_info["action"]
+            if action not in ("approve", "reject"):
+                raise web.HTTPNotFound(text=f"no such action: {action}")
+            if not req.match_info["n"].isdigit():
+                raise web.HTTPBadRequest(text="the issue number must be an integer")
+            body = await body_of(req)
+            priority, reason = body.get("priority"), body.get("reason")
+            if action == "approve" and priority is not None and priority not in tickets.PRIORITIES:
+                raise web.HTTPBadRequest(text=f"priority must be one of {', '.join(tickets.PRIORITIES)}")
+            if action == "reject" and reason is not None and not isinstance(reason, str):
+                raise web.HTTPBadRequest(text="reason must be text")
+            try:
+                result = await asyncio.to_thread(self.settle_proposal, int(req.match_info["n"]), action,
+                                                 cast("str | None", priority), (reason or "").strip() if isinstance(reason, str) else "")
+            except tickets.FilingError as exc:
+                raise web.HTTPConflict(text=str(exc)) from exc
+            return web.json_response({"result": result})
 
         @r.post("/v1/tickets/{n}/{action}")
         async def act(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]

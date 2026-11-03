@@ -65,7 +65,7 @@
     "paused": false,
     "stop_line": null
   },
-  "max_active": 2,
+  "max_active": 3,
   "muted": false,
   "nightly": {
     "at": 1500.0,
@@ -79,6 +79,13 @@
   },
   "now": 2000.0,
   "pause": null,
+  "proposals": [
+    {
+      "by": "review agent",
+      "number": 31,
+      "title": "Show the retry budget"
+    }
+  ],
   "repo": "brianm998/starry_timelapse_airplane_remover",
   "resources": {
     "cpu_limit": 85.0,
