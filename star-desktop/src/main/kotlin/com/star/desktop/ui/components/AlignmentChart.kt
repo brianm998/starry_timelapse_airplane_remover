@@ -44,6 +44,8 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -58,6 +60,7 @@ import com.star.desktop.domain.DeviationPoint
 import com.star.desktop.domain.XDomain
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.theme.StarColors
+import com.star.desktop.ui.windows.AlignmentWindowTexts
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.pow
@@ -128,7 +131,7 @@ fun DeviationChart(
         TimelineChart(
             frameCount = frameCount, current = current, onPick = onPick,
             yRange = { -height.toDouble()..height.toDouble() },
-            xTitle = localized("ui.frame_index"), yTitle = localized("ui.deviation"), compact = compact,
+            xTitle = localized(AlignmentWindowTexts.X_AXIS), yTitle = localized("ui.deviation"), compact = compact,
             modifier = Modifier.fillMaxWidth().height(chartHeight),
             drawSeries = { domain, x, y ->
                 for ((offset, pts) in series) {
@@ -178,7 +181,8 @@ fun KeypointChart(
             // Fitted to what is showing: from nothing up to the most any visible frame has, so zooming in on a quiet stretch shows its detail.
             0.0..max(1.0, (known.maxOfOrNull { it.second } ?: 1).toDouble() * 1.05)
         },
-        xTitle = localized("ui.frame_index"), yTitle = localized("ui.number_of_key_points"), compact = compact,
+        xTitle = localized(AlignmentWindowTexts.X_AXIS), yTitle = localized(AlignmentWindowTexts.KEYPOINT_Y_AXIS), compact = compact,
+        seriesName = localized(AlignmentWindowTexts.KEYPOINT_SERIES), valueName = localized(AlignmentWindowTexts.KEYPOINT_VALUE),
         modifier = modifier.fillMaxWidth().height(chartHeight),
         drawSeries = { domain, x, y ->
             val path = Path()
@@ -216,6 +220,8 @@ private fun TimelineChart(
     yTitle: String,
     compact: Boolean,
     modifier: Modifier,
+    seriesName: String? = null,
+    valueName: String? = null,
     drawSeries: DrawScope.(domain: XDomain, x: (Int) -> Float, y: (Double) -> Float) -> Unit,
     hover: (frame: Int, value: Double) -> Hover?,
 ) {
@@ -241,9 +247,18 @@ private fun TimelineChart(
 
     val hovering = pointer?.takeIf { plot.contains(it) }?.let { p -> hover(frameAt(p.x), valueAt(p.y)) }
 
+    // What the gui's chart names its marks (`.value(...)`), for assistive technology: the current frame, the hovered one, the series and its value.
+    val description = buildList {
+        add("${localized(AlignmentWindowTexts.CURRENT_FRAME)}: $current")
+        hovering?.let { add("${localized(AlignmentWindowTexts.HOVER_FRAME)}: ${it.frame}") }
+        seriesName?.let { add(it) }
+        if (valueName != null) hovering?.let { add("$valueName: ${it.value.roundToInt()}") }
+    }.joinToString(", ")
+
     Box(
         modifier
             .background(StarColors.prefsCard)
+            .semantics { contentDescription = description }
             .onSizeChanged { size = it }
             .onPointerEvent(PointerEventType.Move) { pointer = it.changes.first().position }
             .onPointerEvent(PointerEventType.Exit) { pointer = null }
