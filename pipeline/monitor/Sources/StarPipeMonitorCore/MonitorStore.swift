@@ -71,6 +71,12 @@ public final class MonitorStore {
     public var daemonDown: Bool { if case .down = connection { true } else { false } }
 
     /// The menu-bar badge: a red dot when develop is red or the daemon is down.
+    /// The "Pipeline status" rows (top-bar items that moved into the Overview).
+    public var statusRows: [Overview.StatusRow] {
+        Overview.statusRows(snapshot: snapshot, connection: connection, updateAvailable: updateAvailable,
+                            rebuildCommand: MonitorUpdates.rebuildCommand)
+    }
+
     public var needsAttention: Bool { developRed || daemonDown }
 
     /// The colour of the star in the menu bar and the Dock.
