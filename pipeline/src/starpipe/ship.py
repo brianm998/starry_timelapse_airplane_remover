@@ -384,7 +384,7 @@ def merge(eng: Engine, t: Ticket, head: str) -> bool:
 def watch_develop(eng: Engine) -> None:
     """Refresh the develop baseline from the latest run of each workflow that ended success or failure; react to new reds
     (§10.3). A run cancelled by a newer push is completed but says nothing about the code, so it is skipped: the workflow's
-    earlier success/failure run stays the baseline."""
+    earlier success/failure run stays the baseline. So is a job that concluded `skipped` inside an otherwise finished run."""
     base = eng.config.base_branch
     runs = [r for r in eng.gh.workflow_runs(branch=base)
             if r.get("status") == "completed" and r.get("conclusion") in ("success", "failure")]
@@ -394,6 +394,8 @@ def watch_develop(eng: Engine) -> None:
     seeding = eng.db.baseline_size() == 0
     for run in latest.values():
         for job in ci.parse_jobs([run], {int(str(run["id"])): eng.gh.run_jobs(int(str(run["id"])), ci.run_version(run))}):
+            if job.conclusion == "skipped":
+                continue  # the push run skipped it because the batch PR already tested this tree: that result stays the baseline
             before = eng.db.baseline(job.workflow, job.job)
             now = job.conclusion or "failure"
             eng.db.set_baseline(job.workflow, job.job, str(run.get("head_sha")), now)

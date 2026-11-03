@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from starpipe import ship
 from starpipe import train as train_mod
 from starpipe.agent import StageOutcome, StageRequest
 from starpipe.daemon import activity
@@ -534,3 +535,47 @@ async def test_a_ticket_still_owing_a_feature_run_is_not_batched(rig: Rig) -> No
     assert train._gated(rig.db.ticket(1)) and train._pick() == []  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
     rig.db.put("gherkin_ok:1", "x")
     assert train._pick() == [1]  # pyright: ignore[reportPrivateUsage]
+
+
+def _land_one(rig: Rig, ci: Ci) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n")
+    rig.gh.ci_hook = lambda sha: ci
+
+
+def _merge_sha(rig: Rig) -> str:
+    return str(next(iter(rig.gh.prs.values()))["merge_commit_sha"])
+
+
+async def test_a_landed_batch_seeds_the_develop_baseline_from_its_pr(rig: Rig) -> None:
+    _land_one(rig, [*PASS, ("cli", "macos", "completed", "success"), ("cli", "windows", "completed", "skipped"),
+                    ("Gherkin", "full", "completed", "failure"), ("cli", "linux", "completed", "success")])
+    rig.db.set_baseline("cli", "linux", "old", "failure")
+    await train_of(rig).run_until_idle()
+    merge = _merge_sha(rig)
+    assert rig.state(1) == "landed"
+    assert (rig.db.baseline("pr-gate", "linux"), rig.db.baseline_sha("pr-gate", "linux")) == ("success", merge)
+    assert (rig.db.baseline("cli", "macos"), rig.db.baseline_sha("cli", "macos")) == ("success", merge)
+    assert rig.db.baseline("cli", "linux") == "success", "an older baseline is replaced"
+    assert rig.db.baseline("cli", "windows") is None, "a skipped job says nothing"
+    assert rig.db.baseline("Gherkin", "full") is None, "post-merge-only workflows are not seeded"
+    # a develop run newer than the merge is not overwritten, and running the bookkeeping again changes nothing
+    advance_develop(rig, "later.md", "later\n")
+    sh(rig.engine.repo, "git", "fetch", "-q")
+    later = sh(rig.engine.repo, "git", "rev-parse", "origin/develop").strip()
+    rig.db.set_baseline("cli", "macos", later, "failure")
+    train_of(rig)._finish(1, merge)  # pyright: ignore[reportPrivateUsage]
+    assert (rig.db.baseline("cli", "macos"), rig.db.baseline_sha("cli", "macos")) == ("failure", later)
+    assert (rig.db.baseline("pr-gate", "linux"), rig.db.baseline_sha("pr-gate", "linux")) == ("success", merge)
+
+
+async def test_a_red_pr_job_seeded_on_landing_files_no_regression(rig: Rig) -> None:
+    _land_one(rig, [*PASS, ("cli", "macos", "completed", "failure")])
+    rig.db.set_baseline("cli", "macos", "old", "failure")  # red on develop already: that is why the PR was judged green
+    rig.db.set_baseline("pr-gate", "linux", "old", "success")
+    await train_of(rig).run_until_idle()
+    assert rig.state(1) == "landed" and rig.db.baseline("cli", "macos") == "failure"
+    rig.gh.develop_sha = _merge_sha(rig)
+    rig.gh.develop_ci = [*PASS, ("cli", "macos", "completed", "failure")]
+    ship.watch_develop(rig.engine)
+    assert rig.db.get("red_pending:cli/macos") is None and rig.db.get("stop_line") is None
+    assert list(rig.gh.issues) == [1], "only the ticket itself: no regression ticket was filed"
