@@ -483,7 +483,7 @@ class Daemon:
 
     def snapshot(self) -> dict[str, object]:
         """Everything the monitor shows, in one document. The daemon decides groups and activity lines, not the client."""
-        base = {k: v for k, v in self.status().items() if k not in ("self_update", "gherkin_nightly", "landing")}  # the monitor's contract is pinned by a fixture
+        base = {k: v for k, v in self.status().items() if k not in ("self_update", "gherkin_nightly", "landing", "alerts")}  # the monitor's contract is pinned by a fixture
         now = self.engine.clock()
         hv: dict[str, Any] = base["heavy"]  # type: ignore[assignment]
         lock_tickets = {str(w["ticket"]) for w in hv["queue"]}  # waiting for the lock; a holder is running its job
