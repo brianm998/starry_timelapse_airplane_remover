@@ -33,6 +33,7 @@ STAGE_STATE = {"explore": "exploring", "develop": "developing", "fix": "verifyin
                "ci-fix": "ci", "conflict": "landing"}
 CATCH_UP_STATES = frozenset({"exploring", "developing", "verifying", "review"})  # where a restarted ticket takes in develop first
 RETRY_STATE = {**STAGE_STATE, "publish": "ready", "ci": "ci", "land": "landing"}  # what `starpipe retry <n> <stage>` re-enters
+HOLDABLE_STATES = ("failed", "cancelled")  # where `retry --when-unblocked` may park a retry
 LANDING_STAGES = frozenset({"conflict", "ci-fix"})  # stages a ticket in the landing train waits on: they outrank new work for an LLM slot
 MAX_FIX_CYCLES, MAX_REVIEW_ROUNDS, MAX_CRASH_RESUMES = 2, 2, 3
 PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
@@ -106,6 +107,39 @@ class Engine:
                 self.db.intervention(t.number, "cancel", t.state)
         for t in self.db.tickets(("needs-input",)):
             self._collect_answer(t)
+
+    def refresh_blockers(self, n: int) -> None:
+        """Re-read a ticket's blocked-by links from GitHub now (sync_issues skips an issue whose updated_at did not move)."""
+        self.issue_memo.pop(n, None)
+        try:
+            self.db.set_blocked_by(n, self.gh.blocked_by(n))
+        except GitHubError:
+            pass  # the stored blockers stand
+
+    def retry_ticket(self, n: int, stage: str) -> None:
+        """What `starpipe retry <n> <stage>` does, for the owner's request and for a held one alike."""
+        self.db.put(f"held_retry:{n}", None)
+        self.db.intervention(n, "retry", stage)
+        self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
+        self.parked.discard(n)
+        if RETRY_STATE[stage] in CATCH_UP_STATES:
+            self.db.put(f"catch_up:{n}", "1")  # drive merges develop in before the stage resumes
+        self._to_state(n, RETRY_STATE[stage])
+
+    def release_held_retries(self) -> None:
+        """Retry the failed tickets whose `retry --when-unblocked` has nothing left to wait for. Each fires once."""
+        for n, stage in self.db.held_retries():
+            t = self.db.ticket(n)
+            if t is None or t.state not in HOLDABLE_STATES or stage not in RETRY_STATE:
+                self.db.put(f"held_retry:{n}", None)  # the owner retried or cancelled it meanwhile: the record is stale
+                continue
+            if self.db.open_blockers(n):
+                continue
+            self.refresh_blockers(n)  # a link added since the last sync must count before this fires
+            if self.db.open_blockers(n):
+                continue
+            self.retry_ticket(n, stage)  # drops the record first
+            log.info("#%d: blockers landed, retrying from %s", n, stage)
 
     def _collect_answer(self, t: Ticket) -> None:
         q = self.db.open_question(t.number)

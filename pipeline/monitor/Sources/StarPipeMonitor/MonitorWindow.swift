@@ -15,6 +15,9 @@ struct MonitorWindow: View {
                 if let ticket = store.selectedTicket {
                     TicketDetailView(store: store, ticket: ticket)
                         .id(ticket.number)
+                } else if let issue = store.selectedIssue {
+                    IssuePanelView(number: issue.number, title: issue.title, repo: store.snapshot?.repo ?? "")
+                        .id(issue.number)
                 } else {
                     OverviewView(store: store)
                 }
@@ -223,7 +226,7 @@ struct Sidebar: View {
                     let rows = store.tickets(in: group)
                     if !rows.isEmpty {
                         Section {
-                            ForEach(rows) { TicketRow(ticket: $0, repo: store.snapshot?.repo ?? "").tag($0.number) }
+                            ForEach(rows) { TicketRow(ticket: $0, repo: store.snapshot?.repo ?? "", onSelect: { store.selectIssue($0) }).tag($0.number) }
                         } header: {
                             Text(GroupTitle.title(group)).scaledFont(.body, weight: .semibold)
                         }
@@ -244,6 +247,7 @@ struct Sidebar: View {
 struct TicketRow: View {
     let ticket: TicketSnap
     let repo: String
+    var onSelect: (Int) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -264,7 +268,7 @@ struct TicketRow: View {
         .padding(.vertical, 2)
     }
 
-    /// `queued: #84, #85` with each blocker a Link, so a click opens the issue rather than only selecting the row.
+    /// `queued: #84, #85` with each blocker a button that shows that issue in the detail pane.
     @ViewBuilder
     private var activityLine: some View {
         if let row = BlockerLinks.row(activity: ticket.activity, blockedBy: ticket.blockedBy, repo: repo) {
@@ -272,7 +276,7 @@ struct TicketRow: View {
                 Text(row.prefix + " ").foregroundStyle(.secondary)
                 ForEach(Array(row.links.enumerated()), id: \.element.id) { i, link in
                     if i > 0 { Text(", ").foregroundStyle(.secondary) }
-                    Link(link.label, destination: link.url).help(link.url.absoluteString)
+                    Button(link.label) { onSelect(link.number) }.buttonStyle(.link).help("Show \(link.label) here")
                 }
             }
             .scaledFont(.caption).lineLimit(1)

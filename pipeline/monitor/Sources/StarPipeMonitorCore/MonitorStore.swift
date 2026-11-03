@@ -30,6 +30,8 @@ public final class MonitorStore {
         didSet { if !navigating { record(selected, was: oldValue) } }
     }
     public var lastError: String?
+    /// Titles learnt for issues that are not pipeline tickets (from a ticket's detail "Blocked by" list).
+    private var issueTitles: [Int: String] = [:]
 
     /// Most views the back/forward history keeps; the oldest are dropped first.
     public static let historyLimit = 100
@@ -80,12 +82,29 @@ public final class MonitorStore {
 
     public var selectedTicket: TicketSnap? { snapshot?.tickets.first { $0.number == selected } }
 
+    /// A ticket in the snapshot, or an issue some snapshot ticket is blocked by: both can be shown in the detail pane.
+    private func isShowable(_ n: Int, in snap: Snapshot?) -> Bool {
+        snap?.tickets.contains { $0.number == n || $0.blockedBy.contains(n) } ?? false
+    }
+
+    /// The selected issue when it is a blocker but not a pipeline ticket; the title is empty when unknown.
+    public var selectedIssue: (number: Int, title: String)? {
+        guard let n = selected, selectedTicket == nil, isShowable(n, in: snapshot) else { return nil }
+        return (n, issueTitles[n] ?? "")
+    }
+
+    /// Show a blocker issue in the detail pane (recorded in the history like any selection).
+    public func selectIssue(_ number: Int, title: String? = nil) {
+        if let title, !title.isEmpty { issueTitles[number] = title }
+        selected = number
+    }
+
     // loading ------------------------------------------------------------------------------------------------------
     public func apply(_ new: Snapshot) {
         Alerts.diff(old: snapshot, new: new).forEach { onAlert?($0) }
         snapshot = new
         connection = .live
-        if let selected, !new.tickets.contains(where: { $0.number == selected }) {
+        if let selected, !isShowable(selected, in: new) {
             // a snapshot-driven reset is not a navigation
             navigating = true
             self.selected = nil
@@ -121,6 +140,7 @@ public final class MonitorStore {
         let fresh = try? await client.detail(n)
         guard selected == n else { return }
         detail = fresh
+        for b in fresh?.blockers ?? [] where !b.title.isEmpty { issueTitles[b.number] = b.title }
         let lines = (try? await client.log(n)) ?? []
         guard selected == n else { return }
         logLines = lines
@@ -144,7 +164,7 @@ public final class MonitorStore {
 
     private func isLive(_ view: Int?) -> Bool {
         guard let view else { return true }
-        return snapshot?.tickets.contains { $0.number == view } ?? false
+        return isShowable(view, in: snapshot)
     }
 
     /// The nearest history entry in `step` direction that can be shown and differs from what is showing.
