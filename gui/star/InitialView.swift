@@ -76,9 +76,9 @@ struct InitialView: View {
               .help(localized("ui.tell_me_how_to_us_this_software")) 
             Spacer()
 
-            FinderStyleDropZone() { providers in
+            FinderStyleDropZone(onDropAction: { providers in
                 handleDrop(providers: providers)
-            }
+            }, onTap: loadImageSequence)
               .frame(maxWidth: 1200, maxHeight: 800)
 
             Spacer()

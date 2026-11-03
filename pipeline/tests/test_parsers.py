@@ -54,7 +54,7 @@ def test_skips_for_missing_fixtures_and_opt_in_measurements_are_expected() -> No
                 "/w/R.swift:23: -[StarDaemonTests.R i] : Test skipped - STAR_REAL_SEQUENCE_DIR is not set to a folder of frames\n"
                 "Test Case '-[StarDaemonTests.R i]' skipped (0.001 seconds).\n"
                 "/w/B.swift:175: -[StarDaemonTests.B j] : Test skipped - NSHomeDirectory() ignores $HOME on this machine\n"
-                "Test Case '-[StarDaemonTests.B j]' skipped (0.002 seconds).\n")
+                "Test Case '-[StarDaemonTests.B j]' skipped (0.001 seconds).\n")
     assert parsers.parse_xctest(XC_GREEN + expected).skipped == 0
     other = ("/w/X.swift:9: -[StarCoreTests.X e] : Test skipped - the decoder is not available\n"
              "Test Case '-[StarCoreTests.X e]' skipped (0.001 seconds).\n")
