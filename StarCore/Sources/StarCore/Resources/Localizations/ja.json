@@ -763,7 +763,7 @@
   "ui.preview": "プレビュー",
   "ui.preview_creation_error": "フレーム {0} のプレビュー作成エラー: {1}",
   "ui.preview_first": "先にプレビュー",
-  "ui.preview_while_processing_help": "処理はバックグラウンドで続行されます。プレビューでは、処理中に完成したフレームを確認できます。ここに戻るには、左の「進行状況を表示」を使ってください。",
+  "ui.preview_while_processing_help": "処理はバックグラウンドで続行されます。プレビューでは、処理中に完成したフレームを確認できます。ここに戻るには、「進行状況を表示」を使ってください。",
   "ui.process": "処理",
   "ui.process_all_frames": "すべてのフレームを処理",
   "ui.process_all_frames_2": "すべてのフレームを処理",

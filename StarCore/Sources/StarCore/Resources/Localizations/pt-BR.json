@@ -763,7 +763,7 @@
   "ui.preview": "Pré-visualização",
   "ui.preview_creation_error": "erro ao criar a pré-visualização do quadro {0}: {1}",
   "ui.preview_first": "Pré-visualizar primeiro",
-  "ui.preview_while_processing_help": "O processamento continua em segundo plano. A pré-visualização permite ver os quadros prontos enquanto ele roda; use Exibir progresso à esquerda para voltar aqui.",
+  "ui.preview_while_processing_help": "O processamento continua em segundo plano. A pré-visualização permite ver os quadros prontos enquanto ele roda; use Exibir progresso para voltar aqui.",
   "ui.process": "Processar",
   "ui.process_all_frames": "Processar todos os quadros",
   "ui.process_all_frames_2": "Processar todos os quadros",

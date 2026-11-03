@@ -21,8 +21,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from . import ci, gitutil, landing, ship, worktrees
-from .db import Ticket
+from . import ci, gitutil, landing, ship, tickets, worktrees
+from .config import Config
+from .db import Database, Ticket
 from .github import GitHubError
 
 if TYPE_CHECKING:
@@ -30,6 +31,18 @@ if TYPE_CHECKING:
 
 WORKTREE = "pipe-batch"
 BACKOFF_S = 60.0
+SLOW_BUILDING_S = 600.0  # a batch still `building` after this long is marked slow in the snapshot
+ABANDONED_MEMORY_S = 3600.0  # how long the snapshot and status remember the last abandoned batch
+
+MAX_NOTED = 5  # files named in an abandon note
+
+
+def overlap_note(ov: landing.Overlap) -> str:
+    """What develop and the batch both changed, for the abandon note: up to MAX_NOTED files, or the shared check sets."""
+    if not ov.files:
+        return "same checks: " + ", ".join(ov.checks[:MAX_NOTED])
+    more = len(ov.files) - MAX_NOTED
+    return ", ".join(ov.files[:MAX_NOTED]) + (f" and {more} more" if more > 0 else "")
 
 
 def batch_worktree(repo: Path) -> Path:
@@ -38,6 +51,21 @@ def batch_worktree(repo: Path) -> Path:
 
 def batch_branch(batch: int) -> str:
     return f"pipe/batch-{batch}"
+
+
+def window_left(db: Database, config: Config, now: float) -> float | None:
+    """Seconds until the train forms its next batch (0: it is about to), or None when a batch is active or nothing is ready.
+
+    The same arithmetic as `Train._pick`: a batch forms once `batch_max` tickets are ready or the oldest has waited `batch_window_s`."""
+    if db.active_batch() is not None:
+        return None
+    ready = [t for t in db.tickets(("ready",)) if db.batch_of(t.number) is None]
+    if not ready:
+        return None
+    if len(ready) >= config.batch_max:
+        return 0.0
+    oldest = min(db.state_since(t.number, "ready") or t.updated_at for t in ready)
+    return max(0.0, config.batch_window_s - (now - oldest))
 
 
 @dataclass
@@ -52,6 +80,7 @@ class Train:
     def __init__(self, eng: Engine) -> None:
         self.eng = eng
         self._catch_ups: set[asyncio.Task[None]] = set()
+        self._gates: dict[int, asyncio.Task[None]] = {}  # a ticket's Gherkin feature run, beside the train, before it may be batched
 
     # the loop ------------------------------------------------------------------------------------------------------
     async def run_forever(self) -> None:
@@ -64,8 +93,8 @@ class Train:
         while steps < limit:
             if await self.step():
                 steps += 1
-            elif self._catch_ups:  # nothing to do but wait for a conflicted ticket to rejoin the queue
-                await asyncio.wait(self._catch_ups)
+            elif self._catch_ups or self._gates:  # nothing to do but wait for a conflicted ticket to rejoin, or a feature run to end
+                await asyncio.wait([*self._catch_ups, *self._gates.values()])
             else:
                 break
         return steps
@@ -79,6 +108,7 @@ class Train:
         eng = self.eng
         if eng.config.landing_mode != "batch":
             return False
+        self._start_gates()  # feature runs cost no landing slot, so they go ahead even while the train is held or busy
         batch = eng.db.active_batch()
         if batch is not None:
             await self._drive(int(batch["id"]))
@@ -92,9 +122,31 @@ class Train:
         return True
 
     # forming a batch -----------------------------------------------------------------------------------------------
+    def _gated(self, t: Ticket) -> bool:
+        """True while a ticket still owes a Gherkin feature run on its own branch: it is not batched until that is green."""
+        db = self.eng.db
+        return (bool(tickets.gherkin_features(t.body, t.plan)) and not db.get(f"gherkin_ok:{t.number}")
+                and not ship.land_now(self.eng, t.number))
+
+    def _start_gates(self) -> None:
+        """Start the feature run of each ready ticket that needs one. It runs on the ticket's own branch, once per ticket: the batch
+        branch is a new merge commit, so the batch's CI never carries a feature run."""
+        eng = self.eng
+        for t in eng.db.tickets(("ready",)):
+            if eng.db.batch_of(t.number) is None and self._gated(t) and t.number not in self._gates:
+                task = asyncio.create_task(self._gate_beside(t))
+                self._gates[t.number] = task
+                task.add_done_callback(lambda _t, n=t.number: self._gates.pop(n, None))
+
+    async def _gate_beside(self, t: Ticket) -> None:
+        try:
+            await ship.feature_gate(self.eng, t, rejoin=True)
+        except Exception as exc:  # noqa: BLE001 - one ticket's feature run must not take the train down
+            self.eng.db.event("train-gate-failed", t.number, error=str(exc)[:200])
+
     def _pick(self) -> list[int]:
         eng = self.eng
-        ready = [t for t in eng.db.tickets(("ready",)) if eng.db.batch_of(t.number) is None]
+        ready = [t for t in eng.db.tickets(("ready",)) if eng.db.batch_of(t.number) is None and not self._gated(t)]
         ids = [t.number for t in ready]
         groups: list[list[int]] = json.loads(eng.db.get("train_groups") or "[]")
         while groups:  # halves of a batch that went red: exactly these tickets, nothing else
@@ -120,12 +172,15 @@ class Train:
             return
         bid = eng.db.batch_create(base)
         tickets = [t for n in members if (t := eng.db.ticket(n)) is not None and t.state == "ready"]
+        for position, t in enumerate(tickets):  # members from the start, so the monitor can say "in batch N (building)"
+            eng.db.batch_add(bid, t.number, position)
         try:
             built = await asyncio.to_thread(self._build, bid, tickets, base)
         except (RuntimeError, OSError) as exc:
             await asyncio.to_thread(self._abandon, bid, f"could not build the batch: {exc}")
             await eng.sleep(BACKOFF_S)
             return
+        eng.db.batch_remove(bid, [*built.deferred, *built.catch_up])  # not in this batch after all
         if not built.merged:
             for n in built.catch_up:
                 await self._catch_up(n)
@@ -228,6 +283,7 @@ class Train:
         """Judge the batch's CI until it passes, is red, or must be given up on."""
         eng = self.eng
         while True:
+            self._start_gates()  # a ticket that became ready while this batch is in CI proves its features meanwhile
             batch = eng.db.batch(bid)
             assert batch is not None
             members = eng.db.batch_members(bid)
@@ -268,8 +324,10 @@ class Train:
                 await asyncio.to_thread(self._abandon, bid, "a member left the batch while it waited to land")
                 return
             result = await asyncio.to_thread(self._merge, bid, notes)
-        if result == "rebuild":
-            await asyncio.to_thread(self._abandon, bid, "develop moved with overlapping changes: rebuilding on the new base")
+        if result.startswith("rebuild"):
+            why = result.partition(":")[2].strip()
+            await asyncio.to_thread(self._abandon, bid, f"develop moved with overlapping changes{f' ({why})' if why else ''}: "
+                                    "rebuilding on the new base")
         elif result.startswith("refused"):
             await asyncio.to_thread(self._abandon, bid, f"the merge was {result}")
             await eng.sleep(BACKOFF_S)
@@ -288,8 +346,12 @@ class Train:
                 return "rebuild"
             if mb != gitutil.git(wt, "rev-parse", base).strip():  # develop moved while CI ran
                 files = [p for p in gitutil.git(wt, "diff", "--name-only", f"{mb}..{head}").splitlines() if p]
-                if landing.overlap(wt, mb, base, files).any or pr.get("mergeable") is False:
-                    return "rebuild"
+                ov = landing.overlap(wt, mb, base, files)
+                if pr.get("mergeable") is False:
+                    return f"rebuild:{overlap_note(ov)}" if ov.any else "rebuild:the PR is not mergeable"
+                if ov.any:
+                    # the overlap is real, but it may still merge cleanly: keep the batch and its PR, and run CI on the merge
+                    return "updated" if self._catch_up_batch(bid, wt, base, head, ov) else f"rebuild:{overlap_note(ov)}"
             if notes:
                 tickets = [t for n in eng.db.batch_members(bid) if (t := eng.db.ticket(n)) is not None]
                 eng.gh.update_pr(int(batch["pr_number"]), self._body(bid, tickets, notes))
@@ -311,6 +373,29 @@ class Train:
         self._finish(bid, sha)
         return "merged"
 
+    def _catch_up_batch(self, bid: int, wt: Path, base: str, head: str, ov: landing.Overlap) -> bool:
+        """Merge develop into the green batch's branch and push it, so the same batch and PR go back to CI.
+
+        False (with the worktree left clean) when the merge conflicts: the batch has to be rebuilt instead."""
+        eng = self.eng
+        if gitutil.head_sha(wt) != head:
+            return False
+        code, _ = gitutil.run(wt, "merge", "--no-ff", "--no-edit", "-m", f"Merge develop into batch #{bid}", base)
+        if code != 0:
+            gitutil.run(wt, "merge", "--abort")
+            return False
+        branch = batch_branch(bid)
+        if eng.config.remote == "https":
+            gitutil.remote_push(wt, eng.config.owner, eng.config.repo, branch)
+        else:
+            gitutil.git(wt, "push", "--quiet", "origin", f"HEAD:refs/heads/{branch}")
+        new = gitutil.head_sha(wt)
+        eng.db.batch_update(bid, head_sha=new, ci_started=eng.clock())
+        eng.db.put(f"pushed_at:batch{bid}", str(eng.clock()))
+        eng.db.put(f"reran:batch{bid}", None)
+        eng.db.event("batch-caught-up", None, batch=bid, files=ov.files[:MAX_NOTED], head=new)
+        return True
+
     def _resume_landing(self, bid: int) -> None:
         eng = self.eng
         batch = eng.db.batch(bid)
@@ -331,6 +416,7 @@ class Train:
         changed = gitutil.git(wt, "diff", "--name-only", f"{sha}^1", sha, check=False).split() if wt.exists() else []
         if any(p.startswith("pipeline/") and not p.startswith("pipeline/monitor/") for p in changed):
             eng.db.put("self_update_wanted", sha)
+        self._seed_baseline(bid, sha, wt)
         for n in eng.db.batch_members(bid):
             t = eng.db.ticket(n)
             if t is None or t.state == "landed":
@@ -341,6 +427,11 @@ class Train:
                 eng.gh.add_labels(n, ["pipe:landed"])
             except GitHubError as exc:
                 eng.db.event("landing-bookkeeping-failed", n, error=str(exc)[:200])
+            if eng.db.get(f"gherkin_run:{n}"):  # its feature run needed the branch on origin
+                try:
+                    eng.gh.delete_branch(t.branch or "")
+                except GitHubError as exc:
+                    eng.db.event("landing-bookkeeping-failed", n, error=str(exc)[:200])
             worktrees.remove(eng.repo, n, keep_branch=False, branch=t.branch)
             eng._to_state(n, "landed")  # pyright: ignore[reportPrivateUsage]
             eng.db.event("landed", n, merge=sha, batch=bid)
@@ -349,6 +440,28 @@ class Train:
             eng.gh.delete_branch(str(batch["branch"]))
         self._remove_worktree()
         eng.db.batch_update(bid, state="landed", ended=eng.clock())
+
+    def _seed_baseline(self, bid: int, sha: str, wt: Path) -> None:
+        """The batch PR's finished jobs become develop's baseline at the merge commit: develop's own push run may skip its jobs
+        because this PR already tested the same tree, and a baseline lost that way weakens the judge. A baseline already at a
+        commit that descends from the merge (or at the merge itself) is newer or equal and stays. Safe to run twice."""
+        eng = self.eng
+        batch = eng.db.batch(bid)
+        if not batch or not batch["head_sha"]:
+            return
+        try:
+            jobs = ship.fetch_jobs(eng, str(batch["head_sha"]))
+        except GitHubError as exc:
+            eng.db.event("baseline-seed-failed", None, batch=bid, error=str(exc)[:200])
+            return
+        root = wt if wt.exists() else eng.repo
+        for job in jobs:
+            if not job.done or job.conclusion == "skipped":
+                continue
+            have = eng.db.baseline_sha(*job.key)
+            if have and (have == sha or gitutil.is_ancestor(root, sha, have)):
+                continue
+            eng.db.set_baseline(job.workflow, job.job, sha, job.conclusion or "failure")
 
     # when it does not land -----------------------------------------------------------------------------------------
     async def _on_red(self, bid: int, verdict: ci.Verdict) -> None:

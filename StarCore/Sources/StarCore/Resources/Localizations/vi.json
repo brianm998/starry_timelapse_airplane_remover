@@ -763,7 +763,7 @@
   "ui.preview": "Xem trước",
   "ui.preview_creation_error": "lỗi khi tạo bản xem trước cho khung {0}: {1}",
   "ui.preview_first": "Xem trước đã",
-  "ui.preview_while_processing_help": "Quá trình xử lý vẫn tiếp tục chạy nền. Xem trước cho phép bạn xem các khung đã hoàn tất trong khi đang chạy; dùng Hiện tiến trình ở bên trái để quay lại đây.",
+  "ui.preview_while_processing_help": "Quá trình xử lý vẫn tiếp tục chạy nền. Xem trước cho phép bạn xem các khung đã hoàn tất trong khi đang chạy; dùng Hiện tiến trình để quay lại đây.",
   "ui.process": "Xử lý",
   "ui.process_all_frames": "Xử lý mọi khung",
   "ui.process_all_frames_2": "Xử lý mọi khung",

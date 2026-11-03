@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import plistlib
@@ -10,7 +11,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import click
 
@@ -242,10 +243,38 @@ def _post(path: str, body: dict[str, object] | None = None) -> None:
     from . import client as client_mod
 
     try:
-        _client().call("POST", path, body or {})
+        res = _client().call("POST", path, body or {})
     except (client_mod.DaemonDown, RuntimeError) as exc:
         raise click.ClickException(str(exc)) from exc
-    click.echo("ok")
+    result: object = cast("dict[str, object]", res).get("result") if isinstance(res, dict) else None
+    click.echo(result if isinstance(result, str) else "ok")
+
+
+def _span(seconds: float) -> str:
+    return f"{int(seconds // 60)}m" if seconds >= 60 else f"{int(seconds)}s"
+
+
+def landing_lines(landing: dict[str, Any]) -> list[str]:
+    """The landing train's lines for `status`: the active batch, then the last abandoned one. The daemon computed all of it."""
+    lines: list[str] = []
+    if b := landing.get("batch"):
+        members = " ".join(f"#{n}" for n in b["members"])
+        lines.append(f"batch {b['number']}: {b['phase']} · age {_span(b['age_s'])}" + (f" · {members}" if members else "")
+                     + (" · SLOW" if b.get("slow") else ""))
+    elif landing.get("next_batch_in_s") is not None:
+        lines.append(f"no batch yet: the next one starts in {landing['next_batch_in_s']}s")
+    if a := landing.get("last_abandoned"):
+        lines.append(f"batch {a['number']} {'failed' if a['state'] == 'failed' else 'abandoned'} {_span(a['ago_s'])} ago: {a['reason']}")
+    return lines
+
+
+def update_hold_line(hold: dict[str, Any] | None) -> str | None:
+    """The `status` line for a self-update that is holding new work, or None when nothing is held."""
+    if not hold:
+        return None
+    waiting = " ".join(f"#{n}" for n in hold.get("waiting_on", []))
+    return (f"self-update to {hold['sha'][:8]} pending: holding new work"
+            + (f", waiting on {waiting}" if waiting else "") + f", swaps in {_span(hold['left_s'])}")
 
 
 @main.command()
@@ -274,6 +303,13 @@ def status(as_json: bool) -> None:
         click.echo(f"PAUSED: {data['pause']}")
     if data.get("usage_pause_until"):
         click.echo(f"usage limit: model stages wait until {time.ctime(float(data['usage_pause_until']))}")
+    update: dict[str, Any] = data.get("self_update") or {}
+    if line := update_hold_line(update.get("hold")):
+        click.echo(line)
+    for line in landing_lines(data.get("landing") or {}):
+        click.echo(line)
+    for alert in data.get("alerts", []):
+        click.echo(f"ALERT {alert['key']}: {alert['text']}")
     heavy_state: dict[str, Any] = data.get("heavy") or {}
     for h in heavy_state.get("holders", []):
         click.echo(f"heavy lock: {h['ticket'] or 'interactive'}  {h['cmd']}")
@@ -312,6 +348,8 @@ def show(number: int, as_json: bool) -> None:
         click.echo(f"  {s['stage']:<8} attempt {s['attempt']}  {s['model']:<6} {took / 60:5.1f}m{wait}  {s['outcome'] or 'running'}")
     for c in t["checks"][-8:]:
         click.echo(f"  check {c['check_id']:<22}{c['result']}")
+    if t.get("held_retry"):
+        click.echo(t["held_retry"])
     if t.get("question"):
         click.echo(f"question: {t['question']['text']}")
 
@@ -327,9 +365,71 @@ def answer(number: int, text: str) -> None:
 @main.command()
 @click.argument("number", type=_num)
 @click.argument("stage", required=False, default="explore")
-def retry(number: int, stage: str) -> None:
+@click.option("--when-unblocked", is_flag=True,
+              help="If the ticket has open blockers, hold the retry until the last one has landed or closed.")
+def retry(number: int, stage: str, when_unblocked: bool) -> None:
     """Re-run from a stage, keeping the branch and plan."""
-    _post(f"/v1/tickets/{number}/retry", {"stage": stage})
+    _post(f"/v1/tickets/{number}/retry", {"stage": stage, **({"when_unblocked": True} if when_unblocked else {})})
+
+
+def _open_pipeline_issue(gh: Any, number: int) -> dict[str, Any]:
+    from .github import GitHubError
+
+    try:
+        issue = gh.issue(number)
+    except GitHubError as exc:
+        raise click.ClickException(str(exc)) from exc
+    if issue.get("state") != "open" or "pipeline" not in {lab["name"] for lab in issue.get("labels", [])}:
+        raise click.ClickException(f"#{number} is not an open pipeline-labelled issue")
+    return issue
+
+
+@main.command()
+@click.argument("number", type=_num)
+@click.argument("blockers")
+def block(number: int, blockers: str) -> None:
+    """Make an existing ticket (any state) blocked by BLOCKERS (comma-separated issue numbers)."""
+    from .github import GitHub, GitHubError
+
+    try:
+        wanted = [int(b.lstrip("#")) for b in blockers.split(",") if b.strip()]
+    except ValueError as exc:
+        raise click.BadParameter("expected numbers like 41,42", param_hint="BLOCKERS") from exc
+    if not wanted:
+        raise click.BadParameter("name at least one issue", param_hint="BLOCKERS")
+    gh = GitHub(config_mod.load())
+    _open_pipeline_issue(gh, number)
+    try:
+        have = set(gh.blocked_by(number))
+        for b in wanted:
+            if b == number:
+                raise click.ClickException(f"#{number} cannot block itself")
+            if number in gh.blocked_by(b):
+                raise click.ClickException(f"#{b} is already blocked by #{number}: that would be a cycle")
+        for b in wanted:
+            if b not in have:
+                gh.block(number, b)
+            click.echo(f"#{number} blocked by #{b}")
+    except GitHubError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
+@main.command()
+@click.argument("number", type=_num)
+@click.argument("blocker", type=_num)
+def unblock(number: int, blocker: int) -> None:
+    """Remove the link that makes ticket NUMBER wait for BLOCKER."""
+    from .github import GitHub, GitHubError
+
+    gh = GitHub(config_mod.load())
+    _open_pipeline_issue(gh, number)
+    try:
+        if blocker not in gh.blocked_by(number):
+            raise click.ClickException(f"#{number} is not blocked by #{blocker}")
+        gh.unblock(number, blocker)
+    except GitHubError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"#{number} no longer blocked by #{blocker}")
 
 
 @main.command()
@@ -505,7 +605,18 @@ def daemon_run() -> None:
 
         Notifier(Database()).alert("runtime-rollback", None, f"the new runtime kept crashing: rolled back to {name}")
         sys.exit(1)
+    _hold_off_idle_sleep()
     asyncio.run(daemon_mod.build(config_mod.load()).run())
+
+
+def _hold_off_idle_sleep() -> None:
+    """Keep the Mac from idle-sleeping while the daemon lives (display sleep is unaffected, and harmless to it).
+
+    `caffeinate -w` exits by itself when this process does, so a crash or restart never leaves an assertion behind. It sits here
+    rather than in front of the shim in the plist because `selfupdate.repoint` owns ProgramArguments[0]."""
+    with contextlib.suppress(OSError):  # no caffeinate off macOS: nothing to hold off
+        subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 @daemon.command("self-test")

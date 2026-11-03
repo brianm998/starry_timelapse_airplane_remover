@@ -4,6 +4,7 @@ import Foundation
 public enum BlockerLinks {
     public struct Link: Equatable, Sendable, Identifiable {
         /// `#84`
+        public var number: Int
         public var label: String
         public var url: URL
         public var id: String { label }
@@ -26,7 +27,7 @@ public enum BlockerLinks {
     /// (not blocked, an activity line of another shape, or no repo to link to).
     public static func row(activity: String, blockedBy: [Int], repo: String) -> (prefix: String, links: [Link])? {
         guard !blockedBy.isEmpty, activity.hasPrefix("queued:") else { return nil }
-        let links = blockedBy.compactMap { n in issueURL(repo: repo, number: n).map { Link(label: "#\(n)", url: $0) } }
+        let links = blockedBy.compactMap { n in issueURL(repo: repo, number: n).map { Link(number: n, label: "#\(n)", url: $0) } }
         return links.count == blockedBy.count ? ("queued:", links) : nil
     }
 

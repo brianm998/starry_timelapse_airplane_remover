@@ -12,6 +12,8 @@ public struct Snapshot: Codable, Sendable, Equatable {
     /// How many tickets may run at once (the owner's override, else config.toml).
     public var maxActive: Int
     public var usagePauseUntil: String?
+    /// The latest five-hour and weekly usage windows a stage's stream reported; nil before any event.
+    public var usageWindows: UsageWindows?
     public var heavy: HeavyState
     public var tickets: [TicketSnap]
     public var groups: [String]
@@ -28,9 +30,33 @@ public struct Snapshot: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey {
         case daemon, pause, muted, heavy, tickets, groups, runtime, landing, develop, now, version, repo, nightly
         case usagePauseUntil = "usage_pause_until"
+        case usageWindows = "usage_windows"
         case maxActive = "max_active"
         case interventionsWeek = "interventions_week"
         case eventsCursor = "events_cursor"
+    }
+}
+
+public struct UsageWindows: Codable, Sendable, Equatable {
+    public var fiveHour: UsageWindow?
+    public var sevenDay: UsageWindow?
+
+    public init(fiveHour: UsageWindow? = nil, sevenDay: UsageWindow? = nil) {
+        self.fiveHour = fiveHour
+        self.sevenDay = sevenDay
+    }
+
+    enum CodingKeys: String, CodingKey { case fiveHour = "five_hour", sevenDay = "seven_day" }
+}
+
+/// `utilization` is a fraction (0.08 = 8%); `resetsAt` is epoch seconds, spelled as the daemon stores it.
+public struct UsageWindow: Codable, Sendable, Equatable {
+    public var utilization: Double
+    public var resetsAt: Double
+
+    public init(utilization: Double, resetsAt: Double) {
+        self.utilization = utilization
+        self.resetsAt = resetsAt
     }
 }
 
@@ -87,8 +113,42 @@ public struct RuntimeInfo: Codable, Sendable, Equatable {
 public struct Landing: Codable, Sendable, Equatable {
     public var paused: Bool
     public var stopLine: String?
+    public var batch: BatchInfo?
+    public var lastAbandoned: AbandonedBatch?
+    public var nextBatchInS: Int?
 
-    enum CodingKeys: String, CodingKey { case paused; case stopLine = "stop_line" }
+    enum CodingKeys: String, CodingKey {
+        case paused, batch
+        case stopLine = "stop_line"
+        case lastAbandoned = "last_abandoned"
+        case nextBatchInS = "next_batch_in_s"
+    }
+}
+
+/// The landing train's active batch, as the daemon computed it.
+public struct BatchInfo: Codable, Sendable, Equatable {
+    public var number: Int
+    public var phase: String
+    public var ageS: Int
+    public var members: [Int]
+    public var prNumber: Int?
+    public var slow: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case number, phase, members, slow
+        case ageS = "age_s"
+        case prNumber = "pr_number"
+    }
+}
+
+/// The most recent batch the train gave up on (kept by the daemon for an hour).
+public struct AbandonedBatch: Codable, Sendable, Equatable {
+    public var number: Int
+    public var state: String
+    public var reason: String
+    public var agoS: Int
+
+    enum CodingKeys: String, CodingKey { case number, state, reason; case agoS = "ago_s" }
 }
 
 public struct Develop: Codable, Sendable, Equatable {
@@ -148,8 +208,13 @@ public struct TicketDetail: Codable, Sendable, Equatable {
     public var question: QuestionRow?
     /// The open issues this ticket waits for; empty from a daemon that predates the field.
     public var blockers: [BlockerRef]
+    /// `retry from ci when unblocked` while a `starpipe retry --when-unblocked` waits; nil from a daemon that predates it.
+    public var heldRetry: String?
 
-    enum CodingKeys: String, CodingKey { case number, plan, checks, question, blockers }
+    enum CodingKeys: String, CodingKey {
+        case number, plan, checks, question, blockers
+        case heldRetry = "held_retry"
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -158,6 +223,7 @@ public struct TicketDetail: Codable, Sendable, Equatable {
         checks = try c.decode([CheckRow].self, forKey: .checks)
         question = try c.decodeIfPresent(QuestionRow.self, forKey: .question)
         blockers = try c.decodeIfPresent([BlockerRef].self, forKey: .blockers) ?? []
+        heldRetry = try c.decodeIfPresent(String.self, forKey: .heldRetry)
     }
 }
 
@@ -236,6 +302,128 @@ public enum Overview {
         }
         return byModel.keys.sorted().map { ModelGroup(model: $0, sessions: byModel[$0]!.sorted { $0.ticket.number < $1.ticket.number }) }
     }
+
+    /// One top-bar counter: how many tickets sit in the daemon states it covers.
+    public struct StageCount: Equatable, Sendable, Identifiable {
+        public var label: String
+        public var states: [String]
+        public var count: Int
+        public var id: String { label }
+
+        /// How loudly the tile draws: the owner's queue when it is non-empty, a muted tile for zero, otherwise normal.
+        public var emphasis: TileEmphasis {
+            if count == 0 { return .idle }
+            return states.contains("needs-input") ? .attention : .active
+        }
+    }
+
+    public enum TileEmphasis: Equatable, Sendable { case attention, active, idle }
+
+    /// The top bar's seven buckets, in display order. `paused` and terminal states belong to none.
+    /// Labels are short and lowercase so they fit a tile on one line.
+    public static let topBarBuckets: [(label: String, states: [String])] = [
+        ("need you", ["needs-input"]), ("queued", ["queued"]), ("exploring", ["exploring"]),
+        ("developing", ["developing"]), ("testing", ["verifying"]), ("review", ["review"]),
+        ("landing", landingStates),
+    ]
+
+    /// Tickets per top-bar bucket, zeros included.
+    public static func topBarCounts(_ tickets: [TicketSnap]) -> [StageCount] {
+        topBarBuckets.map { bucket in
+            StageCount(label: bucket.label, states: bucket.states, count: tickets.filter { bucket.states.contains($0.state) }.count)
+        }
+    }
+
+    public struct LandingLine: Equatable, Sendable {
+        public var text: String
+        public var slow: Bool
+    }
+
+    static func span(_ seconds: Int) -> String { seconds >= 60 ? "\(seconds / 60)m" : "\(seconds)s" }
+
+    /// What the landing queue section says about the train: the active batch (flagged when slow), the last abandoned batch and why,
+    /// and the countdown to the next batch while none is active. Pure, so it is tested on a decoded snapshot.
+    public static func landingLines(_ landing: Landing?) -> [LandingLine] {
+        guard let landing else { return [] }
+        var lines: [LandingLine] = []
+        if let b = landing.batch {
+            let members = b.members.map { "#\($0)" }.joined(separator: " ")
+            let text = "batch \(b.number): \(b.phase) · age \(span(b.ageS))" + (members.isEmpty ? "" : " · \(members)")
+                + (b.slow ? " · SLOW" : "")
+            lines.append(LandingLine(text: text, slow: b.slow))
+        } else if let next = landing.nextBatchInS {
+            lines.append(LandingLine(text: "no batch yet: the next one starts in \(next)s", slow: false))
+        }
+        if let a = landing.lastAbandoned {
+            let verb = a.state == "failed" ? "failed" : "abandoned"
+            lines.append(LandingLine(text: "batch \(a.number) \(verb) \(span(a.agoS)) ago: \(a.reason)", slow: false))
+        }
+        return lines
+    }
+
+    public enum Severity: Equatable, Sendable { case normal, ok, warn, bad }
+
+    /// One "Pipeline status" row: the label and value the top bar used to show, its colour class, and the short word
+    /// the top bar still shows while the row is abnormal (nil for rows that never raise attention).
+    public struct StatusRow: Equatable, Sendable, Identifiable {
+        public var label: String
+        public var value: String
+        public var severity: Severity
+        public var attention: String? = nil
+        public var id: String { label }
+    }
+
+    /// The status items in the order the top bar showed them. Usage limit, Monitor update, Paused and Interventions appear only when present.
+    public static func statusRows(snapshot s: Snapshot?, connection: Connection, updateAvailable: Bool,
+                                  rebuildCommand: String, timeZone: TimeZone = .current) -> [StatusRow] {
+        let down: Bool
+        var daemon = "connecting…"
+        if case .down(let why) = connection { down = true; daemon = "down: \(why)" } else {
+            down = false
+            if let s { daemon = "up, \(s.runtime.sha)" + (s.runtime.behindDevelop > 0 ? ", behind develop by \(s.runtime.behindDevelop)" : "") }
+        }
+        var lock = "—"
+        if let heavy = s?.heavy {
+            if let h = heavy.holders.first {
+                let elapsed = Int((s?.now ?? h.since) - h.since)
+                let who = h.ticket.isEmpty ? "interactive" : "#\(h.ticket)"
+                lock = "\(who) \(h.cmd.prefix(36)) \(elapsed / 60)m" + (heavy.queue.isEmpty ? "" : " · \(heavy.queue.count) queued")
+            } else { lock = heavy.queue.isEmpty ? "idle" : "\(heavy.queue.count) waiting" }
+        }
+        let red = s?.landing.stopLine != nil
+        var landing = "—"
+        if let l = s?.landing { landing = l.stopLine.map { "stopped: \($0)" } ?? (l.paused ? "paused" : "running") }
+        var develop = "—"
+        if let d = s?.develop {
+            let gate = d.gate.isEmpty ? "pr-gate: no data" : "pr-gate " + (d.gate.values.allSatisfy { $0 == "success" } ? "green" : "red")
+            develop = "\(gate), \(d.knownRed) known red"
+        }
+        var rows = [
+            StatusRow(label: "Daemon", value: daemon, severity: down ? .bad : .ok, attention: down ? "Daemon down" : nil),
+            StatusRow(label: "Heavy lock", value: lock, severity: .normal),
+            StatusRow(label: "Landing", value: landing, severity: s?.landing.paused == true || red ? .warn : .normal,
+                      attention: s?.landing.paused == true ? "Landing paused" : nil),
+            StatusRow(label: "develop", value: develop, severity: red ? .bad : .normal, attention: red ? "develop red" : nil),
+        ]
+        if let until = s?.usagePauseUntil, let t = Double(until) {
+            let time = Date(timeIntervalSince1970: t).formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: timeZone))
+            rows.append(StatusRow(label: "Usage limit", value: "model stages wait until \(time)", severity: .warn, attention: "Usage limit"))
+        }
+        if updateAvailable {
+            rows.append(StatusRow(label: "Monitor update", value: "Update available — \(rebuildCommand)", severity: .warn, attention: "Update available"))
+        }
+        if let pause = s?.pause { rows.append(StatusRow(label: "Paused", value: pause, severity: .warn, attention: "Paused")) }
+        rows.append(StatusRow(label: "Last nightly", value: s?.nightly?.line ?? "none yet",
+                              severity: (s?.nightly?.reds ?? 0) > 0 || s?.nightly?.status == "error" ? .warn : .normal))
+        if let week = s?.interventionsWeek, !week.isEmpty {
+            rows.append(StatusRow(label: "Interventions (7 d)", value: week.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", "),
+                                  severity: .normal))
+        }
+        return rows
+    }
+
+    /// The words the top bar's attention indicator shows: one per abnormal row; empty when all is well.
+    public static func attentionWords(_ rows: [StatusRow]) -> [String] { rows.compactMap(\.attention) }
 
     public static func landingQueue(_ tickets: [TicketSnap]) -> [TicketSnap] {
         landingStates.flatMap { state in tickets.filter { $0.state == state }.sorted { $0.number < $1.number } }

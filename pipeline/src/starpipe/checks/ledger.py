@@ -13,7 +13,7 @@ from ..config import home
 @dataclass
 class Result:
     check: str
-    status: str  # pass | fail | vacuous | skipped-tests | not-run
+    status: str  # pass | fail | hung | vacuous | skipped-tests | not-run
     sha: str
     seconds: float
     lock_wait: float = 0.0

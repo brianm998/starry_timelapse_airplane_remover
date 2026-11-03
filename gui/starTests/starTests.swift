@@ -4193,6 +4193,106 @@ final class StartScreenTests: XCTestCase {
         StarLocalization.shared.languageOverride = "de"
         XCTAssertNotEqual(localized(key), english, "\(key) is English in German")
     }
+
+    private func zoneSource() throws -> String {
+        try String(contentsOf: Self.root.appendingPathComponent("gui/star/FinderStyleDropZone.swift"), encoding: .utf8)
+    }
+
+    /// The drop zone is the reference for the desktop's: this key, a document icon and a dashed border that turns accent while a drag is over it.
+    func testTheDropZoneSaysItsKey() throws {
+        let source = try zoneSource()
+        XCTAssertTrue(source.contains("localized(\"ui.drop_a_video_an_image_sequence_or_an\")"))
+        XCTAssertTrue(source.contains("doc.on.doc"))
+        XCTAssertTrue(source.contains("dash: [5]"))
+        XCTAssertTrue(source.contains("isTargeted ? Color.accentColor"))
+    }
+
+    /// Clicking the zone opens the image sequence chooser (as the desktop's does), and hovering says so.
+    func testTheDropZoneIsClickable() throws {
+        let source = try zoneSource()
+        XCTAssertTrue(source.contains(".onTapGesture(perform: onTap)"), "the zone has no click handler")
+        XCTAssertTrue(source.contains(".help(localized(\"ui.load_an_image_sequence_yet_to_be_processed\"))"), "the zone has no hover text")
+        XCTAssertTrue(source.contains("accessibilityIdentifier(\"startup.dropzone\")"))
+        let view = try String(contentsOf: Self.root.appendingPathComponent("gui/star/InitialView.swift"), encoding: .utf8)
+        XCTAssertTrue(view.contains("onTap: loadImageSequence"), "the zone's click does not load an image sequence")
+    }
+}
+
+/// The alignment window says what the desktop's does (`gherkin/ui/vectors/alignmentWindow.json`; the desktop's
+/// `AlignmentWindowTextsTest` reads its own view against the same file): the same empty-state texts in the same states, the same
+/// chart labels and the same zoom/pan/click help line.
+final class AlignmentWindowTextsTests: XCTestCase {
+    private static var root: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private func vector() throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(contentsOf: Self.root.appendingPathComponent("gherkin/ui/vectors/alignmentWindow.json"))) as? [String: Any])
+    }
+
+    private func source() throws -> String {
+        try String(contentsOf: Self.root.appendingPathComponent("gui/star/AlignmentWindowView.swift"), encoding: .utf8)
+    }
+
+    /// The gui always has its alignment data in the view model, so the states the vector has for data not yet fetched do not arise here.
+    func testTheEmptyStatesAreTheVectors() throws {
+        let states = try XCTUnwrap(try vector()["emptyStates"] as? [[String: Any]])
+        XCTAssertGreaterThanOrEqual(states.count, 6, "the vector lost states")
+        var checked = 0
+        for state in states {
+            let hasSequence = try XCTUnwrap(state["hasSequence"] as? Bool)
+            let fetched = try XCTUnwrap(state["fetched"] as? Bool)
+            if hasSequence && !fetched { continue }
+            let got = AlignmentWindowView.emptyState(
+              hasSequence: hasSequence,
+              hasData: try XCTUnwrap(state["hasData"] as? Bool),
+              processing: try XCTUnwrap(state["processing"] as? Bool))
+            XCTAssertEqual(got, state["lines"] as? [String], "state \(state["id"] ?? "")")
+            checked += 1
+        }
+        XCTAssertGreaterThanOrEqual(checked, 5)
+        let view = try source()
+        XCTAssertTrue(view.contains("Self.emptyState("), "the window does not pick its text from the shared states")
+        defer { StarLocalization.shared.languageOverride = nil }
+        StarLocalization.shared.languageOverride = "en"
+        for state in states {
+            for key in try XCTUnwrap(state["lines"] as? [String]) {
+                XCTAssertNotEqual(localized(key), key, "\(key) is missing from the catalogue")
+            }
+        }
+    }
+
+    func testTheChartLabelsAreTheVectors() throws {
+        let doc = try vector()
+        let labels = try XCTUnwrap(doc["chartLabels"] as? [String: String])
+        let help = try XCTUnwrap(doc["help"] as? String)
+        let view = try source()
+        func label(_ id: String) throws -> String { try XCTUnwrap(labels[id], id) }
+
+        for id in ["currentFrame", "hoverFrame", "keypointSeries", "keypointValue", "frame"] {
+            let key = try label(id)
+            XCTAssertTrue(view.contains("localized(\"\(key)\")"), "\(id) (\(key)) does not name a chart mark")
+        }
+        XCTAssertTrue(view.contains(".chartXAxisLabel(localized(\"\(try label("xAxis"))\"))"))
+        XCTAssertTrue(view.contains(".chartYAxisLabel(localized(\"\(try label("keypointYAxis"))\"))"))
+        XCTAssertTrue(view.contains("Text(localized(\"\(try label("starKeypointsTitle"))\"))"), "no title over the star keypoints")
+        XCTAssertTrue(view.contains("Text(localized(\"\(try label("earthKeypointsTitle"))\"))"), "no title over the earth keypoints")
+
+        // The help line is shown, and both charts can do what it says: zoom (pinch and Ctrl/Cmd+scroll), pan (drag) and click.
+        XCTAssertTrue(view.contains("Text(localized(\"\(help)\"))"), "the help line is not shown")
+        XCTAssertEqual(view.components(separatedBy: ".scrollWheelZoom {").count - 1, 2, "both charts zoom with the scroll wheel")
+        XCTAssertEqual(view.components(separatedBy: "pan(by: value.translation.width)").count - 1, 2, "both charts pan")
+        XCTAssertEqual(view.components(separatedBy: "viewModel.currentIndex = hoveredFrame").count - 1, 2, "both charts go to the clicked frame")
+
+        defer { StarLocalization.shared.languageOverride = nil }
+        StarLocalization.shared.languageOverride = "en"
+        for (id, key) in labels { XCTAssertNotEqual(localized(key), key, "\(id): \(key) is missing from the catalogue") }
+        let english = localized(help)
+        XCTAssertNotEqual(english, help)
+        StarLocalization.shared.languageOverride = "de"
+        XCTAssertNotEqual(localized(help), english, "the help line is English in German")
+    }
 }
 
 /// Layer 0 of the parity plan (§6.2.4): the outlier table's columns are the ones `gherkin/ui/vectors/outlierColumns.json` lists, in the
@@ -4771,5 +4871,31 @@ final class MenuBarStatusTests: XCTestCase {
         // Rendering wins over a stale processing flag, and the fraction stays in 0...1.
         XCTAssertEqual(status(isRendering: true, renderFraction: 1.7, steps: steps), .rendering(fraction: 1))
         XCTAssertEqual(localized("ui.menu_bar.rendering_video"), "Rendering video")
+    }
+}
+
+/// The gui's bottom status bar no longer carries the old sequence-alignment phase line the
+/// desktop never had; the "N frames processing" line and Stop stay.
+final class BottomStatusTests: XCTestCase {
+    private static var root: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private func source(_ path: String) throws -> String {
+        try String(contentsOf: Self.root.appendingPathComponent(path), encoding: .utf8)
+    }
+
+    func testTheAlignmentPhaseLineIsGone() throws {
+        let bar = try source("gui/star/BottomRightView.swift")
+        XCTAssertFalse(bar.contains("sequenceProcessingState"), "the bottom bar still reads sequenceProcessingState")
+        for key in ["ui.detecting_horizons", "ui.star_keypoints", "ui.earth_keypoints", "ui.first_alignment",
+                    "ui.second_alignment", "ui.alignment_done", "ui.alignment_error", "ui.n_frames_left"] {
+            XCTAssertFalse(bar.contains("\"\(key)\""), "\(key) is still drawn in the bottom bar")
+        }
+        XCTAssertTrue(bar.contains("localized(\"ui.n_frames_processing\""), "the N frames processing line is gone")
+        XCTAssertTrue(bar.contains("viewModel.stopProcessing()"), "the Stop button is gone")
+
+        let model = try source("gui/star/ImageSequenceViewModel.swift")
+        XCTAssertFalse(model.contains("sequenceProcessingState"), "nothing reads it, so the view model should not keep it")
     }
 }

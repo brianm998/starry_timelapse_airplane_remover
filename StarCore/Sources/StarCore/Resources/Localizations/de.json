@@ -763,7 +763,7 @@
   "ui.preview": "Vorschau",
   "ui.preview_creation_error": "Fehler beim Erstellen der Vorschau für Bild {0}: {1}",
   "ui.preview_first": "Erst Vorschau",
-  "ui.preview_while_processing_help": "Die Verarbeitung läuft im Hintergrund weiter. Mit der Vorschau kannst du dir die fertigen Bilder ansehen, während sie läuft; über „Fortschritt anzeigen“ links kommst du hierher zurück.",
+  "ui.preview_while_processing_help": "Die Verarbeitung läuft im Hintergrund weiter. Mit der Vorschau kannst du dir die fertigen Bilder ansehen, während sie läuft; über „Fortschritt anzeigen“ kommst du hierher zurück.",
   "ui.process": "Verarbeiten",
   "ui.process_all_frames": "Alle Bilder verarbeiten",
   "ui.process_all_frames_2": "Alle Bilder verarbeiten",

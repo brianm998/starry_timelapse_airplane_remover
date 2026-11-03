@@ -19,6 +19,7 @@ from . import plan as planmod
 from .checks import impact, ledger
 from .db import Database, Ticket
 from .github import GitHub, GitHubError
+from .notify import Notifier
 
 ACCEPTED = "accepted. End your turn now."
 CLOSE_REASONS = ("duplicate-of", "already-done", "no-defect", "not-this-repo")
@@ -66,6 +67,7 @@ class Contract:
     db: Database
     gh: GitHub | None = None
     check_runner: CheckRunner | None = None
+    notifier: Notifier | None = None
     owner_filed: bool = True
     result: tuple[str, Any] | None = None
     lock_wait_s: float = 0.0  # seconds spent waiting for the heavy lock; stage budgets are net of it
@@ -79,13 +81,19 @@ class Contract:
         return ACCEPTED
 
     # EXPLORE -------------------------------------------------------------------------------------------------------
-    def submit_plan(self, args: dict[str, Any]) -> str:
+    def check_plan(self, args: dict[str, Any]) -> tuple[planmod.Plan | None, list[str]]:
+        """The one place a plan is judged: the model's shape, then `planmod.validate` against the worktree and ticket.
+        EXPLORE's `submit_plan` and the engine's plan-from-the-ticket path both come through here."""
         try:
             p = planmod.Plan.model_validate(args)
         except ValidationError as exc:
-            return "plan rejected:\n" + "\n".join(f"- {'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
+            return None, [f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()]
         errors = planmod.validate(p, self.worktree, self.ticket.body, self._bug())
-        if errors:
+        return (None, errors) if errors else (p, [])
+
+    def submit_plan(self, args: dict[str, Any]) -> str:
+        p, errors = self.check_plan(args)
+        if p is None:
             return "plan rejected:\n" + "\n".join(f"- {e}" for e in errors)
         return self._accept("plan", p.model_dump())
 
@@ -119,6 +127,8 @@ class Contract:
         for r in results:
             self.db.record_check(self.ticket.number, sha, r.check, r.status,
                                  {"executed": r.executed, "failed": r.failed, "skipped": r.skipped}, r.log)
+        if self.notifier:
+            self.notifier.hung_checks(self.ticket.number, results)
         lines = [f"{'PASS' if r.green else r.status.upper()} {r.check} ({r.executed} tests, {r.failed} failed)"
                  + ("" if r.green else f" — {r.detail} log: {r.log}") for r in results]
         return "\n".join(lines) or "no checks needed for this diff"

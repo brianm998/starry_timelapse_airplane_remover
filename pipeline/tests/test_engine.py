@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from pathlib import Path
 
 import pytest
 
-from starpipe import guards, negctl
+from starpipe import gitutil, guards, negctl, worktrees
 from starpipe.agent import StageOutcome, StageRequest
 from starpipe.config import Config
 from starpipe.db import Database
 from starpipe.engine import Engine
 from starpipe.notify import Notifier
+from starpipe.tickets import filed_by
 
 from .fakes import (
     GOOD_BODY,
@@ -24,6 +26,7 @@ from .fakes import (
     green_runner,
     make_repo,
     plan_args,
+    sh,
 )
 
 
@@ -163,6 +166,30 @@ async def test_nothing_new_is_claimed_while_a_landing_stage_waits_for_a_session(
     assert rig.engine.claimable() is None
 
 
+async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
+    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    rig.db.begin_stage(5, "develop", 1, "sonnet")
+    rig.db.put("self_update_pending", "e3c559f6aabb")
+    rig.db.put("self_update_pending_since", str(rig.now))
+    drain = rig.engine.config.self_update_drain_s
+    assert drain == 600
+
+    assert rig.engine.claimable() is None, "nothing new is claimed inside the window"
+    hold = rig.engine.update_hold()
+    assert hold == {"sha": "e3c559f6aabb", "left_s": drain, "waiting_on": [5]}
+
+    rig.now += drain - 60
+    assert rig.engine.claimable() is None and rig.engine.update_hold()["left_s"] == 60  # type: ignore[index]
+    rig.now += 61
+    assert rig.engine.update_hold() is None and rig.engine.claimable() is not None, "the window has passed: the daemon swaps, no hold"
+
+    rig.now -= 100  # back inside the window
+    assert rig.engine.claimable() is None
+    rig.db.put("self_update_pending", None)
+    assert rig.engine.claimable() is not None, "no pending update, no hold"
+
+
 async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Rig) -> None:
     assert rig.engine.max_active() == rig.engine.config.max_llm_sessions
     rig.db.put("max_active", "2")
@@ -275,6 +302,28 @@ async def test_a_usage_limit_pauses_without_counting_an_attempt(rig: Rig) -> Non
     assert [r.attempt for r in explores] == [1, 1]
     assert sum(rig.slept) >= 600
     assert rig.db.get("usage_pause_until") is None
+
+
+async def test_rate_limit_windows_are_recorded(rig: Rig, tmp_path: Path) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    both = {"five_hour": {"utilization": 0.08, "resetsAt": 1793493600, "status": "allowed"},
+            "seven_day": {"utilization": 0.25, "resetsAt": 1793984400, "status": "allowed"}}
+
+    def explore(req: StageRequest) -> StageOutcome:
+        req.on_usage(both)
+        req.on_usage({"five_hour": {"utilization": 0.1, "resetsAt": 1793497200}})  # one window: the other stays
+        req.on_usage({"seven_day": {"utilization": "lots", "resetsAt": None}, "five_hour": "x"})  # malformed: ignored
+        return explore_ok(req)
+
+    rig.agent.on("explore", explore)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    stored = json.loads(rig.db.get("usage_windows") or "null")
+    assert stored == {"five_hour": {"utilization": 0.1, "resetsAt": 1793497200},
+                      "seven_day": {"utilization": 0.25, "resetsAt": 1793984400}}
+    reopened = Database(tmp_path / "state.db")  # it survives a daemon restart
+    assert json.loads(reopened.get("usage_windows") or "null") == stored
 
 
 async def test_a_question_the_resolver_can_answer_resumes_the_session(rig: Rig) -> None:
@@ -603,3 +652,292 @@ def test_the_real_announcer_swallows_missing_binaries_and_never_blocks(monkeypat
     announce.SayAnnouncer.play("landed", 1)  # no exception
     a = announce.SayAnnouncer()
     a.announce("attention", 2)  # returns at once; the worker thread swallows the failure
+
+
+PLAN_TICKET = """## Goal
+Tidy the docs.
+
+## Context
+docs/a.md.
+
+## Acceptance criteria
+- A1: the docs file has a second line — check: review: docs/a.md
+
+## Tests
+none: docs only
+
+## Out of scope
+Everything else.
+
+## Plan
+summary: Add a line to the docs file.
+parity: neither
+localization: no
+- approach: edit docs/a.md
+- file: docs/a.md:1 — the one line there
+- risk: none
+
+## Pipeline
+gherkin: no
+"""
+
+
+async def test_owner_ticket_with_a_valid_plan_skips_explore(rig: Rig) -> None:
+    rig.gh.add_issue(7, "Tidy the docs", PLAN_TICKET + filed_by("interactive"))
+    rig.engine.sync_issues()
+    t = rig.engine.claim(rig.db.ticket(7))  # type: ignore[arg-type]
+    assert t.state == "developing"
+    assert t.plan and t.plan["summary"] == "Add a line to the docs file." and t.plan["findings"][0]["line"] == 1
+    assert json.loads((worktrees.ticket_dir(7) / "plan.json").read_text()) == t.plan
+    assert [e["kind"] for e in rig.db.events_since() if e["ticket"] == 7 and e["kind"].startswith(("plan", "ticket-plan"))] \
+        == ["plan-from-ticket"]
+    rig.agent.on("develop", develop_ok)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    assert rig.state(7) == "landed"
+    assert not [r for r in rig.agent.requests if r.stage == "explore"]
+
+
+async def test_an_invalid_ticket_plan_falls_back_to_explore_with_reasons(rig: Rig) -> None:
+    past_eof = PLAN_TICKET.replace("docs/a.md:1 —", "docs/a.md:99 —").replace(
+        "none: docs only", "unit: pipeline/tests/test_x.py test_x — shows: A1")
+    rig.gh.add_issue(7, "Fix the docs crash", past_eof + filed_by("interactive"))
+    rig.engine.sync_issues()
+    rig.agent.on("explore", explore_ok)
+    rig.agent.on("develop", develop_ok)
+    rig.agent.on("review", review_ok)
+    rig.engine.claim(rig.db.ticket(7))  # type: ignore[arg-type]
+    assert rig.state(7) == "exploring" and not rig.db.ticket(7).plan  # type: ignore[union-attr]
+    rejected = [e for e in rig.db.events_since() if e["kind"] == "ticket-plan-rejected"]
+    assert len(rejected) == 1 and rejected[0]["ticket"] == 7
+    reasons = rejected[0]["data"]["reasons"]
+    assert any("docs/a.md has fewer than 99 lines" in r for r in reasons)
+    assert any("fails_before_fix" in r for r in reasons)
+    await rig.engine.drive(7)
+    (req,) = [r for r in rig.agent.requests if r.stage == "explore"]
+    assert "was rejected" in req.prompt and all(r in req.prompt for r in reasons)
+    assert rig.state(7) == "landed"
+
+    rig.gh.add_issue(8, "Tidy the docs again", PLAN_TICKET.replace("## Plan", "## Plan\nbogus: 1")
+                     + filed_by("nightly-review"))
+    rig.engine.sync_issues()
+    rig.engine.claim(rig.db.ticket(8))  # type: ignore[arg-type]
+    assert rig.state(8) == "exploring" and "unknown key" in (rig.db.get("plan_rejected:8") or "")
+
+
+async def test_a_plan_from_an_agent_filed_ticket_skips_explore(rig: Rig) -> None:
+    rig.gh.add_issue(7, "Tidy the docs", PLAN_TICKET + filed_by("nightly-review"))
+    rig.engine.sync_issues()
+    t = rig.engine.claim(rig.db.ticket(7))  # type: ignore[arg-type]
+    assert t.state == "developing" and t.plan and t.plan["summary"] == "Add a line to the docs file."
+    assert [e["kind"] for e in rig.db.events_since() if e["ticket"] == 7 and e["kind"].startswith(("plan", "ticket-plan"))] \
+        == ["plan-from-ticket"]
+    rig.agent.on("develop", develop_ok)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    assert rig.state(7) == "landed"
+    assert not [r for r in rig.agent.requests if r.stage == "explore"]
+
+
+async def test_a_pipeline_filed_ticket_ignores_its_plan(rig: Rig) -> None:
+    mine = PLAN_TICKET + filed_by("interactive")
+    rig.gh.add_issue(1, "labelled by the pipeline", mine, labels=("pipeline", "pipe:filed-by-pipeline"))
+    rig.gh.add_issue(2, "filed by a stranger", mine, author="stranger")
+    rig.engine.sync_issues()
+    for n in (1, 2):
+        assert tickets_ok(rig, n)
+
+
+def tickets_ok(rig: Rig, n: int) -> bool:
+    assert rig.db.ticket(n), f"#{n} was not taken up"
+    t = rig.engine.claim(rig.db.ticket(n))  # type: ignore[arg-type]
+    assert t.state == "exploring" and t.plan is None, f"#{n} skipped EXPLORE"
+    assert rig.db.get(f"plan_rejected:{n}") is None
+    return True
+
+
+# a restarted ticket takes in develop first -------------------------------------------------------------------------
+GIT_AS_T = ("git", "-c", "user.email=t@t", "-c", "user.name=t")
+
+
+def stopped_ticket(rig: Rig, file: str = "mine.md", text: str = "mine\n") -> Path:
+    """Ticket 7 stopped in `developing` with one commit on a branch cut from the develop of its time."""
+    rig.gh.add_issue(7, "Tidy the docs")
+    rig.engine.sync_issues()
+    t = rig.engine.claim(rig.db.ticket(7))  # type: ignore[arg-type]
+    wt = Path(t.worktree or "")
+    (wt / "docs").mkdir(exist_ok=True)
+    (wt / "docs" / file).write_text(text)
+    sh(wt, "git", "add", "-A")
+    sh(wt, *GIT_AS_T, "commit", "-q", "-m", f"change {file}")
+    rig.db.set_fields(7, plan_json=json.dumps({"summary": "A planned change.", "acceptance": [{"id": "A1", "check": "review: x"}],
+                                               "tests": {"none_reason": "docs"}}))
+    rig.db.set_state(7, "developing")
+    return wt
+
+
+def develop_moves(rig: Rig, file: str, text: str) -> None:
+    """Another ticket lands `docs/<file>` on origin's develop."""
+    clone = rig.engine.repo.parent / "dev-clone"
+    if not clone.exists():
+        sh(clone.parent, "git", "clone", "-q", str(rig.gh.origin), str(clone))
+        sh(clone, "git", "checkout", "-q", "develop")
+    sh(clone, "git", "pull", "-q", "origin", "develop")
+    (clone / "docs").mkdir(exist_ok=True)
+    (clone / "docs" / file).write_text(text)
+    sh(clone, "git", "add", "-A")
+    sh(clone, *GIT_AS_T, "commit", "-q", "-m", f"develop: {file}")
+    sh(clone, "git", "push", "-q", "origin", "develop")
+
+
+def behind(wt: Path) -> bool:
+    return not gitutil.is_ancestor(wt, "origin/develop", "HEAD")
+
+
+def resolver(keep: str):  # type: ignore[no-untyped-def]
+    """A conflict stage that writes `keep` over docs/shared.md, commits the merge and submits."""
+    def script(req: StageRequest) -> StageOutcome:
+        wt = req.contract.worktree
+        assert "docs/shared.md" in req.prompt and "Conflicts merging origin/develop" in req.prompt
+        (wt / "docs" / "shared.md").write_text(keep)
+        sh(wt, "git", "add", "-A")
+        sh(wt, *GIT_AS_T, "commit", "-q", "--no-edit")
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "resolved"})
+        return accepted(req, "S-conflict")
+    return script
+
+
+async def test_a_retried_stale_branch_merges_develop_before_its_stage(rig: Rig) -> None:
+    stopped_ticket(rig)
+    develop_moves(rig, "other.md", "theirs\n")
+    rig.db.put("catch_up:7", "1")
+    seen: list[tuple[bool, str, bool]] = []
+
+    def develop(req: StageRequest) -> StageOutcome:
+        d = req.contract.worktree / "docs"
+        seen.append((behind(req.contract.worktree), req.prompt, (d / "other.md").read_text() == "theirs\n" and (d / "mine.md").exists()))
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "done"})
+        return accepted(req, "S-dev")
+
+    rig.agent.on("develop", develop)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    assert seen and seen[0][0] is False, "develop is in the branch when the stage starts"
+    assert "was merged into this branch" in seen[0][1] and "1 commit(s)" in seen[0][1]
+    assert seen[0][2], "develop's file and the ticket's own commit are both in the tree"
+    assert rig.db.get("catch_up:7") is None
+    assert [e["data"]["commits"] for e in rig.db.events_since() if e["kind"] == "caught-up"] == [1]
+
+
+async def test_a_retried_branch_with_conflicts_goes_through_the_conflict_stage(rig: Rig) -> None:
+    stopped_ticket(rig, "shared.md", "mine\n")
+    develop_moves(rig, "shared.md", "develop's line\n")
+    rig.db.put("catch_up:7", "1")
+    behind_at_develop: list[bool] = []
+    waiting: list[set[int]] = []
+    inner = resolver("develop's line\nmine\n")
+
+    def resolve(req: StageRequest) -> StageOutcome:
+        waiting.append(set(rig.engine.landing_waiting))
+        return inner(req)
+
+    def develop(req: StageRequest) -> StageOutcome:
+        behind_at_develop.append(behind(req.contract.worktree))
+        return develop_ok(req)
+
+    rig.agent.on("conflict", resolve)
+    rig.agent.on("develop", develop)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    stages = [s["stage"] for s in rig.db.stages(7)]
+    assert stages[0] == "conflict" and "develop" in stages
+    assert waiting == [set()], "the ticket is not landing: its conflict stage does not take landing priority"
+    assert behind_at_develop == [False], "the resumed stage continues on the merged branch"
+
+
+async def test_a_dropped_develop_line_parks_a_retried_branch(rig: Rig) -> None:
+    stopped_ticket(rig, "shared.md", "mine\n")
+    develop_moves(rig, "shared.md", "develop's line\n")
+    rig.db.put("catch_up:7", "1")
+    rig.agent.on("conflict", resolver("mine\n"))
+    await rig.engine.drive(7)
+    t = rig.db.ticket(7)
+    assert t and t.state == "failed" and "dropped 1 landed line" in (t.park_reason or "")
+    assert [s["stage"] for s in rig.db.stages(7)] == ["conflict"]
+
+
+async def test_a_dirty_worktree_is_not_caught_up(rig: Rig) -> None:
+    wt = stopped_ticket(rig)
+    develop_moves(rig, "other.md", "theirs\n")
+    (wt / "docs" / "mine.md").write_text("half an edit\n")  # a stage was interrupted mid-edit
+    rig.db.put("catch_up:7", "1")
+    ran: list[bool] = []
+
+    def develop(req: StageRequest) -> StageOutcome:
+        ran.append(behind(req.contract.worktree))
+        sh(req.contract.worktree, "git", "add", "-A")
+        sh(req.contract.worktree, *GIT_AS_T, "commit", "-q", "-m", "finish")
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "done"})
+        return accepted(req, "S-dev")
+
+    rig.agent.on("develop", develop)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    assert ran == [True], "the stage ran on the old base"
+    skipped = [e for e in rig.db.events_since() if e["kind"] == "catch-up-skipped"]
+    assert len(skipped) == 1 and "uncommitted" in skipped[0]["data"]["reason"]
+    assert not [e for e in rig.db.events_since() if e["kind"] == "caught-up"]
+
+
+def failed_behind(rig: Rig, blockers: list[int]) -> None:
+    """Ticket 7 failed in CI; `blockers` are pipeline tickets that must land before its held retry fires."""
+    rig.gh.add_issue(7, "failed one")
+    for b in blockers:
+        rig.gh.add_issue(b, f"blocker {b}")
+    rig.gh.deps[7] = blockers
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "failed", "CI still red after 2 fix cycles")
+    rig.db.put("land_now:7", "1")
+    rig.engine.parked.add(7)
+    rig.db.put("held_retry:7", "ci")
+
+
+def interventions(rig: Rig) -> list[str]:
+    return [r["kind"] for r in rig.db._all("SELECT kind FROM interventions")]  # pyright: ignore[reportPrivateUsage]
+
+
+def test_held_retry_fires_when_the_last_blocker_lands(rig: Rig) -> None:
+    failed_behind(rig, [8, 9])
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "failed", "both blockers are still open"
+    rig.db.set_state(8, "landed")
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "failed", "one is still open"
+    rig.db.set_state(9, "closed")
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "ci", "the retry the owner would have run: from ci"
+    assert rig.db.get("held_retry:7") is None and rig.db.get("land_now:7") is None
+    assert 7 not in rig.engine.parked
+    assert interventions(rig) == ["retry"]
+
+
+def test_held_retry_does_not_fire_early_or_twice(rig: Rig) -> None:
+    failed_behind(rig, [8])
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "failed" and rig.db.get("held_retry:7") == "ci" and interventions(rig) == []
+
+    rig.db.set_state(8, "landed")
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "ci"
+    rig.db.set_state(7, "failed", "red again")  # it fails a second time: the spent record must not fire again
+    rig.engine.release_held_retries()
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "failed" and interventions(rig) == ["retry"]
+
+    rig.db.put("held_retry:7", "ci")  # the owner retried by hand meanwhile: the record is stale and is dropped
+    rig.db.set_state(7, "developing")
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "developing" and rig.db.get("held_retry:7") is None and interventions(rig) == ["retry"]

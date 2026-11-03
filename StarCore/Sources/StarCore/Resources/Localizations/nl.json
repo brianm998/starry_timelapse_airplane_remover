@@ -763,7 +763,7 @@
   "ui.preview": "Voorbeeld",
   "ui.preview_creation_error": "fout bij het maken van de voorvertoning van beeld {0}: {1}",
   "ui.preview_first": "Eerst voorvertonen",
-  "ui.preview_while_processing_help": "De verwerking gaat op de achtergrond door. Met Voorbeeld kun je de voltooide beelden bekijken terwijl het loopt; gebruik Voortgang tonen aan de linkerkant om hier terug te komen.",
+  "ui.preview_while_processing_help": "De verwerking gaat op de achtergrond door. Met Voorbeeld kun je de voltooide beelden bekijken terwijl het loopt; gebruik Voortgang tonen om hier terug te komen.",
   "ui.process": "Verwerk",
   "ui.process_all_frames": "Alle beelden verwerken",
   "ui.process_all_frames_2": "Alle beelden verwerken",
