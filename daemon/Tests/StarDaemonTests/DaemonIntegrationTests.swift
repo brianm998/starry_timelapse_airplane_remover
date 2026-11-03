@@ -89,6 +89,9 @@ final class DaemonIntegrationTests: XCTestCase {
 
 // MARK: - Minimal DaemonProcess driver
 
+/// Every test that talks to `stard` (DaemonIntegrationTests, the ExportEndToEndTestCase subclasses,
+/// SessionConfigPersistenceTests) goes through this driver, and its reads used to have no bound
+/// (ticket #209: `swift test` sat at 0% CPU for 95 minutes with the main thread in XCTWaiter).
 final class DaemonProcess: @unchecked Sendable {
     private let process: Process
     private let stdinPipe:  Pipe
