@@ -988,7 +988,8 @@ class DesktopFeatureRunner {
         val source = resolveSequence(param("sequence"))
         val script = File(repoRoot(), "gherkin/ui/make-processed-fixture.sh")
         // A machine without a built cli builds it (the script's STAR_CLI_BUILD): the first feature of a run that needs the processed sequence waits for that.
-        val builder = ProcessBuilder("bash", script.path, source.path)
+        val isWindows = System.getProperty("os.name").startsWith("Windows")
+        val builder = ProcessBuilder(bashExecutable(isWindows), script.path, source.path)
         builder.environment().putIfAbsent("STAR_CLI_BUILD", "1")
         val process = builder.start()
         // The script's stderr (its own messages, the cli build) is read as it comes, passed on to the log, and its tail goes into the error: an inherited
@@ -1008,7 +1009,7 @@ class DesktopFeatureRunner {
             throw RunnerError("could not make the processed sequence (the script exited $exit, printed ${printed ?: "nothing"}); its stderr:\n$said")
         }
         val target = File(scratch, "processed")
-        val fixture = nativeFixturePath(printed, System.getProperty("os.name").startsWith("Windows"))
+        val fixture = nativeFixturePath(printed, isWindows)
         File(fixture).copyRecursively(target)
         relocateJsonFiles(target, fixture, target.path)
         processedConfig = File(target, "input/star_temp_${source.name}/config.json")
