@@ -190,7 +190,8 @@ async def test_a_resolution_that_drops_a_landed_line_is_caught(rig: Rig) -> None
         wt = req.contract.worktree
         (wt / "docs" / "shared.md").write_text("mine\n")  # develop's line is gone
         sh(wt, "git", "add", "-A")
-        sh(wt, "git", "commit", "-q", "--no-edit")
+        if subprocess.run(["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"], check=False, cwd=wt, capture_output=True).returncode == 0:
+            sh(wt, "git", "commit", "-q", "--no-edit")  # the first round finishes the merge; the second finds it already committed
         req.contract.run_checks({})
         req.contract.submit_change({"summary": "resolved"})
         return accepted(req, "S-conflict")
@@ -198,9 +199,35 @@ async def test_a_resolution_that_drops_a_landed_line_is_caught(rig: Rig) -> None
     rig.agent.on("conflict", drop)
     await rig.engine.drive(1)
     assert rig.state(1) == "failed"
+    assert [r.stage for r in rig.agent.requests] == ["conflict", "conflict"], "one more round, then parked"
     t = rig.db.ticket(1)
     assert t and "dropped 1 landed line" in (t.park_reason or "") and "develop's line" in (t.park_reason or "")
     assert not origin_has(rig, 1)
+
+
+async def test_dropped_lines_go_back_to_the_conflict_stage_once(rig: Rig) -> None:
+    ready_ticket(rig, 1, "shared.md", "mine\n")
+    advance_develop(rig, "shared.md", "develop's line\n")
+    prompts: list[str] = []
+
+    def conflict(req: StageRequest) -> StageOutcome:
+        prompts.append(req.prompt)
+        wt = req.contract.worktree
+        # the first round drops develop's line; the second restores it on top of the first resolution
+        (wt / "docs" / "shared.md").write_text("mine\n" if len(prompts) == 1 else "develop's line\nmine\n")
+        sh(wt, "git", "add", "-A")
+        sh(wt, "git", "commit", "-q", "-m", f"round {len(prompts)}")
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "resolved"})
+        return accepted(req, "S-conflict")
+
+    rig.agent.on("conflict", conflict)
+    await rig.engine.drive(1)
+    assert rig.state(1) == "landed"  # a clean second audit carries on as after a clean first one
+    assert [r.stage for r in rig.agent.requests] == ["conflict", "conflict"]
+    assert "Conflicts merging" in prompts[0]
+    assert "docs/shared.md: develop's line" in prompts[1] and "already committed" in prompts[1] and "restore" in prompts[1].lower()
+    assert sh(rig.engine.repo, "git", "show", "origin/develop:docs/shared.md") == "develop's line\nmine\n"
 
 
 async def test_a_reported_merge_that_is_not_on_develop_is_a_phantom_landing(rig: Rig) -> None:
