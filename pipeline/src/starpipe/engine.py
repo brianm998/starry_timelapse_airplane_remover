@@ -198,11 +198,13 @@ class Engine:
         return refreshed
 
     def _plan_from_ticket(self, t: Ticket) -> bool:
-        """Take the plan an owner's interactive session wrote into the ticket, when it passes the checks EXPLORE's plan passes.
+        """Take the plan written into the ticket, when it passes the checks EXPLORE's plan passes.
 
-        Only a ticket the owner filed from an interactive session qualifies; anything else, and any plan that does not parse or
-        validate against the fresh worktree, goes to EXPLORE (a rejected plan's reasons are appended to its prompt)."""
-        if not self._owner_filed(t) or (m := tickets.FILED_BY.search(t.body)) is None or m.group(1) != "interactive":
+        Any owner-authored ticket qualifies, whoever filed it (an interactive session, an agent, an approved proposal): the agent
+        that writes the ticket is the exploration agent. Tickets the pipeline files itself (`auto:<n>`) and anyone else's, and any
+        plan that does not parse or validate against the fresh worktree, go to EXPLORE (a rejected plan's reasons are appended to
+        its prompt)."""
+        if not self._owner_filed(t):
             return False
         self.db.put(f"plan_rejected:{t.number}", None)  # a stale reason from an earlier claim
         supplied, errors = tickets.ticket_plan(t.body)

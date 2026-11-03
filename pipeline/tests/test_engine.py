@@ -694,20 +694,32 @@ async def test_an_invalid_ticket_plan_falls_back_to_explore_with_reasons(rig: Ri
     assert rig.state(7) == "landed"
 
     rig.gh.add_issue(8, "Tidy the docs again", PLAN_TICKET.replace("## Plan", "## Plan\nbogus: 1")
-                     + filed_by("interactive"))
+                     + filed_by("nightly-review"))
     rig.engine.sync_issues()
     rig.engine.claim(rig.db.ticket(8))  # type: ignore[arg-type]
     assert rig.state(8) == "exploring" and "unknown key" in (rig.db.get("plan_rejected:8") or "")
 
 
-async def test_pipeline_and_agent_filed_tickets_always_explore(rig: Rig) -> None:
+async def test_a_plan_from_an_agent_filed_ticket_skips_explore(rig: Rig) -> None:
+    rig.gh.add_issue(7, "Tidy the docs", PLAN_TICKET + filed_by("nightly-review"))
+    rig.engine.sync_issues()
+    t = rig.engine.claim(rig.db.ticket(7))  # type: ignore[arg-type]
+    assert t.state == "developing" and t.plan and t.plan["summary"] == "Add a line to the docs file."
+    assert [e["kind"] for e in rig.db.events_since() if e["ticket"] == 7 and e["kind"].startswith(("plan", "ticket-plan"))] \
+        == ["plan-from-ticket"]
+    rig.agent.on("develop", develop_ok)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    assert rig.state(7) == "landed"
+    assert not [r for r in rig.agent.requests if r.stage == "explore"]
+
+
+async def test_a_pipeline_filed_ticket_ignores_its_plan(rig: Rig) -> None:
     mine = PLAN_TICKET + filed_by("interactive")
     rig.gh.add_issue(1, "labelled by the pipeline", mine, labels=("pipeline", "pipe:filed-by-pipeline"))
-    rig.gh.add_issue(2, "filed by an agent", PLAN_TICKET + filed_by("nightly-review"))
-    rig.gh.add_issue(3, "filed by a stranger", mine, author="stranger")
-    rig.gh.add_issue(4, "no marker at all", PLAN_TICKET)
+    rig.gh.add_issue(2, "filed by a stranger", mine, author="stranger")
     rig.engine.sync_issues()
-    for n in (1, 2, 3, 4):
+    for n in (1, 2):
         assert tickets_ok(rig, n)
 
 

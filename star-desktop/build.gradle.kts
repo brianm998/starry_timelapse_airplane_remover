@@ -40,34 +40,12 @@ sourceSets {
     }
 }
 
-// JavaFX classifier for the current build host, matching the artifacts published to Maven Central
-// (org.openjfx:javafx-*). Only used for the initial screen's decorative background video (embedded
-// via JFXPanel/MediaView, since Compose Desktop has no video playback of its own) — same idea as
-// hostResourceDir below, one platform's binary per build.
-val javafxClassifier: String = run {
-    val os = System.getProperty("os.name").lowercase()
-    val arch = System.getProperty("os.arch").lowercase()
-    val isArm = arch.contains("aarch64") || arch.contains("arm")
-    when {
-        os.contains("mac") || os.contains("darwin") -> if (isArm) "mac-aarch64" else "mac"
-        os.contains("win") -> "win"
-        else -> if (isArm) "linux-aarch64" else "linux"
-    }
-}
-
 dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
 
     // Proto messages only — NO gRPC plugin (transport is hand-rolled stdio framing).
     implementation("com.google.protobuf:protobuf-kotlin-lite:4.28.3")
-
-    // Background video on the initial screen (macOS `SplitRevealVideoView`, via IntroVideoBackground).
-    val javafxVersion = "21.0.2"
-    implementation("org.openjfx:javafx-base:$javafxVersion:$javafxClassifier")
-    implementation("org.openjfx:javafx-graphics:$javafxVersion:$javafxClassifier")
-    implementation("org.openjfx:javafx-media:$javafxVersion:$javafxClassifier")
-    implementation("org.openjfx:javafx-swing:$javafxVersion:$javafxClassifier")
 
     // Coroutines: core + Swing dispatcher (Compose Desktop runs on the AWT/Swing EDT).
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
