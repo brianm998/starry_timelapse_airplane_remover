@@ -826,7 +826,7 @@ final class ProposalTests: XCTestCase {
         let fixture = try FixtureTests.fixture()
         final class Seen: @unchecked Sendable { var requests: [(String, String, String)] = [] }
         let seen = Seen()
-        func body(_ r: URLRequest) -> String {
+        @Sendable func body(_ r: URLRequest) -> String {
             let data = r.httpBodyStream.flatMap { stream -> Data in
                 stream.open()
                 defer { stream.close() }
