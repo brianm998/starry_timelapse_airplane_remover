@@ -197,7 +197,7 @@ def test_an_interrupted_job_kills_children_in_other_groups(tmp_path: Path) -> No
     pidfile = tmp_path / "child.pid"
     popen: Any = subprocess.Popen
     real_wait = popen.wait
-    interrupted = []
+    interrupted: list[int] = []
 
     def wait(self: Any, timeout: float | None = None) -> int:
         if not interrupted:
