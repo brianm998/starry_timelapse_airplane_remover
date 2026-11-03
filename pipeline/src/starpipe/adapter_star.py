@@ -104,23 +104,55 @@ class CheckSpec:
     title: str
     argv: tuple[str, ...]
     cwd: str = "."
-    parser: str = "exit"  # exit | xctest | gradle
+    parser: str = "exit"  # exit | xctest | xunit | pytest | gradle
     heavy: bool = True
     ui: bool = False  # keep the display awake (caffeinate -d -u)
     results_glob: str | None = None  # gradle JUnit XML directory, relative to cwd
     env: tuple[tuple[str, str], ...] = ()  # extra environment; values may use {root}
     expect: int | None = None  # exactly this many tests must have executed (a partial run is not green)
+    # parser="xunit": the xunit files swift test wrote ({log_dir} is the check's log directory); the counts are summed
+    xunit: tuple[str, ...] = ()
+    # The test classes skipped from the parallel run, run here as a second, serial `swift test --filter` pass (its own heavy job)
+    serial_argv: tuple[str, ...] = ()
 
 
 def _swift_build(pkg: str, *extra: str) -> CheckSpec:
     return CheckSpec(f"build:{pkg}", f"swift build {pkg}", ("swift", "build", "--package-path", pkg, *extra))
 
 
-def _swift_test(pkg: str, *extra: str, tid: str | None = None) -> CheckSpec:
-    return CheckSpec(
-        f"test:{tid or pkg}", f"swift test {pkg}",
-        ("swift", "test", "--package-path", pkg, *extra), parser="xctest",
-    )
+# Test classes that must not share the machine with other tests: they measure time, QoS or the whole machine's memory, or write
+# fixed paths. Each runs in the second, serial pass of its check. The one place to list them (found empirically: ticket #238).
+SERIAL_CLASSES: dict[str, tuple[str, ...]] = {
+    "test:StarCpp": (),
+    "test:StarCore": (),
+    "test:daemon": (),
+}
+PARALLEL_SUITES = tuple(SERIAL_CLASSES)
+
+
+def swift_test(pkg: str, *extra: str, tid: str | None = None) -> CheckSpec:
+    check_id = f"test:{tid or pkg}"
+    if check_id not in SERIAL_CLASSES:
+        return CheckSpec(check_id, f"swift test {pkg}", ("swift", "test", "--package-path", pkg, *extra), parser="xctest")
+    # --parallel prints no per-bundle "Executed N tests" totals, so the verdict comes from the xunit files
+    name = log_stem(check_id)
+    serial = SERIAL_CLASSES[check_id]
+    skips = tuple(arg for cls in serial for arg in ("--skip", cls))
+    xml = "{log_dir}/" + name + ".xml"
+    parallel = ("swift", "test", "--package-path", pkg, *extra, "--parallel", "--num-workers", "{workers}",
+                "--xunit-output", xml, *skips)
+    xml_serial = "{log_dir}/" + name + "-serial.xml"
+    serial_argv = ("swift", "test", "--package-path", pkg, "--xunit-output", xml_serial,
+                   *(arg for cls in serial for arg in ("--filter", cls))) if serial else ()
+    files = (xml, xml.removesuffix(".xml") + "-swift-testing.xml")
+    if serial:
+        files += (xml_serial, xml_serial.removesuffix(".xml") + "-swift-testing.xml")
+    return CheckSpec(check_id, f"swift test {pkg} (parallel)", parallel, parser="xunit", xunit=files, serial_argv=serial_argv)
+
+
+def log_stem(check_id: str) -> str:
+    """A check id as a file name: `build:pipeline/monitor` must not become a nested path."""
+    return check_id.replace(":", "_").replace("/", "_")
 
 
 GUI_DD = "{build}/gui-dd"
@@ -148,16 +180,16 @@ CHECKS: dict[str, CheckSpec] = {
             "build:desktop", "gradle compile star-desktop",
             ("./gradlew", "compileKotlin", "compileTestKotlin", "--no-daemon"), cwd="star-desktop",
         ),
-        _swift_test("logging"),
+        swift_test("logging"),
         _swift_build("pipeline/monitor"),
-        _swift_test("pipeline/monitor"),
-        _swift_test("StarCpp", "--filter", "StarCppBridgeTests", tid="StarCpp"),
-        _swift_test("StarCpp", "--filter", "StarCppWGPUTests", tid="StarCpp-wgpu"),
-        _swift_test("StarCore"),
-        _swift_test("cli", "--skip", "GherkinTests"),
-        _swift_test("daemon"),
-        _swift_test("trail_tools"),
-        _swift_test("decision_tree_generator"),
+        swift_test("pipeline/monitor"),
+        swift_test("StarCpp", "--filter", "StarCppBridgeTests", tid="StarCpp"),
+        swift_test("StarCpp", "--filter", "StarCppWGPUTests", tid="StarCpp-wgpu"),
+        swift_test("StarCore"),
+        swift_test("cli", "--skip", "GherkinTests"),
+        swift_test("daemon"),
+        swift_test("trail_tools"),
+        swift_test("decision_tree_generator"),
         CheckSpec(
             "test:gui", "xcodebuild test gui starTests",
             ("xcodebuild", "-project", "gui/star.xcodeproj", "-scheme", "star", "-configuration", "Debug",

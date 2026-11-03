@@ -43,6 +43,8 @@ class Config(BaseModel):
     batch_window_s: int = 120  # wait this long for more tickets once one is ready and no batch is running
     max_in_ci: int = 3  # tickets in CI or landing at once; a finished ticket waits as `ready` for room (runners are shared)
     heavy_slots: int = 1
+    # `swift test --parallel --num-workers N` for the big suites (StarCore, StarCpp, daemon): they used one core of 18 (sampled 2026-11-03)
+    heavy_test_workers: int = 8
     auto_self_update: bool = True  # switch the daemon to a new pinned runtime when origin/develop has newer pipeline/ code; the kill switch
     self_update_drain_s: int = 600  # a pending self-update holds new claims at most this long; then it swaps, interrupting running stages (they resume by session id)
     nightly_start: str = "03:00"
