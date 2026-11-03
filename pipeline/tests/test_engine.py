@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from starpipe import guards, negctl, worktrees
+from starpipe import gitutil, guards, negctl, worktrees
 from starpipe.agent import StageOutcome, StageRequest
 from starpipe.config import Config
 from starpipe.db import Database
@@ -27,6 +27,7 @@ from .fakes import (
     green_runner,
     make_repo,
     plan_args,
+    sh,
 )
 
 
@@ -846,3 +847,139 @@ def tickets_ok(rig: Rig, n: int) -> bool:
     assert t.state == "exploring" and t.plan is None, f"#{n} skipped EXPLORE"
     assert rig.db.get(f"plan_rejected:{n}") is None
     return True
+
+
+# a restarted ticket takes in develop first -------------------------------------------------------------------------
+GIT_AS_T = ("git", "-c", "user.email=t@t", "-c", "user.name=t")
+
+
+def stopped_ticket(rig: Rig, file: str = "mine.md", text: str = "mine\n") -> Path:
+    """Ticket 7 stopped in `developing` with one commit on a branch cut from the develop of its time."""
+    rig.gh.add_issue(7, "Tidy the docs")
+    rig.engine.sync_issues()
+    t = rig.engine.claim(rig.db.ticket(7))  # type: ignore[arg-type]
+    wt = Path(t.worktree or "")
+    (wt / "docs").mkdir(exist_ok=True)
+    (wt / "docs" / file).write_text(text)
+    sh(wt, "git", "add", "-A")
+    sh(wt, *GIT_AS_T, "commit", "-q", "-m", f"change {file}")
+    rig.db.set_fields(7, plan_json=json.dumps({"summary": "A planned change.", "acceptance": [{"id": "A1", "check": "review: x"}],
+                                               "tests": {"none_reason": "docs"}}))
+    rig.db.set_state(7, "developing")
+    return wt
+
+
+def develop_moves(rig: Rig, file: str, text: str) -> None:
+    """Another ticket lands `docs/<file>` on origin's develop."""
+    clone = rig.engine.repo.parent / "dev-clone"
+    if not clone.exists():
+        sh(clone.parent, "git", "clone", "-q", str(rig.gh.origin), str(clone))
+        sh(clone, "git", "checkout", "-q", "develop")
+    sh(clone, "git", "pull", "-q", "origin", "develop")
+    (clone / "docs").mkdir(exist_ok=True)
+    (clone / "docs" / file).write_text(text)
+    sh(clone, "git", "add", "-A")
+    sh(clone, *GIT_AS_T, "commit", "-q", "-m", f"develop: {file}")
+    sh(clone, "git", "push", "-q", "origin", "develop")
+
+
+def behind(wt: Path) -> bool:
+    return not gitutil.is_ancestor(wt, "origin/develop", "HEAD")
+
+
+def resolver(keep: str):  # type: ignore[no-untyped-def]
+    """A conflict stage that writes `keep` over docs/shared.md, commits the merge and submits."""
+    def script(req: StageRequest) -> StageOutcome:
+        wt = req.contract.worktree
+        assert "docs/shared.md" in req.prompt and "Conflicts merging origin/develop" in req.prompt
+        (wt / "docs" / "shared.md").write_text(keep)
+        sh(wt, "git", "add", "-A")
+        sh(wt, *GIT_AS_T, "commit", "-q", "--no-edit")
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "resolved"})
+        return accepted(req, "S-conflict")
+    return script
+
+
+async def test_a_retried_stale_branch_merges_develop_before_its_stage(rig: Rig) -> None:
+    stopped_ticket(rig)
+    develop_moves(rig, "other.md", "theirs\n")
+    rig.db.put("catch_up:7", "1")
+    seen: list[tuple[bool, str, bool]] = []
+
+    def develop(req: StageRequest) -> StageOutcome:
+        d = req.contract.worktree / "docs"
+        seen.append((behind(req.contract.worktree), req.prompt, (d / "other.md").read_text() == "theirs\n" and (d / "mine.md").exists()))
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "done"})
+        return accepted(req, "S-dev")
+
+    rig.agent.on("develop", develop)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    assert seen and seen[0][0] is False, "develop is in the branch when the stage starts"
+    assert "was merged into this branch" in seen[0][1] and "1 commit(s)" in seen[0][1]
+    assert seen[0][2], "develop's file and the ticket's own commit are both in the tree"
+    assert rig.db.get("catch_up:7") is None
+    assert [e["data"]["commits"] for e in rig.db.events_since() if e["kind"] == "caught-up"] == [1]
+
+
+async def test_a_retried_branch_with_conflicts_goes_through_the_conflict_stage(rig: Rig) -> None:
+    stopped_ticket(rig, "shared.md", "mine\n")
+    develop_moves(rig, "shared.md", "develop's line\n")
+    rig.db.put("catch_up:7", "1")
+    behind_at_develop: list[bool] = []
+    waiting: list[set[int]] = []
+    inner = resolver("develop's line\nmine\n")
+
+    def resolve(req: StageRequest) -> StageOutcome:
+        waiting.append(set(rig.engine.landing_waiting))
+        return inner(req)
+
+    def develop(req: StageRequest) -> StageOutcome:
+        behind_at_develop.append(behind(req.contract.worktree))
+        return develop_ok(req)
+
+    rig.agent.on("conflict", resolve)
+    rig.agent.on("develop", develop)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    stages = [s["stage"] for s in rig.db.stages(7)]
+    assert stages[0] == "conflict" and "develop" in stages
+    assert waiting == [set()], "the ticket is not landing: its conflict stage does not take landing priority"
+    assert behind_at_develop == [False], "the resumed stage continues on the merged branch"
+
+
+async def test_a_dropped_develop_line_parks_a_retried_branch(rig: Rig) -> None:
+    stopped_ticket(rig, "shared.md", "mine\n")
+    develop_moves(rig, "shared.md", "develop's line\n")
+    rig.db.put("catch_up:7", "1")
+    rig.agent.on("conflict", resolver("mine\n"))
+    await rig.engine.drive(7)
+    t = rig.db.ticket(7)
+    assert t and t.state == "failed" and "dropped 1 landed line" in (t.park_reason or "")
+    assert [s["stage"] for s in rig.db.stages(7)] == ["conflict"]
+
+
+async def test_a_dirty_worktree_is_not_caught_up(rig: Rig) -> None:
+    wt = stopped_ticket(rig)
+    develop_moves(rig, "other.md", "theirs\n")
+    (wt / "docs" / "mine.md").write_text("half an edit\n")  # a stage was interrupted mid-edit
+    rig.db.put("catch_up:7", "1")
+    ran: list[bool] = []
+
+    def develop(req: StageRequest) -> StageOutcome:
+        ran.append(behind(req.contract.worktree))
+        sh(req.contract.worktree, "git", "add", "-A")
+        sh(req.contract.worktree, *GIT_AS_T, "commit", "-q", "-m", "finish")
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "done"})
+        return accepted(req, "S-dev")
+
+    rig.agent.on("develop", develop)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    assert ran == [True], "the stage ran on the old base"
+    skipped = [e for e in rig.db.events_since() if e["kind"] == "catch-up-skipped"]
+    assert len(skipped) == 1 and "uncommitted" in skipped[0]["data"]["reason"]
+    assert not [e for e in rig.db.events_since() if e["kind"] == "caught-up"]
