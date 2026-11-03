@@ -120,14 +120,20 @@ def _swift_build(pkg: str, *extra: str) -> CheckSpec:
     return CheckSpec(f"build:{pkg}", f"swift build {pkg}", ("swift", "build", "--package-path", pkg, *extra))
 
 
-# Test classes that must not share the machine with other tests: they measure time, QoS or the whole machine's memory, or write
-# fixed paths. Each runs in the second, serial pass of its check. The one place to list them (found empirically: ticket #238).
+# The swift test suites that run with `--parallel`, each with the test classes that must not share the machine with other
+# tests (they measure time, QoS or the whole machine's memory, or write fixed paths): those run in the second, serial pass of
+# the check. Found empirically (ticket #238, this iMac Pro, 8 workers, seconds inside the heavy lock):
+#   StarCpp   803 -> 367, 254 tests, 0 failed: a few huge classes (CloudAwareMergeTests) and few tests, so it wins.
+#   StarCore  not parallel: SwiftPM runs XCTest `--parallel` as one `xctest` process per test, and a launch costs ~1 s on this
+#             machine whatever the worker count (MappingTests, 46 trivial tests: 9 s serial, 41-47 s with 2, 8 or 16 workers),
+#             so 1,619 tests cannot beat the 380 s serial run; its heavy tests are multi-threaded already and ran 10x slower
+#             beside each other (HorizonConsensusTests: 97 s serial, 88 s parallel).
+#   daemon    not parallel, same launch floor (313 tests, 132 s serial), and BackgroundExtractionSessionTests hangs beside others.
+# `--parallel --xunit-output` records no `<skipped>`: an XCTSkip reads as a pass (StarCpp's serial banner says 7 skipped, its
+# xunit file 0), so an unexpected skip in a parallel suite goes unseen. A suite is added here only when it wins by that much.
 SERIAL_CLASSES: dict[str, tuple[str, ...]] = {
     "test:StarCpp": (),
-    "test:StarCore": (),
-    "test:daemon": (),
 }
-PARALLEL_SUITES = tuple(SERIAL_CLASSES)
 
 
 def swift_test(pkg: str, *extra: str, tid: str | None = None) -> CheckSpec:

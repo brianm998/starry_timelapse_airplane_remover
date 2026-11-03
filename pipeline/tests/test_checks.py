@@ -58,14 +58,14 @@ def _wt(tmp_path: Path) -> Path:
 
 def test_parallel_swift_test_counts_come_from_xunit(tmp_path: Path) -> None:
     wt = _wt(tmp_path)
-    for check_id in ("test:StarCore", "test:StarCpp", "test:daemon"):
-        spec = star.CHECKS[check_id]
-        assert spec.parser == "xunit"
-        assert "--parallel" in spec.argv and spec.argv[spec.argv.index("--num-workers") + 1] == "{workers}"
-        assert spec.argv[spec.argv.index("--xunit-output") + 1].startswith("{log_dir}/")
+    spec = star.CHECKS["test:StarCpp"]
+    assert spec.parser == "xunit"
+    assert "--parallel" in spec.argv and spec.argv[spec.argv.index("--num-workers") + 1] == "{workers}"
+    assert spec.argv[spec.argv.index("--xunit-output") + 1].startswith("{log_dir}/")
     assert Config().heavy_test_workers == 8
-    # the others keep the serial run and its banner
-    assert star.CHECKS["test:cli"].parser == "xctest" and "--parallel" not in star.CHECKS["test:cli"].argv
+    # the others keep the serial run and its banner: StarCore and daemon are slower in parallel (see SERIAL_CLASSES)
+    for check_id in ("test:StarCore", "test:daemon", "test:cli"):
+        assert star.CHECKS[check_id].parser == "xctest" and "--parallel" not in star.CHECKS[check_id].argv
 
     cases = [("A", "t1", "pass"), ("A", "t2", "pass"), ("B", "t3", "skip")]
     spec = star.CheckSpec("test:par", "parallel", (sys.executable, "-c", _xunit_script(cases), "{log_dir}/par.xml"),
@@ -99,16 +99,16 @@ def test_a_parallel_failure_is_red_and_named(tmp_path: Path) -> None:
 
 def test_serial_classes_run_in_their_own_pass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     wt = _wt(tmp_path)
-    monkeypatch.setitem(star.SERIAL_CLASSES, "test:daemon", ("TimingTests", "OtherTests"))
-    spec = star.swift_test("daemon")
+    monkeypatch.setitem(star.SERIAL_CLASSES, "test:StarCpp", ("TimingTests", "OtherTests"))
+    spec = star.swift_test("StarCpp", tid="StarCpp")
     assert spec.argv.count("--skip") == 2 and "TimingTests" in spec.argv and "OtherTests" in spec.argv
     assert spec.serial_argv and "--parallel" not in spec.serial_argv
     assert [a for a in spec.serial_argv if a not in ("--filter",)].count("TimingTests") == 1
     assert spec.serial_argv.count("--filter") == 2 and "--skip" not in spec.serial_argv
     assert any(f.endswith("-serial.xml") for f in spec.xunit)
     # a suite with nothing to run alone has no second pass
-    monkeypatch.setitem(star.SERIAL_CLASSES, "test:StarCore", ())
-    assert star.swift_test("StarCore").serial_argv == ()
+    monkeypatch.setitem(star.SERIAL_CLASSES, "test:StarCpp", ())
+    assert star.swift_test("StarCpp", tid="StarCpp").serial_argv == ()
 
     # run both passes: the counts add, and each pass is its own process
     first = _xunit_script([("A", "t1", "pass"), ("A", "t2", "pass")])
