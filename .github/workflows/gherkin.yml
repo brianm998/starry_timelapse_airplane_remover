@@ -229,13 +229,18 @@ jobs:
         with:
           swift-version: '6.0'
 
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Cache OpenCV
         uses: actions/cache@v4
         with:
           path: |
             opencv/lib/linux
             opencv/include
-          key: opencv-linux-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-linux-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -421,13 +426,18 @@ jobs:
               }
           }
 
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Cache OpenCV
         uses: actions/cache@v4
         with:
           path: |
             opencv/lib/windows
             opencv/include
-          key: opencv-windows-msvc14.40-sdk22621-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-windows-msvc14.40-sdk22621-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -557,13 +567,18 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Cache OpenCV
         uses: actions/cache@v4
         with:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -708,13 +723,18 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Cache OpenCV
         uses: actions/cache@v4
         with:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -869,13 +889,18 @@ jobs:
         with:
           swift-version: '6.0'
 
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Cache OpenCV
         uses: actions/cache@v4
         with:
           path: |
             opencv/lib/linux
             opencv/include
-          key: opencv-linux-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-linux-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -1095,13 +1120,18 @@ jobs:
               }
           }
 
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Cache OpenCV
         uses: actions/cache@v4
         with:
           path: |
             opencv/lib/windows
             opencv/include
-          key: opencv-windows-msvc14.40-sdk22621-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-windows-msvc14.40-sdk22621-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -1234,13 +1264,18 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Cache OpenCV
         uses: actions/cache@v4
         with:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
