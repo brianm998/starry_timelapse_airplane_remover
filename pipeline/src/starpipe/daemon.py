@@ -38,7 +38,7 @@ from . import (
 )
 from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
-from .engine import RETRY_STATE, STAGE_STATE, Engine
+from .engine import CATCH_UP_STATES, RETRY_STATE, STAGE_STATE, Engine
 from .github import GitHubError
 
 log = logging.getLogger("starpiped")
@@ -581,7 +581,10 @@ class Daemon:
             self.db.intervention(n, "answer", q["stage"])
             self.engine.notifier.clear("needs-input", n)
             self.engine.parked.discard(n)
-            self.engine._to_state(n, STAGE_STATE.get(q["stage"], "exploring"))  # pyright: ignore[reportPrivateUsage]
+            resume = STAGE_STATE.get(q["stage"], "exploring")
+            if resume in CATCH_UP_STATES:
+                self.db.put(f"catch_up:{n}", "1")  # drive merges develop in before the stage resumes
+            self.engine._to_state(n, resume)  # pyright: ignore[reportPrivateUsage]
         elif action == "retry":
             stage = str(body.get("stage") or "explore")
             if stage not in RETRY_STATE:
@@ -589,6 +592,8 @@ class Daemon:
             self.db.intervention(n, "retry", stage)
             self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
             self.engine.parked.discard(n)
+            if RETRY_STATE[stage] in CATCH_UP_STATES:
+                self.db.put(f"catch_up:{n}", "1")  # drive merges develop in before the stage resumes
             self.engine._to_state(n, RETRY_STATE[stage])  # pyright: ignore[reportPrivateUsage]
         elif action == "allow-opus":
             self.db.put(f"opus_ok:{n}", "1")  # the ticket's own `model_<stage>: opus` choices now apply

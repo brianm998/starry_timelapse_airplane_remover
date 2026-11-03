@@ -57,6 +57,23 @@ async def test_status_and_show_report_the_ticket_and_its_activity(rig: Rig) -> N
         await client.close()
 
 
+async def test_retry_and_answer_ask_for_a_catch_up(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.add_question(7, "develop", "which?", {})
+    rig.db.set_state(7, "needs-input", "waiting")
+    client, _ = await api(rig)
+    try:
+        assert rig.db.get("catch_up:7") is None
+        assert (await client.post("/v1/tickets/7/answer", json={"text": "the first"}, headers=AUTH)).status == 200
+        assert rig.db.get("catch_up:7") == "1", "answer: develop is merged in before the stage resumes"
+        rig.db.put("catch_up:7", None)
+        assert (await client.post("/v1/tickets/7/retry", json={"stage": "review"}, headers=AUTH)).status == 200
+        assert rig.db.get("catch_up:7") == "1", "retry: the same"
+    finally:
+        await client.close()
+
+
 async def test_activity_lists_open_blockers_of_a_queued_ticket(rig: Rig) -> None:
     for n, title in [(7, "blocked"), (8, "free"), (84, "first blocker"), (85, "second blocker")]:
         rig.gh.add_issue(n, title)
