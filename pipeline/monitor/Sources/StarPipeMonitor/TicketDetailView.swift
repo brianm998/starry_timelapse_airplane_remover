@@ -197,3 +197,27 @@ struct StageTimeline: View {
         }
     }
 }
+
+/// The detail pane for an issue that is a blocker but not a pipeline ticket: what is known, and the way to GitHub.
+struct IssuePanelView: View {
+    let number: Int
+    let title: String
+    let repo: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("#\(number)").monospacedDigit().foregroundStyle(.secondary)
+                if !title.isEmpty { Text(title).scaledFont(.title2, weight: .bold).textSelection(.enabled) }
+                Spacer()
+                if let url = BlockerLinks.issueURL(repo: repo, number: number) {
+                    Button("Issue") { NSWorkspace.shared.open(url) }
+                }
+            }
+            Text("Not a pipeline ticket.").foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+}
