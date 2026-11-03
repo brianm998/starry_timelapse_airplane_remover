@@ -994,11 +994,9 @@ class DesktopFeatureRunner {
         val printed = process.inputStream.bufferedReader().readText().lines().lastOrNull { it.isNotBlank() }?.trim()
         if (process.waitFor() != 0 || printed == null) throw RunnerError("could not make the processed sequence (the script's own message is above)")
         val target = File(scratch, "processed")
-        File(printed).copyRecursively(target)
-        target.walkTopDown().filter { it.isFile && it.extension == "json" && it.length() < 8_000_000 }.forEach { f ->
-            val text = f.readText()
-            if (printed in text) f.writeText(text.replace(printed, target.path))
-        }
+        val fixture = nativeFixturePath(printed, System.getProperty("os.name").startsWith("Windows"))
+        File(fixture).copyRecursively(target)
+        relocateJsonFiles(target, fixture, target.path)
         processedConfig = File(target, "input/star_temp_${source.name}/config.json")
     }
 
