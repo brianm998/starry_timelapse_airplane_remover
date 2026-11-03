@@ -295,6 +295,8 @@ def status(as_json: bool) -> None:
         click.echo(f"usage limit: model stages wait until {time.ctime(float(data['usage_pause_until']))}")
     for line in landing_lines(data.get("landing") or {}):
         click.echo(line)
+    for alert in data.get("alerts", []):
+        click.echo(f"ALERT {alert['key']}: {alert['text']}")
     heavy_state: dict[str, Any] = data.get("heavy") or {}
     for h in heavy_state.get("holders", []):
         click.echo(f"heavy lock: {h['ticket'] or 'interactive'}  {h['cmd']}")

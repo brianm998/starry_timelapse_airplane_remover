@@ -306,7 +306,7 @@ class Engine:
                           allow_resolve: bool = True, as_landing: bool | None = None) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
         contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db, self.gh, self.check_runner,
-                            owner_filed=self._owner_filed(t))
+                            self.notifier, owner_filed=self._owner_filed(t))
         resume = None if fresh else self._last_session(t, stage)
         note = self.db.get(f"catch_up_note:{t.number}")
         if note:  # develop was merged into the branch while the ticket was stopped: the resumed session did not make those commits
@@ -643,6 +643,7 @@ class Engine:
         for r in results:
             self.db.record_check(t.number, sha, r.check, r.status,
                                  {"executed": r.executed, "failed": r.failed, "skipped": r.skipped}, r.log)
+        self.notifier.hung_checks(t.number, results)
         red = [r for r in results if not r.green]
         if red:
             return "\n".join(f"{r.status.upper()} {r.check}: {r.detail} (log {r.log})" for r in red)
