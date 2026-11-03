@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 MAX_CI_FIX = 2
 GATE_ERROR_LIMIT = 5  # the same feature-gate error on the same head this many polls in a row parks the ticket
-TRANSIENT_ERROR = re.compile(r"HTTP 5\d\d|timed out|timeout|connection|network|temporar|rate limit|could not resolve", re.I)
+TRANSIENT_ERROR = re.compile(r"HTTP 5\d\d|timed out|timeout|connection|network|temporar|rate limit|could not resolve", re.IGNORECASE)
 FEATURE_RUN_WAIT_S = 600.0  # a dispatched feature run that has not appeared by then is dispatched again
 LANDING_STATES = ("ci", "landing")
 BYPASS_NOTE = "The owner landed this with land-now: CI, the overlap re-test and the stop-line wait were bypassed."
