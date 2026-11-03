@@ -37,47 +37,117 @@ public final class OutlierWindowViewModel {
         }
     }
     
-    init() {
+    /// Every optional column in the order of `gherkin/ui/vectors/outlierColumns.json`: the key the clients remember it by (the
+    /// desktop's `outlierTableColumns` uses the same ones), the flag that shows it, and whether it shows until the user chooses.
+    static let columns: [(key: String, flag: ReferenceWritableKeyPath<OutlierWindowViewModel, Bool>, isDefault: Bool)] = [
+        ("name", \.showName, false),
+        ("width", \.showWidth, true),
+        ("height", \.showHeight, true),
+        ("centerX", \.showCenterX, false),
+        ("centerY", \.showCenterY, false),
+        ("minX", \.showMinX, false),
+        ("minY", \.showMinY, false),
+        ("maxX", \.showMaxX, false),
+        ("maxY", \.showMaxY, false),
+        ("hypotenuse", \.showHypotenuse, true),
+        ("aspectRatio", \.showAspectRatio, true),
+        ("fillAmount", \.showFillAmount, true),
+        ("surfaceAreaRatio", \.showSurfaceAreaRatio, true),
+        ("averagebrightness", \.showAveragebrightness, true),
+        ("medianBrightness", \.showMedianBrightness, true),
+        ("maxBrightness", \.showMaxBrightness, true),
+        ("numberOfNearbyOutliersInSameFrame", \.showNumberOfNearbyOutliersInSameFrame, true),
+        ("maxHoughTransformCount", \.showMaxHoughTransformCount, true),
+        ("pixelBorderAmount", \.showPixelBorderAmount, true),
+        ("averageLineVariance", \.showAverageLineVariance, true),
+        ("lineLength", \.showLineLength, true),
+        ("nearbyDirectOverlapScore", \.showNearbyDirectOverlapScore, true),
+        ("boundingBoxOverlapScore", \.showBoundingBoxOverlapScore, true),
+        ("lineIntensityScore", \.showLineIntensityScore, true),
+        ("linePixelScore", \.showLinePixelScore, true),
+        ("borderBrightness", \.showBorderBrightness, true),
+        ("bunchCount", \.showBunchCount, true),
+        ("medianBunchSize", \.showMedianBunchSize, true),
+        ("maxBunchSize", \.showMaxBunchSize, true),
+        ("neighborLineThetaScore", \.showNeighborLineThetaScore, true),
+        ("neighborLineRhoScore", \.showNeighborLineRhoScore, true),
+        ("neighborLineSizeScore", \.showNeighborLineSizeScore, true),
+        ("neighborLineBrightnessScore", \.showNeighborLineBrightnessScore, true),
+        ("neighborLineDistanceScore", \.showNeighborLineDistanceScore, true),
+        ("classificationScore", \.showClassificationScore, true),
+    ]
+
+    /// The keys that show for a saved choice: the vector's defaults when nothing was saved, and unknown keys ignored.
+    static func shownKeys(saved: [String]?) -> Set<String> {
+        guard let saved else { return Set(columns.filter { $0.isDefault }.map { $0.key }) }
+        return Set(saved).intersection(columns.map { $0.key })
+    }
+
+    /// Where a change to the choice goes; the app's writes `outlierTableColumns` in `~/.star.userprefs.json`.
+    @ObservationIgnored private let save: ([String]) -> Void
+    @ObservationIgnored private var persistSuspended = false
+
+    /// `savedColumns` is `outlierTableColumns` as it was read, and `save` is told the shown keys, in table order, after every change.
+    /// The default reads and writes the app's preferences; the preferences are loaded before any view is made.
+    init(savedColumns: [String]? = nil,
+         save: (([String]) -> Void)? = nil)
+    {
+        self.save = save ?? { UserPreferencesStore.shared.preferences.outlierTableColumns = $0 }
+        let saved = savedColumns ?? (save == nil ? UserPreferencesStore.shared.preferences.outlierTableColumns : nil)
+        let shown = Self.shownKeys(saved: saved)
+        persistSuspended = true
+        for column in Self.columns { self[keyPath: column.flag] = shown.contains(column.key) }
+        persistSuspended = false
         Task { houghLineFinderArgs = await constants.getHoughLineFinderArgs() }
+    }
+
+    /// The shown columns' keys, in table order.
+    var shownColumnKeys: [String] {
+        Self.columns.filter { self[keyPath: $0.flag] }.map { $0.key }
+    }
+
+    private func persist() {
+        guard !persistSuspended else { return }
+        save(shownColumnKeys)
     }
 
     public var selectedOutliers: [OutlierGroup] = []
 
-    public var showName = false
-    public var showCenterX = false
-    public var showCenterY = false
-    public var showWidth = true
-    public var showHeight = true
-    public var showMinX = false
-    public var showMinY = false
-    public var showMaxX = false
-    public var showMaxY = false
-    public var showHypotenuse = true
-    public var showAspectRatio = true
-    public var showFillAmount = true
-    public var showSurfaceAreaRatio = true
-    public var showAveragebrightness = true
-    public var showMedianBrightness = true
-    public var showMaxBrightness = true
-    public var showNumberOfNearbyOutliersInSameFrame = true
-    public var showMaxHoughTransformCount = true
-    public var showPixelBorderAmount = true
-    public var showAverageLineVariance = true
-    public var showLineLength = true
-    public var showNearbyDirectOverlapScore = true
-    public var showBoundingBoxOverlapScore = true
-    public var showLineIntensityScore = true
-    public var showLinePixelScore = true
-    public var showBorderBrightness = true
-    public var showBunchCount = true
-    public var showMedianBunchSize = true
-    public var showMaxBunchSize = true
-    public var showNeighborLineThetaScore = true
-    public var showNeighborLineRhoScore = true
-    public var showNeighborLineSizeScore = true
-    public var showNeighborLineBrightnessScore = true
-    public var showNeighborLineDistanceScore = true
-    public var showClassificationScore = true
+    public var showName = false { didSet { persist() } }
+    public var showCenterX = false { didSet { persist() } }
+    public var showCenterY = false { didSet { persist() } }
+    public var showWidth = true { didSet { persist() } }
+    public var showHeight = true { didSet { persist() } }
+    public var showMinX = false { didSet { persist() } }
+    public var showMinY = false { didSet { persist() } }
+    public var showMaxX = false { didSet { persist() } }
+    public var showMaxY = false { didSet { persist() } }
+    public var showHypotenuse = true { didSet { persist() } }
+    public var showAspectRatio = true { didSet { persist() } }
+    public var showFillAmount = true { didSet { persist() } }
+    public var showSurfaceAreaRatio = true { didSet { persist() } }
+    public var showAveragebrightness = true { didSet { persist() } }
+    public var showMedianBrightness = true { didSet { persist() } }
+    public var showMaxBrightness = true { didSet { persist() } }
+    public var showNumberOfNearbyOutliersInSameFrame = true { didSet { persist() } }
+    public var showMaxHoughTransformCount = true { didSet { persist() } }
+    public var showPixelBorderAmount = true { didSet { persist() } }
+    public var showAverageLineVariance = true { didSet { persist() } }
+    public var showLineLength = true { didSet { persist() } }
+    public var showNearbyDirectOverlapScore = true { didSet { persist() } }
+    public var showBoundingBoxOverlapScore = true { didSet { persist() } }
+    public var showLineIntensityScore = true { didSet { persist() } }
+    public var showLinePixelScore = true { didSet { persist() } }
+    public var showBorderBrightness = true { didSet { persist() } }
+    public var showBunchCount = true { didSet { persist() } }
+    public var showMedianBunchSize = true { didSet { persist() } }
+    public var showMaxBunchSize = true { didSet { persist() } }
+    public var showNeighborLineThetaScore = true { didSet { persist() } }
+    public var showNeighborLineRhoScore = true { didSet { persist() } }
+    public var showNeighborLineSizeScore = true { didSet { persist() } }
+    public var showNeighborLineBrightnessScore = true { didSet { persist() } }
+    public var showNeighborLineDistanceScore = true { didSet { persist() } }
+    public var showClassificationScore = true { didSet { persist() } }
     
     public func selectAll() {
         setAll(to: true)
@@ -87,41 +157,11 @@ public final class OutlierWindowViewModel {
         setAll(to: false)
     }
 
+    /// Every flag at once, saved once.
     public func setAll(to value: Bool) {
-        showName = value
-        showCenterX = value
-        showCenterY = value
-        showWidth = value
-        showHeight = value
-        showMinX = value
-        showMinY = value
-        showMaxX = value
-        showMaxY = value
-        showHypotenuse = value
-        showAspectRatio = value
-        showFillAmount = value
-        showSurfaceAreaRatio = value
-        showAveragebrightness = value
-        showMedianBrightness = value
-        showMaxBrightness = value
-        showNumberOfNearbyOutliersInSameFrame = value
-        showMaxHoughTransformCount = value
-        showPixelBorderAmount = value
-        showAverageLineVariance = value
-        showLineLength = value
-        showNearbyDirectOverlapScore = value
-        showBoundingBoxOverlapScore = value
-        showLineIntensityScore = value
-        showLinePixelScore = value
-        showBorderBrightness = value
-        showBunchCount = value
-        showMedianBunchSize = value
-        showMaxBunchSize = value
-        showNeighborLineThetaScore = value
-        showNeighborLineRhoScore = value
-        showNeighborLineSizeScore = value
-        showNeighborLineBrightnessScore = value
-        showNeighborLineDistanceScore = value
-        showClassificationScore = value
+        persistSuspended = true
+        for column in Self.columns { self[keyPath: column.flag] = value }
+        persistSuspended = false
+        persist()
     }
 }
