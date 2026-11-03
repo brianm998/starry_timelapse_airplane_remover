@@ -117,12 +117,16 @@ def test_status_prints_the_active_batch_and_the_abandoned_one() -> None:
 def test_daemon_run_holds_off_idle_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
     from starpipe import cli
 
+    hold_off = getattr(cli, "_hold_off_idle_sleep")  # noqa: B009 - private on purpose
     calls: list[list[str]] = []
-    monkeypatch.setattr(cli.subprocess, "Popen", lambda argv, **_kw: calls.append(argv))
-    cli._hold_off_idle_sleep()
+
+    def record(argv: list[str], **_kw: Any) -> None:
+        calls.append(argv)
+    monkeypatch.setattr(cli.subprocess, "Popen", record)
+    hold_off()
     assert calls == [["caffeinate", "-i", "-w", str(os.getpid())]]
 
     def missing(*_a: Any, **_kw: Any) -> None:
         raise FileNotFoundError
     monkeypatch.setattr(cli.subprocess, "Popen", missing)
-    cli._hold_off_idle_sleep()  # no caffeinate: not an error
+    hold_off()  # no caffeinate: not an error
