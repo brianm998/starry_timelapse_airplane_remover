@@ -81,6 +81,8 @@ final class FixtureTests: XCTestCase {
     }
 
     func testTopBarCountsBucketTicketStates() throws {
+        // the labels are fixed text, not derived from a snapshot, so the "—" placeholder tiles read the same
+        XCTAssertEqual(Overview.topBarBuckets.map(\.label), ["need you", "queued", "exploring", "developing", "testing", "review", "landing"])
         let base = try XCTUnwrap(try Self.snapshot().tickets.first)
         func ticket(_ n: Int, _ state: String) -> TicketSnap {
             var t = base
