@@ -855,3 +855,33 @@ async def test_restart_finishes_an_escalation_it_cut_short(rig: Rig) -> None:
     Daemon(rig.engine, Config(), token="tok").reconcile()
     assert rig.state(7) == "needs-input"
     assert rig.db.open_question(7)["comment_id"] is not None  # type: ignore[index]
+
+
+async def test_hung_heavy_job_raises_an_alert(rig: Rig) -> None:
+    from starpipe.checks import ledger
+
+    def hung_runner(worktree: Path, base: str) -> list[ledger.Result]:
+        return [ledger.Result("test:daemon", "hung", "abc", 1.0,
+                              detail="hung: `swift test --package-path daemon` made no progress for 900s and was killed")]
+
+    rig.engine.check_runner = hung_runner
+    rig.gh.add_issue(7, "Tidy the docs")
+    rig.engine.sync_issues()
+    rig.agent.on("explore", explore_ok)
+
+    def develop(req: StageRequest) -> StageOutcome:
+        req.contract.run_checks({})
+        return StageOutcome("no-result")
+
+    rig.agent.on("develop", develop)
+    await rig.engine.drive(7)
+
+    assert "heavy-hung:7" in [a["key"] for a in rig.db.open_alerts()]
+    client, _ = await api(rig)
+    try:
+        status = await (await client.get("/v1/status", headers=AUTH)).json()
+    finally:
+        await client.close()
+    alert = next(a for a in status["alerts"] if a["key"] == "heavy-hung:7")
+    assert "#7" in alert["text"] and "swift test --package-path daemon" in alert["text"]
+    assert [t for t, _ in rig.pages].count("star pipeline: heavy-hung") == 1
