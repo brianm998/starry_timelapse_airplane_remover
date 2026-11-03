@@ -893,7 +893,9 @@ async def test_a_dispatch_422_catches_the_branch_up_then_dispatches_again(rig: R
     failing_dispatch(rig, [NO_TRIGGER])
     await rig.engine.drive(1)
     assert [d[2] for d in rig.gh.dispatches] == [{"features": "autoMovingTiff16"}], "dispatched once, on the caught-up head"
-    assert "develop: later.md" in sh(rig.gh.origin, "git", "log", "--oneline", rig.gh.feature_runs[5000]["sha"]), "the run is of a head with develop merged in"
+    assert rig.gh.origin is not None
+    ran = sh(rig.gh.origin, "git", "log", "--oneline", rig.gh.feature_runs[5000]["sha"])
+    assert "develop: later.md" in ran, "the run is of a head with develop merged in"
     assert rig.state(1) == "landed"
     assert rig.db.get("gherkin_err:1") is None
 
