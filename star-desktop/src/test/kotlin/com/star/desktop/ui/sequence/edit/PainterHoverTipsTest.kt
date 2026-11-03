@@ -52,7 +52,7 @@ class PainterHoverTipsTest {
     @Test fun theSaveButtonSaysWhatTheGuisSays() {
         val src = source
         assertTrue("localized(\"ui.save\")" !in src, "the painter still has the bare Save label")
-        assertTrue("localized(\"ui.save_reference_horizon\")" in src, "Save does not read ui.save_reference_horizon")
+        assertTrue("else if (hasMore) \"ui.next\" else \"ui.continue\"" in src && "if (!startup) \"ui.save_reference_horizon\"" in src, "Save does not read ui.save_reference_horizon")
         assertTrue("localized(\"ui.saving\")" in src, "no saving state")
         assertTrue("if (saving)" in src, "the saving state is not shown")
         Strings.setOverride("en")
