@@ -25,8 +25,22 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
 
 jobs:
+  # On a push to develop that merges a batch PR whose tree this workflow already passed, `tested` is true and build-test skips
+  # (already-tested.yml). It is always false on pull requests, tags and workflow_dispatch, so they run as before.
+  # Only build-test is gated: the installer jobs (linux-package, windows-package, macos-signed, their ffmpeg/opencv calls and e2e
+  # jobs) never run on a pull request, so a green PR run says nothing about them and they must keep running on develop.
+  tested:
+    name: Already tested?
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    uses: ./.github/workflows/already-tested.yml
+
   build-test:
     name: ${{ matrix.os }}
+    needs: tested
+    if: needs.tested.outputs.tested != 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
