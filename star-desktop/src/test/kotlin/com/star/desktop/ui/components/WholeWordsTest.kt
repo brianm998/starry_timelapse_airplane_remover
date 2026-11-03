@@ -1,5 +1,7 @@
 package com.star.desktop.ui.components
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
@@ -40,7 +42,7 @@ import com.star.desktop.ui.sequence.grid.GridSwitchRow
 import com.star.desktop.ui.sequence.grid.InfoRow
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.windows.BlobArgsHeader
-import com.star.desktop.ui.windows.COLUMN_CHOOSER_WIDTH
+import com.star.desktop.ui.windows.ArgName
 import com.star.desktop.ui.windows.ColumnChooserRow
 import com.star.desktop.ui.windows.ColumnChooserTop
 import com.star.desktop.ui.windows.Header
@@ -166,13 +168,13 @@ class WholeWordsTest {
         case("outlier headers", 640.dp) {
             val visible = OutlierTable.columns
             val widths = outlierColumnWidths(visible)
-            androidx.compose.foundation.layout.Row {
+            androidx.compose.foundation.layout.Row(Modifier.horizontalScroll(rememberScrollState())) {
                 Header(localized("ui.remove"), OutlierTable.DECISION, OutlierTable.defaultSort, widths.decision) {}
                 Header(localized("ui.size"), OutlierTable.SIZE, OutlierTable.defaultSort, widths.size) {}
                 for (c in visible) Header(localized(c.labelKey), c.key, OutlierTable.defaultSort, widths.column) {}
             }
         }
-        case("outlier column chooser", COLUMN_CHOOSER_WIDTH - 8.dp) {
+        case("outlier column chooser", 1000.dp) {
             Column {
                 ColumnChooserTop({}, {}, {})
                 OutlierTable.columns.forEach { ColumnChooserRow(localized(it.labelKey), true, noopBool) }
@@ -187,7 +189,7 @@ class WholeWordsTest {
         case("blob parameter table", 760.dp) {
             val names = listOf("minimumAreaThreshold", "maximumNeighborDistanceThreshold")
             BlobArgsHeader(blobNameColumnWidth(names), blobValueColumnWidth())
-            Box(Modifier.width(blobNameColumnWidth(names))) { androidx.compose.material3.Text(names[1], maxLines = 1, softWrap = false) }
+            names.forEach { ArgName(it, blobNameColumnWidth(names)) }
         }
 
         // The dialogs: the information dialog's picker column, and a settings row that needs a newer engine.

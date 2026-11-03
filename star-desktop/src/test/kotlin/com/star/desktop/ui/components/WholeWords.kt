@@ -11,6 +11,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import com.star.desktop.i18n.Strings
 import com.star.desktop.ui.theme.StarTheme
@@ -40,11 +41,15 @@ internal fun wholeWordProblems(width: @Composable () -> Dp, content: @Composable
     return problems
 }
 
+/** Skia's layout does not say which line it ellipsized, so a text that asks for an ellipsis and does not fit is taken as having one. */
+private fun ellipsized(layout: TextLayoutResult, line: Int): Boolean =
+    layout.isLineEllipsized(line) || (layout.layoutInput.overflow == TextOverflow.Ellipsis && layout.hasVisualOverflow)
+
 private fun problemsIn(layout: TextLayoutResult): List<String> {
     val text = layout.layoutInput.text.text
     val out = ArrayList<String>()
     for (line in 0 until layout.lineCount) {
-        if (layout.isLineEllipsized(line)) continue
+        if (ellipsized(layout, line)) continue
         val end = layout.getLineEnd(line, visibleEnd = false)
         if (end in 1 until text.length) {
             val before = text[end - 1]
@@ -58,7 +63,7 @@ private fun problemsIn(layout: TextLayoutResult): List<String> {
     // (The line's own extent, not didOverflowWidth, which is also set for a cell that is only a rounding error narrower.)
     for (line in 0 until layout.lineCount) {
         val extent = layout.getLineRight(line) - layout.getLineLeft(line)
-        if (!layout.isLineEllipsized(line) && extent > layout.size.width + 1f) out += "\"$text\" is clipped by its cell (${extent}px of text in ${layout.size.width}px)"
+        if (!ellipsized(layout, line) && extent > layout.size.width + 1f) out += "\"$text\" is clipped by its cell (${extent}px of text in ${layout.size.width}px)"
     }
     return out
 }

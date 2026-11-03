@@ -221,7 +221,7 @@ private fun DecisionCell(reason: RemoveReason, width: Dp, onToggle: () -> Unit) 
 /** The panel that picks which optional columns show (macOS "Select which columns to show"). */
 @Composable
 private fun ColumnChooser(vm: SequenceViewModel, chosen: Set<String>, onClose: () -> Unit) {
-    Column(Modifier.width(COLUMN_CHOOSER_WIDTH).fillMaxHeight().padding(start = 8.dp)) {
+    Column(Modifier.width(columnChooserWidth()).fillMaxHeight().padding(start = 8.dp)) {
         ColumnChooserTop(onClose, onAll = { vm.setAllOutlierColumns(true) }, onNone = { vm.setAllOutlierColumns(false) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             for (c in OutlierTable.columns) {
@@ -231,8 +231,12 @@ private fun ColumnChooser(vm: SequenceViewModel, chosen: Set<String>, onClose: (
     }
 }
 
-/** The chooser's width, less the 8dp it is inset by on the left when it is the window's. */
-internal val COLUMN_CHOOSER_WIDTH = 240.dp
+/**
+ * The chooser's width: 240dp, or more for the longest column name, which is a single identifier-like word with no space to wrap at. It is a
+ * check box (48dp), the name, and the 8dp the chooser is inset by on the left.
+ */
+@Composable
+internal fun columnChooserWidth(): Dp = maxOf(240.dp, widestWord(OutlierTable.columns.map { localized(it.labelKey) }, 11.sp, wholeText = true) + 48.dp + 8.dp + 4.dp)
 
 /** The chooser's title and its two buttons: each takes half the row, and a label that does not fit on one line wraps at its spaces. */
 @Composable

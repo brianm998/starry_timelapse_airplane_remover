@@ -350,17 +350,30 @@ internal fun OnlyUnclassifiedRow(checked: Boolean, onChange: (Boolean) -> Unit) 
     }
 }
 
-/** A switch and its label, with hover help when [help] is given. */
+/** The width of a Material 3 switch. */
+private val SWITCH_WIDTH = 52.dp
+
+/** A switch and its label, with hover help when [help] is given; the label goes beside the switch, or under it when one of its words would not fit beside it. */
 @Composable
 internal fun SwitchRow(label: String, help: String?, checked: Boolean, onChange: (Boolean) -> Unit, tag: String? = null) {
+    val widestWord = com.star.desktop.ui.components.widestWord(listOf(label), 11.sp)
     val row = @Composable {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            androidx.compose.material3.Switch(
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+            @Composable fun switch() = androidx.compose.material3.Switch(
                 checked = checked, onCheckedChange = onChange,
                 modifier = if (tag == null) Modifier else Modifier.testTag(tag),   // the id a UI test finds the switch by (`gherkin/ui/ids.json`)
             )
-            Spacer(Modifier.width(6.dp))
-            Text(label, color = StarColors.white, fontSize = 11.sp, modifier = Modifier.weight(1f))
+            if (widestWord <= maxWidth - SWITCH_WIDTH - 6.dp) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    switch()
+                    Spacer(Modifier.width(6.dp))
+                    Text(label, color = StarColors.white, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                }
+            } else {
+                // A word of the label is wider than what is left beside the switch (a 150dp panel, a long German word): the label goes under the
+                // switch, in the panel's whole width, rather than breaking inside the word.
+                Column { switch(); Text(label, color = StarColors.white, fontSize = 11.sp) }
+            }
         }
     }
     if (help != null) HoverTip(help, row) else row()

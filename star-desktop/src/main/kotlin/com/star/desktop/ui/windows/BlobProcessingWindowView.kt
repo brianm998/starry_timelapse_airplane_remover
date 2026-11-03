@@ -163,10 +163,16 @@ internal fun BlobArgsHeader(nameWidth: Dp, valueWidth: Dp) {
     }
 }
 
+/** A parameter's name, in the column [blobNameColumnWidth] sized for it: an identifier, so one line, with no space to wrap at. */
+@Composable
+internal fun ArgName(name: String, width: Dp) {
+    Text(name, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.width(width))
+}
+
 @Composable
 private fun ArgRow(stepIndex: Int, arg: BlobStepArg, editable: Boolean, model: BlobProcessingModel, nameWidth: Dp, valueWidth: Dp) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        Text(arg.name, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.width(nameWidth))
+        ArgName(arg.name, nameWidth)
         Box(Modifier.width(valueWidth)) {
             val shown = if (arg.valuePresent) BlobStepFormat.show(arg.value, arg.isInteger) else ""
             if (editable) {
