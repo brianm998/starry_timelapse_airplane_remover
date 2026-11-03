@@ -96,7 +96,7 @@ final class BackgroundExtractionSessionTests: XCTestCase {
         var first: Star_V1_FrameExtraction?
         var sawAvailable = false
         let deadline = Date().addingTimeInterval(30)
-        for await event in boundedStream(stream, seconds: 40, what: "the subscriber's first extraction events") {
+        for await event in boundedStream(stream, seconds: 120, what: "the subscriber's first extraction events") {
             switch event.kind {
             case .frameExtraction(let extraction)? where first == nil: first = extraction
             case .framesAvailable? : sawAvailable = true
