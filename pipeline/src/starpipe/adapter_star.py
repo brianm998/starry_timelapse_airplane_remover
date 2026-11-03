@@ -178,7 +178,7 @@ CHECKS: dict[str, CheckSpec] = {
             ("bash", "-c", PIPELINE_STATIC),
             heavy=False,
         ),
-        CheckSpec("t0:diff-check", "git diff --check", ("git", "diff", "--check", "{base}"), heavy=False),
+        CheckSpec("t0:diff-check", "git diff --check", ("git", "diff", "--check", "{mergebase}"), heavy=False),
         CheckSpec(
             "t0:proto-sync", "gradle checkProtoSync",
             ("./gradlew", "checkProtoSync", "--no-daemon"), cwd="star-desktop",

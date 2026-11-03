@@ -296,6 +296,10 @@ public final class ImageSequenceViewModel {
 
     var isRenderingVideo = false
 
+    /// How far the video render has got, 0...1, for the menu-bar wand; the render sheet keeps
+    /// its own copy for its bar.  Only meaningful while `isRenderingVideo`.
+    var videoRenderFraction = 0.0
+
     var hasPendingWork: Bool {
         isProcessingFrames ||
         isRenderingVideo ||
@@ -958,12 +962,14 @@ public final class ImageSequenceViewModel {
         getCleanMethod(forFrame: currentIndex)
     }
     
+    /// A frame's own override is read from `pixelReplacementOverrides`, which the views observe and which holds what the config does (they are set
+    /// together in `set(cleanMethod:forFrame:)`); the config is not observable, so the right panel's mode label read from it stayed as it was after
+    /// the mode was changed.
     func getCleanMethod(forFrame frame: Int) -> CleanMethod {
-        let realConfig = config.config()
-        if let value = realConfig.pixelReplacementOverrides[frame] {
+        if let value = pixelReplacementOverrides[frame] {
             return value
         } else {
-            return realConfig.cleanMethod
+            return config.config().cleanMethod
         }
     }
 
@@ -972,12 +978,7 @@ public final class ImageSequenceViewModel {
     }
     
     func hasOverriddenCleanMethod(forFrame frame: Int) -> Bool {
-        let realConfig = config.config()
-        if let value = realConfig.pixelReplacementOverrides[frame] {
-            return true
-        } else {
-            return false
-        }
+        pixelReplacementOverrides[frame] != nil
     }
     
     func set(cleanMethod: CleanMethod, forFrame frameIndex: Int) {
@@ -1568,6 +1569,7 @@ public final class ImageSequenceViewModel {
         // run is going — that run's bars would otherwise measure from the wrong place.
         let showsModal = !isProcessingFrames
         isProcessingFrames = true
+        topViewModel?.menuBarOutcome.runStarted()
         if showsModal {
             startProcessingModal(
               steps: steps,
@@ -1979,6 +1981,52 @@ public final class ImageSequenceViewModel {
     /// during that the step rows have nothing in them and the frames-complete line still
     /// reads as the finished sequence it is about to take apart.
     var processingStatusText: String? = nil
+
+    /// How fast each step is going, for the time left the modal and the menu-bar wand show.
+    /// One tracker for both, replaced when a run starts so a previous run's samples are gone;
+    /// a reference type that is fed, not state anything draws.
+    @ObservationIgnored var stepRates = StepRateTracker()
+
+    /// Bumped each run, so that a feed left over from the one before stops itself.
+    @ObservationIgnored private var stepRateFeedGeneration = 0
+
+    /// The steps the current run is taking and how far each has got: what the processing modal
+    /// draws and the menu-bar wand summarises.
+    var processingSteps: [ProcessingStepProgress] {
+        // `alreadyDone` describes whichever graph was built last, so until this run's is
+        // the one that was, it is the previous run's answer and belongs to nobody.  The
+        // same number gates the filtering below for the same reason.
+        let graphIsBuilt = processingHasPlan
+        return ProcessingSteps.visible(
+          ProcessingSteps.progress(
+            for: processingStepTypes,
+            counts: frameGraphViewModel.operations,
+            since: processingStepBaseline,
+            alreadyDone: graphIsBuilt ? frameGraphViewModel.alreadyDone : [:]
+          ),
+          graphIsBuilt: graphIsBuilt
+        )
+    }
+
+    /// Whether this run's operations have been built; until then every step reads as empty,
+    /// which is "still planning", not "nothing to do".
+    var processingHasPlan: Bool {
+        frameGraphViewModel.graphBuildsCompleted > processingBuildCount
+    }
+
+    /// Feeds `stepRates` each time the counts change for as long as the run goes, so that an
+    /// estimate exists when someone opens the menu-bar wand after working in another app, not
+    /// only once a view that is on screen has watched for a few seconds.  Driven by
+    /// observation of the counts, not by a timer: nothing runs between changes, and the chain
+    /// ends with the run.
+    private func feedStepRates(generation: Int) {
+        guard generation == stepRateFeedGeneration, isProcessingFrames else { return }
+        withObservationTracking {
+            stepRates.observe(processingSteps)
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in self?.feedStepRates(generation: generation) }
+        }
+    }
 
     var shouldShowTrash: Bool = false
 
@@ -2824,6 +2872,9 @@ public final class ImageSequenceViewModel {
         processingBuildCount = frameGraphViewModel.graphBuildsCompleted
         processingStepTypes = steps ?? ProcessingSteps.types(for: config.config())
         processingStatusText = status
+        stepRates = StepRateTracker()
+        stepRateFeedGeneration += 1
+        feedStepRates(generation: stepRateFeedGeneration)
         if userPreferences.showProcessingWindow ?? true {
             processingModalShowing = true
         }
@@ -2963,6 +3014,7 @@ public final class ImageSequenceViewModel {
         // and dismissed is still a change the frames on disk have not had.
         self.settingsSnapshot = config.config()
         self.isProcessingFrames = true
+        self.topViewModel?.menuBarOutcome.runStarted()
         self.startProcessingModal()
         processingGeneration += 1
         let capturedGen = processingGeneration
@@ -2982,9 +3034,11 @@ public final class ImageSequenceViewModel {
                         self.isProcessingFrames = false
                         switch processingState {
                         case .done:
+                            self.topViewModel?.menuBarOutcome.runEnded(.finished)
                             self.handleProcessingDone()
                         case .error(let errorString):
                             Log.e("Error: \(errorString)")
+                            self.topViewModel?.menuBarOutcome.runEnded(.failed)
                             self.topViewModel?.report(error: errorString)
                         default:
                             break
@@ -3324,6 +3378,7 @@ public final class ImageSequenceViewModel {
         processingGeneration += 1
         let runGeneration = processingGeneration
         isProcessingFrames = true
+        topViewModel?.menuBarOutcome.runStarted()
         startProcessingModal()
 
         Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
@@ -3900,6 +3955,7 @@ public final class ImageSequenceViewModel {
         guard token == videoRenderToken else { return }
         videoRenderTask = nil
         isRenderingVideo = false
+        videoRenderFraction = 0
     }
 
     /// Stops the render that is going, if any: ffmpeg is terminated, and the partial video is removed.
@@ -3937,8 +3993,21 @@ public final class ImageSequenceViewModel {
 
         videoRenderTask?.cancel()
         isRenderingVideo = true
+        topViewModel?.menuBarOutcome.runStarted()
+        videoRenderFraction = 0
         let token = UUID()
         videoRenderToken = token
+        let progress: ProgressCallback = { [weak self] current, total, outputDir in
+            if total > 0 {
+                let fraction = Double(current) / Double(total)
+                Task { @MainActor [weak self] in
+                    // A render that was replaced or has ended does not move the next one's bar.
+                    guard let self, self.videoRenderToken == token, self.isRenderingVideo else { return }
+                    self.videoRenderFraction = fraction
+                }
+            }
+            progress(current, total, outputDir)
+        }
         videoRenderTask = Task.detached { [weak self] in
             let listPath = "\(NSTemporaryDirectory())/star-export-\(UUID().uuidString).ffconcat"
             defer { try? FileManager.default.removeItem(atPath: listPath) }
@@ -3977,10 +4046,20 @@ public final class ImageSequenceViewModel {
                 }
             }
             await self?.videoRenderEnded(token)
+            await self?.noteRenderOutcome(outcome)
             switch outcome {
             case .success: completion()
             case .failure(let error): errorCallback(error)
             }
+        }
+    }
+
+    /// Latches how a render ended on the menu-bar wand; a cancelled one sets nothing.
+    private func noteRenderOutcome(_ outcome: Result<Void, Error>) {
+        switch outcome {
+        case .success: topViewModel?.menuBarOutcome.runEnded(.finished)
+        case .failure(let error):
+            if !(error is CancellationError) { topViewModel?.menuBarOutcome.runEnded(.failed) }
         }
     }
 

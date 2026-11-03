@@ -44,7 +44,7 @@ fun BottomStatus(vm: SequenceViewModel) {
             }
         }
 
-        states[current]?.let { Line(localized("ui.frame_is_state", FrameState.message(it)), StarColors.stateColor(it)) }
+        states[current]?.let { Line(localized("ui.frame_is_state", FrameState.message(it)), StarColors.stateColor(it), "status.state") }
 
         if (loading || loadingTrash) {
             Column {

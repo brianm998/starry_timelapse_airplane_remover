@@ -123,6 +123,9 @@
     "uiNumberFields": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiNumberFieldMessage": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiTranslatedScreen": {
       "sequence": "test_data/test_a7sii_10"
     },
@@ -145,6 +148,24 @@
       "sequence": "test_data/test_a7sii_10"
     },
     "uiMultiSelectSheet": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiFrameModeChange": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiFindOutliersInline": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiOutlierClickUndecided": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiReprocessNonContiguous": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiStartDuringRun": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiMultiChoiceSheet": {
       "sequence": "test_data/test_a7sii_10"
     }
   }

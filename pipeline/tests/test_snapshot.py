@@ -62,6 +62,14 @@ def test_a_stage_waiting_for_the_heavy_lock_is_waiting_not_running(rig: Rig, mon
     assert groups[2] == "waiting"
 
 
+def test_a_stage_holding_the_heavy_lock_is_running(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    d = populate(rig)
+    held = heavy.Holder(pid=4242, ticket="2", cmd="swift test", since=0.0)
+    monkeypatch.setattr(heavy, "status", lambda: heavy.Status([held], []))
+    groups = {t["number"]: t["group"] for t in d.snapshot()["tickets"]}  # type: ignore[index, union-attr]
+    assert groups[2] == "running", "the ticket whose job holds the lock is working, not waiting"
+
+
 def test_old_landed_and_failed_tickets_drop_off(rig: Rig) -> None:
     rig.gh.add_issue(1, "old")
     rig.engine.sync_issues()
@@ -90,7 +98,8 @@ def test_the_snapshot_carries_develop_landing_and_interventions(rig: Rig) -> Non
     rig.db.put("stop_line", "pr-gate/linux")
     snap = d.snapshot()
     assert snap["develop"] == {"gate": {"linux": "success"}, "known_red": 1}
-    assert snap["landing"] == {"paused": False, "stop_line": "pr-gate/linux"}
+    assert snap["landing"] == {"paused": False, "stop_line": "pr-gate/linux", "batch": None, "last_abandoned": None,
+                               "next_batch_in_s": None}
     assert snap["interventions_week"] == {"answer": 1}
     assert snap["events_cursor"] >= 1  # type: ignore[operator]
 
@@ -98,7 +107,17 @@ def test_the_snapshot_carries_develop_landing_and_interventions(rig: Rig) -> Non
 def test_the_snapshot_has_the_shape_the_monitors_fixture_records(rig: Rig) -> None:
     """The Swift tests decode FIXTURE. If the daemon's snapshot gains or loses a key, this fails until the fixture and the
     Swift models are updated together. Regenerate with STARPIPE_REGEN_FIXTURE=1."""
-    snap = json.loads(json.dumps(populate(rig).snapshot()))
+    d = populate(rig)
+    assert d.snapshot()["usage_windows"] is None  # nothing reported yet
+    rig.db.put("usage_windows", json.dumps({"five_hour": {"utilization": 0.1, "resetsAt": 3600.0},
+                                            "seven_day": {"utilization": 0.24, "resetsAt": 90000.0}}))
+    rig.db.batch_update(rig.db.batch_create("0" * 40), state="abandoned", ended=rig.now - 60, note="develop moved")
+    live = rig.db.batch_create("1" * 40)
+    rig.db.batch_update(live, state="ci", pr_number=12)
+    rig.db.batch_add(live, 3, 0)
+    snap = json.loads(json.dumps(d.snapshot()))
+    snap["landing"]["batch"]["age_s"] = 90  # wall-clock parts are not part of the contract
+    snap["landing"]["last_abandoned"].update(ended=1940.0, ago_s=60)
     snap["heavy"] = {"holders": [{"pid": 4242, "ticket": "2", "cmd": "swift test --package-path StarCore", "since": 1.0}],
                      "queue": [{"priority": 1, "enqueued_at": 2.0, "pid": 4343, "started": 2.0, "ticket": "3",
                                 "cmd": "xcodebuild -scheme star"}]}
@@ -129,6 +148,7 @@ def test_the_snapshot_has_the_shape_the_monitors_fixture_records(rig: Rig) -> No
     ours = next(t for t in snap["tickets"] if t["stages"])["stages"][0]
     assert set(ours) ^ set(next(t for t in recorded["tickets"] if t["stages"])["stages"][0]) == set()
     assert shape(recorded["heavy"]) == shape(snap["heavy"])
+    assert shape(recorded["landing"]) == shape(snap["landing"])
 
 
 async def test_snapshot_endpoint_and_log_tail(rig: Rig) -> None:
@@ -177,13 +197,15 @@ async def test_the_event_stream_delivers_new_events_and_resumes_from_an_id(rig: 
 
 def test_the_ticket_detail_has_the_fields_the_monitor_decodes(rig: Rig) -> None:
     """monitor/.../Fixtures/detail.json is a real `GET /v1/tickets/28`; the Swift TicketDetail decodes it."""
+    rig.gh.deps[2] = [4]
     d = populate(rig)
     rig.db.set_fields(2, plan_json=json.dumps({"summary": "s", "acceptance": [{"id": "A1", "check": "c"}]}))
     rig.db.record_check(2, "abc", "t0:diff-check", "pass", {"executed": 0}, "/log")
     shown = d.show(2)
     assert shown is not None
     recorded = json.loads((FIXTURE.parent / "detail.json").read_text())
-    for key in ("number", "plan", "checks", "question"):
+    for key in ("number", "plan", "checks", "question", "blockers"):
         assert key in shown and key in recorded
+    assert set(shown["blockers"][0]) == {"number", "title"} == set(recorded["blockers"][0])  # type: ignore[index]
     assert {"summary", "acceptance"} <= set(shown["plan"]) and {"summary", "acceptance"} <= set(recorded["plan"])  # type: ignore[arg-type]
     assert {"check_id", "result"} <= set(shown["checks"][0]) and {"check_id", "result"} <= set(recorded["checks"][0])  # type: ignore[index]

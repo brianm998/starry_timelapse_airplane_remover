@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 import re
 import secrets
@@ -21,7 +22,20 @@ from typing import Any, cast
 from aiohttp import web
 
 from . import digest as digest_mod
-from . import gitutil, heavy, nightly, selfupdate, ship, tickets, trust, watch, worktrees
+from . import (
+    gherkin_nightly,
+    gitutil,
+    heavy,
+    load,
+    nightly,
+    selfupdate,
+    ship,
+    tickets,
+    train,
+    trust,
+    watch,
+    worktrees,
+)
 from .config import Config, home, token_path
 from .db import ACTIVE_STATES, POST_STATES, Database, Ticket
 from .engine import RETRY_STATE, STAGE_STATE, Engine
@@ -41,7 +55,38 @@ def api_token() -> str:
     return path.read_text().strip()
 
 
-def activity(db: Database, t: Ticket, now: float | None = None) -> str:
+def train_info(db: Database, config: Config, now: float) -> dict[str, object]:
+    """The landing train's state, computed here for status, the snapshot and the monitor: the active batch (number, phase, age,
+    members, slow flag), the last abandoned batch while it is under an hour old, and the countdown to the next batch."""
+    batch = db.active_batch()
+    active: dict[str, object] | None = None
+    if batch is not None:
+        age = max(0.0, now - float(batch["created"]))
+        active = {"number": batch["id"], "phase": batch["state"], "age_s": int(age), "members": db.batch_members(int(batch["id"])),
+                  "pr_number": batch["pr_number"], "slow": batch["state"] == "building" and age > train.SLOW_BUILDING_S}
+    gone = db.last_abandoned_batch(now - train.ABANDONED_MEMORY_S)
+    abandoned: dict[str, object] | None = None
+    if gone is not None:
+        abandoned = {"number": gone["id"], "state": gone["state"], "reason": gone["note"] or "", "ended": gone["ended"],
+                     "ago_s": int(max(0.0, now - float(gone["ended"])))}
+    left = train.window_left(db, config, now)
+    return {"batch": active, "last_abandoned": abandoned, "next_batch_in_s": None if left is None else math.ceil(left)}
+
+
+def ready_activity(db: Database, t: Ticket, config: Config, now: float) -> str:
+    """What the landing train is doing about a ready ticket, so a long wait does not look like a hang."""
+    if (member := db.batch_of(t.number)) is not None:
+        row = db.batch(member)
+        return f"ready · in batch {member} ({row['state'] if row else 'building'})"
+    if (active := db.active_batch()) is not None:
+        return f"ready · waiting for the next batch (batch {active['id']} is {active['state']})"
+    left = train.window_left(db, config, now)
+    if left is None or left <= 0:
+        return "ready · waiting for the next batch (starting)"
+    return f"ready · waiting for the next batch (starts in {math.ceil(left)}s)"
+
+
+def activity(db: Database, t: Ticket, now: float | None = None, mode: str = "batch", config: Config | None = None) -> str:
     """The one-line "what is it doing" the CLI and monitor both show (computed here, never by a client)."""
     now = now or time.time()
     stages = db.stages(t.number)
@@ -51,11 +96,20 @@ def activity(db: Database, t: Ticket, now: float | None = None) -> str:
         return f"needs you · asked {int((now - q['asked_at']) / 60)}m ago" if q else "needs you"
     if t.state in ("failed", "cancelled", "closed", "paused") and t.park_reason:
         return f"{t.state} · {t.park_reason}"
+    wait = db.get(f"llm_wait:{t.number}")
+    if wait and t.state in ACTIVE_STATES and (last is None or last["ended"] is not None):
+        return f"{t.state} · waiting to start: {wait}"
     if last and last["ended"] is None:
         spent = int((now - last["started"]) / 60)
         return f"{t.state} · attempt {last['attempt']}/3 · {spent}m" + (
             f" (+{int(last['lock_wait_s'] / 60)}m lock wait)" if last["lock_wait_s"] >= 60 else "")
-    return t.state if t.state != "ready" else "ready to publish"
+    if t.state in ("ci", "landing") and (batch := db.batch_of(t.number)) is not None:
+        return f"CI · batch #{batch} ({len(db.batch_members(batch))} tickets together)"
+    if t.state == "queued" and (blockers := db.open_blockers(t.number)):
+        return "queued: " + ", ".join(f"#{b}" for b in blockers)
+    if t.state == "ready":
+        return ready_activity(db, t, config or Config(), now) if mode == "batch" else "ready to publish"
+    return t.state
 
 
 LAND_NOW_STATES = ("ready", "ci", "landing")
@@ -63,12 +117,12 @@ MAX_ACTIVE_CAP = 6
 GROUPS = ("needs_you", "running", "waiting", "queued", "landed_today", "failed")
 
 
-def group_of(t: Ticket, holding_or_waiting_lock: bool, now: float, updated: float) -> str | None:
+def group_of(t: Ticket, waiting_for_lock: bool, now: float, updated: float) -> str | None:
     """Which sidebar group a ticket belongs in (computed here, never by a client). None: not shown."""
     if t.state == "needs-input":
         return "needs_you"
     if t.state in ACTIVE_STATES:
-        return "waiting" if holding_or_waiting_lock else "running"
+        return "waiting" if waiting_for_lock else "running"
     if t.state in ("ready", "ci", "landing", "paused"):
         return "waiting"
     if t.state == "queued":
@@ -91,8 +145,12 @@ class Daemon:
         self.watch = watch.Watch()
         self._runtime: dict[str, object] = {}
         self.nightly_task: asyncio.Task[int] | None = None
+        self.train = train.Train(engine)
+        self.cpu = load.CpuMeter(window_s=float(config.cpu_window_s))
+        engine.cpu = self.cpu.average
         self._update_lock = threading.Lock()
-        self.exit: Callable[[int], None] = sys.exit  # replaced in tests; SystemExit passes through supervise to asyncio.run
+        self._blocker_titles: dict[int, str] = {}  # GitHub titles of blockers, fetched once per daemon
+        self.exit: Callable[[int], None] = hard_exit  # replaced in tests
 
     # supervision ---------------------------------------------------------------------------------------------------
     def reconcile(self) -> None:
@@ -174,6 +232,32 @@ class Daemon:
                     and self.start_nightly(nightly.Options(ui=self.config.nightly_ui))):
                 self.db.put("nightly_last_day", now.strftime("%Y-%m-%d"))
             await asyncio.sleep(60)
+
+    def gherkin_run(self, force: bool = False) -> gherkin_nightly.Decision:
+        """One Gherkin full-run decision (blocking: git and GitHub calls)."""
+        source = gherkin_nightly.git_source(self.engine.repo, self.config.base_branch,
+                                            lambda repo: ship.fetch(self.engine, repo))
+        return gherkin_nightly.run_once(self.db, self.engine.gh, self.config, source, force)
+
+    async def gherkin_nightly_loop(self) -> None:
+        retry_at = 0.0
+        while True:
+            now = datetime.now()
+            if (self.config.gherkin_nightly_enabled and time.time() >= retry_at
+                    and nightly.due(now, self.db.get("gherkin_nightly_last_day"), self.config.gherkin_nightly_start)):
+                decision = await asyncio.to_thread(self.gherkin_run)
+                if decision.action == "error":
+                    retry_at = time.time() + gherkin_nightly.RETRY_AFTER_ERROR_S  # not done for the day: try again, not every minute
+                else:
+                    self.db.put("gherkin_nightly_last_day", now.strftime("%Y-%m-%d"))
+            await asyncio.sleep(60)
+
+    def gherkin_info(self) -> dict[str, object] | None:
+        raw = self.db.get("gherkin_nightly_last")
+        if raw is None:
+            return None
+        info: dict[str, object] = json.loads(raw)
+        return {**info, "line": gherkin_nightly.summary_line(info)}
 
     def self_update_once(self, plist: Path | None = None, sync: selfupdate.Sync | None = None,
                          test: Callable[[Path], tuple[bool, str]] | None = None) -> str | None:
@@ -309,6 +393,18 @@ class Daemon:
             await asyncio.to_thread(self.watch_once)
             await asyncio.sleep(30)
 
+    async def cpu_loop(self) -> None:
+        self.cpu.sample()  # psutil's first reading is meaningless; this primes it
+        while True:
+            await asyncio.sleep(5)
+            self.cpu.sample()
+
+    def resources(self) -> dict[str, object]:
+        sessions, cpu_limit = self.engine.limits()
+        room = self.engine.llm_room()
+        return {"llm_active": room.llm_active, "llm_max": sessions, "cpu_pct": round(room.cpu, 1), "cpu_limit": cpu_limit,
+                "waiting": room.reason, "overridden": bool(self.db.get("limit_llm") or self.db.get("limit_cpu"))}
+
     async def scheduler(self) -> None:
         while True:
             self.schedule_once()
@@ -320,14 +416,25 @@ class Daemon:
 
         hv = heavy.status()
         tickets = [{"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
-                    "activity": activity(self.db, t), "blocked_by": self.db.open_blockers(t.number)}
+                    "activity": activity(self.db, t, self.engine.clock(), self.config.landing_mode, self.config),
+                    "blocked_by": self.db.open_blockers(t.number)}
                    for t in self.db.tickets() if t.state not in ("landed", "closed", "cancelled")]
         return {"daemon": {"pid": os.getpid(), "since": self.started, "last_poll": self.last_poll,
                            "error": self.last_error or self.update_error()},
                 "self_update": {"pending": self.db.get("self_update_pending"), "failed": self.update_failure()},
-                "pause": self.db.get("pause"), "usage_pause_until": self.db.get("usage_pause_until"),
+                "resources": self.resources(), "pause": self.db.get("pause"), "muted": self.db.get("muted") == "1", "usage_pause_until": self.db.get("usage_pause_until"),
+                "usage_windows": self.usage_windows(),
                 "heavy": {"holders": [h.__dict__ for h in hv.holders], "queue": [w.__dict__ for w in hv.queue]},
-                "tickets": tickets}
+                "landing": train_info(self.db, self.config, self.engine.clock()),
+                "tickets": tickets, "gherkin_nightly": self.gherkin_info()}
+
+    def usage_windows(self) -> dict[str, object] | None:
+        raw = self.db.get("usage_windows")
+        try:
+            value: object = json.loads(raw) if raw else None
+        except ValueError:
+            return None
+        return cast("dict[str, object]", value) if isinstance(value, dict) else None
 
     def update_failure(self) -> dict[str, object] | None:
         raw = self.db.get("self_update_failed")
@@ -374,10 +481,10 @@ class Daemon:
 
     def snapshot(self) -> dict[str, object]:
         """Everything the monitor shows, in one document. The daemon decides groups and activity lines, not the client."""
-        base = {k: v for k, v in self.status().items() if k != "self_update"}  # the monitor's contract is pinned by a fixture
-        now = time.time()
+        base = {k: v for k, v in self.status().items() if k not in ("self_update", "gherkin_nightly", "landing")}  # the monitor's contract is pinned by a fixture
+        now = self.engine.clock()
         hv: dict[str, Any] = base["heavy"]  # type: ignore[assignment]
-        lock_tickets = {str(h["ticket"]) for h in hv["holders"]} | {str(w["ticket"]) for w in hv["queue"]}
+        lock_tickets = {str(w["ticket"]) for w in hv["queue"]}  # waiting for the lock; a holder is running its job
         tickets: list[dict[str, object]] = []
         for t in self.db.tickets():
             row = self.db._all("SELECT updated_at FROM tickets WHERE number=?", (t.number,))[0]  # pyright: ignore[reportPrivateUsage]
@@ -388,7 +495,7 @@ class Daemon:
             question = self.db.open_question(t.number)
             running = [s["model"] for s in stages if s["ended"] is None]  # the open stage's model, else none
             tickets.append({"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
-                            "group": group, "model": running[-1] if running else None, "activity": activity(self.db, t, now), "blocked_by": self.db.open_blockers(t.number),
+                            "group": group, "model": running[-1] if running else None, "activity": activity(self.db, t, now, self.config.landing_mode, self.config), "blocked_by": self.db.open_blockers(t.number),
                             "pr_number": t.pr_number, "branch": t.branch, "worktree": t.worktree,
                             "park_reason": t.park_reason, "question": question["text"] if question else None,
                             "stages": [{k: s[k] for k in ("stage", "attempt", "model", "started", "ended", "lock_wait_s", "outcome")}
@@ -398,7 +505,8 @@ class Daemon:
         week = self.db._all("SELECT kind, COUNT(*) AS n FROM interventions WHERE at > ? GROUP BY kind", (now - 7 * 86400,))  # pyright: ignore[reportPrivateUsage]
         cursor = self.db._all("SELECT COALESCE(MAX(id),0) AS m FROM events")[0]["m"]  # pyright: ignore[reportPrivateUsage]
         return {**base, "max_active": self.engine.max_active(), "tickets": tickets, "groups": list(GROUPS), "runtime": {k: v for k, v in self.runtime().items() if k != "at"},
-                "landing": {"paused": self.db.get("pause") in ("all", "landing"), "stop_line": self.db.get("stop_line")},
+                "landing": {"paused": self.db.get("pause") in ("all", "landing"), "stop_line": self.db.get("stop_line"),
+                            **train_info(self.db, self.config, now)},
                 "develop": {"gate": {r["job"]: r["conclusion"] for r in gate}, "known_red": int(reds[0]["n"])},
                 "interventions_week": {r["kind"]: r["n"] for r in week}, "events_cursor": int(cursor), "now": now,
                 "version": "starpipe 1", "repo": f"{self.config.owner}/{self.config.repo}",
@@ -424,13 +532,41 @@ class Daemon:
             out.append(f"{time.strftime('%H:%M:%S', time.localtime(data['t']))} {data['type']}  {str(data['repr'])[:220]}")
         return out
 
+    def _close_pr_for_requeue(self, n: int) -> None:
+        t = self.db.ticket(n)
+        if t is None or t.state not in ("ci", "landing") or self.db.batch_of(n) is not None or not t.pr_number:
+            return
+        try:
+            self.engine.gh.close_pr(t.pr_number, "Moving this ticket onto the landing train: its changes will be in the next batch PR, "
+                                    "which runs one CI for several tickets.")
+            if t.branch:
+                self.engine.gh.cancel_runs(t.branch)  # closing the PR leaves its queued runs in the queue, ahead of everyone else's
+        except GitHubError:
+            pass  # it is requeued either way; an open stale PR is harmless
+
     def show(self, n: int) -> dict[str, object] | None:
         t = self.db.ticket(n)
         if t is None:
             return None
         return {"number": t.number, "title": t.title, "state": t.state, "priority": t.priority, "branch": t.branch,
-                "park_reason": t.park_reason, "plan": t.plan, "activity": activity(self.db, t),
-                "stages": self.db.stages(n), "checks": self.db.checks(n), "question": self.db.open_question(n)}
+                "park_reason": t.park_reason, "plan": t.plan,
+                "activity": activity(self.db, t, self.engine.clock(), self.config.landing_mode, self.config),
+                "stages": self.db.stages(n), "checks": self.db.checks(n), "question": self.db.open_question(n),
+                "blockers": [{"number": b, "title": self.blocker_title(b)} for b in self.db.open_blockers(n)]}
+
+    def blocker_title(self, n: int) -> str:
+        """A blocker's title: the pipeline ticket's, else the GitHub issue's (cached; a failed lookup is retried later)."""
+        if n in self._blocker_titles:
+            return self._blocker_titles[n]
+        t = self.db.ticket(n)
+        if t is not None:
+            return t.title
+        try:
+            title = str(self.engine.gh.issue(n).get("title") or "")
+        except GitHubError:
+            return ""
+        self._blocker_titles[n] = title
+        return title
 
     def mutate(self, n: int, action: str, body: dict[str, object]) -> str:
         t = self.db.ticket(n)
@@ -453,6 +589,9 @@ class Daemon:
             self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
             self.engine.parked.discard(n)
             self.engine._to_state(n, RETRY_STATE[stage])  # pyright: ignore[reportPrivateUsage]
+        elif action == "allow-opus":
+            self.db.put(f"opus_ok:{n}", "1")  # the ticket's own `model_<stage>: opus` choices now apply
+            self.db.intervention(n, "allow-opus", t.state)
         elif action == "cancel":
             task = self.tasks.get(n)
             if task:
@@ -460,6 +599,12 @@ class Daemon:
             self.db.intervention(n, "cancel", t.state)
             self.db.put(f"land_now:{n}", None)
             self.engine._to_state(n, "cancelled", str(body.get("reason") or "cancelled by the owner"))  # pyright: ignore[reportPrivateUsage]
+        elif action == "requeue":
+            if t.state not in ("ci", "landing") or self.db.batch_of(n) is not None:
+                raise web.HTTPConflict(text=f"#{n} is {t.state}: only a ticket in its own CI can be moved onto the train")
+            self.db.set_fields(n, pr_number=None)
+            self.db.intervention(n, "requeue", t.state)
+            self.engine._to_state(n, "ready")  # pyright: ignore[reportPrivateUsage]
         elif action == "land-now":
             if t.state not in LAND_NOW_STATES:
                 raise web.HTTPConflict(text=f"#{n} is {t.state}: land-now needs a ticket in {', '.join(LAND_NOW_STATES)}")
@@ -550,6 +695,8 @@ class Daemon:
                     if new_body != body:
                         self.engine.gh.set_body(n, new_body)
                     self.engine.gh.add_labels(n, [trust.PIPELINE_LABEL])
+                    if "opus" in models.values():
+                        self.db.put(f"opus_ok:{n}", "1")  # the owner picked it in the monitor: the one way opus is asked for
                     result = "labelled"
             except GitHubError as exc:
                 result = f"error: {exc}"
@@ -576,7 +723,7 @@ class Daemon:
 
         @r.get("/v1/tickets/{n}")
         async def show(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
-            data = self.show(int(req.match_info["n"]))
+            data = await asyncio.to_thread(self.show, int(req.match_info["n"]))  # a blocker's title may need GitHub
             if data is None:
                 raise web.HTTPNotFound()
             return web.json_response(data)
@@ -584,6 +731,29 @@ class Daemon:
         @r.get("/v1/snapshot")
         async def snapshot(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             return web.json_response(await asyncio.to_thread(self.snapshot))
+
+        @r.get("/v1/limits")
+        async def limits_get(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            return web.json_response(self.resources())
+
+        @r.post("/v1/limits")
+        async def limits_set(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            body = await body_of(req)
+            if body.get("reset"):
+                self.db.put("limit_llm", None)
+                self.db.put("limit_cpu", None)
+            if body.get("llm") is not None:
+                value = int(str(body["llm"]))
+                if not 1 <= value <= 32:
+                    raise web.HTTPBadRequest(text="llm must be between 1 and 32")
+                self.db.put("limit_llm", str(value))
+            if body.get("cpu") is not None:
+                pct = float(str(body["cpu"]))
+                if not 10 <= pct <= 100:
+                    raise web.HTTPBadRequest(text="cpu must be between 10 and 100")
+                self.db.put("limit_cpu", str(pct))
+            self.db.intervention(None, "limits")
+            return web.json_response(self.resources())
 
         @r.get("/v1/monitor-update")
         async def monitor_update(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
@@ -609,6 +779,12 @@ class Daemon:
             if self.start_nightly(opts) is None:
                 raise web.HTTPConflict(text="a nightly is already running")
             return web.json_response({"result": "started"})
+
+        @r.post("/v1/gherkin/run")
+        async def gherkin_run(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            body = await body_of(req)
+            d = await asyncio.to_thread(self.gherkin_run, bool(body.get("force")))  # a manual run leaves today's schedule alone
+            return web.json_response(d.__dict__)
 
         @r.get("/v1/tickets/{n}/log")
         async def tail(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
@@ -659,7 +835,10 @@ class Daemon:
         @r.post("/v1/tickets/{n}/{action}")
         async def act(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             body = await body_of(req)
-            return web.json_response({"result": self.mutate(int(req.match_info["n"]), req.match_info["action"], body)})
+            n = int(req.match_info["n"])
+            if req.match_info["action"] == "requeue":
+                await asyncio.to_thread(self._close_pr_for_requeue, n)  # the GitHub call off the loop; the state change on it
+            return web.json_response({"result": self.mutate(n, req.match_info["action"], body)})
 
         @r.post("/v1/pause")
         async def pause(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
@@ -674,6 +853,15 @@ class Daemon:
             if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= MAX_ACTIVE_CAP:
                 raise web.HTTPBadRequest(text=f"max_active must be an integer from 1 to {MAX_ACTIVE_CAP}")
             self.db.put("max_active", str(n))  # lowering it never stops a running ticket, it only stops new claims
+            return web.json_response({"result": "ok"})
+
+        @r.post("/v1/mute")
+        async def mute(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            body = await body_of(req)
+            muted = body.get("muted")
+            if not isinstance(muted, bool):
+                raise web.HTTPBadRequest(text="muted must be true or false")
+            self.db.put("muted", "1" if muted else "0")  # the daemon db: it survives a restart
             return web.json_response({"result": "ok"})
 
         @r.post("/v1/resume")
@@ -694,9 +882,21 @@ class Daemon:
         try:
             await asyncio.gather(self.supervise("poller", self.poller), self.supervise("scheduler", self.scheduler),
                                  self.supervise("watcher", self.watcher), self.supervise("nightly", self.nightly_loop),
-                                 self.supervise("digest", self.digest_loop), self.supervise("update", self.update_loop))
+                                 self.supervise("gherkin-nightly", self.gherkin_nightly_loop),
+                                 self.supervise("digest", self.digest_loop), self.supervise("update", self.update_loop),
+                                 self.supervise("train", self.train.run_forever), self.supervise("cpu", self.cpu_loop))
         finally:
             await runner.cleanup()
+
+
+def hard_exit(code: int) -> None:
+    """Leave now. `sys.exit` unwinds through asyncio and then waits on non-daemon threads (a running check, an SDK
+    subprocess pipe), so a self-update could log "exiting" and then hang with the server closed and launchd none the
+    wiser. State is all in the database, and `reconcile` picks up whatever was running."""
+    logging.shutdown()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
 
 
 def resolve_java_home(config: Config) -> str | None:
@@ -718,6 +918,7 @@ def checkout_root(config: Config, start: Path) -> Path:
 
 def build(config: Config) -> Daemon:
     from .agent import SdkRunner
+    from .announce import SayAnnouncer
     from .engine import check_runner_for
     from .github import GitHub
     from .notify import Notifier
@@ -729,7 +930,7 @@ def build(config: Config) -> Daemon:
     db = Database()
     shim = str(Path(__file__).resolve().parents[2] / "bin" / "starpipe")
     engine = Engine(config, db, GitHub(config), SdkRunner(shim), repo, check_runner_for(), Notifier(db),
-                    base_ref=gitutil.resolve_base(repo, None), shim=shim)
+                    base_ref=gitutil.resolve_base(repo, None), shim=shim, announcer=SayAnnouncer())
     return Daemon(engine, config)
 
 

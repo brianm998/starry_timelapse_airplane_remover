@@ -189,6 +189,7 @@ struct BottomRightView: View {
 
                     Text(localized("ui.frame_is_state", frameState.message))
                       .foregroundColor(frameState.color)
+                      .accessibilityIdentifier("status.state")
 
                     Spacer()
                       .frame(maxWidth: 20)

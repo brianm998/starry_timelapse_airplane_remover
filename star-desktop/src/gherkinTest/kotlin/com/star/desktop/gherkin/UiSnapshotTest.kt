@@ -35,7 +35,7 @@ import kotlin.test.assertTrue
  * `STAR_UI_SNAPSHOT_MODES` (comma separated) picks the screens: edit, grid, settings, progress, prerender, startup, removal, and those reached by
  * one more step: customlimits and rendervideo (a call on the view model), settingsgpu, settingsalignment, settingshorizon and settingsmemory (the
  * settings sheet's other tabs, which `settings` leaves on the first, by a click on the tab). The start screen is not
- * among them: it embeds a JavaFX video background, and JavaFX cannot start headless. The window is 1400 x 1100, as the Gherkin runner's.
+ * among them: it plays a video background through ffmpeg, which a test host should not spawn. The window is 1400 x 1100, as the Gherkin runner's.
  */
 @OptIn(ExperimentalTestApi::class)
 class UiSnapshotTest {
@@ -92,7 +92,7 @@ class UiSnapshotTest {
                 val model = AppViewModel(scope, autoOpenPath = sequence.absolutePath, autoMode = hook, autoFrame = 2, releaseCheck = { null })
                 try {
                     runDesktopComposeUiTest(width = 1400, height = 1100) {
-                        // Nothing is composed until the sequence has opened: the start screen embeds a JavaFX video background.
+                        // Nothing is composed until the sequence has opened: the start screen plays an ffmpeg video background.
                         val deadline = System.nanoTime() + 180_000_000_000L
                         while (model.screen.value !is AppScreen.Sequence) {
                             model.error.value?.let { error("opening the sequence failed: $it") }

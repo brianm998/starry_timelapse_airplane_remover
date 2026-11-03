@@ -426,7 +426,7 @@ func validate(_ f: ParsedFeature, steps: [StepDef], defaults: [String: String], 
             if name == "fixture" && !references.prefsFixtures.contains(arg) {
                 throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a file of gherkin/ui/fixtures/prefs/ (without .json)")
             }
-            if name == "key" && found.def.caseName == "idReads" && !references.catalogueKeys.contains(arg) {
+            if name == "key" && ["idReads", "clickLabel"].contains(found.def.caseName) && !references.catalogueKeys.contains(arg) {
                 throw GenError("\(f.file):\(s.line): \"\(arg)\" is not a key of the English catalogue")
             }
         }

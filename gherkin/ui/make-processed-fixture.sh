@@ -34,7 +34,8 @@ if [ ! -x "$star" ]; then
 fi
 
 name=$(basename "$sequence")
-stamp=$(stat -f '%m-%z' "$star" 2>/dev/null || stat -c '%Y-%s' "$star")
+# GNU stat first: its -f means "filesystem status" and succeeds, so trying BSD's -f first never reached the fallback on Linux or Windows
+stamp=$(stat -c '%Y-%s' "$star" 2>/dev/null || stat -f '%m-%z' "$star")
 fixtures=${STAR_UI_FIXTURES:-$root/.test-data/ui-processed}
 dest="$fixtures/$name-$stamp"
 

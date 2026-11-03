@@ -47,6 +47,9 @@ public final class LoggingViewModel {
 @MainActor @Observable
 public final class ViewModel {
 
+    /// How the last run ended, shown on the menu-bar wand until the menu is opened or a run starts.
+    var menuBarOutcome = MenuBarOutcome()
+
     /// A view onto the one live copy, not a copy of it — see `UserPreferencesStore`.
     var userPreferences: UserPreferences {
         get { UserPreferencesStore.shared.preferences }
@@ -404,7 +407,9 @@ public final class ViewModel {
             panel.canChooseDirectories = false
             panel.canChooseFiles = true
         }
-        guard panel.runModal() == .OK, let path = panel.url?.path else { return }
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let path = url.path
+        FolderAccess.remember(url)
 
         // What is chosen replaces the open sequence: close it the way File ▸ Close does, back to the start screen, which is
         // where the sheets that ask about a video or a sequence are shown.
@@ -576,6 +581,7 @@ public final class ViewModel {
             Task { await closing.flushSaves() }
         }
         imageSequence = nil
+        FolderAccess.releaseAll()
         cursorStack = []
         cursor = .arrow
         frameGraphViewModel.reset()
@@ -600,6 +606,10 @@ public final class ViewModel {
         isLoadingImageSequence = true
         loadingImageSequenceFilename = jsonConfigFilename
         let generation = beginLoad()
+
+        // Under the sandbox the config.json alone is not enough: the images and the output folder it names have to be reachable
+        // too (a bookmark from the launch that made them, or a panel).  Nothing here when not sandboxed.
+        try FolderAccess.ensureAccess(forConfigFile: jsonConfigFilename)
 
         numberLoaded = 0
         amountLoaded = 0.0

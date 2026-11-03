@@ -152,6 +152,10 @@ def pipeline_commits_behind(repo: Path, have: str, target: str) -> int:
     An unknown `have` (not in this repo) counts as behind when it differs."""
     if have == target:
         return 0
+    known = subprocess.run(["git", "-C", str(repo), "cat-file", "-e", f"{have}^{{commit}}"], capture_output=True, check=False)
+    if known.returncode == 0 and subprocess.run(["git", "-C", str(repo), "merge-base", "--is-ancestor", have, target],
+                                                 capture_output=True, check=False).returncode != 0:
+        return 0  # the running code has commits `target` lacks (the owner's, not pushed yet): "updating" would be a downgrade
     out = gitutil.git(repo, "rev-list", "--count", f"{have}..{target}", "--", "pipeline", ":(exclude)pipeline/monitor",
                       check=False).strip()
     return int(out) if out.isdigit() else 1

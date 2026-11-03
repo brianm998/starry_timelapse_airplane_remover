@@ -54,6 +54,17 @@ struct HeaderStrip: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 22) {
+            Button { store.goBack() } label: { Image(systemName: "chevron.left") }
+                .help("Back")
+                .disabled(!store.canGoBack)
+                .keyboardShortcut("[", modifiers: .command)
+            Button { store.goForward() } label: { Image(systemName: "chevron.right") }
+                .help("Forward")
+                .disabled(!store.canGoForward)
+                .keyboardShortcut("]", modifiers: .command)
+            Button { store.showOverview() } label: { Image(systemName: "house") }
+                .help("Back to the Overview")
+                .disabled(store.selected == nil)
             item("Daemon", daemonText, color: store.daemonDown ? .red : .green)
             item("Heavy lock", lockText, color: .secondary)
             item("Landing", landingText, color: store.snapshot?.landing.paused == true || store.developRed ? .orange : .secondary)
@@ -68,15 +79,61 @@ struct HeaderStrip: View {
             item("Last nightly", store.snapshot?.nightly?.line ?? "none yet",
                  color: (store.snapshot?.nightly?.reds ?? 0) > 0 || store.snapshot?.nightly?.status == "error" ? .orange : .secondary)
             Spacer()
+            usageLines
             if let week = store.snapshot?.interventionsWeek, !week.isEmpty {
                 item("Interventions (7 d)", week.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", "), color: .secondary)
             }
+            counters
             Button { enqueueing = true } label: { Image(systemName: "plus") }
                 .help("Enqueue GitHub issues from links")
+            let muted = store.snapshot?.muted ?? false
+            Button { Task { await store.setMuted(!muted) } } label: { Image(systemName: muted ? "speaker.slash" : "speaker.wave.2") }
+                .help(muted ? "Unmute the pipeline's spoken alerts" : "Mute the pipeline's spoken alerts")
         }
         .sheet(isPresented: $enqueueing) { EnqueueSheet(store: store) }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .scaledFont(.caption)
+    }
+
+    /// The account's 5-hour and weekly usage limits, stacked; always shown ("—" until a stage reports) so the bar does not jump.
+    private var usageLines: some View {
+        let windows = store.snapshot?.usageWindows
+        let now = Date.now
+        let lines = [UsageLimitText.line(kind: .fiveHour, window: windows?.fiveHour, now: now, timeZone: .current),
+                     UsageLimitText.line(kind: .weekly, window: windows?.sevenDay, now: now, timeZone: .current)]
+        return VStack(alignment: .leading, spacing: 1) {
+            ForEach(lines.indices, id: \.self) { i in
+                Text(lines[i].text).foregroundStyle(usageColor(lines[i].level)).lineLimit(1)
+            }
+        }
+        .fixedSize()
+        .layoutPriority(1)
+    }
+
+    private func usageColor(_ level: UsageLimitText.Level) -> Color {
+        switch level {
+        case .ok: .green
+        case .warn: .yellow
+        case .critical: .red
+        case .unknown: .secondary
+        }
+    }
+
+    /// The pipeline's load by stage; a dash for each while there is no snapshot (never stale or zero).
+    private var counters: some View {
+        HStack(alignment: .top, spacing: 12) {
+            if let snapshot = store.snapshot {
+                ForEach(Overview.topBarCounts(snapshot.tickets)) { c in
+                    item(c.label, "\(c.count)", color: stateColor(c.states[0]))
+                        .help("Counts tickets in: \(c.states.joined(separator: ", "))")
+                }
+            } else {
+                ForEach(Overview.topBarBuckets, id: \.label) { b in
+                    item(b.label, "—", color: .secondary)
+                        .help("Counts tickets in: \(b.states.joined(separator: ", "))")
+                }
+            }
+        }
     }
 
     private func item(_ label: String, _ value: String, color: Color) -> some View {
@@ -125,14 +182,14 @@ struct Sidebar: View {
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .background(store.selected == nil ? Color.accentColor.opacity(0.2) : Color.clear)
                 .contentShape(Rectangle())
-                .onTapGesture { store.selected = nil }
+                .onTapGesture { store.showOverview() }
             Divider()
             List(selection: $store.selected) {
                 ForEach(store.snapshot?.groups ?? [], id: \.self) { group in
                     let rows = store.tickets(in: group)
                     if !rows.isEmpty {
                         Section {
-                            ForEach(rows) { TicketRow(ticket: $0).tag($0.number) }
+                            ForEach(rows) { TicketRow(ticket: $0, repo: store.snapshot?.repo ?? "").tag($0.number) }
                         } header: {
                             Text(GroupTitle.title(group)).scaledFont(.body, weight: .semibold)
                         }
@@ -152,6 +209,7 @@ struct Sidebar: View {
 
 struct TicketRow: View {
     let ticket: TicketSnap
+    let repo: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -162,7 +220,7 @@ struct TicketRow: View {
                 Chip(text: ticket.state, color: stateColor(ticket.state))
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(ticket.activity).scaledFont(.caption).foregroundStyle(.secondary).lineLimit(2)
+                activityLine
                 Spacer(minLength: 0)
                 if let model = ticket.model {
                     Text(model).scaledFont(.caption2, monospaced: true).foregroundStyle(.tertiary)
@@ -170,5 +228,22 @@ struct TicketRow: View {
             }
         }
         .padding(.vertical, 2)
+    }
+
+    /// `queued: #84, #85` with each blocker a Link, so a click opens the issue rather than only selecting the row.
+    @ViewBuilder
+    private var activityLine: some View {
+        if let row = BlockerLinks.row(activity: ticket.activity, blockedBy: ticket.blockedBy, repo: repo) {
+            HStack(spacing: 0) {
+                Text(row.prefix + " ").foregroundStyle(.secondary)
+                ForEach(Array(row.links.enumerated()), id: \.element.id) { i, link in
+                    if i > 0 { Text(", ").foregroundStyle(.secondary) }
+                    Link(link.label, destination: link.url).help(link.url.absoluteString)
+                }
+            }
+            .scaledFont(.caption).lineLimit(1)
+        } else {
+            Text(ticket.activity).scaledFont(.caption).foregroundStyle(.secondary).lineLimit(2)
+        }
     }
 }

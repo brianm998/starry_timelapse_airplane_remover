@@ -65,15 +65,10 @@ public class CustomBlobProcessor: AbstractBlobProcessor {
         self.steps = try decoder.decode([BlobProcessingType].self, from: config_data)
     }
     
+    /// `~/.star_custom_processor_steps.json`; under the App Sandbox the home directory is the app's container.
     private var jsonFilename: String {
-        let filename = ".star_custom_processor_steps.json"
-        let env = ProcessInfo.processInfo.environment
-        if let homedir = env["HOME"] {
-            return "\(homedir)/\(filename)"
-        } else {
-            // with no homedir, put it in tmp?
-            return "/tmp/\(filename)"
-        }
+        URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+          .appendingPathComponent(".star_custom_processor_steps.json").path
     }
 
     /// Whether the step at `index` has been told to be skipped.

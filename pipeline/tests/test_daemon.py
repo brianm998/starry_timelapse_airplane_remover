@@ -57,6 +57,50 @@ async def test_status_and_show_report_the_ticket_and_its_activity(rig: Rig) -> N
         await client.close()
 
 
+async def test_activity_lists_open_blockers_of_a_queued_ticket(rig: Rig) -> None:
+    for n, title in [(7, "blocked"), (8, "free"), (84, "first blocker"), (85, "second blocker")]:
+        rig.gh.add_issue(n, title)
+    rig.gh.deps[7] = [84, 85]
+    rig.engine.sync_issues()
+    t7, t8 = rig.db.ticket(7), rig.db.ticket(8)
+    assert t7 and t8
+    assert activity(rig.db, t7) == "queued: #84, #85"
+    assert activity(rig.db, t8) == "queued"
+    rig.db.set_state(84, "landed")
+    assert activity(rig.db, t7) == "queued: #85"
+    rig.db.set_state(85, "closed")
+    assert activity(rig.db, t7) == "queued"
+
+
+async def test_show_lists_blockers_with_titles_and_caches_github_lookups(rig: Rig) -> None:
+    rig.gh.add_issue(7, "blocked")
+    rig.gh.add_issue(84, "a pipeline blocker")
+    rig.gh.add_issue(85, "an ordinary issue", labels=())  # not a pipeline ticket: its title comes from GitHub
+    rig.gh.add_issue(86, "already landed")
+    rig.gh.deps[7] = [84, 85, 86]
+    rig.engine.sync_issues()
+    assert rig.db.ticket(85) is None
+    rig.db.set_state(86, "landed")
+    asked: list[int] = []
+    real_issue = rig.gh.issue
+
+    def counting_issue(n: int) -> dict[str, Any]:
+        asked.append(n)
+        return real_issue(n)
+
+    rig.gh.issue = counting_issue  # type: ignore[method-assign]
+    client, _ = await api(rig)
+    try:
+        for _ in range(2):
+            shown = await (await client.get("/v1/tickets/7", headers=AUTH)).json()
+            assert shown["blockers"] == [{"number": 84, "title": "a pipeline blocker"},
+                                         {"number": 85, "title": "an ordinary issue"}]
+        assert asked == [85], "the non-pipeline title is fetched once, the pipeline one never"
+        assert (await (await client.get("/v1/tickets/84", headers=AUTH)).json())["blockers"] == []
+    finally:
+        await client.close()
+
+
 async def test_answer_retry_cancel_prio_and_pause(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
@@ -96,7 +140,7 @@ async def test_settings_stores_max_active_and_snapshot_reports_it(rig: Rig) -> N
     client, _ = await api(rig)
     try:
         snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
-        assert snap["max_active"] == 2
+        assert snap["max_active"] == rig.engine.config.max_llm_sessions
         assert (await client.post("/v1/settings", json={"max_active": 4}, headers=AUTH)).status == 200
         assert rig.db.get("max_active") == "4" and rig.engine.max_active() == 4
         snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
@@ -229,6 +273,26 @@ async def test_the_session_id_is_recorded_as_soon_as_it_is_known_so_a_kill_can_r
     assert rig.db.stages(7, "explore")[0]["session_id"] == "S-early"
 
 
+async def test_requeue_moves_a_ticket_in_its_own_ci_onto_the_train(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "ci")
+    rig.db.set_fields(7, pr_number=101)
+    rig.gh.prs[101] = {"number": 101, "title": "t", "body": "", "branch": "pipe/7-t", "merged": False, "mergeable": True,
+                       "merge_commit_sha": None}
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/tickets/7/requeue", json={}, headers=AUTH)
+        assert r.status == 200 and rig.state(7) == "ready"
+        t = rig.db.ticket(7)
+        assert t and t.pr_number is None
+        assert rig.gh.closed_prs and "landing train" in rig.gh.closed_prs[0][1]
+        assert [r["kind"] for r in rig.db._all("SELECT kind FROM interventions")] == ["requeue"]  # pyright: ignore[reportPrivateUsage]
+        assert (await client.post("/v1/tickets/7/requeue", json={}, headers=AUTH)).status == 409, "it is ready now, not in CI"
+    finally:
+        await client.close()
+
+
 def commit_under(repo: Path, rel: str, text: str) -> str:
     """Commit one file to the working clone's develop and publish it to the bare origin; return the new sha."""
     (repo / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -259,6 +323,20 @@ async def test_monitor_update_reports_commits_behind_under_pipeline_monitor_and_
         await client.close()
 
 
+async def test_requeue_refuses_a_ticket_that_is_already_in_a_batch(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "ci")
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_add(bid, 7, 0)
+    client, _ = await api(rig)
+    try:
+        assert (await client.post("/v1/tickets/7/requeue", json={}, headers=AUTH)).status == 409
+        assert rig.state(7) == "ci" and rig.gh.closed_prs == []
+    finally:
+        await client.close()
+
+
 async def test_monitor_update_is_zero_behind_when_up_to_date_and_ignores_other_paths(rig: Rig) -> None:
     repo = rig.engine.repo
     built = commit_under(repo, "pipeline/monitor/a.swift", "one\n")
@@ -267,6 +345,21 @@ async def test_monitor_update_is_zero_behind_when_up_to_date_and_ignores_other_p
     client, _ = await api(rig)
     try:
         assert await monitor_update(client, built) == {"behind": 0, "latest": built}
+    finally:
+        await client.close()
+
+
+async def test_requeue_also_cancels_the_ci_runs_of_the_pr_it_closes(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "ci")
+    rig.db.set_fields(7, pr_number=101, branch="pipe/7-t")
+    rig.gh.prs[101] = {"number": 101, "title": "t", "body": "", "branch": "pipe/7-t", "merged": False, "mergeable": True,
+                       "merge_commit_sha": None}
+    client, _ = await api(rig)
+    try:
+        assert (await client.post("/v1/tickets/7/requeue", json={}, headers=AUTH)).status == 200
+        assert rig.gh.cancelled_branches == ["pipe/7-t"]
     finally:
         await client.close()
 
@@ -568,3 +661,139 @@ async def test_no_update_during_a_nightly_or_for_non_pipeline_changes(rig: Rig, 
 def test_with_no_pinned_runtime_nothing_updates(rig: Rig) -> None:
     d = Daemon(rig.engine, Config(remote="origin"), token="t")
     assert d.self_update_once(Path("/nonexistent.plist"), sync=noop_sync, test=ok_test) is None
+
+
+async def test_picking_opus_in_the_monitor_and_allow_opus_are_how_a_ticket_may_use_it(rig: Rig) -> None:
+    rig.gh.add_issue(8, "picked", author="someone", labels=())
+    rig.gh.add_issue(9, "not picked", author="someone", labels=())
+    rig.gh.add_issue(10, "later")
+    rig.engine.sync_issues()
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/enqueue", json={"numbers": [8], "models": {"develop": "opus"}}, headers=AUTH)
+        assert r.status == 200
+        r = await client.post("/v1/enqueue", json={"numbers": [9], "models": {"develop": "sonnet"}}, headers=AUTH)
+        assert r.status == 200
+        assert rig.db.get("opus_ok:8") == "1" and rig.db.get("opus_ok:9") is None
+        assert (await client.post("/v1/tickets/10/allow-opus", json={}, headers=AUTH)).status == 200
+        assert rig.db.get("opus_ok:10") == "1"
+    finally:
+        await client.close()
+
+
+async def test_mute_is_persisted_reported_and_silences_announcements(rig: Rig) -> None:
+    client, _ = await api(rig)
+    try:
+        snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        assert snap["muted"] is False
+        for bad in ("yes", 1, None):
+            assert (await client.post("/v1/mute", json={"muted": bad}, headers=AUTH)).status == 400
+        assert (await client.post("/v1/mute", json={"muted": True}, headers=AUTH)).status == 200
+        assert rig.db.get("muted") == "1"
+        snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        assert snap["muted"] is True
+        rig.engine.announce("landed", 5)
+        assert rig.announcer.calls == []
+        restarted = Daemon(rig.engine, Config(), token="tok")  # a new daemon on the same db: still muted
+        assert restarted.status()["muted"] is True
+        assert (await client.post("/v1/mute", json={"muted": False}, headers=AUTH)).status == 200
+        snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        assert snap["muted"] is False
+        rig.engine.announce("landed", 5)
+        assert rig.announcer.calls == [("landed", 5)]
+    finally:
+        await client.close()
+
+
+def test_hard_exit_is_the_default_exit_and_ends_the_process_without_unwinding(monkeypatch: pytest.MonkeyPatch, rig: Rig) -> None:
+    from starpipe import daemon as daemon_mod
+
+    calls: list[int] = []
+    monkeypatch.setattr(daemon_mod.os, "_exit", calls.append)
+    assert daemon_mod.Daemon(rig.engine, rig.engine.config).exit is daemon_mod.hard_exit
+    daemon_mod.hard_exit(0)
+    assert calls == [0], "os._exit, not sys.exit: SystemExit would wait on non-daemon threads and hang"
+
+
+def landing_daemon(rig: Rig, window: int = 120) -> Daemon:
+    return Daemon(rig.engine, Config(landing_mode="batch", batch_window_s=window, batch_max=5), token="tok")
+
+
+def ready_tickets(rig: Rig, *numbers: int) -> None:
+    for n in numbers:
+        rig.gh.add_issue(n, f"t{n}")
+    rig.engine.sync_issues()
+    for n in numbers:
+        rig.engine._to_state(n, "ready")  # pyright: ignore[reportPrivateUsage]
+
+
+def activity_of(d: Daemon, n: int) -> str:
+    return next(t["activity"] for t in d.snapshot()["tickets"] if t["number"] == n)  # type: ignore[index, union-attr]
+
+
+def test_snapshot_shows_the_active_batch_in_each_phase(rig: Rig) -> None:
+    ready_tickets(rig, 1, 2)
+    d = landing_daemon(rig)
+    assert d.snapshot()["landing"]["batch"] is None  # type: ignore[index]
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_add(bid, 1, 0)
+    rig.db.batch_add(bid, 2, 1)
+    rig.now += 90
+    for phase in ("building", "ci", "landing"):
+        rig.db.batch_update(bid, state=phase)
+        landing = d.snapshot()["landing"]
+        assert landing["batch"] == {"number": bid, "phase": phase, "age_s": 90, "members": [1, 2],  # type: ignore[index]
+                                    "pr_number": None, "slow": False}
+        assert d.status()["landing"]["batch"]["phase"] == phase  # type: ignore[index]
+
+
+def test_ready_ticket_reads_in_batch_n_while_building(rig: Rig) -> None:
+    ready_tickets(rig, 1, 2, 3)
+    d = landing_daemon(rig)
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_add(bid, 1, 0)
+    rig.db.batch_add(bid, 2, 1)
+    assert activity_of(d, 1) == f"ready · in batch {bid} (building)"
+    assert activity_of(d, 2) == f"ready · in batch {bid} (building)"
+    assert activity_of(d, 3) == f"ready · waiting for the next batch (batch {bid} is building)"
+
+
+def test_ready_ticket_reads_waiting_for_the_next_batch_with_the_countdown(rig: Rig) -> None:
+    ready_tickets(rig, 1)
+    d = landing_daemon(rig, window=120)
+    rig.now += 30
+    assert activity_of(d, 1) == "ready · waiting for the next batch (starts in 90s)"
+    assert d.snapshot()["landing"]["next_batch_in_s"] == 90  # type: ignore[index]
+    rig.now += 100
+    assert activity_of(d, 1) == "ready · waiting for the next batch (starting)"
+    assert d.snapshot()["landing"]["next_batch_in_s"] == 0  # type: ignore[index]
+
+
+def test_snapshot_remembers_the_last_abandoned_batch_for_an_hour(rig: Rig) -> None:
+    d = landing_daemon(rig)
+    old = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(old, state="abandoned", ended=rig.now, note="an older reason")
+    rig.now += 10
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(bid, state="abandoned", ended=rig.now,
+                        note="develop moved with overlapping changes: rebuilding on the new base")
+    rig.now += 18 * 60
+    snap = d.snapshot()["landing"]
+    assert snap["batch"] is None  # type: ignore[index]
+    assert snap["last_abandoned"] == {"number": bid, "state": "abandoned", "ended": rig.now - 18 * 60, "ago_s": 18 * 60,  # type: ignore[index]
+                                      "reason": "develop moved with overlapping changes: rebuilding on the new base"}
+    rig.now += 41 * 60  # 59 minutes since it ended
+    assert d.snapshot()["landing"]["last_abandoned"]["number"] == bid  # type: ignore[index]
+    rig.now += 2 * 60  # over the hour
+    assert d.snapshot()["landing"]["last_abandoned"] is None  # type: ignore[index]
+
+
+def test_a_batch_building_over_ten_minutes_is_marked_slow(rig: Rig) -> None:
+    d = landing_daemon(rig)
+    bid = rig.db.batch_create("0" * 40)
+    rig.now += 599
+    assert d.snapshot()["landing"]["batch"]["slow"] is False  # type: ignore[index]
+    rig.now += 2
+    assert d.snapshot()["landing"]["batch"]["slow"] is True  # type: ignore[index]
+    rig.db.batch_update(bid, state="ci")  # only a batch still building is slow: CI is expected to take long
+    assert d.snapshot()["landing"]["batch"]["slow"] is False  # type: ignore[index]

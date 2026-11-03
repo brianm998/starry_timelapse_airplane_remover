@@ -67,6 +67,31 @@ def _ts(value: str | None) -> float | None:
     return datetime.fromisoformat(value).timestamp() if value else None
 
 
+def run_version(run: dict[str, Any]) -> str | None:
+    """A cache key for a run's jobs: only a completed run is stable, and a rerun changes its attempt and update time."""
+    if run.get("status") != "completed":
+        return None
+    return f"{run.get('run_attempt')}:{run.get('updated_at')}"
+
+
+def poll_delay(age_s: float, base: float) -> float:
+    """How long to wait before looking at CI again: often at first, then less, since CI takes hours and polls cost API quota."""
+    if age_s < 10 * 60:
+        return base
+    if age_s < 30 * 60:
+        return base * 2
+    if age_s < 2 * 3600:
+        return base * 3
+    return base * 5
+
+
+def split_post_merge(runs: list[dict[str, Any]], names: tuple[str, ...]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """(runs the PR is judged on, runs of post-merge-only workflows). Names compare without regard to case."""
+    wanted = {n.lower() for n in names}
+    kept = [r for r in runs if (r.get("name") or "").lower() not in wanted]
+    return kept, [r for r in runs if r not in kept]
+
+
 def parse_jobs(runs: list[dict[str, Any]], jobs_by_run: dict[int, list[dict[str, Any]]]) -> list[Job]:
     """GitHub's workflow runs and their jobs as Job values (the latest attempt of each run)."""
     out: list[Job] = []
@@ -78,7 +103,7 @@ def parse_jobs(runs: list[dict[str, Any]], jobs_by_run: dict[int, list[dict[str,
 
 
 def judge(jobs: list[Job], baseline: Baseline, *, now: float, head_pushed_at: float, settle_s: float = 90.0,
-          blocking_wait_s: float = 3 * 3600, reran: set[tuple[str, str]] | None = None,
+          blocking_wait_s: float = 4 * 3600, reran: set[tuple[str, str]] | None = None,
           infra: Callable[[Job], bool] = lambda j: (j.conclusion or "") in INFRA_CONCLUSIONS) -> Verdict:
     reran = reran or set()
     gate = [j for j in jobs if j.workflow == GATE]
@@ -119,4 +144,30 @@ def judge(jobs: list[Job], baseline: Baseline, *, now: float, head_pushed_at: fl
             f"{j.workflow}/{j.job}" for j in verdict.rerun)
     elif pending:
         verdict.kind, verdict.reason = "pending", "other jobs still running"
+    return verdict
+
+
+def judge_feature_run(jobs: list[Job], reran: set[tuple[str, str]], *, run_completed: bool = False,
+                      run_conclusion: str | None = None, run_id: int = 0) -> Verdict:
+    """The jobs of ONE dispatched Gherkin feature run (a ticket's `gherkin:` features, proven on its own branch).
+
+    Every job blocks: there is no develop baseline for a subset run's job names (a baseline lookup would make a red one a
+    harmless `known_red`), and a slow job is never demoted, because the run is the proof the ticket asked for. A red job gets
+    one rerun; red twice is `fail`. A run that finished with no jobs (a feature name that does not exist) fails at once instead
+    of hanging."""
+    if not jobs:
+        if not run_completed:
+            return Verdict("pending", "the feature run has no jobs yet")
+        empty = Job("Gherkin", "feature matrix (no jobs ran)", "completed", run_conclusion or "failure", run_id)
+        return Verdict("fail", "the feature run finished without running any job (unknown feature name?)", blocking=[empty])
+    if not all(j.done for j in jobs):
+        return Verdict("pending", "the feature run is still going")
+    red = [j for j in jobs if j.red]
+    verdict = Verdict("pass")
+    verdict.blocking = [j for j in red if j.key in reran]
+    verdict.rerun = [j for j in red if j.key not in reran]
+    if verdict.blocking:
+        verdict.kind, verdict.reason = "fail", "feature run red twice: " + ", ".join(f"{j.workflow}/{j.job}" for j in verdict.blocking)
+    elif verdict.rerun:
+        verdict.kind, verdict.reason = "rerun", "feature run red: " + ", ".join(f"{j.workflow}/{j.job}" for j in verdict.rerun)
     return verdict

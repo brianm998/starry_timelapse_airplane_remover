@@ -5,6 +5,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.state.ToggleableState
@@ -14,12 +16,18 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.rightClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import com.google.gson.JsonObject
@@ -98,8 +106,17 @@ class DesktopFeatureRunner {
         StepAction.OPEN_COPIED to { t -> openCopiedSequence(t) },
         StepAction.OPEN_COPIED_NO_QUESTIONS to { t -> openCopiedSequence(t, askingTheStartupQuestions = false) },
         StepAction.CLICK_ID to { t -> clickId(t, args[0]) },
+        StepAction.COMMAND_CLICK_ID to { t -> clickWith(t, args[0], command = true) },
+        StepAction.RIGHT_CLICK_ID to { t -> clickWith(t, args[0], right = true) },
+        StepAction.PROCESSING_FINISHES to { t -> waitForProcessingToFinish(t) },
+        StepAction.PROCESSING_STOPS to { t -> waitForProcessingToStop(t) },
         StepAction.PRESS_KEY to { t -> pressKey(t, args[0]) },
         StepAction.DRAG_AROUND to { t -> dragAround(t, args[0]) },
+        StepAction.CLICK_LABEL to { t -> clickLabel(t, args[0]) },
+        StepAction.WAIT to { t -> waitSeconds(t, args[0].toInt()) },
+        StepAction.LARGE_WINDOW to { },   // the test host's window is large already (1400 by 1100 pixels)
+        StepAction.ID_STILL_SAYS to { t -> expectStillSays(t, args[0], args[1]) },
+        StepAction.ID_STOPS_SAYING to { t -> expectStopsSaying(t, args[0], args[1]) },
         StepAction.ID_SHOWN to { t -> expectShown(t, args[0], shown = true) },
         StepAction.ID_NOT_SHOWN to { t -> expectShown(t, args[0], shown = false) },
         StepAction.ID_SELECTED to { t -> expectSelected(t, args[0], selected = true) },
@@ -142,7 +159,7 @@ class DesktopFeatureRunner {
         if (feature.steps.isEmpty()) throw RunnerError("feature \"${feature.name}\" has no steps: refusing to pass vacuously")
         // The client keeps its preferences in ~/.star.userprefs.json; a test must neither read nor write the real one.
         // a @ui feature may compare what the app says with the English catalogue
-        // and may show the start screen, which would otherwise embed a JavaFX video that cannot start headless
+        // and may show the start screen, which would otherwise spawn ffmpeg for its video background
         if ("@ui" in feature.tags) {
             // English, unless the feature says `the language is "<code>"`
             com.star.desktop.i18n.Strings.setOverride(feature.steps.firstOrNull { it.action == StepAction.LANGUAGE_IS }?.args?.firstOrNull() ?: "en")
@@ -296,7 +313,7 @@ class DesktopFeatureRunner {
         val model = newModel()
         model.openVideo(sequenceCopy.absolutePath)
 
-        // Only the dialog is composed: the start screen behind it embeds a JavaFX video background, and JavaFX cannot start headless.
+        // Only the dialog is composed: the start screen behind it plays an ffmpeg video background, which a test host should not spawn.
         t.setContent { VideoImportDialog(sequenceCopy.absolutePath, probe = { null }, onImport = model::confirmVideoImport, onCancel = model::cancelVideoImport) }
         val format = FrameFormatChoice.valueOf(param("frame_format").uppercase())
         waitFor(t, "the video import dialog", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("videoimport.import") }
@@ -348,7 +365,68 @@ class DesktopFeatureRunner {
     private fun clickId(t: ComposeUiTest, id: String) {
         waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
         t.waitForIdle()
-        t.onAllNodes(hasTestTag(id))[0].performClick()
+        val node = t.onAllNodes(hasTestTag(id))[0]
+        val config = node.fetchSemanticsNode().config
+        // A button or a switch is pressed through its own action: a pointer click on the ones in the right panel (under a hover tip) did not
+        // reach them in the test host. A field, or a spot on the frame that has no action, needs the pointer, which is what a user's click is.
+        val role = config.getOrNull(SemanticsProperties.Role)
+        if ((role == Role.Button || role == Role.Switch) && SemanticsActions.OnClick in config && SemanticsProperties.Disabled !in config) {
+            node.performSemanticsAction(SemanticsActions.OnClick)
+        } else {
+            node.performClick()
+        }
+    }
+
+    /** A click with the command (control off a Mac) key held, or a right click: by the pointer, which is what a cell reads them from. */
+    private fun clickWith(t: ComposeUiTest, id: String, command: Boolean = false, right: Boolean = false) {
+        waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
+        t.waitForIdle()
+        val mac = System.getProperty("os.name").orEmpty().startsWith("Mac", ignoreCase = true)
+        val modifier = if (mac) Key.MetaLeft else Key.CtrlLeft
+        // the key is held through the key scope (the mouse one has none), and the pointer events carry it
+        if (command) t.onRoot().performKeyInput { keyDown(modifier) }
+        try {
+            t.onAllNodes(hasTestTag(id))[0].performMouseInput { if (right) rightClick() else click() }
+        } finally {
+            if (command) t.onRoot().performKeyInput { keyUp(modifier) }
+        }
+        t.waitForIdle()
+    }
+
+    /**
+     * Waits for the run that has begun to end: the progress line says "<complete>/<total>/idle" with every frame complete, once it has said
+     * "running" (a run that has not begun reads the same, so the feature first sees the processing screen come up). The line is in the left panel
+     * of the edit and scrub screens, so the feature looks away from the processing screen (Preview) and to one of them first.
+     */
+    private fun waitForProcessingToFinish(t: ComposeUiTest) {
+        var sawRunning = false
+        var last = "(none)"
+        waitFor(t, "processing to finish", 20L * 60_000, { "(last progress: $last)" }) {
+            val state = semanticsOf(t, "processing.progress")?.getOrNull(SemanticsProperties.StateDescription) ?: return@waitFor false
+            last = state
+            val parts = state.split('/')
+            if (parts.size != 3) return@waitFor false
+            if (parts[2] == "running") sawRunning = true
+            sawRunning && parts[2] == "idle" && (parts[1].toIntOrNull() ?: 0) > 0 && parts[0] == parts[1]
+        }
+    }
+
+    /**
+     * Waits for the run to be idle, whether or not every frame is complete (a run that another start put an end to leaves the frames it
+     * cleared unfinished). It has to stay idle for three seconds, so the moment between a run being stopped and the next one starting is
+     * not taken for the end.
+     */
+    private fun waitForProcessingToStop(t: ComposeUiTest) {
+        var idleSince: Long? = null
+        var last = "(none)"
+        waitFor(t, "processing to stop", 20L * 60_000, { "(last progress: $last)" }) {
+            val state = semanticsOf(t, "processing.progress")?.getOrNull(SemanticsProperties.StateDescription)
+            val idle = state != null && state.split('/').let { it.size == 3 && it[2] == "idle" }
+            if (state != null) last = state
+            if (!idle) { idleSince = null; return@waitFor false }
+            val since = idleSince ?: System.nanoTime().also { idleSince = it }
+            System.nanoTime() - since >= IDLE_STOPPED_NS
+        }
     }
 
     /**
@@ -367,6 +445,25 @@ class DesktopFeatureRunner {
             release()
         }
         t.waitForIdle()
+    }
+
+    /**
+     * Clicks the control that shows the catalogue's text for [key]: of those that can be clicked, the last in the tree, which is the one in a
+     * dialog when one is up. For the choices of a picker that carries no identifier of its own.
+     */
+    private fun clickLabel(t: ComposeUiTest, key: String) {
+        val text = com.star.desktop.i18n.localized(key)
+        val clickable = hasText(text) and hasClickAction() and isEnabled()
+        waitFor(t, "a control labelled \"$text\"", 20_000) { t.onAllNodes(clickable).fetchSemanticsNodes().isNotEmpty() }
+        t.waitForIdle()
+        val all = t.onAllNodes(clickable)
+        all[all.fetchSemanticsNodes().size - 1].performSemanticsAction(SemanticsActions.OnClick)
+    }
+
+    /** Lets [seconds] pass with the app running: for what shows only after a timer in the daemon has gone off, which no condition can wait for. */
+    private fun waitSeconds(t: ComposeUiTest, seconds: Int) {
+        val end = System.nanoTime() + seconds * 1_000_000_000L
+        waitFor(t, "$seconds seconds to pass", seconds * 1000L + 10_000) { System.nanoTime() >= end }
     }
 
     private fun expectShown(t: ComposeUiTest, id: String, shown: Boolean) {
@@ -417,7 +514,21 @@ class DesktopFeatureRunner {
     private fun expectSays(t: ComposeUiTest, id: String, expected: String) {
         expectShown(t, id, shown = true)
         fun texts() = semanticsOf(t, id)?.getOrNull(SemanticsProperties.Text)?.map { it.text }.orEmpty()
-        waitFor(t, "\"$id\" to say \"$expected\"", 20_000, { "(it says ${texts()})" }) { expected in texts() || texts().joinToString("") == expected }
+        waitFor(t, "\"$id\" to say \"$expected\"", UI_TIMEOUT_MS, { "(it says ${texts()})" }) { expected in texts() || texts().joinToString("") == expected }
+    }
+
+    /** The control says [expected] now, with no waiting for it to: for a state that must have been there all along. */
+    private fun expectStillSays(t: ComposeUiTest, id: String, expected: String) {
+        t.waitForIdle()
+        val texts = semanticsOf(t, id)?.getOrNull(SemanticsProperties.Text)?.map { it.text }.orEmpty()
+        if (expected !in texts && texts.joinToString("") != expected) throw RunnerError("\"$id\" does not say \"$expected\" (it says $texts)")
+    }
+
+    /** The control says something other than [unwanted] before long: for a count that is to move from a value it is known to start on. */
+    private fun expectStopsSaying(t: ComposeUiTest, id: String, unwanted: String) {
+        expectShown(t, id, shown = true)
+        fun texts() = semanticsOf(t, id)?.getOrNull(SemanticsProperties.Text)?.map { it.text }.orEmpty()
+        waitFor(t, "\"$id\" to stop saying \"$unwanted\"", UI_TIMEOUT_MS, { "(it says ${texts()})" }) { unwanted !in texts() && texts().joinToString("") != unwanted }
     }
 
     /** The control's text is the catalogue's English text for [key]. */
@@ -472,8 +583,8 @@ class DesktopFeatureRunner {
 
     private fun finishOpening(t: ComposeUiTest, model: AppViewModel, answer: Boolean = true) {
         // The sequence opens in the background, driven by the view model and not by composition. Nothing is composed until it has:
-        // the start screen (the first thing StarApp would draw) embeds a JavaFX video background, and JavaFX cannot start headless, so
-        // composing it blocks the UI thread for good. (A @ui feature turns the video off, so one that wants the start screen can have it.)
+        // the start screen (the first thing StarApp would draw) plays an ffmpeg video background, which a test host should not spawn, so
+        // it is not composed. (A @ui feature turns the video off, so one that wants the start screen can have it.)
         val deadline = System.nanoTime() + OPEN_TIMEOUT_MS * 1_000_000
         while (model.screen.value !is AppScreen.Sequence) {
             model.error.value?.let { throw RunnerError("the app reported an error while opening: $it") }
@@ -966,6 +1077,7 @@ class DesktopFeatureRunner {
     }
 
     private companion object {
+        const val IDLE_STOPPED_NS = 3_000_000_000L
         const val CLIENT = "desktop"
         const val OPEN_TIMEOUT_MS = 10L * 60_000
         const val UI_TIMEOUT_MS = 90_000L
