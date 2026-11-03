@@ -44,6 +44,7 @@ class Config(BaseModel):
     max_in_ci: int = 3  # tickets in CI or landing at once; a finished ticket waits as `ready` for room (runners are shared)
     heavy_slots: int = 1
     auto_self_update: bool = True  # switch the daemon to a new pinned runtime when origin/develop has newer pipeline/ code; the kill switch
+    self_update_drain_s: int = 600  # a pending self-update holds new claims at most this long; then it swaps, interrupting running stages (they resume by session id)
     nightly_start: str = "03:00"
     digest_weekday: int = 6  # Monday is 0
     digest_hour: int = 8

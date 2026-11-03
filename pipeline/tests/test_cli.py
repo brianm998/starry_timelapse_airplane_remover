@@ -11,7 +11,7 @@ import pytest
 from click.testing import CliRunner
 
 from starpipe import selfupdate
-from starpipe.cli import landing_lines, main
+from starpipe.cli import landing_lines, main, update_hold_line
 from starpipe.config import home
 
 from .fakes import sh
@@ -130,6 +130,26 @@ def test_daemon_run_holds_off_idle_sleep(monkeypatch: pytest.MonkeyPatch) -> Non
         raise FileNotFoundError
     monkeypatch.setattr(cli.subprocess, "Popen", missing)
     hold_off()  # no caffeinate: not an error
+
+
+def test_status_says_when_a_self_update_holds_claims(monkeypatch: pytest.MonkeyPatch) -> None:
+    hold = {"sha": "e3c559f6aabbccdd", "left_s": 7 * 60 + 5, "waiting_on": [73]}
+    assert update_hold_line(hold) == "self-update to e3c559f6 pending: holding new work, waiting on #73, swaps in 7m"
+    assert update_hold_line({**hold, "waiting_on": [73, 74], "left_s": 40}) == (
+        "self-update to e3c559f6 pending: holding new work, waiting on #73 #74, swaps in 40s")
+    assert update_hold_line(None) is None
+
+    class FakeClient:
+        def __init__(self, hold: dict[str, object] | None) -> None:
+            self.hold = hold
+
+        def call(self, _method: str, _path: str) -> dict[str, object]:
+            return {"daemon": {"pid": 1, "error": None}, "self_update": {"pending": "e3c559f6", "hold": self.hold}, "tickets": []}
+
+    for h, shown in ((hold, True), (None, False)):
+        monkeypatch.setattr("starpipe.cli._client", lambda h=h: FakeClient(h))  # type: ignore[misc]
+        out = CliRunner().invoke(main, ["status"])
+        assert out.exit_code == 0 and ("self-update to e3c559f6 pending" in out.output) is shown
 
 
 class FakeDaemon:
