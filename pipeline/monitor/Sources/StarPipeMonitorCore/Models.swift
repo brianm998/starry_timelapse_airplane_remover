@@ -229,8 +229,13 @@ public struct TicketDetail: Codable, Sendable, Equatable {
     public var question: QuestionRow?
     /// The open issues this ticket waits for; empty from a daemon that predates the field.
     public var blockers: [BlockerRef]
+    /// `retry from ci when unblocked` while a `starpipe retry --when-unblocked` waits; nil from a daemon that predates it.
+    public var heldRetry: String?
 
-    enum CodingKeys: String, CodingKey { case number, plan, checks, question, blockers }
+    enum CodingKeys: String, CodingKey {
+        case number, plan, checks, question, blockers
+        case heldRetry = "held_retry"
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -239,6 +244,7 @@ public struct TicketDetail: Codable, Sendable, Equatable {
         checks = try c.decode([CheckRow].self, forKey: .checks)
         question = try c.decodeIfPresent(QuestionRow.self, forKey: .question)
         blockers = try c.decodeIfPresent([BlockerRef].self, forKey: .blockers) ?? []
+        heldRetry = try c.decodeIfPresent(String.self, forKey: .heldRetry)
     }
 }
 
@@ -375,6 +381,70 @@ public enum Overview {
         }
         return lines
     }
+
+    public enum Severity: Equatable, Sendable { case normal, ok, warn, bad }
+
+    /// One "Pipeline status" row: the label and value the top bar used to show, its colour class, and the short word
+    /// the top bar still shows while the row is abnormal (nil for rows that never raise attention).
+    public struct StatusRow: Equatable, Sendable, Identifiable {
+        public var label: String
+        public var value: String
+        public var severity: Severity
+        public var attention: String? = nil
+        public var id: String { label }
+    }
+
+    /// The status items in the order the top bar showed them. Usage limit, Monitor update, Paused and Interventions appear only when present.
+    public static func statusRows(snapshot s: Snapshot?, connection: Connection, updateAvailable: Bool,
+                                  rebuildCommand: String, timeZone: TimeZone = .current) -> [StatusRow] {
+        let down: Bool
+        var daemon = "connecting…"
+        if case .down(let why) = connection { down = true; daemon = "down: \(why)" } else {
+            down = false
+            if let s { daemon = "up, \(s.runtime.sha)" + (s.runtime.behindDevelop > 0 ? ", behind develop by \(s.runtime.behindDevelop)" : "") }
+        }
+        var lock = "—"
+        if let heavy = s?.heavy {
+            if let h = heavy.holders.first {
+                let elapsed = Int((s?.now ?? h.since) - h.since)
+                let who = h.ticket.isEmpty ? "interactive" : "#\(h.ticket)"
+                lock = "\(who) \(h.cmd.prefix(36)) \(elapsed / 60)m" + (heavy.queue.isEmpty ? "" : " · \(heavy.queue.count) queued")
+            } else { lock = heavy.queue.isEmpty ? "idle" : "\(heavy.queue.count) waiting" }
+        }
+        let red = s?.landing.stopLine != nil
+        var landing = "—"
+        if let l = s?.landing { landing = l.stopLine.map { "stopped: \($0)" } ?? (l.paused ? "paused" : "running") }
+        var develop = "—"
+        if let d = s?.develop {
+            let gate = d.gate.isEmpty ? "pr-gate: no data" : "pr-gate " + (d.gate.values.allSatisfy { $0 == "success" } ? "green" : "red")
+            develop = "\(gate), \(d.knownRed) known red"
+        }
+        var rows = [
+            StatusRow(label: "Daemon", value: daemon, severity: down ? .bad : .ok, attention: down ? "Daemon down" : nil),
+            StatusRow(label: "Heavy lock", value: lock, severity: .normal),
+            StatusRow(label: "Landing", value: landing, severity: s?.landing.paused == true || red ? .warn : .normal,
+                      attention: s?.landing.paused == true ? "Landing paused" : nil),
+            StatusRow(label: "develop", value: develop, severity: red ? .bad : .normal, attention: red ? "develop red" : nil),
+        ]
+        if let until = s?.usagePauseUntil, let t = Double(until) {
+            let time = Date(timeIntervalSince1970: t).formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: timeZone))
+            rows.append(StatusRow(label: "Usage limit", value: "model stages wait until \(time)", severity: .warn, attention: "Usage limit"))
+        }
+        if updateAvailable {
+            rows.append(StatusRow(label: "Monitor update", value: "Update available — \(rebuildCommand)", severity: .warn, attention: "Update available"))
+        }
+        if let pause = s?.pause { rows.append(StatusRow(label: "Paused", value: pause, severity: .warn, attention: "Paused")) }
+        rows.append(StatusRow(label: "Last nightly", value: s?.nightly?.line ?? "none yet",
+                              severity: (s?.nightly?.reds ?? 0) > 0 || s?.nightly?.status == "error" ? .warn : .normal))
+        if let week = s?.interventionsWeek, !week.isEmpty {
+            rows.append(StatusRow(label: "Interventions (7 d)", value: week.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", "),
+                                  severity: .normal))
+        }
+        return rows
+    }
+
+    /// The words the top bar's attention indicator shows: one per abnormal row; empty when all is well.
+    public static func attentionWords(_ rows: [StatusRow]) -> [String] { rows.compactMap(\.attention) }
 
     public static func landingQueue(_ tickets: [TicketSnap]) -> [TicketSnap] {
         landingStates.flatMap { state in tickets.filter { $0.state == state }.sorted { $0.number < $1.number } }
