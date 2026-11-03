@@ -8,7 +8,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-/** The path handling of the runner's "a processed copy of the sequence" step (`ProcessedCopyPaths.kt`), which needs no stard and no processed fixture. */
+/** The path handling of the runner's "a processed copy of the sequence" step (`ProcessedCopyPaths.kt`), which needs no stard and no processed fixture.
+ * The features that start from a processed copy (uiOutlierClicks, uiMultiChoiceSheet, ...) prove it end to end, on the Windows `ui` leg among others. */
 class ProcessedCopyPathsTest {
     @Test fun aGitBashPathBecomesAWindowsPath() {
         // cygpath answers: its answer is used.
