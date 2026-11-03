@@ -9,9 +9,9 @@ name: wgpu GPU backend
 # about speed. macOS runners do expose a Metal device, so that leg also holds the port byte-for-byte to
 # the existing Metal kernels (the tests skip that comparison where there is no Metal backend).
 #
-# The build setup is cli.yml's, deliberately the same (toolchain pins, OpenCV cache keys) so the caches
-# are shared; only StarCpp is built, not the whole CLI. The macOS leg runs on macos-15 like cli.yml's `macos`
-# job and uses its opencv-macos15- key, not the plain key the remaining macos-14 release jobs save under.
+# The build setup is cli.yml's, deliberately the same (toolchain pins); OpenCV
+# comes from opencv.yml, the same build cli.yml and pr-gate.yml use. Only StarCpp is built, not the whole CLI.
+# The macOS leg runs on macos-15 like cli.yml's `macos` job.
 # wgpu-native itself comes from wgpu/fetch.sh.
 #
 # Opt-in at run time: nothing touches a GPU driver unless STAR_WGPU is set, and these jobs set it.
@@ -47,8 +47,34 @@ env:
 
 jobs:
   # ─── Linux: Vulkan on lavapipe ───────────────────────────────────────────────
+  # ─── OpenCV: built once per OS per key by opencv.yml (cache, then the opencv-prebuilt release, then a build) ───
+  opencv-linux:
+    name: OpenCV (linux)
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: linux
+
+  opencv-macos:
+    name: OpenCV (macos)
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: macos
+
+  opencv-windows:
+    name: OpenCV (windows)
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: windows
+
   linux:
     name: Linux · Vulkan (lavapipe)
+    needs: opencv-linux
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -70,26 +96,11 @@ jobs:
         with:
           swift-version: '6.0'
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/linux
-            opencv/include
-          key: opencv-linux-${{ steps.opencv-key.outputs.key }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/linux/libopencv2.a ]; then
-            cd opencv && ./release.sh
-          else
-            echo "OpenCV: restored from cache"
-          fi
+          name: opencv-linux
+          path: opencv
 
       - name: Fetch wgpu-native
         run: wgpu/fetch.sh
@@ -114,6 +125,7 @@ jobs:
   # ─── macOS: Metal, and the byte-for-byte comparison with the Metal kernels ───
   macos:
     name: macOS · Metal
+    needs: opencv-macos
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -126,26 +138,11 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/macos
-            opencv/include
-          key: opencv-macos15-${{ steps.opencv-key.outputs.key }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/macos/libopencv2.a ]; then
-            cd opencv && ./release.sh
-          else
-            echo "OpenCV: restored from cache"
-          fi
+          name: opencv-macos
+          path: opencv
 
       - name: Fetch wgpu-native
         run: wgpu/fetch.sh
@@ -170,6 +167,7 @@ jobs:
   # ─── Windows: Direct3D 12 on WARP ────────────────────────────────────────────
   windows:
     name: Windows · Direct3D 12 (WARP)
+    needs: opencv-windows
     runs-on: windows-2022
     defaults:
       run:
@@ -355,29 +353,11 @@ jobs:
               }
           }
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      # NOTE: cache keys include "msvc14.40" so changing the toolset pin
-      # above invalidates these caches automatically (otherwise an older
-      # toolset's libs could get linked against a newer toolset's code).
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/windows
-            opencv/include
-          key: opencv-windows-msvc14.40-sdk22621-${{ steps.opencv-key.outputs.key }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/windows/opencv2.lib ]; then
-            cd opencv && bash build.sh
-          else
-            echo "OpenCV: restored from cache"
-          fi
+          name: opencv-windows
+          path: opencv
 
       - name: Fetch wgpu-native
         run: wgpu/fetch.sh
