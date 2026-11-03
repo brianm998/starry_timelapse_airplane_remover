@@ -46,6 +46,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       - name: Check proto is in sync with the daemon
         run: ./gradlew checkProtoSync --no-daemon
@@ -156,6 +159,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       - name: Download source-built ffmpeg/ffprobe
         uses: actions/download-artifact@v4
@@ -334,6 +340,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       - name: Download source-built ffmpeg/ffprobe
         uses: actions/download-artifact@v4
@@ -448,6 +457,9 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       - name: OpenCV cache key
         id: opencv-key
