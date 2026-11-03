@@ -5,6 +5,26 @@
 /// Returns 0 on failure (caller should fall back to a default estimate).
 uint64_t star_available_system_memory(void);
 
+/// The pieces `star_available_system_memory` is made of, plus what it leaves out, in bytes.
+/// For diagnosing "why does star think the machine is short of memory": a figure that is
+/// low because the compressor holds a lot reads very differently from one that is low
+/// because file cache is not being counted.
+typedef struct {
+    uint64_t total;       ///< physical memory
+    uint64_t free_bytes;  ///< free (includes speculative)
+    uint64_t inactive;    ///< inactive queue — NOT counted as available
+    uint64_t active;
+    uint64_t wired;
+    uint64_t purgeable;   ///< counted as available
+    uint64_t file_backed; ///< external pages (file cache), counted as available
+    uint64_t anonymous;   ///< internal pages, not counted
+    uint64_t compressed;  ///< held by the compressor, not counted
+    uint64_t available;   ///< what `star_available_system_memory` returns
+} StarMemoryBreakdown;
+
+/// Fills `out`. Returns 0 on success, -1 where the platform has no such breakdown (off macOS).
+int star_system_memory_breakdown(StarMemoryBreakdown *out);
+
 /// Returns this process's current memory footprint in bytes, or 0 on failure.
 ///
 /// On macOS this is `phys_footprint` from TASK_VM_INFO — the same number Activity
