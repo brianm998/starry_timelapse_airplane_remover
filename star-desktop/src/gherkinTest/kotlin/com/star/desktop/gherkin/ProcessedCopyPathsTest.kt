@@ -21,6 +21,14 @@ class ProcessedCopyPathsTest {
         assertEquals("C:\\a\\b", nativeFixturePath("C:\\a\\b", isWindows = true) { error("asked") })
     }
 
+    @Test fun windowsRunsGitBashNotTheWslLauncher() {
+        val gitBash = "C:\\Program Files\\Git\\bin\\bash.exe"
+        assertEquals(gitBash, bashExecutable(true, mapOf("EXEPATH" to "C:\\Program Files\\Git")) { it == gitBash })
+        assertEquals(gitBash, bashExecutable(true, emptyMap()) { it == gitBash })
+        assertEquals("bash", bashExecutable(true, emptyMap()) { false })
+        assertEquals("bash", bashExecutable(false, emptyMap()) { error("asked") })
+    }
+
     @Test fun rewrittenJsonStaysValidAndPointsAtTheCopy() {
         val copy = "C:\\Users\\runner\\AppData\\Local\\Temp\\processed"
         val from = "D:/a/star/.test-data/ui-processed/seq"
