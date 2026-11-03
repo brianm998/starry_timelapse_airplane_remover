@@ -266,6 +266,20 @@ def landing_lines(landing: dict[str, Any]) -> list[str]:
     return lines
 
 
+def usage_lines(data: dict[str, Any]) -> list[str]:
+    """The usage-limit pause (with its reset time and window), usage-credit support, and credit spend, for `status`."""
+    lines: list[str] = []
+    if data.get("usage_pause_until"):
+        window = f" ({data['usage_pause_window']} window)" if data.get("usage_pause_window") else ""
+        lines.append(f"usage limit: model stages wait until {time.ctime(float(data['usage_pause_until']))}{window}")
+    support = data.get("credit_support") or "unknown"
+    lines.append(f"usage credits: {support}" + (", exhausted" if data.get("credit_exhausted") else ""))
+    if use := data.get("credit_use"):
+        amount = f", {use['amount'] * 100:.0f}% of the credit limit" if isinstance(use.get("amount"), (int, float)) else ""
+        lines.append(f"credits in use since {time.ctime(float(use['since']))}{amount}")
+    return lines
+
+
 @main.command()
 @click.option("--json", "as_json", is_flag=True)
 def status(as_json: bool) -> None:
@@ -290,8 +304,8 @@ def status(as_json: bool) -> None:
                    + (f" · new sessions wait: {res['waiting']}" if res.get("waiting") else ""))
     if data.get("pause"):
         click.echo(f"PAUSED: {data['pause']}")
-    if data.get("usage_pause_until"):
-        click.echo(f"usage limit: model stages wait until {time.ctime(float(data['usage_pause_until']))}")
+    for line in usage_lines(data):
+        click.echo(line)
     for line in landing_lines(data.get("landing") or {}):
         click.echo(line)
     heavy_state: dict[str, Any] = data.get("heavy") or {}

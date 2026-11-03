@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from . import gitutil, guards, load, negctl, ship, tickets, trust, worktrees
-from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
+from .agent import CREDITS_USABLE, READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
 from .announce import Announcer, Kind, SilentAnnouncer
 from .checks import impact, ledger
 from .config import Config, home
@@ -233,6 +233,48 @@ class Engine:
         while (left := self._usage_paused_until() - self.clock()) > 0:
             await self.sleep(min(left, 60))
         self.db.put("usage_pause_until", None)
+        if self.db.get("usage_pause_window") == "overage":
+            self.db.put("credit_exhausted", None)  # the credit window has reset; the next event says whether it is still out
+        self.db.put("usage_pause_window", None)
+
+    def _credits_usable(self) -> bool:
+        """Credits can carry a stage past a rejected base window: the account supports them and they are not exhausted."""
+        return self.db.get("credit_support") == "supported" and not self.db.get("credit_exhausted")
+
+    def _record_credits(self, report: dict[str, Any]) -> None:
+        """Keep what a rate-limit event says about usage credits: `credit_support` (supported / none; absent = unknown),
+        `credit_exhausted`, and `credit_use` while they are being spent (logging `credits-in-use` when the spend starts).
+        An event that says nothing about credits changes nothing; any overage state not recognised as usable is no credits."""
+        overage, window, status = report.get("overage_status"), report.get("window"), report.get("status")
+        exhausted = window == "overage" and status == "rejected"
+        if overage is not None:
+            if overage in CREDITS_USABLE and not exhausted:
+                self.db.put("credit_support", "supported")
+                self.db.put("credit_exhausted", None)
+            else:
+                if self.db.get("credit_support") != "supported":
+                    self.db.put("credit_support", "none")
+                exhausted = True
+        if exhausted:
+            self.db.put("credit_exhausted", "1")
+            self.db.put("credit_use", None)
+            return
+        spending = overage in CREDITS_USABLE and (status == "rejected" or (window == "overage" and status in CREDITS_USABLE))
+        if spending:
+            util = report.get("utilization")
+            amount = float(util) if isinstance(util, (int, float)) and not isinstance(util, bool) and window == "overage" else None
+            previous = self.db.get("credit_use")
+            since = self.clock()
+            if previous:
+                try:
+                    since = float(json.loads(previous).get("since", since))
+                except (ValueError, AttributeError):
+                    pass
+            self.db.put("credit_use", json.dumps({"since": since, "amount": amount, "window": window}))
+            if not previous:
+                self.db.event("credits-in-use", None, amount=amount, window=window)
+        elif window != "overage" and status in CREDITS_USABLE:
+            self.db.put("credit_use", None)  # a base window is back to normal: nothing is being spent on top of it
 
     async def _wait_for_update_hold(self) -> None:
         while self.db.get("self_update_pending"):
@@ -323,8 +365,10 @@ class Engine:
                                prompt_text("_preamble") + "\n\n" + prompt_text(stage.replace("-", "_")), model,
                                effort, BUDGET_S[stage], contract, self._fence(t, stage), resume,
                                on_session=lambda sid, sid_row=stage_id: self.db.set_session(sid_row, sid),
-                               on_usage=self._record_usage_windows)
+                               on_usage=self._record_usage_windows, on_credits=self._record_credits)
             out: StageOutcome = await self.agent.run(req)
+            if out.status == "usage-limit" and out.window not in (None, "overage") and self._credits_usable():
+                out.status, out.summary = "crash", out.summary or f"{out.window} limit rejected while credits were usable"
             if out.session_id:
                 self.db.set_session(stage_id, out.session_id)
             self.db.end_stage(stage_id, out.status, contract.lock_wait_s, out.summary[:500])
@@ -337,7 +381,8 @@ class Engine:
             known = out.session_id or self._last_session(t, stage)  # the row has it even if the run never finished
             if out.status == "usage-limit":
                 self.db.put("usage_pause_until", str(out.resets_at or self.clock() + 1800))
-                self.db.event("usage-pause", None, until=out.resets_at)
+                self.db.put("usage_pause_window", out.window)
+                self.db.event("usage-pause", None, until=out.resets_at, window=out.window)
                 resume = known or resume
                 continue  # not a failure: no attempt counted
             summary = out.summary

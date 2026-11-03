@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +11,7 @@ from aiohttp.test_utils import TestClient, TestServer
 
 from starpipe import selfupdate
 from starpipe.agent import StageOutcome, StageRequest
+from starpipe.cli import usage_lines
 from starpipe.config import Config
 from starpipe.daemon import Daemon, activity
 from starpipe.tickets import lint, parse_pipeline
@@ -55,6 +58,27 @@ async def test_status_and_show_report_the_ticket_and_its_activity(rig: Rig) -> N
         assert (await client.get("/v1/tickets/99", headers=AUTH)).status == 404
     finally:
         await client.close()
+
+
+async def test_status_reports_credits_and_pause(rig: Rig) -> None:
+    client, _ = await api(rig)
+    try:
+        data = await (await client.get("/v1/status", headers=AUTH)).json()
+        assert data["credit_support"] == "unknown" and data["credit_use"] is None and data["usage_pause_until"] is None
+        assert usage_lines(data) == ["usage credits: unknown"]
+        rig.db.put("credit_support", "supported")
+        rig.db.put("credit_use", json.dumps({"since": 1000.0, "amount": 0.25, "window": "five_hour"}))
+        rig.db.put("usage_pause_until", "1793493600")
+        rig.db.put("usage_pause_window", "seven_day")
+        data = await (await client.get("/v1/status", headers=AUTH)).json()
+    finally:
+        await client.close()
+    assert data["credit_support"] == "supported" and data["credit_use"]["amount"] == 0.25
+    lines = usage_lines(data)
+    assert lines[0].startswith("usage limit: model stages wait until ") and lines[0].endswith("(seven_day window)")
+    assert time.ctime(1793493600) in lines[0]
+    assert lines[1] == "usage credits: supported"
+    assert lines[2].startswith("credits in use since ") and lines[2].endswith("25% of the credit limit")
 
 
 async def test_activity_lists_open_blockers_of_a_queued_ticket(rig: Rig) -> None:

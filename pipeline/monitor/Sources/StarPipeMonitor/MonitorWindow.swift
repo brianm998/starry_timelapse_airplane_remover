@@ -70,8 +70,10 @@ struct HeaderStrip: View {
             item("Landing", landingText, color: store.snapshot?.landing.paused == true || store.developRed ? .orange : .secondary)
             item("develop", developText, color: store.developRed ? .red : .secondary)
             if let until = store.snapshot?.usagePauseUntil, let t = Double(until) {
-                item("Usage limit", "model stages wait until \(Date(timeIntervalSince1970: t).formatted(date: .omitted, time: .shortened))", color: .orange)
+                item("Usage limit", "model stages wait until \(Date(timeIntervalSince1970: t).formatted(date: .omitted, time: .shortened))" + (store.snapshot?.usagePauseWindow.map { " (\($0))" } ?? ""), color: .orange)
             }
+            item(CreditText.support(store.snapshot?.creditSupport).label, CreditText.support(store.snapshot?.creditSupport).value, color: .secondary)
+            if let inUse = CreditText.inUse(store.snapshot?.creditUse) { item(inUse.label, inUse.value, color: .orange) }
             if store.updateAvailable {
                 item("Monitor", "Update available — \(MonitorUpdates.rebuildCommand)", color: .orange)
             }

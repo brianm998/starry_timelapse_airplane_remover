@@ -66,6 +66,7 @@ class StageRequest:
     resume: str | None = None
     on_session: Callable[[str], None] = lambda _sid: None  # called as soon as the session id is known
     on_usage: Callable[[dict[str, Any]], None] = lambda _windows: None  # the stream's `unifiedWindows`, as it arrives
+    on_credits: Callable[[dict[str, Any]], None] = lambda _report: None  # the credit state of each rate-limit event (credit_report_of)
 
 
 @dataclass
@@ -73,6 +74,7 @@ class StageOutcome:
     status: Status
     session_id: str | None = None
     resets_at: float | None = None
+    window: str | None = None  # the rate-limit window that caused a "usage-limit" (five_hour, seven_day, overage); None when unreported
     summary: str = ""
     cost_usd: float = 0.0
     transcript: Path | None = None
@@ -117,13 +119,30 @@ def tool_schema(name: str) -> dict[str, Any]:
     return {**free, "properties": props[name]} if name in props else free
 
 
+CREDITS_USABLE = ("allowed", "allowed_warning")  # the SDK's `overage_status` values that mean credits can still be spent
+
+
 def parse_usage_limit(info: Any) -> float | None:
-    """The reset time of a rejected rate-limit event, or None when it is not a rejection."""
+    """The reset time of a rejected rate-limit event that stops model work, or None.
+
+    A rejection of a base window (five_hour, seven_day, ...) while the account's credits are usable is not a stop: the
+    CLI carries on spending them. A rejection of the overage window itself means the credits are exhausted, and an event
+    that says nothing about credits is treated as no credits."""
     status = getattr(info, "status", None)
     if status != "rejected":
         return None
+    if getattr(info, "rate_limit_type", None) != "overage" and getattr(info, "overage_status", None) in CREDITS_USABLE:
+        return None
     resets = getattr(info, "resets_at", None)
     return float(resets) if resets else time.time() + DEFAULT_USAGE_PAUSE_S
+
+
+def credit_report_of(info: Any) -> dict[str, Any]:
+    """What one rate-limit event says about usage credits, from the SDK's typed fields (never from guessed raw keys)."""
+    return {"status": getattr(info, "status", None), "window": getattr(info, "rate_limit_type", None),
+            "utilization": getattr(info, "utilization", None), "overage_status": getattr(info, "overage_status", None),
+            "overage_resets_at": getattr(info, "overage_resets_at", None),
+            "overage_disabled_reason": getattr(info, "overage_disabled_reason", None)}
 
 
 def usage_windows_of(info: Any) -> dict[str, Any] | None:
@@ -223,9 +242,11 @@ class SdkRunner:
                         windows = usage_windows_of(message.rate_limit_info)
                         if windows:
                             req.on_usage(windows)
+                        req.on_credits(credit_report_of(message.rate_limit_info))
                         resets = parse_usage_limit(message.rate_limit_info)
                         if resets:
                             outcome.status, outcome.resets_at = "usage-limit", resets
+                            outcome.window = getattr(message.rate_limit_info, "rate_limit_type", None)
                     elif isinstance(message, AssistantMessage):
                         for block in message.content:
                             if isinstance(block, ToolUseBlock):

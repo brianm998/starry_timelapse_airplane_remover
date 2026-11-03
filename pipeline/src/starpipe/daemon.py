@@ -423,10 +423,22 @@ class Daemon:
                            "error": self.last_error or self.update_error()},
                 "self_update": {"pending": self.db.get("self_update_pending"), "failed": self.update_failure()},
                 "resources": self.resources(), "pause": self.db.get("pause"), "muted": self.db.get("muted") == "1", "usage_pause_until": self.db.get("usage_pause_until"),
+                "usage_pause_window": self.db.get("usage_pause_window"), **self.credit_info(),
                 "usage_windows": self.usage_windows(),
                 "heavy": {"holders": [h.__dict__ for h in hv.holders], "queue": [w.__dict__ for w in hv.queue]},
                 "landing": train_info(self.db, self.config, self.engine.clock()),
                 "tickets": tickets, "gherkin_nightly": self.gherkin_info()}
+
+    def credit_info(self) -> dict[str, object]:
+        """Usage-credit state for the snapshot: support ("supported" / "none" / "unknown" until a stream reports), whether
+        the credits are exhausted, and, while they are being spent, `credit_use` ({since, amount, window})."""
+        raw = self.db.get("credit_use")
+        try:
+            use: object = json.loads(raw) if raw else None
+        except ValueError:
+            use = None
+        return {"credit_support": self.db.get("credit_support") or "unknown", "credit_exhausted": bool(self.db.get("credit_exhausted")),
+                "credit_use": cast("dict[str, object]", use) if isinstance(use, dict) else None}
 
     def usage_windows(self) -> dict[str, object] | None:
         raw = self.db.get("usage_windows")

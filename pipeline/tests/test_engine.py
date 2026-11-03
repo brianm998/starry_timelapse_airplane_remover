@@ -301,6 +301,122 @@ async def test_rate_limit_windows_are_recorded(rig: Rig, tmp_path: Path) -> None
     assert json.loads(reopened.get("usage_windows") or "null") == stored
 
 
+def _credit_report(**over: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {"status": "allowed", "window": "five_hour", "utilization": None, "overage_status": None,
+                            "overage_resets_at": None, "overage_disabled_reason": None}
+    return {**base, **over}
+
+
+async def test_credit_support_is_recorded(rig: Rig, tmp_path: Path) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    assert rig.db.get("credit_support") is None, "unknown until a stream reports"
+
+    def explore(req: StageRequest) -> StageOutcome:
+        req.on_credits(_credit_report())  # says nothing about credits: still unknown
+        assert rig.db.get("credit_support") is None
+        req.on_credits(_credit_report(overage_status="allowed"))
+        return explore_ok(req)
+
+    rig.agent.on("explore", explore)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    assert rig.db.get("credit_support") == "supported"
+    assert Database(tmp_path / "state.db").get("credit_support") == "supported"  # survives a restart
+    rig.engine._record_credits(_credit_report(status="rejected", overage_status="rejected", overage_disabled_reason="out_of_credits"))  # pyright: ignore[reportPrivateUsage]
+    assert rig.db.get("credit_support") == "supported", "exhausted credits are still supported credits"
+    rig.db.put("credit_support", None)
+    rig.engine._record_credits(_credit_report(overage_status="rejected", overage_disabled_reason="org_level_disabled"))  # pyright: ignore[reportPrivateUsage]
+    assert rig.db.get("credit_support") == "none"
+    rig.db.put("credit_support", None)
+    rig.engine._record_credits(_credit_report(overage_status="something-new"))  # pyright: ignore[reportPrivateUsage]
+    assert rig.db.get("credit_support") == "none", "an unrecognised state is treated as no credits"
+
+
+async def test_credit_use_is_recorded_and_announced(rig: Rig) -> None:
+    record = rig.engine._record_credits  # pyright: ignore[reportPrivateUsage]
+    record(_credit_report(status="allowed", window="five_hour", overage_status="allowed"))
+    assert rig.db.get("credit_use") is None
+    record(_credit_report(status="rejected", window="five_hour", overage_status="allowed"))  # base window out, credits carry on
+    first = json.loads(rig.db.get("credit_use") or "null")
+    assert first["window"] == "five_hour" and first["amount"] is None
+    record(_credit_report(status="allowed", window="overage", overage_status="allowed", utilization=0.25))
+    second = json.loads(rig.db.get("credit_use") or "null")
+    assert second["amount"] == 0.25 and second["since"] == first["since"], "the amount follows; the start stays"
+    record(_credit_report(status="allowed_warning", window="overage", overage_status="allowed_warning", utilization=0.9))
+    events = [e for e in rig.db.events_since() if e["kind"] == "credits-in-use"]
+    assert len(events) == 1, "announced once per start of use"
+    assert events[0]["data"]["window"] == "five_hour"
+    record(_credit_report(status="allowed", window="five_hour", overage_status="allowed"))  # the base window is back
+    assert rig.db.get("credit_use") is None
+    record(_credit_report(status="rejected", window="five_hour", overage_status="allowed"))
+    assert len([e for e in rig.db.events_since() if e["kind"] == "credits-in-use"]) == 2, "a new start is announced again"
+    record(_credit_report(status="rejected", window="overage", overage_status="rejected"))  # credits ran out
+    assert rig.db.get("credit_use") is None and rig.db.get("credit_exhausted") == "1"
+
+
+async def test_no_credits_pause_resumes_at_the_reset(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    reset = rig.now + 900
+
+    def limited(req: StageRequest) -> StageOutcome:
+        req.on_credits(_credit_report(status="rejected", window="seven_day", overage_status="rejected"))
+        assert rig.db.get("credit_support") == "none"
+        return StageOutcome("usage-limit", session_id="S1", resets_at=reset, window="seven_day")
+
+    paused: list[tuple[str | None, str | None]] = []
+
+    def resumed(req: StageRequest) -> StageOutcome:
+        paused.append((rig.db.get("usage_pause_until"), rig.db.get("usage_pause_window")))
+        return explore_ok(req)
+
+    rig.agent.on("explore", limited, resumed)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    # the pause is stored, with its window, while the engine waits
+    original_sleep = rig.engine.sleep
+    seen: list[tuple[str | None, str | None]] = []
+
+    async def watching(seconds: float) -> None:
+        seen.append((rig.db.get("usage_pause_until"), rig.db.get("usage_pause_window")))
+        await original_sleep(seconds)
+
+    rig.engine.sleep = watching
+    await rig.engine.drive(7)
+    explores = [r for r in rig.agent.requests if r.stage == "explore"]
+    assert [r.attempt for r in explores] == [1, 1], "no attempt counted"
+    assert explores[1].resume == "S1"
+    assert seen and all(s == (str(reset), "seven_day") for s in seen)
+    assert sum(rig.slept) >= 900
+    assert rig.db.get("usage_pause_until") is None and rig.db.get("usage_pause_window") is None
+    pauses = [e for e in rig.db.events_since() if e["kind"] == "usage-pause"]
+    assert [e["data"]["window"] for e in pauses] == ["seven_day"]
+
+
+async def test_credits_keep_stages_running_until_exhausted(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    reset = rig.now + 900
+
+    def credits_carry_on(req: StageRequest) -> StageOutcome:
+        req.on_credits(_credit_report(status="rejected", window="five_hour", overage_status="allowed"))
+        return StageOutcome("usage-limit", session_id="S1", resets_at=reset, window="five_hour")
+
+    def credits_run_out(req: StageRequest) -> StageOutcome:
+        req.on_credits(_credit_report(status="rejected", window="overage", overage_status="rejected"))
+        return StageOutcome("usage-limit", session_id="S1", resets_at=reset, window="overage")
+
+    rig.agent.on("explore", credits_carry_on, credits_run_out, explore_ok)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    explores = [r for r in rig.agent.requests if r.stage == "explore"]
+    assert [r.attempt for r in explores] == [1, 1, 1], "neither limit counts an attempt"
+    pauses = [e for e in rig.db.events_since() if e["kind"] == "usage-pause"]
+    assert [e["data"]["window"] for e in pauses] == ["overage"], "only the exhausted credits paused the stages"
+    assert sum(rig.slept) >= 900
+    assert rig.db.get("credit_exhausted") is None, "cleared when the credit pause ended"
+
+
 async def test_a_question_the_resolver_can_answer_resumes_the_session(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()

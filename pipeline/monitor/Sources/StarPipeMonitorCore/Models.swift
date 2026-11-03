@@ -12,6 +12,13 @@ public struct Snapshot: Codable, Sendable, Equatable {
     /// How many tickets may run at once (the owner's override, else config.toml).
     public var maxActive: Int
     public var usagePauseUntil: String?
+    /// Which rate-limit window caused the pause (five_hour, seven_day, overage); nil when unreported or not paused.
+    public var usagePauseWindow: String?
+    /// Whether the account can spend usage credits: "supported", "none", or "unknown" until a stage reports.
+    public var creditSupport: String?
+    public var creditExhausted: Bool?
+    /// Set while credits are being spent.
+    public var creditUse: CreditUse?
     /// The latest five-hour and weekly usage windows a stage's stream reported; nil before any event.
     public var usageWindows: UsageWindows?
     public var heavy: HeavyState
@@ -31,9 +38,27 @@ public struct Snapshot: Codable, Sendable, Equatable {
         case daemon, pause, muted, heavy, tickets, groups, runtime, landing, develop, now, version, repo, nightly
         case usagePauseUntil = "usage_pause_until"
         case usageWindows = "usage_windows"
+        case usagePauseWindow = "usage_pause_window"
+        case creditSupport = "credit_support"
+        case creditExhausted = "credit_exhausted"
+        case creditUse = "credit_use"
         case maxActive = "max_active"
         case interventionsWeek = "interventions_week"
         case eventsCursor = "events_cursor"
+    }
+}
+
+/// Credits being spent: `since` is epoch seconds; `amount` is the credit window's utilization fraction as reported, nil when
+/// the stream gave none.
+public struct CreditUse: Codable, Sendable, Equatable {
+    public var since: Double
+    public var amount: Double?
+    public var window: String?
+
+    public init(since: Double, amount: Double? = nil, window: String? = nil) {
+        self.since = since
+        self.amount = amount
+        self.window = window
     }
 }
 

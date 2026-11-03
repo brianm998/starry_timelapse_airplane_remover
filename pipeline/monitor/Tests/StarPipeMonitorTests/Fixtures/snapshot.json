@@ -1,4 +1,7 @@
 {
+  "credit_exhausted": false,
+  "credit_support": "unknown",
+  "credit_use": null,
   "daemon": {
     "error": "",
     "last_poll": 1100.0,
@@ -201,6 +204,7 @@
     }
   ],
   "usage_pause_until": null,
+  "usage_pause_window": null,
   "usage_windows": {
     "five_hour": {
       "resetsAt": 3600.0,
