@@ -150,14 +150,7 @@ final class PreviewGenerationTests: XCTestCase {
                                                 workingFrameBytes: unit, urgency: .background)
         }
         task.cancel()
-        let finished = await withTaskGroup(of: Bool.self) { group in
-            group.addTask { _ = await task.value; return true }
-            group.addTask { try? await Task.sleep(for: .seconds(20)); return false }
-            let first = await group.next() ?? false
-            group.cancelAll()
-            return first
-        }
-        XCTAssertTrue(finished, "a cancelled request must finish")
+        _ = try await boundedValue(of: task, seconds: 20, what: "a cancelled preview request to finish")
     }
 
     // MARK: - the pre-warm

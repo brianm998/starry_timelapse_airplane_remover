@@ -27,10 +27,26 @@ final class DaemonTestTimeoutTests: XCTestCase {
 
         // 3. A stream that is never finished.
         let (stream, _) = AsyncStream<Int>.makeStream()
+        let timeouts = Locked<[TestTimeout]>([])
         let streamStart = Date()
-        let saw = await consume(stream, within: 1, what: "an AsyncStream nobody finishes") { _ in true }
-        XCTAssertFalse(saw)
+        var elements = 0
+        for await _ in boundedStream(stream, seconds: 1, what: "an AsyncStream nobody finishes",
+                                     onTimeout: { timeout in timeouts.withLock { $0.append(timeout) } }) { elements += 1 }
+        XCTAssertEqual(elements, 0)
+        XCTAssertEqual(timeouts.withLock { $0.map(\.what) }, ["an AsyncStream nobody finishes"])
         XCTAssertLessThan(Date().timeIntervalSince(streamStart), 10)
+
+        // 3b. A task that never finishes, awaited by its value.
+        let stuck = Task<Int, Never> {
+            do { try await Task.sleep(nanoseconds: 600_000_000_000); return 0 } catch { return -1 }
+        }
+        do {
+            _ = try await boundedValue(of: stuck, seconds: 1, what: "a task nobody finishes")
+            XCTFail("boundedValue returned")
+        } catch let timeout as TestTimeout {
+            XCTAssertEqual(timeout.what, "a task nobody finishes")
+        }
+        XCTAssertTrue(stuck.isCancelled, "the stuck task is cancelled, not left running")
 
         // 4. withTimeout itself names what it was waiting for.
         do {

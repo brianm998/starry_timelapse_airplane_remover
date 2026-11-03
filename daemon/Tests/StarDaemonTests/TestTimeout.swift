@@ -30,21 +30,41 @@ func withTimeout<T: Sendable>(
     }
 }
 
-/// Consumes `stream` until `body` returns `true` or the stream finishes, giving up after `seconds`
-/// either way.  The deadline holds even when the stream is quiet, which a deadline checked inside a
-/// `for await` body does not: that body only runs when an event arrives.  Returns whether `body`
-/// said stop.
-@discardableResult
-func consume<S: AsyncSequence & Sendable>(
-    _ stream: S, within seconds: TimeInterval, what: String, until body: @escaping @Sendable (S.Element) -> Bool
-) async -> Bool where S.Element: Sendable {
-    do {
-        return try await withTimeout(seconds, what: what) {
-            for try await element in stream where body(element) { return true }
-            return false
+/// The value of `task`, or `TestTimeout` after `seconds`, in which case `task` is cancelled too.
+/// `withTimeout { await task.value }` would not do: awaiting another task's value is not
+/// cancellable, so the timed-out child would hold the task group (and the test) open.
+func boundedValue<T: Sendable>(of task: Task<T, Never>, seconds: TimeInterval = 60, what: String) async throws -> T {
+    try await withTimeout(seconds, what: what) {
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+    }
+}
+
+func boundedValue<T: Sendable>(of task: Task<T, Error>, seconds: TimeInterval = 60, what: String) async throws -> T {
+    try await withTimeout(seconds, what: what) {
+        try await withTaskCancellationHandler { try await task.value } onCancel: { task.cancel() }
+    }
+}
+
+/// `source`, except that it finishes after `seconds` even if `source` never does (and says so with
+/// a failure naming `what`).  For the `for await event in stream` loops that check a deadline in
+/// their body: that body only runs when an event arrives, so on a quiet stream the deadline never
+/// gets looked at and the loop waits for ever.
+func boundedStream<E: Sendable>(
+    _ source: AsyncStream<E>, seconds: TimeInterval, what: String,
+    onTimeout: @escaping @Sendable (TestTimeout) -> Void = { XCTFail("\($0)") }
+) -> AsyncStream<E> {
+    AsyncStream { continuation in
+        let pump = Task {
+            for await element in source { continuation.yield(element) }
+            continuation.finish()
         }
-    } catch {
-        return false
+        let timer = Task {
+            guard (try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))) != nil else { return }
+            onTimeout(TestTimeout(what: what, seconds: seconds))
+            pump.cancel()
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in pump.cancel(); timer.cancel() }
     }
 }
 
@@ -62,4 +82,12 @@ func waitUntilExit(_ process: Process, within seconds: TimeInterval = 120, what:
         if process.isRunning { kill(process.processIdentifier, SIGKILL) }
     }
     process.waitUntilExit()
+}
+
+/// Just enough of a lock to share a value with a `@Sendable` closure.
+final class Locked<Value>: @unchecked Sendable {
+    private var value: Value
+    private let lock = NSLock()
+    init(_ value: Value) { self.value = value }
+    func withLock<R>(_ body: (inout Value) -> R) -> R { lock.lock(); defer { lock.unlock() }; return body(&value) }
 }
