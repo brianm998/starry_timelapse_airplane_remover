@@ -158,6 +158,7 @@ class Daemon:
         for s in self.db.running_stages():
             self.db.end_stage(s["id"], "interrupted", detail="daemon restarted")
         self.engine.parked.clear()
+        self.engine.escalate_orphaned_questions()  # a restart between "asked" and "owner told" must not lose the question
         self.db.put("self_update_pending", None)  # a restart is how an update completes; whatever is still wanted is re-staged
 
     async def supervise(self, name: str, body: Callable[[], Awaitable[None]], delay: float = 5.0) -> None:

@@ -28,6 +28,27 @@ jobs:
   # The list mirrors paths-ignore in cli.yml (glob syntax there, `case` syntax here: `*` crosses `/`).
   # Only pull_request is narrowed: a push to develop or a manual run always builds, because develop's
   # result is the baseline the pipeline's CI judge compares PRs with.
+  # ─── OpenCV: built once per OS per key by opencv.yml (cache, then the opencv-prebuilt release, then a build) ───
+  opencv-linux:
+    name: OpenCV (linux)
+    needs: changes
+    if: needs.changes.outputs.program == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: linux
+
+  opencv-macos:
+    name: OpenCV (macos)
+    needs: changes
+    if: needs.changes.outputs.program == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: macos
+
   changes:
     name: changed paths
     runs-on: ubuntu-24.04
@@ -100,6 +121,9 @@ jobs:
           java-version: '21'
 
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       # Plugin resolution from plugins.gradle.org fails transiently ("Could not parse POM"); try once more before going red.
       - name: Proto is in sync with the daemon
@@ -123,7 +147,7 @@ jobs:
   # ─── Linux ───────────────────────────────────────────────────────────────────
   linux:
     name: Linux build + tests (ubuntu-24.04)
-    needs: changes
+    needs: [changes, opencv-linux]
     if: needs.changes.outputs.program == 'true'
     runs-on: ubuntu-24.04
     steps:
@@ -142,19 +166,11 @@ jobs:
         with:
           swift-version: '6.0'
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      # the same cache keys as cli.yml, so a warm cache there is a warm cache here
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/linux
-            opencv/include
-          key: opencv-linux-${{ steps.opencv-key.outputs.key }}
+          name: opencv-linux
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -163,12 +179,6 @@ jobs:
             StarDecisionTrees/lib/release/linux
             StarDecisionTrees/include/release/linux
           key: dt-linux-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/linux/libopencv2.a ]; then
-            cd opencv && ./release.sh
-          fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -205,12 +215,13 @@ jobs:
 
   # ─── macOS ───────────────────────────────────────────────────────────────────
   # macos-15, not macos-14: GitHub retires the macos-14 image on 2026-11-02 and its brownouts already cancel
-  # this job (https://github.com/actions/runner-images/issues/13518). The OpenCV and StarDecisionTrees caches
-  # below carry their own macos15 keys: the StarDecisionTrees .swiftmodule only imports under the compiler that
-  # built it (see gherkin.yml), so they must not restore what cli.yml's macos-14 jobs saved under the plain keys.
+  # this job (https://github.com/actions/runner-images/issues/13518). OpenCV comes from opencv.yml (its
+  # macos15 key leaves the macos-14 jobs' opencv-macos- caches alone). The StarDecisionTrees cache below has its
+  # own macos15 key: its .swiftmodule only imports under the compiler that built it (see gherkin.yml), so it must
+  # not restore what cli.yml's macos-14 jobs saved under the plain key.
   macos:
     name: macOS build + tests (macos-15)
-    needs: changes
+    needs: [changes, opencv-macos]
     if: needs.changes.outputs.program == 'true'
     runs-on: macos-15
     steps:
@@ -224,18 +235,11 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/macos
-            opencv/include
-          key: opencv-macos15-${{ steps.opencv-key.outputs.key }}
+          name: opencv-macos
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -244,12 +248,6 @@ jobs:
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
           key: dt-macos15-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/macos/libopencv2.a ]; then
-            cd opencv && ./release.sh
-          fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |

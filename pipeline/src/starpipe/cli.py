@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import plistlib
@@ -525,7 +526,18 @@ def daemon_run() -> None:
 
         Notifier(Database()).alert("runtime-rollback", None, f"the new runtime kept crashing: rolled back to {name}")
         sys.exit(1)
+    _hold_off_idle_sleep()
     asyncio.run(daemon_mod.build(config_mod.load()).run())
+
+
+def _hold_off_idle_sleep() -> None:
+    """Keep the Mac from idle-sleeping while the daemon lives (display sleep is unaffected, and harmless to it).
+
+    `caffeinate -w` exits by itself when this process does, so a crash or restart never leaves an assertion behind. It sits here
+    rather than in front of the shim in the plist because `selfupdate.repoint` owns ProgramArguments[0]."""
+    with contextlib.suppress(OSError):  # no caffeinate off macOS: nothing to hold off
+        subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 @daemon.command("self-test")

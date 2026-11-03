@@ -1,0 +1,368 @@
+name: opencv
+
+# The one place OpenCV is built in CI. Reused with `uses:` by cli.yml, pr-gate.yml and wgpu.yml (one call per
+# OS, so Linux never waits on macOS). Per requested platform, the first of three tiers that has it wins:
+#   1. actions/cache, key <prefix>-<opencv/cache_key.sh>
+#   2. the asset <prefix>-<opencv/cache_key.sh>.tar.gz of the `opencv-prebuilt` pre-release (opencv/ci_release_asset.sh)
+#   3. a build (opencv/release.sh, or opencv/build.sh on Windows), which is then uploaded as that asset
+# Tier 2 is what makes a build reusable across refs: a cache saved by a PR is visible to that PR only, so
+# without it develop's push run, and the next batch PR, would each build OpenCV again.
+# Whatever the tier, the job uploads the artifact opencv-<os> (lib/<os> and include); callers download it into opencv/.
+#   opencv-linux    ubuntu-24.04  lib/linux/libopencv2.a
+#   opencv-macos    macos-15      lib/macos/libopencv2.a      universal; the key says macos15 on purpose: the
+#                                 macos-14 release jobs' opencv-macos- caches are neither read nor overwritten
+#   opencv-windows  windows-2022  lib/windows/opencv2.lib     MSVC 14.40 + SDK 22621, as every Windows consumer
+# The Windows prefix names the toolset: change the pin below (and in the consumers) and the old builds stop matching.
+
+on:
+  workflow_call:
+    inputs:
+      platforms:
+        description: Space-separated subset of "linux macos windows" to provide
+        type: string
+        default: linux macos windows
+
+jobs:
+  linux:
+    name: OpenCV (Linux)
+    if: contains(inputs.platforms, 'linux')
+    runs-on: ubuntu-24.04
+    # the release tier uploads with the workflow token; a caller job must grant this too
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: OpenCV cache key
+        id: key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
+      # tier 1: the Actions cache (this ref, the base branch, or what an earlier run of this ref saved)
+      - name: Cache OpenCV
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/linux
+            opencv/include
+          key: opencv-linux-${{ steps.key.outputs.key }}
+
+      # tier 2: a build made on ANY branch, kept as an asset of the opencv-prebuilt pre-release
+      - name: Restore from the opencv-prebuilt release
+        id: release
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          if opencv/ci_release_asset.sh download opencv-linux linux libopencv2.a; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # tier 3: build it
+      - name: Install apt prerequisites
+        if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake make git pkg-config perl libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev
+
+      - name: Build OpenCV
+        id: build
+        if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.hit != 'true'
+        working-directory: opencv
+        run: ./release.sh
+
+      - name: Save the build as a release asset
+        if: steps.build.outcome == 'success'
+        shell: bash
+        # a read-only token (a fork's PR) must not fail a build that worked
+        run: opencv/ci_release_asset.sh upload opencv-linux linux libopencv2.a || echo "::warning::could not upload the OpenCV build to the opencv-prebuilt release"
+
+      - name: Which tier
+        shell: bash
+        run: |
+          if [ "${{ steps.cache.outputs.cache-hit }}" = "true" ]; then tier=cache
+          elif [ "${{ steps.release.outputs.hit }}" = "true" ]; then tier="release asset"
+          else tier="built from source"; fi
+          echo "::notice::OpenCV (linux) from: $tier"
+          echo "OpenCV (linux, key opencv-linux-${{ steps.key.outputs.key }}): **$tier**" >> "$GITHUB_STEP_SUMMARY"
+          test -f opencv/lib/linux/libopencv2.a
+          # stage exactly what callers unpack into opencv/ (lib/linux and include), so the artifact's layout
+          # does not depend on upload-artifact's choice of root directory
+          rm -rf opencv-artifact
+          mkdir -p opencv-artifact/lib
+          cp -R opencv/lib/linux opencv-artifact/lib/linux
+          cp -R opencv/include opencv-artifact/include
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opencv-linux
+          path: opencv-artifact
+          if-no-files-found: error
+
+  macos:
+    name: OpenCV (macOS, macos-15)
+    if: contains(inputs.platforms, 'macos')
+    runs-on: macos-15
+    # the release tier uploads with the workflow token; a caller job must grant this too
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: OpenCV cache key
+        id: key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
+      # tier 1: the Actions cache (this ref, the base branch, or what an earlier run of this ref saved)
+      - name: Cache OpenCV
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/macos
+            opencv/include
+          key: opencv-macos15-${{ steps.key.outputs.key }}
+
+      # tier 2: a build made on ANY branch, kept as an asset of the opencv-prebuilt pre-release
+      - name: Restore from the opencv-prebuilt release
+        id: release
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          if opencv/ci_release_asset.sh download opencv-macos15 macos libopencv2.a; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # tier 3: build it
+      - name: Select latest Xcode
+        if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.hit != 'true'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # OpenCV's CMake picks Eigen up when it finds it, so the build sees what the consumers' builds saw.
+      - name: Install Eigen3 via Homebrew
+        if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.hit != 'true'
+        run: brew install eigen
+
+      - name: Build OpenCV
+        id: build
+        if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.hit != 'true'
+        working-directory: opencv
+        run: ./release.sh
+
+      - name: Save the build as a release asset
+        if: steps.build.outcome == 'success'
+        shell: bash
+        # a read-only token (a fork's PR) must not fail a build that worked
+        run: opencv/ci_release_asset.sh upload opencv-macos15 macos libopencv2.a || echo "::warning::could not upload the OpenCV build to the opencv-prebuilt release"
+
+      - name: Which tier
+        shell: bash
+        run: |
+          if [ "${{ steps.cache.outputs.cache-hit }}" = "true" ]; then tier=cache
+          elif [ "${{ steps.release.outputs.hit }}" = "true" ]; then tier="release asset"
+          else tier="built from source"; fi
+          echo "::notice::OpenCV (macos) from: $tier"
+          echo "OpenCV (macos, key opencv-macos15-${{ steps.key.outputs.key }}): **$tier**" >> "$GITHUB_STEP_SUMMARY"
+          test -f opencv/lib/macos/libopencv2.a
+          # stage exactly what callers unpack into opencv/ (lib/macos and include), so the artifact's layout
+          # does not depend on upload-artifact's choice of root directory
+          rm -rf opencv-artifact
+          mkdir -p opencv-artifact/lib
+          cp -R opencv/lib/macos opencv-artifact/lib/macos
+          cp -R opencv/include opencv-artifact/include
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opencv-macos
+          path: opencv-artifact
+          if-no-files-found: error
+
+  windows:
+    name: OpenCV (Windows, MSVC 14.40)
+    if: contains(inputs.platforms, 'windows')
+    runs-on: windows-2022
+    # the release tier uploads with the workflow token; a caller job must grant this too
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: OpenCV cache key
+        id: key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
+      # tier 1: the Actions cache (this ref, the base branch, or what an earlier run of this ref saved)
+      - name: Cache OpenCV
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/windows
+            opencv/include
+          key: opencv-windows-msvc14.40-sdk22621-${{ steps.key.outputs.key }}
+
+      # tier 2: a build made on ANY branch, kept as an asset of the opencv-prebuilt pre-release
+      - name: Restore from the opencv-prebuilt release
+        id: release
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          if opencv/ci_release_asset.sh download opencv-windows-msvc14.40-sdk22621 windows opencv2.lib; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # tier 3: build it
+      - name: Install Eigen3 to C:/eigen3
+        if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.hit != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest `
+            -Uri 'https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.zip' `
+            -OutFile "$env:RUNNER_TEMP\eigen.zip"
+          Expand-Archive -Path "$env:RUNNER_TEMP\eigen.zip" -DestinationPath C:\
+          Move-Item C:\eigen-3.4.0 C:\eigen3
+
+      - name: Show toolchain
+        if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.hit != 'true'
+        run: |
+          cmake --version
+
+      - name: Install MSVC 14.40 toolset
+        if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.hit != 'true'
+        # The windows-2022 runner only ships the latest MSVC toolset, which is
+        # 14.44 as of image 20260518. Swift 6.0's bundled Clang 17 has two
+        # incompatibilities with the 14.44 headers:
+        #   1. <wchar.h> now #includes <intrin.h>, creating a Clang module
+        #      cycle (ucrt -> _visualc_intrinsics -> ucrt via <malloc.h> in
+        #      <xmmintrin.h>). Breaks every Swift compile, including
+        #      third-party packages like Semaphore.
+        #   2. The STL static_asserts on Clang version >= 19 (the
+        #      _ALLOW_COMPILER_AND_STL_VERSION_MISMATCH workaround in
+        #      StarCpp/Package.swift covers this for the C++ compile, but not
+        #      for the Swift Clang importer).
+        # The 14.40 LTSC toolset predates both regressions. Installing it here
+        # so the "Pin MSVC dev env" step below can switch vcvars to it.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe"
+          $vsPath    = 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise'
+          Write-Host "Adding MSVC 14.40 toolset to $vsPath"
+          # The path contains spaces ("Program Files", "Visual Studio").
+          # PowerShell's Start-Process -ArgumentList does NOT auto-quote array
+          # elements that contain spaces — passing $vsPath bare results in the
+          # installer parsing --installPath as just "C:\Program" and silently
+          # ignoring the rest. Wrap in literal double quotes so the path stays
+          # intact across the process boundary.
+          $proc = Start-Process -FilePath $installer -ArgumentList @(
+              'modify',
+              '--installPath', "`"$vsPath`"",
+              '--add', 'Microsoft.VisualStudio.Component.VC.14.40.17.10.x86.x64',
+              '--quiet', '--norestart', '--nocache'
+          ) -Wait -PassThru -NoNewWindow
+          if ($proc.ExitCode -notin 0,3010) {
+              throw "VS Installer failed (exit code $($proc.ExitCode))"
+          }
+          # Verify the toolset is actually present so we fail fast if the
+          # component ID drifts.
+          $toolsetDir = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Directory `
+              | Where-Object { $_.Name -like '14.40.*' } | Select-Object -First 1
+          if (-not $toolsetDir) {
+              throw "MSVC 14.40 toolset not found under $vsPath\VC\Tools\MSVC after install"
+          }
+          Write-Host "Installed: $($toolsetDir.Name)"
+
+      - name: Pin MSVC dev env to 14.40 + Windows SDK 10.0.22621.0
+        if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.hit != 'true'
+        # gha-setup-swift activates the latest toolset + SDK via vcvars64. We
+        # need to override BOTH:
+        #
+        #   * MSVC 14.40 (not 14.44) — see install step above.
+        #
+        #   * Windows SDK 10.0.22621.0 (not the current default 10.0.26100.0).
+        #     The 26100 ucrt's <wchar.h> unconditionally `#include <intrin.h>`,
+        #     which makes Clang build the _visualc_intrinsics module while
+        #     building the ucrt module — and _visualc_intrinsics transitively
+        #     includes <malloc.h> from ucrt, producing
+        #         cyclic dependency in module 'ucrt':
+        #             ucrt -> _visualc_intrinsics -> ucrt
+        #     The cycle kills every Swift compile. SDK 22621 predates that
+        #     wchar.h change. windows-2022 has it preinstalled alongside 26100.
+        #
+        # vcvars64.bat positional arg #1 is the SDK version; -vcvars_ver=
+        # pins the MSVC toolset. Capture the resulting env and push it through
+        # GITHUB_ENV so subsequent steps inherit it.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vsPath = 'C:\Program Files\Microsoft Visual Studio\2022\Enterprise'
+          $vcvars = "$vsPath\VC\Auxiliary\Build\vcvars64.bat"
+          $output = & cmd /c "`"$vcvars`" 10.0.22621.0 -vcvars_ver=14.40 && set"
+          $wanted = @(
+              'INCLUDE','LIB','LIBPATH','PATH',
+              'VCINSTALLDIR','VCToolsInstallDir','VCToolsVersion',
+              'VSINSTALLDIR','WindowsSdkDir','WindowsSDKVersion','UCRTVersion'
+          )
+          foreach ($line in $output) {
+              if ($line -match '^([A-Za-z_][A-Za-z0-9_(\)]*)=(.*)$') {
+                  $name = $matches[1]; $value = $matches[2]
+                  if ($wanted -contains $name) {
+                      "$name=$value" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+                  }
+              }
+          }
+          $ver    = ($output | Where-Object { $_ -match '^VCToolsVersion='     }) -replace '^VCToolsVersion=', ''
+          $sdkVer = ($output | Where-Object { $_ -match '^WindowsSDKVersion='  }) -replace '^WindowsSDKVersion=', ''
+          $ucrt   = ($output | Where-Object { $_ -match '^UCRTVersion='        }) -replace '^UCRTVersion=', ''
+          Write-Host "Active VCToolsVersion:    $ver"
+          Write-Host "Active WindowsSDKVersion: $sdkVer"
+          Write-Host "Active UCRTVersion:       $ucrt"
+
+      - name: Build OpenCV
+        id: build
+        if: steps.cache.outputs.cache-hit != 'true' && steps.release.outputs.hit != 'true'
+        working-directory: opencv
+        run: bash build.sh
+
+      - name: Save the build as a release asset
+        if: steps.build.outcome == 'success'
+        shell: bash
+        # a read-only token (a fork's PR) must not fail a build that worked
+        run: opencv/ci_release_asset.sh upload opencv-windows-msvc14.40-sdk22621 windows opencv2.lib || echo "::warning::could not upload the OpenCV build to the opencv-prebuilt release"
+
+      - name: Which tier
+        shell: bash
+        run: |
+          if [ "${{ steps.cache.outputs.cache-hit }}" = "true" ]; then tier=cache
+          elif [ "${{ steps.release.outputs.hit }}" = "true" ]; then tier="release asset"
+          else tier="built from source"; fi
+          echo "::notice::OpenCV (windows) from: $tier"
+          echo "OpenCV (windows, key opencv-windows-msvc14.40-sdk22621-${{ steps.key.outputs.key }}): **$tier**" >> "$GITHUB_STEP_SUMMARY"
+          test -f opencv/lib/windows/opencv2.lib
+          # stage exactly what callers unpack into opencv/ (lib/windows and include), so the artifact's layout
+          # does not depend on upload-artifact's choice of root directory
+          rm -rf opencv-artifact
+          mkdir -p opencv-artifact/lib
+          cp -R opencv/lib/windows opencv-artifact/lib/windows
+          cp -R opencv/include opencv-artifact/include
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: opencv-windows
+          path: opencv-artifact
+          if-no-files-found: error
