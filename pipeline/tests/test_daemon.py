@@ -797,3 +797,14 @@ def test_a_batch_building_over_ten_minutes_is_marked_slow(rig: Rig) -> None:
     assert d.snapshot()["landing"]["batch"]["slow"] is True  # type: ignore[index]
     rig.db.batch_update(bid, state="ci")  # only a batch still building is slow: CI is expected to take long
     assert d.snapshot()["landing"]["batch"]["slow"] is False  # type: ignore[index]
+
+
+async def test_restart_finishes_an_escalation_it_cut_short(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.engine.claim(rig.engine.claimable() or rig.db.tickets()[0])
+    rig.db.add_question(7, "explore", "ship it?", {"question": "ship it?", "why": "unclear", "options": []})
+    assert rig.db.open_question(7)["comment_id"] is None  # type: ignore[index]  # the daemon died before posting it
+    Daemon(rig.engine, Config(), token="tok").reconcile()
+    assert rig.state(7) == "needs-input"
+    assert rig.db.open_question(7)["comment_id"] is not None  # type: ignore[index]

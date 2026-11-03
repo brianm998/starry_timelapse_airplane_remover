@@ -420,6 +420,24 @@ class Engine:
         self.db.set_question_comment(qid, cid)
         return self.park(t, f"waiting on the owner: {q['question'][:120]}", state="needs-input")
 
+    def escalate_orphaned_questions(self) -> list[int]:
+        """Finish an escalation a restart cut short: the question is recorded but never posted, and the ticket was
+        left in an active state, so it kept running and showed "running" while the owner was never asked.
+        Called at daemon start, when no stage can be mid-escalation. Returns the tickets it parked."""
+        parked: list[int] = []
+        for t in self.db.tickets(ACTIVE_STATES):
+            rows = self.db._all("SELECT * FROM questions WHERE ticket=? ORDER BY id DESC LIMIT 1", (t.number,))  # pyright: ignore[reportPrivateUsage]
+            if not rows or rows[0]["answer"] is not None or rows[0]["comment_id"] is not None:
+                continue
+            q = dict(rows[0])
+            payload = json.loads(q["payload"] or "{}")
+            payload.setdefault("question", q["text"])
+            payload.setdefault("why", "")
+            self.db.event("question-reescalated", t.number, question=q["id"])
+            self._escalate(t, q["stage"], q["id"], payload)
+            parked.append(t.number)
+        return parked
+
     def _issue(self, t: Ticket) -> dict[str, Any]:
         return {"title": t.title, "body": t.body, "user": {"login": t.author}}
 
