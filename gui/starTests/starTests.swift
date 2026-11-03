@@ -4382,9 +4382,9 @@ final class OutlierTableTests: XCTestCase {
         XCTAssertEqual(OutlierWindowViewModel.columns.map { $0.isDefault }, try vectorColumns().map { $0.isDefault })
 
         // the preference is the desktop's key, a list of strings
-        var prefs = UserPreferences()
-        let json = Data(#"{"outlierTableColumns":["name","width"]}"#.utf8)
-        prefs = try JSONDecoder().decode(UserPreferences.self, from: json)
+        // decoded rather than assigned: assigning fires the `didSet` that saves the real preferences file
+        let json = Data(#"{"recentlyOpenedSequencelist":{},"outlierTableColumns":["name","width"]}"#.utf8)
+        let prefs = try JSONDecoder().decode(UserPreferences.self, from: json)
         XCTAssertEqual(prefs.outlierTableColumns, ["name", "width"])
         let round = try JSONEncoder().encode(prefs)
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: round) as? [String: Any])
