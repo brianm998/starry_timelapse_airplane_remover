@@ -387,10 +387,7 @@ async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: la
         result, _ = await eng.model_stage(t, "conflict", prompt, fresh=True)
         if not result.ok:
             return False
-    dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
-    if dropped:
-        shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
-        eng.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
+    if not await eng.audit_conflict(t, wt, mb, base, head):
         return False
     failure = None if land_now(eng, t.number) else await asyncio.to_thread(eng._run_verification, t, wt)  # pyright: ignore[reportPrivateUsage]
     if failure:

@@ -562,15 +562,32 @@ class Engine:
             result, _ = await self.model_stage(t, "conflict", prompt, fresh=True, as_landing=False)  # the ticket is not landing: no priority
             if not result.ok:
                 return False
-        dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
-        if dropped:
-            shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
-            self.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
+        if not await self.audit_conflict(t, wt, mb, base, head, as_landing=False):
             return False
         self.db.put(f"gherkin_ok:{t.number}", None)  # the head changed: an old feature run proves nothing about it
         self.db.put(f"catch_up_note:{t.number}", f"{base} was merged into this branch while the ticket was stopped: {count} commit(s) "
                                                 "you did not make are now in the tree. Re-read what you rely on before continuing.")
         self.db.event("caught-up", t.number, commits=count, conflicts=len(conflicted))
+        return True
+
+    async def audit_conflict(self, t: Ticket, wt: Path, mb: str, base: str, head: str, *, as_landing: bool | None = None) -> bool:
+        """The dropped-lines audit after a merge of develop. Lines found missing go back to the conflict stage once, listed, in a fresh
+        session; the audit then runs again. Parks (naming what is still missing) and returns False only if lines are still dropped."""
+        dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
+        if dropped:
+            listing = "\n".join(f"- {d.file}: {d.line.strip()[:200]}" for d in dropped[:30])
+            prompt = (f"{self._ticket_text(t)}\n\nThe merge of {base} into this branch is already committed, but the audit found "
+                      f"{len(dropped)} line(s) that {base} added and the branch no longer has:\n{listing}\n\n"
+                      "Do not redo the merge: commit on top of the current HEAD. Restore each of these lines, or remove it only where this "
+                      "ticket's own change replaces it. A line merely reworded or moved is fine only if its content is still there.")
+            result, _ = await self.model_stage(t, "conflict", prompt, fresh=True, as_landing=as_landing)
+            if not result.ok:
+                return False
+            dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
+        if dropped:
+            shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
+            self.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
+            return False
         return True
 
     def _prepare_catch_up(self, number: int, wt: Path, base: str) -> tuple[str, str, list[str], int] | None:
