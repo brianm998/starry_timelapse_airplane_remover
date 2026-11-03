@@ -92,7 +92,7 @@ final class FixtureTests: XCTestCase {
         // two needs-input tickets and two ci tickets to tell a count from a presence check
         let states = live + terminal + ["needs-input", "ci"]
         let counts = Overview.topBarCounts(states.enumerated().map { ticket($0.offset + 1, $0.element) })
-        XCTAssertEqual(counts.map(\.label), ["Needs input", "Queued", "Exploring", "Developing", "Testing", "Review", "Landing"])
+        XCTAssertEqual(counts.map(\.label), ["need you", "queued", "exploring", "developing", "testing", "review", "landing"])
         XCTAssertEqual(counts.map(\.count), [2, 1, 1, 1, 1, 1, 4])
         // every live state but paused is in exactly one bucket; paused and terminal states in none
         for state in live + terminal {
@@ -100,6 +100,21 @@ final class FixtureTests: XCTestCase {
             XCTAssertEqual(hits, live.contains(state) && state != "paused" ? 1 : 0, state)
         }
         XCTAssertEqual(Overview.topBarCounts([]).map(\.count), [0, 0, 0, 0, 0, 0, 0])
+    }
+
+    func testTopBarTileEmphasis() throws {
+        let base = try XCTUnwrap(try Self.snapshot().tickets.first)
+        func tickets(_ states: [String]) -> [TicketSnap] {
+            states.enumerated().map { var t = base; t.number = $0.offset + 1; t.state = $0.element; return t }
+        }
+        func emphases(_ states: [String]) -> [Overview.TileEmphasis] { Overview.topBarCounts(tickets(states)).map(\.emphasis) }
+        // nothing in flight: every tile is idle, needs-input included
+        XCTAssertEqual(emphases([]), Array(repeating: .idle, count: 7))
+        // a needs-input ticket is the only attention tile; the other non-zero buckets are active
+        XCTAssertEqual(emphases(["needs-input", "queued", "landing"]),
+                       [.attention, .active, .idle, .idle, .idle, .idle, .active])
+        // non-zero buckets other than needs-input never draw attention
+        XCTAssertEqual(emphases(["developing", "review"]), [.idle, .idle, .idle, .active, .idle, .active, .idle])
     }
 
     func testEveryTicketIsInAKnownGroupAndStagesCarryTheirLockWait() throws {
