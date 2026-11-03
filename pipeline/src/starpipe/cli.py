@@ -11,7 +11,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import click
 
@@ -246,7 +246,7 @@ def _post(path: str, body: dict[str, object] | None = None) -> None:
         res = _client().call("POST", path, body or {})
     except (client_mod.DaemonDown, RuntimeError) as exc:
         raise click.ClickException(str(exc)) from exc
-    result = res.get("result") if isinstance(res, dict) else None
+    result: object = cast("dict[str, object]", res).get("result") if isinstance(res, dict) else None
     click.echo(result if isinstance(result, str) else "ok")
 
 

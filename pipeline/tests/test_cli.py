@@ -151,7 +151,7 @@ def test_block_adds_links_to_an_existing_ticket(monkeypatch: pytest.MonkeyPatch)
     for n in (7, 174, 199):
         gh.add_issue(n, f"ticket {n}")
     gh.add_issue(50, "not a pipeline ticket", labels=())
-    monkeypatch.setattr(github, "GitHub", lambda _cfg: gh)  # pyright: ignore[reportUnknownLambdaType]
+    monkeypatch.setattr(github, "GitHub", lambda _cfg: gh)  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
     run = CliRunner()
     out = run.invoke(main, ["block", "7", "#174,199"])
     assert out.exit_code == 0, out.output
