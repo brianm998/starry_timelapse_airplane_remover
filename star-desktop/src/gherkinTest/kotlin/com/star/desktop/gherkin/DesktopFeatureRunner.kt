@@ -36,7 +36,16 @@ import com.star.desktop.gherkin.generated.StepAction
 import com.star.desktop.ui.app.AppScreen
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.app.MenuEntry
+import com.star.desktop.ui.app.SecondaryWindow
+import com.star.desktop.ui.app.SecondaryWindowContent
 import com.star.desktop.ui.app.StarApp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.captureToImage
 import com.star.desktop.ui.app.starMenusNow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -150,6 +159,8 @@ class DesktopFeatureRunner {
         StepAction.CONFIRM_CLOSE_IF_ASKED to { t -> confirmClosingIfAsked(t) },
         StepAction.WINDOW_OPEN to { t -> expectWindow(t, args[0], open = true) },
         StepAction.WINDOW_NOT_OPEN to { t -> expectWindow(t, args[0], open = false) },
+        StepAction.SAVE_SCREENSHOT to { t -> saveScreenshot(t, args[0]) },
+        StepAction.SAVE_WINDOW_SCREENSHOT to { t -> saveScreenshot(t, args[1], window = args[0]) },
     )
 
     fun run(feature: Feature) {
@@ -605,7 +616,31 @@ class DesktopFeatureRunner {
      * (`Window(onKeyEvent = ...)`) on an ancestor, in the bubble phase, with the focus put on it to begin with.
      */
     private fun showApp(t: ComposeUiTest, model: AppViewModel) {
-        if ("@ui" in feature.tags) t.setContent { KeyHost(model) { StarApp(model) } } else t.setContent { StarApp(model) }
+        if ("@ui" in feature.tags) t.setContent { KeyHost(model) { SecondaryWindowOverlay(model) { StarApp(model) } } } else t.setContent { StarApp(model) }
+    }
+
+    /** The secondary window the parity gallery is drawing now (null the rest of the time). */
+    private val shownWindow = androidx.compose.runtime.mutableStateOf<SecondaryWindow?>(null)
+
+    /**
+     * The test host has no AWT window to show a secondary window in, so for a screenshot of one its content (`SecondaryWindowContent`, which `Main.kt`
+     * puts in its `Window` too) is drawn over the app at the size the window opens at, tagged so the capture is of that and not of the app behind it.
+     */
+    @androidx.compose.runtime.Composable
+    private fun SecondaryWindowOverlay(model: AppViewModel, app: @androidx.compose.runtime.Composable () -> Unit) {
+        androidx.compose.foundation.layout.Box {
+            app()
+            val kind = shownWindow.value
+            if (kind != null) {
+                val screen by model.screen.collectAsState()
+                androidx.compose.foundation.layout.Box(
+                    androidx.compose.ui.Modifier
+                        .size(kind.size.width, kind.size.height)
+                        .background(com.star.desktop.ui.theme.StarColors.appBackground)
+                        .testTag(WINDOW_SHOT_TAG),
+                ) { SecondaryWindowContent(kind, model, (screen as? AppScreen.Sequence)?.vm) }
+            }
+        }
     }
 
     /** Horizon → camera → (select horizon: No) → what to remove → Start processing, as a user answers them. */
@@ -1053,6 +1088,49 @@ class DesktopFeatureRunner {
         waitFor(t, "the $name window to be ${if (open) "open" else "closed"}", 15_000) { windowIsOpen(name) == open }
     }
 
+    // ---- the parity gallery ----
+
+    /** `<dir>/<client>/<name>.png`, where dir is `STAR_GALLERY_DIR` (the gui's runner reads the same), else `<repo>/.test-data/gallery/latest`. */
+    private fun galleryFile(name: String): File {
+        val dir = System.getenv("STAR_GALLERY_DIR")?.takeIf { it.isNotEmpty() }?.let { File(it) } ?: File(repoRoot(), ".test-data/gallery/latest")
+        return File(File(dir, CLIENT), "$name.png")
+    }
+
+    private fun pixels(image: java.awt.image.BufferedImage): IntArray = image.getRGB(0, 0, image.width, image.height, null, 0, image.width)
+
+    /**
+     * Saves the main window (the whole 1400 by 1100 root), or with [window] the secondary window of that name drawn at its own size, as a PNG.
+     * Frames, thumbnails and the daemon's answers arrive on real threads, not on the test clock, so the capture is repeated until two in a row
+     * are the same picture (up to six seconds), and the step fails on a file that is empty.
+     */
+    private fun saveScreenshot(t: ComposeUiTest, name: String, window: String? = null) {
+        val kind = window?.let { SecondaryWindow.named(it) ?: throw RunnerError("no window called \"$it\"") }
+        shownWindow.value = kind
+        try {
+            fun capture(): java.awt.image.BufferedImage {
+                t.waitForIdle()
+                val node = if (kind != null) t.onNodeWithTag(WINDOW_SHOT_TAG) else t.onAllNodes(isRoot())[0]
+                return node.captureToImage().toAwtImage()
+            }
+            var image = capture()
+            var steady = 0
+            var tries = 0
+            while (steady < 2 && tries++ < 30) {
+                Thread.sleep(200)
+                val next = capture()
+                steady = if (pixels(next).contentEquals(pixels(image))) steady + 1 else 0
+                image = next
+            }
+            val file = galleryFile(name)
+            file.parentFile.mkdirs()
+            javax.imageio.ImageIO.write(image, "png", file)
+            println("SCREENSHOT $name -> $file (${image.width}x${image.height})")
+            if (file.length() < 1000) throw RunnerError("the screenshot \"$name\" is empty (${file.length()} bytes)")
+        } finally {
+            shownWindow.value = null
+        }
+    }
+
     // ---- waiting ----
 
     private fun ComposeUiTest.onAllNodesWithTagExists(tag: String): Boolean =
@@ -1079,6 +1157,7 @@ class DesktopFeatureRunner {
     private companion object {
         const val IDLE_STOPPED_NS = 3_000_000_000L
         const val CLIENT = "desktop"
+        const val WINDOW_SHOT_TAG = "gallery.window"
         const val OPEN_TIMEOUT_MS = 10L * 60_000
         const val UI_TIMEOUT_MS = 90_000L
         const val DRAG_HALF_PX = 24f   // a drag around a group is a box this far each way from its centre, in pixels
