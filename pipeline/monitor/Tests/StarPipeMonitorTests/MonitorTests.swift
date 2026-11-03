@@ -230,10 +230,10 @@ final class StoreTests: XCTestCase {
         XCTAssertNil(store.selected)
     }
 
-    /// Fixture ticket 9 blocked by a ticket (6) and a non-ticket issue (99).
+    /// Fixture ticket 3 blocked by a ticket (6) and a non-ticket issue (99).
     private func blockedSnapshot() throws -> Snapshot {
         var s = try FixtureTests.snapshot()
-        let i = try XCTUnwrap(s.tickets.firstIndex { $0.number == 9 })
+        let i = try XCTUnwrap(s.tickets.firstIndex { $0.number == 3 })
         s.tickets[i].blockedBy = [6, 99]
         return s
     }
