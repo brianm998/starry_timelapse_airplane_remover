@@ -7,6 +7,10 @@ import StarDaemonMessages
 final class BlobStepsTests: XCTestCase {
     private var savedHome: String?
     private var home: URL!
+    /// Where the custom processor really keeps its file. NSHomeDirectory() does not always follow a `setenv("HOME")`
+    /// (it did not on the machine that found this), and then the file is the user's real one.
+    private var stepsFile: URL { URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".star_custom_processor_steps.json") }
+    private var realFileBefore: Data?
 
     override func setUp() {
         super.setUp()
@@ -16,9 +20,12 @@ final class BlobStepsTests: XCTestCase {
         home = FileManager.default.temporaryDirectory.appendingPathComponent("star-blob-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         setenv("HOME", home.path, 1)
+        realFileBefore = try? Data(contentsOf: stepsFile)
     }
 
     override func tearDown() {
+        // when HOME was not honoured the test wrote the real file: put back what was there
+        if let realFileBefore { try? realFileBefore.write(to: stepsFile) } else if !stepsFile.path.hasPrefix(home.path) { try? FileManager.default.removeItem(at: stepsFile) }
         if let savedHome { setenv("HOME", savedHome, 1) } else { unsetenv("HOME") }
         try? FileManager.default.removeItem(at: home)
         StarLocalization.shared.languageOverride = nil
@@ -175,7 +182,7 @@ final class BlobStepsTests: XCTestCase {
         // a processor made afterwards reads what was saved
         guard case .findBlobs(let args) = CustomBlobProcessor().steps[0] else { return XCTFail("nothing was saved") }
         XCTAssertEqual(args.value(for: .minPixelIntensity), 4321)
-        XCTAssertTrue(FileManager.default.fileExists(atPath: home.appendingPathComponent(".star_custom_processor_steps.json").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stepsFile.path))
     }
 
     func testAParameterThatIsNotThereIsRefusedAndChangesNothing() throws {
