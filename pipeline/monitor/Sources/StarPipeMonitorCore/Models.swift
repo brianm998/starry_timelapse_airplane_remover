@@ -307,8 +307,12 @@ public enum Overview {
     public struct StageCount: Equatable, Sendable, Identifiable {
         public var label: String
         public var states: [String]
+        public var help: String
         public var count: Int
         public var id: String { label }
+
+        /// The hover text: what the stage does, then which daemon states the tile counts.
+        public var tooltip: String { Overview.tooltip(help: help, states: states) }
 
         /// How loudly the tile draws: the owner's queue when it is non-empty, a muted tile for zero, otherwise normal.
         public var emphasis: TileEmphasis {
@@ -319,18 +323,44 @@ public enum Overview {
 
     public enum TileEmphasis: Equatable, Sendable { case attention, active, idle }
 
+    /// One top-bar bucket: its tile label, the daemon states it counts, and what the stage means (the hover help).
+    public struct TopBarBucket: Sendable {
+        public var label: String
+        public var states: [String]
+        public var help: String
+
+        /// The hover text: what the stage does, then which daemon states the tile counts.
+        public var tooltip: String { Overview.tooltip(help: help, states: states) }
+    }
+
+    static func tooltip(help: String, states: [String]) -> String {
+        help + "\nCounts tickets in: " + states.joined(separator: ", ")
+    }
+
     /// The top bar's seven buckets, in display order. `paused` and terminal states belong to none.
     /// Labels are short and lowercase so they fit a tile on one line.
-    public static let topBarBuckets: [(label: String, states: [String])] = [
-        ("need you", ["needs-input"]), ("queued", ["queued"]), ("exploring", ["exploring"]),
-        ("developing", ["developing"]), ("testing", ["verifying"]), ("review", ["review"]),
-        ("landing", landingStates),
+    public static let topBarBuckets: [TopBarBucket] = [
+        TopBarBucket(label: "need you", states: ["needs-input"],
+                     help: "An agent stopped and asked a question, or parked the ticket. It waits for your answer and does nothing until you give one."),
+        TopBarBucket(label: "queued", states: ["queued"],
+                     help: "Approved tickets waiting for a free slot (max_active). No agent has started on them."),
+        TopBarBucket(label: "exploring", states: ["exploring"],
+                     help: "An agent is reading the code and writing the plan for the ticket. Skipped when the ticket carries its own ## Plan."),
+        TopBarBucket(label: "developing", states: ["developing"],
+                     help: "An agent is writing the change in the ticket's own worktree, including rework after review findings."),
+        TopBarBucket(label: "testing", states: ["verifying"],
+                     help: "The builds and tests the change needs are running. A failure goes to a fix agent and back here."),
+        TopBarBucket(label: "review", states: ["review"],
+                     help: "A fresh reviewer is checking the diff against the acceptance criteria. It either approves or sends the ticket back to developing."),
+        TopBarBucket(label: "landing", states: landingStates,
+                     help: "Approved changes on their way into develop: ready (waiting for a CI slot), ci (checks running on the PR or batch), landing (merging, resolving conflicts)."),
     ]
 
     /// Tickets per top-bar bucket, zeros included.
     public static func topBarCounts(_ tickets: [TicketSnap]) -> [StageCount] {
         topBarBuckets.map { bucket in
-            StageCount(label: bucket.label, states: bucket.states, count: tickets.filter { bucket.states.contains($0.state) }.count)
+            StageCount(label: bucket.label, states: bucket.states, help: bucket.help,
+                       count: tickets.filter { bucket.states.contains($0.state) }.count)
         }
     }
 
