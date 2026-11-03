@@ -89,7 +89,8 @@ struct TicketDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(rows) { row in
                         HStack(alignment: .firstTextBaseline) {
-                            Link(row.label, destination: row.url).monospacedDigit().help(row.url.absoluteString)
+                            Button(row.label) { store.selectIssue(row.number, title: row.title) }
+                                .buttonStyle(.link).monospacedDigit().help("Show \(row.label) here")
                             Text(row.title).foregroundStyle(.secondary).textSelection(.enabled)
                         }
                     }
@@ -195,5 +196,29 @@ struct StageTimeline: View {
         case "interrupted": .gray
         default: .orange
         }
+    }
+}
+
+/// The detail pane for an issue that is a blocker but not a pipeline ticket: what is known, and the way to GitHub.
+struct IssuePanelView: View {
+    let number: Int
+    let title: String
+    let repo: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("#\(number)").monospacedDigit().foregroundStyle(.secondary)
+                if !title.isEmpty { Text(title).scaledFont(.title2, weight: .bold).textSelection(.enabled) }
+                Spacer()
+                if let url = BlockerLinks.issueURL(repo: repo, number: number) {
+                    Button("Issue") { NSWorkspace.shared.open(url) }
+                }
+            }
+            Text("Not a pipeline ticket.").foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

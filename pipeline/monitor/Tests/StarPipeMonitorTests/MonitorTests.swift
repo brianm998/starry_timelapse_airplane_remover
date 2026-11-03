@@ -230,6 +230,49 @@ final class StoreTests: XCTestCase {
         XCTAssertNil(store.selected)
     }
 
+    /// Fixture ticket 3 blocked by a ticket (6) and a non-ticket issue (99).
+    private func blockedSnapshot() throws -> Snapshot {
+        var s = try FixtureTests.snapshot()
+        let i = try XCTUnwrap(s.tickets.firstIndex { $0.number == 3 })
+        s.tickets[i].blockedBy = [6, 99]
+        return s
+    }
+
+    func testSelectingBlockerShowsItInPanel() throws {
+        let store = MonitorStore()
+        store.apply(try blockedSnapshot())
+        store.selectIssue(6)
+        XCTAssertEqual(store.selectedTicket?.number, 6)
+        XCTAssertNil(store.selectedIssue)
+        store.selectIssue(99, title: "outside")
+        XCTAssertNil(store.selectedTicket)
+        XCTAssertEqual(store.selectedIssue?.number, 99)
+        XCTAssertEqual(store.selectedIssue?.title, "outside")
+    }
+
+    func testSnapshotKeepsSelectedBlockerNotInTickets() throws {
+        let store = MonitorStore()
+        store.apply(try blockedSnapshot())
+        store.selectIssue(99, title: "outside")
+        store.apply(try blockedSnapshot())
+        XCTAssertEqual(store.selected, 99)
+        XCTAssertNil(store.selectedTicket)
+        XCTAssertEqual(store.selectedIssue?.title, "outside")
+        store.apply(try FixtureTests.snapshot())   // nothing is blocked by 99 any more
+        XCTAssertNil(store.selected)
+    }
+
+    func testBlockerSelectionIsInHistory() throws {
+        let store = MonitorStore()
+        store.apply(try blockedSnapshot())
+        store.selectIssue(99)
+        store.selected = 6
+        store.goBack()
+        XCTAssertEqual(store.selected, 99)
+        store.goForward()
+        XCTAssertEqual(store.selected, 6)
+    }
+
     func testShowOverviewClearsTheSelectionAndDetail() async throws {
         let store = MonitorStore()
         store.apply(try FixtureTests.snapshot())
