@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from . import ci, gherkin_nightly, gitutil, landing, tickets, trust, worktrees
+from .checks import baseline
 from .db import Ticket
 from .github import GitHubError
 
@@ -40,6 +41,7 @@ def pr_body(eng: Engine, t: Ticket) -> str:
     return (f"{trust.marker('pr', t.number)}\nCloses #{t.number}\n\n## Plan\n{plan.get('summary', '')}\n\n"
             f"## Acceptance\n{acceptance}\n\n## Local checks at HEAD\n| check | result | tests |\n|---|---|---|\n{rows}\n\n"
             f"## Negative control\n{json.dumps(controls) if controls else 'none planned'}\n"
+            + (f"\n{known}" if (known := baseline.section(eng.db, t.number, gitutil.head_sha(Path(t.worktree or "")))) else "")
             + (f"\n## CI notes\n{notes}\n" if notes else "")
             + (f"\n## Tests bypassed\n{BYPASS_NOTE}\n" if land_now(eng, t.number) else "")
             + "\nOpened by the star pipeline.\n")
