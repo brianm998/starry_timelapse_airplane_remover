@@ -36,6 +36,46 @@ struct OutlierGroupView: View {
         return .userSelected(!current.willRemove)
     }
 
+    /// A group as the probe choice sees it: its id, its bounds in frame pixels and its pixel count, in the order the groups are drawn
+    /// (the last one is on top).
+    struct ProbeCandidate: Equatable {
+        let id: String
+        let bounds: BoundingBox
+        let size: UInt
+    }
+
+    /// The group a UI test clicks (`outlier.first`). It must be one a click can hit: the smallest group is often under a point wide at the
+    /// size the frame is shown at (0.9 x 0.3 pt in the default window), and XCUITest never reports such an element hittable, so the run
+    /// waited out its 60 s on it. Among the groups with more than `minSize` pixels whose box is at least `minPoints` on screen both ways
+    /// (the desktop tags a fixed 6 dp box), this takes the smallest one whose centre no later-drawn group covers, because a click on the
+    /// centre would land on that group instead. When none qualifies it is the smallest group over `minSize`, as it used to be.
+    /// - Parameters:
+    ///   - groups: the candidates in drawing order
+    ///   - pointsPerPixel: how many points a frame pixel takes up on screen
+    static func probeGroupId(groups: [ProbeCandidate],
+                             pointsPerPixel: CGFloat,
+                             minSize: UInt = 40,
+                             minPoints: CGFloat = 6) -> String?
+    {
+        let big = groups.indices.filter { groups[$0].size > minSize }
+        func area(_ i: Int) -> Int { groups[i].bounds.size }
+
+        let hittable = big.filter { i in
+            let b = groups[i].bounds
+            guard CGFloat(b.width) * pointsPerPixel >= minPoints,
+                  CGFloat(b.height) * pointsPerPixel >= minPoints else { return false }
+            let c = b.centerDouble
+            return !groups.indices.contains { j in
+                guard j > i else { return false }
+                let o = groups[j].bounds
+                return c.x >= Double(o.min.x) && c.x <= Double(o.max.x + 1) && c.y >= Double(o.min.y) && c.y <= Double(o.max.y + 1)
+            }
+        }
+        // `min(by:)` keeps the first of equals; the old rule kept the last one drawn, which is the one on top
+        let pick = hittable.reversed().min { area($0) < area($1) } ?? big.reversed().min { area($0) < area($1) }
+        return pick.map { groups[$0].id }
+    }
+
     var body: some View {
         @Bindable var groupViewModel = groupViewModel
         @Bindable var viewModel = viewModel

@@ -4154,6 +4154,42 @@ final class ClickRuleTests: XCTestCase {
                            expected, "\(c)")
         }
     }
+
+    /// The probe (`outlier.first`) is a group a click can hit. On the CI VM's default window the frame is 180 pt wide for a 6000 px frame
+    /// (0.03 pt a pixel), and the old choice, the smallest group, was 0.9 x 0.3 pt: the element existed and was never hittable.
+    func testTheProbeGroupIsOneAClickCanHit() {
+        typealias C = OutlierGroupView.ProbeCandidate
+        func box(_ x: Int, _ y: Int, _ w: Int, _ h: Int) -> BoundingBox {
+            BoundingBox(min: Coord(x: x, y: y), max: Coord(x: x + w - 1, y: y + h - 1))
+        }
+        let pointsPerPixel: CGFloat = 0.03
+        let big = C(id: "big", bounds: box(1000, 1000, 400, 300), size: 5000)        // 12 x 9 pt
+        let tiny = C(id: "tiny", bounds: box(3000, 500, 30, 10), size: 200)           // 0.9 x 0.3 pt, the old choice
+        let thin = C(id: "thin", bounds: box(2000, 2000, 600, 100), size: 900)        // 18 x 3 pt: too thin
+        let few = C(id: "few", bounds: box(4000, 4000, 300, 300), size: 40)           // not over 40 pixels
+
+        // drawn biggest first, so the last is on top; the old rule took the last one with more than 40 pixels
+        let drawn = [big, thin, tiny, few]
+        XCTAssertEqual(drawn.last(where: { $0.size > 40 })?.id, "tiny", "the old rule picks the sub-point group")
+        XCTAssertEqual(OutlierGroupView.probeGroupId(groups: drawn, pointsPerPixel: pointsPerPixel), "big")
+
+        // a group drawn later on top of the centre of `big` takes the click: the next smallest is chosen
+        let middle = C(id: "middle", bounds: box(5000, 1000, 250, 250), size: 3000)   // 7.5 x 7.5 pt
+        let cover = C(id: "cover", bounds: box(1100, 1050, 200, 200), size: 2000)     // 6 x 6 pt, on `big`'s centre
+        XCTAssertEqual(OutlierGroupView.probeGroupId(groups: [big, middle, cover, tiny], pointsPerPixel: pointsPerPixel), "cover",
+                       "the smallest group a click can hit is `cover`; `big` is under it")
+        XCTAssertEqual(OutlierGroupView.probeGroupId(groups: [big, cover, middle, tiny], pointsPerPixel: pointsPerPixel), "cover")
+        XCTAssertEqual(OutlierGroupView.probeGroupId(groups: [cover, big, middle, tiny], pointsPerPixel: pointsPerPixel), "middle",
+                       "`big` is drawn over `cover`'s centre, and it is not the smaller one")
+
+        // zoomed in, the small one is big enough
+        XCTAssertEqual(OutlierGroupView.probeGroupId(groups: drawn, pointsPerPixel: 1), "tiny")
+
+        // nothing is big enough: the smallest group over 40 pixels, as before; nothing over 40 pixels: none
+        XCTAssertEqual(OutlierGroupView.probeGroupId(groups: [thin, tiny, few], pointsPerPixel: pointsPerPixel), "tiny")
+        XCTAssertNil(OutlierGroupView.probeGroupId(groups: [few], pointsPerPixel: pointsPerPixel))
+        XCTAssertNil(OutlierGroupView.probeGroupId(groups: [], pointsPerPixel: pointsPerPixel))
+    }
 }
 
 /// S8: the start screen's controls are the ones `gherkin/ui/vectors/startScreen.json` lists, in that order, each with its hover text; the

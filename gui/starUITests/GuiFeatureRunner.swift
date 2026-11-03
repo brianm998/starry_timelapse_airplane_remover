@@ -1,5 +1,6 @@
 import Foundation
 import StarGherkinKernel
+import AppKit
 import XCTest
 
 /// Runs a generated `Feature` against the real `Star.app` with XCUITest. The step vocabulary is
@@ -345,10 +346,18 @@ final class GuiFeatureRunner {
     /// come up over the loading view) is not one to click, and a click on one that has gone fails the whole test.
     private enum Click { case plain, command, right }
 
+    /// What a failed wait for a click target prints before the tree: whether the element is there, how big it is on screen, whether it can be
+    /// hit and what display it is on. (A group that was 0.9 x 0.3 pt was there for the whole wait and never hittable; the tree alone did not say.)
+    private func whyNotClickable(_ e: XCUIElement, _ identifier: String) -> String {
+        let window = app.windows.firstMatch
+        let scale = NSScreen.main.map { "\($0.backingScaleFactor)" } ?? "unknown"
+        return "\n\(identifier): exists \(e.exists), hittable \(e.isHittable), frame \(e.frame), window \(window.exists ? "\(window.frame)" : "none"), backingScaleFactor \(scale), screen \(NSScreen.main?.frame ?? .zero)\n\(app.debugDescription)"
+    }
+
     private func clickId(_ identifier: String, how: Click = .plain) throws {
         let e = element(identifier)
         var scroller = Scroller()
-        try waitFor("\(identifier) to be clickable", timeout: 60, detail: { "\n\(self.app.debugDescription)" }) {
+        try waitFor("\(identifier) to be clickable", timeout: 60, detail: { self.whyNotClickable(e, identifier) }) {
             if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller) }
             return e.exists && e.isHittable
         }

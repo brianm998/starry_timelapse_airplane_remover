@@ -227,9 +227,13 @@ public struct FrameEditImageView: View {
                             let sorted = outlierViews.sorted() {
                                 $0.group.bounds.size > $1.group.bounds.size
                             }
-                            // a test finds one group: the smallest box that is drawn, which is on top, so a click on it is a click on it
-                            // (`-StarUITestProbes YES`, `outlier.first` in `gherkin/ui/ids.json`)
-                            let probe = ViewModel.uiTestProbes ? sorted.last(where: { $0.group.size > 40 })?.group.id : nil
+                            // a test finds one group, one a click can hit at the size the frame is shown at
+                            // (`-StarUITestProbes YES`, `outlier.first` in `gherkin/ui/ids.json`, `OutlierGroupView.probeGroupId`)
+                            let probe = ViewModel.uiTestProbes
+                              ? OutlierGroupView.probeGroupId(
+                                groups: sorted.map { .init(id: $0.group.id, bounds: $0.group.bounds, size: $0.group.size) },
+                                pointsPerPixel: viewModel.currentZoomScale)
+                              : nil
                             ForEach(sorted) { outlierViewModel in
                                 if outlierViewModel.group.size > 40 { // XXX use a constant here
                                     OutlierGroupView(groupViewModel: outlierViewModel,
