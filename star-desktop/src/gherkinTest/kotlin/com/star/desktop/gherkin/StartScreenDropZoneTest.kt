@@ -24,6 +24,9 @@ import kotlin.test.assertTrue
 class StartScreenDropZoneTest {
     @Test fun theDropZoneFillsTheMiddleOfTheWindow() {
         System.setProperty(NO_INTRO_VIDEO_PROPERTY, "1")
+        // The view model resolves a stard path when it is made, though this test never starts the engine: any executable file will do.
+        val stard = kotlin.io.path.createTempFile("stard").toFile().apply { setExecutable(true); deleteOnExit() }
+        System.setProperty("star.stard.path", stard.absolutePath)
         try {
             runDesktopComposeUiTest(width = 1400, height = 1100) {
                 setContent {
@@ -43,6 +46,7 @@ class StartScreenDropZoneTest {
             }
         } finally {
             System.clearProperty(NO_INTRO_VIDEO_PROPERTY)
+            System.clearProperty("star.stard.path")
         }
     }
 }
