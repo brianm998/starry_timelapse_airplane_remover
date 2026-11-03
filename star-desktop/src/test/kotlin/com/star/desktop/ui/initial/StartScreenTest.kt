@@ -43,6 +43,17 @@ class StartScreenTest {
         assertNotEquals(english, localized(key), "$key is English in German")
     }
 
+    /** The zone says what the gui's does (its key, a document icon, a dashed border that goes accent under a drag) and is clickable, with a hover text. */
+    @Test fun theDropZoneSaysWhatTheGuisSays() {
+        val source = read("star-desktop/src/main/kotlin/com/star/desktop/ui/initial/InitialView.kt")
+        for (needle in listOf(
+            "localized(\"ui.drop_a_video_an_image_sequence_or_an\")", "DropZoneIcon()", "dashPathEffect", "if (isHovering) StarColors.accent else Color.White",
+            "HoverTip(localized(\"ui.load_an_image_sequence_yet_to_be_processed\")) {\n                            DropZone(", ".clickable(onClick = onOpenSequence)",
+            "testTag(\"startup.dropzone\")",
+        )) assertTrue(needle in source, "InitialView.kt lacks: $needle")
+        assertTrue("ui.drop_an_image_sequence_folder_video_or" !in source, "the desktop's own drop zone text is still on the start screen")
+    }
+
     @Test fun theyAreTranslated() {
         Strings.setOverride("en")
         val english = controls.flatMap { listOf(it["label"].asString, it["tip"].asString) }.associateWith { localized(it) }
