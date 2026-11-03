@@ -1,6 +1,7 @@
 package com.star.desktop.ui.dialogs
 
 import com.star.desktop.domain.SettingsEdit
+import com.star.desktop.i18n.localized
 import com.star.proto.CleanMethod
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -178,5 +179,40 @@ class SettingsRulesTest {
                 com.star.desktop.i18n.Strings.setOverride(null)
             }
         }
+    }
+
+    private fun choices(label: String) = (field(label) as BoolField).choices
+
+    @Test fun cannyRowsAreTwoChoicesWithTheGuisLabels() {
+        val canny = choices("Canny edge detection")!!
+        assertEquals(listOf("Yes", "No"), canny.map { localized(it.labelKey) })
+        assertEquals(listOf(true, false), canny.map { it.value })
+        val gradient = choices("Canny L2 gradient")!!
+        assertEquals(listOf("L1 Norm", "L2 Norm"), gradient.map { localized(it.labelKey) })
+        // Choosing L2 sets the same boolean the switch did: canny_use_l2_gradient = true.
+        assertEquals(listOf(false, true), gradient.map { it.value })
+    }
+
+    @Test fun cannyChoicesHaveTheGuisHoverTexts() {
+        assertEquals(
+            listOf("ui.canny_yes_help", "ui.canny_no_help"),
+            choices("Canny edge detection")!!.map { it.helpKey },
+        )
+        assertEquals(listOf("ui.l1_norm_help", "ui.l2_norm_help"), choices("Canny L2 gradient")!!.map { it.helpKey })
+        for (c in choices("Canny edge detection")!! + choices("Canny L2 gradient")!!) {
+            assertTrue(localized(c.helpKey) != c.helpKey && localized(c.helpKey).isNotBlank(), "${c.helpKey} has no text")
+        }
+    }
+
+    @Test fun cannyRowsKeepTheirEnablement() {
+        val skyOnly = edit(horizon = false, on = arrayOf("Canny edge detection"))
+        assertFalse(enabled("Canny edge detection", skyOnly))
+        assertFalse(enabled("Canny L2 gradient", skyOnly))
+        val cannyOff = edit()
+        assertTrue(enabled("Canny edge detection", cannyOff))
+        assertFalse(enabled("Canny L2 gradient", cannyOff))
+        val cannyOn = edit(on = arrayOf("Canny edge detection"))
+        assertTrue(enabled("Canny edge detection", cannyOn))
+        assertTrue(enabled("Canny L2 gradient", cannyOn))
     }
 }

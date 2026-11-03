@@ -44,6 +44,7 @@ class Config(BaseModel):
     max_in_ci: int = 3  # tickets in CI or landing at once; a finished ticket waits as `ready` for room (runners are shared)
     heavy_slots: int = 1
     auto_self_update: bool = True  # switch the daemon to a new pinned runtime when origin/develop has newer pipeline/ code; the kill switch
+    self_update_drain_s: int = 600  # a pending self-update holds new claims at most this long; then it swaps, interrupting running stages (they resume by session id)
     nightly_start: str = "03:00"
     digest_weekday: int = 6  # Monday is 0
     digest_hour: int = 8
@@ -68,6 +69,11 @@ class Config(BaseModel):
     # with just those features, recognise the run by its display_title, and wait for it.
     ci_post_merge_workflows: tuple[str, ...] = ("Gherkin",)
     heavy_wait_report_s: float = 60.0
+    # A heavy job whose process group used under 1% of a core and wrote nothing to its log for this long is killed and reported
+    # as hung (0 turns it off). A wedged xctest sat 1h35m at 0% CPU on the only slot (2026-11-03).
+    heavy_idle_kill_s: float = 900.0
+    heavy_idle_grace_s: float = 10.0  # SIGTERM, then SIGKILL after this
+    heavy_idle_poll_s: float = 5.0
     api_port: int = 47231
     java_home: str = ""  # JDK 21 for star-desktop builds; empty: $JAVA_HOME, else the adapter's candidates
     remote: str = "https"  # "https" (the daemon, token from github.env or gh) or "origin" (tests, a local bare repo)
