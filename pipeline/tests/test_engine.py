@@ -866,3 +866,54 @@ async def test_a_dirty_worktree_is_not_caught_up(rig: Rig) -> None:
     skipped = [e for e in rig.db.events_since() if e["kind"] == "catch-up-skipped"]
     assert len(skipped) == 1 and "uncommitted" in skipped[0]["data"]["reason"]
     assert not [e for e in rig.db.events_since() if e["kind"] == "caught-up"]
+
+
+def failed_behind(rig: Rig, blockers: list[int]) -> None:
+    """Ticket 7 failed in CI; `blockers` are pipeline tickets that must land before its held retry fires."""
+    rig.gh.add_issue(7, "failed one")
+    for b in blockers:
+        rig.gh.add_issue(b, f"blocker {b}")
+    rig.gh.deps[7] = blockers
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "failed", "CI still red after 2 fix cycles")
+    rig.db.put("land_now:7", "1")
+    rig.engine.parked.add(7)
+    rig.db.put("held_retry:7", "ci")
+
+
+def interventions(rig: Rig) -> list[str]:
+    return [r["kind"] for r in rig.db._all("SELECT kind FROM interventions")]  # pyright: ignore[reportPrivateUsage]
+
+
+def test_held_retry_fires_when_the_last_blocker_lands(rig: Rig) -> None:
+    failed_behind(rig, [8, 9])
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "failed", "both blockers are still open"
+    rig.db.set_state(8, "landed")
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "failed", "one is still open"
+    rig.db.set_state(9, "closed")
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "ci", "the retry the owner would have run: from ci"
+    assert rig.db.get("held_retry:7") is None and rig.db.get("land_now:7") is None
+    assert 7 not in rig.engine.parked
+    assert interventions(rig) == ["retry"]
+
+
+def test_held_retry_does_not_fire_early_or_twice(rig: Rig) -> None:
+    failed_behind(rig, [8])
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "failed" and rig.db.get("held_retry:7") == "ci" and interventions(rig) == []
+
+    rig.db.set_state(8, "landed")
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "ci"
+    rig.db.set_state(7, "failed", "red again")  # it fails a second time: the spent record must not fire again
+    rig.engine.release_held_retries()
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "failed" and interventions(rig) == ["retry"]
+
+    rig.db.put("held_retry:7", "ci")  # the owner retried by hand meanwhile: the record is stale and is dropped
+    rig.db.set_state(7, "developing")
+    rig.engine.release_held_retries()
+    assert rig.state(7) == "developing" and rig.db.get("held_retry:7") is None and interventions(rig) == ["retry"]

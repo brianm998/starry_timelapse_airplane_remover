@@ -158,6 +158,7 @@ final class DetailTests: XCTestCase {
         XCTAssertEqual(d.checks.first?.result, "pass")
         XCTAssertNil(d.question)
         XCTAssertEqual(d.blockers, [BlockerRef(number: 27, title: "Processing Frames dialog: remember the window size")])
+        XCTAssertEqual(d.heldRetry, "retry from ci when unblocked")
     }
 
     func testADetailWithoutBlockersFromAnOlderDaemonDecodesToNone() throws {
@@ -166,6 +167,7 @@ final class DetailTests: XCTestCase {
         raw["blockers"] = nil
         let d = try JSONDecoder().decode(TicketDetail.self, from: JSONSerialization.data(withJSONObject: raw))
         XCTAssertEqual(d.blockers, [])
+        XCTAssertNil(d.heldRetry)
         XCTAssertEqual(d.number, 28)
     }
 }
