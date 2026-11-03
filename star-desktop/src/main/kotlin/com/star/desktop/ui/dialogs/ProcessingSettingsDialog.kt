@@ -926,12 +926,14 @@ private fun ExpertGroup(
 }
 
 @Composable
-private fun UnsupportedRow(label: String, daemonVersion: String?) {
+internal fun UnsupportedRow(label: String, daemonVersion: String?) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(label, color = StarColors.textDisabled, fontSize = 12.sp, modifier = Modifier.weight(1f))
         Text(
             if (daemonVersion == null) localized("ui.needs_a_newer_engine") else localized("ui.needs_an_engine_newer_than", daemonVersion),
             color = StarColors.textDisabled, fontSize = 10.sp,
+            // Not unweighted: a long note would be measured first and leave the label no room, and the label would break inside its words.
+            modifier = Modifier.weight(1f, fill = false),
         )
     }
 }

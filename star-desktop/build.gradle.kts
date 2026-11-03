@@ -56,6 +56,7 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation(compose.desktop.uiTestJUnit4)
 }
 
 // Generate protobuf-java-lite + protobuf-kotlin-lite extensions. No gRPC.

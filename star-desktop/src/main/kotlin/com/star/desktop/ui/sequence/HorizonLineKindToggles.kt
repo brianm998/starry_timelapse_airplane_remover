@@ -47,16 +47,18 @@ fun HorizonLineKindToggles(vm: SequenceViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(0.dp), modifier = Modifier.padding(start = 16.dp)) {
         for (kind in HorizonLineKinds.all) {
             val enabled = showHorizon && kind in available
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.alpha(if (enabled) 1f else 0.4f)) {
-                Checkbox(
-                    checked = kind in visible,
-                    onCheckedChange = { vm.setHorizonLineKindVisible(kind, it) },
-                    enabled = enabled,
-                )
-                Spacer(Modifier.size(8.dp).background(horizonLineColor(kind, pending = false), CircleShape))
-                Spacer(Modifier.width(6.dp))
-                Text(HorizonLineKinds.label(kind), color = StarColors.white, fontSize = 11.sp)
-            }
+            HorizonKindRow(kind, kind in visible, enabled) { vm.setHorizonLineKindVisible(kind, it) }
         }
+    }
+}
+
+/** One kind's check box, its colour dot and its name; the name takes what is left of the row and wraps at its spaces. */
+@Composable
+internal fun HorizonKindRow(kind: HorizonOverlayKind, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.alpha(if (enabled) 1f else 0.4f)) {
+        Checkbox(checked = checked, onCheckedChange = onChange, enabled = enabled)
+        Spacer(Modifier.size(8.dp).background(horizonLineColor(kind, pending = false), CircleShape))
+        Spacer(Modifier.width(6.dp))
+        Text(HorizonLineKinds.label(kind), color = StarColors.white, fontSize = 11.sp, modifier = Modifier.weight(1f))
     }
 }
