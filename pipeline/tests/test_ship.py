@@ -947,3 +947,17 @@ def test_a_feature_run_on_a_branch_without_a_run_name_is_matched_by_its_path_tit
     assert not ship._is_feature_run(run(path, "2026-11-02T12:00:05Z", head="other"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
     assert not ship._is_feature_run(run(path, "2026-11-02T12:00:05Z", event="push"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
     assert not ship._is_feature_run(run("Some PR title", "2026-11-02T12:00:05Z"), sha, title, dispatched)  # type: ignore[reportPrivateUsage]
+
+
+def test_a_skipped_develop_job_keeps_its_baseline(rig: Rig) -> None:
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "success"), ("cli", "macos", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    rig.db.set_baseline("cli", "macos", "tested-by-pr", "success")
+    rig.db.put("red_pending:cli/macos", "earlier")
+    rig.gh.develop_sha = "d2"  # the push run skipped its jobs: the batch PR had already tested this tree
+    rig.gh.develop_ci = [("pr-gate", "linux", "completed", "skipped"), ("cli", "macos", "completed", "skipped")]
+    ship.watch_develop(rig.engine)
+    assert rig.db.baseline("cli", "macos") == "success" and rig.db.baseline_sha("cli", "macos") == "tested-by-pr"
+    assert rig.db.baseline("pr-gate", "linux") == "success" and rig.db.baseline_sha("pr-gate", "linux") != "d2"
+    assert rig.db.get("red_pending:cli/macos") == "earlier", "no red/green transition was recorded"
+    assert rig.gh.issues == {} and rig.db.get("stop_line") is None
