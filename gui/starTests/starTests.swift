@@ -3744,6 +3744,51 @@ final class CommandTableTests: XCTestCase {
         XCTAssertEqual(wrong, [], "commands in the wrong menu")
     }
 
+    /// The keys `StarCommands.swift` gives its menu items, spelled as `gherkin/ui/commands.json` spells them (`r`, `cmd+shift+,`).
+    private func commandShortcuts(_ text: String) throws -> [String] {
+        let pattern = try NSRegularExpression(pattern: #"\.keyboardShortcut\("(.)", modifiers: \[([^\]]*)\]\)"#)
+        return pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { m in
+            guard let k = Range(m.range(at: 1), in: text), let mods = Range(m.range(at: 2), in: text) else { return nil }
+            let names = text[mods].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            let prefix = names.map { [".command": "cmd+", ".shift": "shift+", ".option": "option+"][$0] ?? "?\($0)+" }.joined()
+            return prefix + text[k]
+        }
+    }
+
+    /// The shortcuts of the commands and of the tools are the table's vectors: the desktop client's test holds its menu to the same file.
+    func testTheShortcutsAreTheVectors() throws {
+        let url = Self.repoRoot.appendingPathComponent("gherkin/ui/commands.json")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let commands = try XCTUnwrap(object["commands"] as? [[String: String]])
+        let tools = try XCTUnwrap(object["toolShortcuts"] as? [[String: String]])
+        let commandsText = try guiFile("StarCommands.swift")
+
+        // Each tool item is `ChangeToolButton(tool: .x)` followed by its number key.
+        let toolPattern = try NSRegularExpression(pattern: #"ChangeToolButton\(tool: \.(\w+)\)\s*\.environment\(viewModel\)\s*\.keyboardShortcut\("(\d)", modifiers: \[\]\)"#)
+        let guiTools = toolPattern.matches(in: commandsText, range: NSRange(commandsText.startIndex..., in: commandsText)).compactMap { m -> [String: String]? in
+            guard let t = Range(m.range(at: 1), in: commandsText), let k = Range(m.range(at: 2), in: commandsText) else { return nil }
+            return ["tool": String(commandsText[t]), "shortcut": String(commandsText[k])]
+        }
+        XCTAssertEqual(guiTools, tools, "the Tools menu's first eight items, in order, with their number keys")
+
+        // The window items' keys are Option plus the letter given to `item(...)`.
+        let windowsText = try guiFile("SecondaryWindows.swift")
+        let windowPattern = try NSRegularExpression(pattern: #"item\(\.\w+, label: localized\("[^"]+"\), shortcut: "(.)"\)"#)
+        let windowKeys = windowPattern.matches(in: windowsText, range: NSRange(windowsText.startIndex..., in: windowsText)).compactMap { m in
+            Range(m.range(at: 1), in: windowsText).map { "option+" + windowsText[$0] }
+        }
+        XCTAssertEqual(windowKeys.count, 4)
+        XCTAssertTrue(try guiFile("StarCommands.swift").contains("keyboardShortcut"), "the menu source moved")
+        // Play / Pause's space is on the transport button, not in the menu.
+        XCTAssertTrue(try guiFile("VideoPlaybackButtons.swift").contains(#"shortcutKey: " ""#), "the space shortcut moved")
+
+        let tableKeys = Set(commands.compactMap { $0["shortcut"] }).subtracting(["space"])
+        let guiKeys = Set(try commandShortcuts(commandsText)).union(windowKeys)
+        // Preferences (cmd+,) is the app menu's, not one of the table's commands.
+        let toolKeys = Set(tools.compactMap { $0["shortcut"] })
+        XCTAssertEqual(guiKeys.subtracting(["cmd+,"]).subtracting(toolKeys), tableKeys, "the keys the gui's menu has, and the table's")
+    }
+
     func testTheTableIsNotEmpty() throws {
         XCTAssertGreaterThan(try table().commands.count, 20)
     }

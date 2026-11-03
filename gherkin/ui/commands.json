@@ -1,5 +1,5 @@
 {
-  "comment": "Every menu command both clients must offer, by the catalogue key of its label (the gui's wording, owner decision D9). Each client's unit test checks that its menu code uses the key; a command added to one client only fails the other's test until it is added here and there. A command one client genuinely cannot offer goes in knownGaps with the reason, and the entry must be removed when it is no longer true. `menu` is the menu the command is in (the gui's tree, D9) and `menus` the catalogue key of each menu's title (File and Window are the system's on a Mac): each client's test checks the command's label is in that menu's code.",
+  "comment": "Every menu command both clients must offer, by the catalogue key of its label (the gui's wording, owner decision D9). Each client's unit test checks that its menu code uses the key; a command added to one client only fails the other's test until it is added here and there. A command one client genuinely cannot offer goes in knownGaps with the reason, and the entry must be removed when it is no longer true. `menu` is the menu the command is in (the gui's tree, D9) and `menus` the catalogue key of each menu's title (File and Window are the system's on a Mac): each client's test checks the command's label is in that menu's code. `shortcut` is the command's key as the gui's menu has it (`cmd+`, `shift+`, `option+` before the key; a bare letter or digit has no modifier); a command without one has no key. The desktop shows `option+` as Ctrl+Alt off a Mac and `cmd+` as Ctrl, and spells space as the space bar, which the gui puts on its transport button rather than its menu. `toolShortcuts` is the Tools menu's first eight items: each is the tool's own name (not a catalogue label of its own), in order, with the number key that selects it. Each client's test checks its menu code against these.",
   "menus": {
     "file": "ui.file",
     "actions": "menu.actions",
@@ -10,12 +10,14 @@
     {
       "id": "closeSequence",
       "label": "ui.close",
-      "menu": "file"
+      "menu": "file",
+      "shortcut": "cmd+w"
     },
     {
       "id": "openImageSequence",
       "label": "ui.open_image_sequence",
-      "menu": "file"
+      "menu": "file",
+      "shortcut": "cmd+o"
     },
     {
       "id": "openVideo",
@@ -30,17 +32,20 @@
     {
       "id": "editMode",
       "label": "ui.edit_mode",
-      "menu": "tools"
+      "menu": "tools",
+      "shortcut": "e"
     },
     {
       "id": "scrubMode",
       "label": "ui.scrub_mode",
-      "menu": "tools"
+      "menu": "tools",
+      "shortcut": "s"
     },
     {
       "id": "gridMode",
       "label": "ui.grid_mode",
-      "menu": "tools"
+      "menu": "tools",
+      "shortcut": "g"
     },
     {
       "id": "toggleSidePanels",
@@ -55,7 +60,8 @@
     {
       "id": "playPause",
       "label": "ui.play_pause",
-      "menu": "tools"
+      "menu": "tools",
+      "shortcut": "space"
     },
     {
       "id": "processAllFrames",
@@ -100,7 +106,8 @@
     {
       "id": "renderThisFrame",
       "label": "ui.render_this_frame",
-      "menu": "actions"
+      "menu": "actions",
+      "shortcut": "r"
     },
     {
       "id": "renderAllFrames",
@@ -115,7 +122,8 @@
     {
       "id": "processingSettings",
       "label": "ui.processing_settings_2",
-      "menu": "actions"
+      "menu": "actions",
+      "shortcut": "cmd+shift+,"
     },
     {
       "id": "renderVideo",
@@ -125,47 +133,90 @@
     {
       "id": "blobWindow",
       "label": "ui.blob_processing_window",
-      "menu": "window"
+      "menu": "window",
+      "shortcut": "option+p"
     },
     {
       "id": "outlierWindow",
       "label": "ui.outlier_information_window",
-      "menu": "window"
+      "menu": "window",
+      "shortcut": "option+o"
     },
     {
       "id": "alignmentWindow",
       "label": "ui.alignment_information_window",
-      "menu": "window"
+      "menu": "window",
+      "shortcut": "option+a"
     },
     {
       "id": "debugWindow",
       "label": "ui.debug_window",
-      "menu": "window"
+      "menu": "window",
+      "shortcut": "option+d"
     },
     {
       "id": "paintHorizon",
       "label": "ui.paint_horizon_reference",
-      "menu": "tools"
+      "menu": "tools",
+      "shortcut": "h"
     },
     {
       "id": "closeHorizonPainter",
       "label": "ui.close_horizon_painter",
-      "menu": "tools"
+      "menu": "tools",
+      "shortcut": "h"
     },
     {
       "id": "keepAll",
       "label": "ui.keep_all",
-      "menu": "actions"
+      "menu": "actions",
+      "shortcut": "k"
     },
     {
       "id": "removeAll",
       "label": "ui.remove_all",
-      "menu": "actions"
+      "menu": "actions",
+      "shortcut": "a"
     },
     {
       "id": "clearUndecided",
       "label": "ui.clear_undecided",
-      "menu": "actions"
+      "menu": "actions",
+      "shortcut": "u"
+    }
+  ],
+  "toolShortcuts": [
+    {
+      "tool": "remove",
+      "shortcut": "1"
+    },
+    {
+      "tool": "keep",
+      "shortcut": "2"
+    },
+    {
+      "tool": "razor",
+      "shortcut": "3"
+    },
+    {
+      "tool": "shovel",
+      "shortcut": "4"
+    },
+    {
+      "tool": "trash",
+      "shortcut": "5"
+    },
+    {
+      "tool": "removeFromTrash",
+      "shortcut": "6"
+    },
+    {
+      "tool": "multi",
+      "shortcut": "7"
+    },
+    {
+      "tool": "information",
+      "shortcut": "8"
     }
   ],
   "knownGaps": {

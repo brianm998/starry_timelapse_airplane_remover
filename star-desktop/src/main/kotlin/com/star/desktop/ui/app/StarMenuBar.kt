@@ -192,7 +192,7 @@ private fun starMenus(app: AppViewModel, svm: SequenceViewModel?, state: MenuSta
             // Every frame at once: this was a button in the right panel, which the gui's panel never had (owner decision D8), so it is a command.
             Item(localized("ui.decision_tree_all_frames"), enabled = hotkeys) { svm?.applyDecisionTreeAll() }
             Item(localized("ui.dt_auto_only"), enabled = hasSession) { svm?.applyDecisionTreeToCurrentFrame(autoOnly = true) }
-            Item(localized("ui.render_this_frame"), enabled = hotkeys) { svm?.renderCurrentFrame() }
+            Item(localized("ui.render_this_frame"), enabled = hotkeys, shortcut = KeyShortcut(Key.R)) { svm?.renderCurrentFrame() }
             // As the gui's: a run over the sequence with the question about rendering the video (frames already written are skipped), not
             // a separate pass that finished every frame from what was on disk (L4, D7).
             Item(localized("ui.render_all_frames"), enabled = hasSession) { app.requestProcessAll() }
@@ -200,7 +200,8 @@ private fun starMenus(app: AppViewModel, svm: SequenceViewModel?, state: MenuSta
 
         if (hasSession) Menu(localized("menu.tools"), mnemonic = 'T') {
             ToolType.selectable.forEachIndexed { i, t ->
-                Item(localized("ui.tool_n", t.displayName, i + 1), enabled = hotkeys) { svm?.setTool(t) }
+                // The tool's own name, as the gui lists it, with its number key (1-8) as the shortcut.
+                Item(t.displayName, enabled = hotkeys, shortcut = KeyShortcut(toolDigitKey(i + 1))) { svm?.setTool(t) }
             }
             Separator()
             // Disabled while the horizon painter is open: Compose delivers a menu accelerator before it delivers the key
@@ -250,6 +251,11 @@ private fun starMenus(app: AppViewModel, svm: SequenceViewModel?, state: MenuSta
         }
     }.menus
 }
+
+/** The number key that selects the tool at the 1-based position [number] of [ToolType.selectable] (the gui's `1`-`8`). */
+internal fun toolDigitKey(number: Int): Key = listOf(
+    Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight,
+)[number - 1]
 
 /** True on macOS — used to map the primary modifier to Cmd there and Ctrl elsewhere. */
 internal val IS_MAC: Boolean = System.getProperty("os.name").orEmpty().lowercase().contains("mac")

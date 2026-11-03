@@ -2,8 +2,11 @@ package com.star.desktop.ui.app
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import androidx.compose.ui.input.key.Key
+import com.star.desktop.domain.ToolType
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -67,5 +70,55 @@ class CommandTableTest {
     @Test fun theMenusAreTheGuisAndTheLanguageMenu() {
         val titles = menuBlocks().keys.toList()
         assertTrue(titles == listOf("ui.file", "menu.actions", "menu.tools", "ui.window", "language.menu"), "menus: $titles")
+    }
+
+    /** How this client's menu code spells the table's `shortcut` (`r`, `cmd+shift+,`, `option+p`, `space`). */
+    private fun spelled(shortcut: String): String {
+        val parts = shortcut.split("+")
+        val k = parts.last()
+        val key = when (k) { "," -> "Key.Comma"; "space" -> "Key.Spacebar"; else -> "Key.${k.uppercase()}" }
+        val mods = parts.dropLast(1)
+        return when (mods) {
+            emptyList<String>() -> "KeyShortcut($key)"
+            listOf("cmd") -> "primaryShortcut($key)"
+            listOf("cmd", "shift") -> "primaryShortcut($key, shift = true)"
+            listOf("option") -> "windowShortcut($key, IS_MAC)"
+            else -> error("a shortcut this test cannot spell: $shortcut")
+        }
+    }
+
+    /** The menu code's line for the command: the `Item(` that names its label key. */
+    private fun itemLine(label: String): String = menu.lines().first { it.contains("\"$label\"") && it.contains("Item(") }
+
+    /** The shortcut of every command is the table's (the gui's), and a command the table gives none has none; the Tools menu's first eight items are the tools' names on 1-8. */
+    @Test fun theShortcutsAreTheVectors() {
+        val wrong = table.getAsJsonArray("commands").map { it.asJsonObject }
+            .filter { it["id"].asString !in gaps }
+            .mapNotNull { c ->
+                val line = itemLine(c["label"].asString)
+                val expected = c["shortcut"]?.asString
+                val has = line.contains("shortcut = ")
+                when {
+                    expected == null && has -> "${c["id"].asString}: has a shortcut the table does not"
+                    expected != null && !line.contains("shortcut = ${spelled(expected)}") -> "${c["id"].asString}: expected ${spelled(expected)} in: ${line.trim()}"
+                    else -> null
+                }
+            }
+        assertTrue(wrong.isEmpty(), "shortcuts that are not the table's: $wrong")
+
+        val tools = table.getAsJsonArray("toolShortcuts").map { it.asJsonObject }
+        assertEquals(
+            ToolType.selectable.map { it.name.replace("_", "").lowercase() },
+            tools.map { it["tool"].asString.lowercase() },
+            "the table's tools, in order, are the ones the desktop binds to the number keys",
+        )
+        assertEquals((1..8).map { it.toString() }, tools.map { it["shortcut"].asString }, "tools are on 1-8 in order")
+        val digits = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight)
+        for ((i, t) in tools.withIndex()) {
+            assertEquals(digits[t["shortcut"].asString.toInt() - 1], toolDigitKey(i + 1), "tool ${t["tool"].asString}")
+        }
+        val toolsLine = menu.lines().first { it.contains("ToolType.selectable.forEachIndexed") }
+        val loop = menu.lines().dropWhile { it != toolsLine }.drop(1).take(3).joinToString("\n")
+        assertTrue(loop.contains("Item(t.displayName,") && loop.contains("shortcut = KeyShortcut(toolDigitKey(i + 1))"), "the Tools items: $loop")
     }
 }

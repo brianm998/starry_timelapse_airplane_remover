@@ -8,16 +8,15 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
-import com.star.desktop.domain.ToolType
 
 /**
  * Global key handling, wired to the window's `onKeyEvent` (the **bubble** phase, so a focused text
  * field — e.g. the editable frame number — consumes its keys first and is never starved; this was a
  * v1 bug where `onPreviewKeyEvent` returned true globally and ate keystrokes meant for fields).
  *
- * Modes/process/outlier shortcuts live on the menu bar (E/S/G, A/K/U, ⌘O/⌘W/⌘,). Here we add the
- * navigation + tool shortcuts that aren't menu-driven: arrows for frame nav, digits 1–8 for tools
- * (in every mode).
+ * Modes/process/outlier/render/tool shortcuts live on the menu bar (E/S/G, A/K/U, R, 1–8, ⌘O/⌘W/⌘,), so each key press
+ * acts once and the menu shows the key. Here we add the navigation shortcuts that aren't menu-driven: arrows for
+ * frame nav, the transport letters, Tab and D.
  */
 fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
     if (event.type != KeyEventType.KeyDown) return false
@@ -46,9 +45,8 @@ fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
         Key.Z -> { svm.fastPrevious(); return true }
         Key.X -> { svm.fastForward(); return true }
         Key.W -> { svm.playReverse(); return true }
-        // Editing accelerators. r renders the current frame; Tab toggles the side panels (macOS
-        // TabCatcher). h (toggle horizon painter) lives on the menu bar so it isn't double-handled.
-        Key.R -> { svm.renderCurrentFrame(); return true }
+        // Editing accelerators. Tab toggles the side panels (macOS TabCatcher). h (horizon painter), r (render) and 1-8 (tools)
+        // live on the menu bar so they aren't double-handled.
         Key.Tab -> { svm.toggleSidePanels(); return true }
         // Decision Tree All on the current frame (macOS ApplyAllDecisionTreeButton's `d`).
         // In any mode, as the gui does (it was edit mode only here): the decisions are the frame's, whatever is on screen.
@@ -59,13 +57,6 @@ fun handleGlobalKey(event: KeyEvent, app: AppViewModel): Boolean {
         }
     }
 
-    // The tools are on 1-8 in every mode (macOS), so the choice is there when the user gets back to the frame; a frame whose method has
-    // no use for them (setTool) leaves the tool alone.
-    val digit = DIGIT_KEYS[event.key]
-    if (digit != null) {
-        ToolType.forShortcut(digit)?.let { svm.setTool(it) }
-        return true
-    }
     return false
 }
 
@@ -76,8 +67,3 @@ internal val TRANSPORT_KEYS: Set<Key> = setOf(
 
 /** The keys that still move through the sequence under the horizon painter (the gui's `VideoPlaybackButtons` shortcuts; Home and End are the desktop's own). */
 internal val PAINT_MODE_FRAME_KEYS: Set<Key> = TRANSPORT_KEYS - setOf(Key.Home, Key.MoveEnd)
-
-private val DIGIT_KEYS: Map<Key, Int> = mapOf(
-    Key.One to 1, Key.Two to 2, Key.Three to 3, Key.Four to 4,
-    Key.Five to 5, Key.Six to 6, Key.Seven to 7, Key.Eight to 8,
-)

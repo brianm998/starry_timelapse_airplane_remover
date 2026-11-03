@@ -17,4 +17,13 @@ class MenuInEveryWindowTest {
         assertTrue(windows >= 5, "the main window and the four others")
         assertEquals(windows, Regex("""StarMenuBar\(vm\)""").findAll(source).count(), "a window without the menu bar: its shortcuts do nothing")
     }
+
+    /** The gui's window titles (`StarApp.swift`): `ui.star_outlier_info_window` and `ui.star_alignment_info`, not the headings the windows hold inside. */
+    @Test fun secondaryWindowTitlesAreTheGuis() {
+        val source = listOf(File("src/main/kotlin/com/star/desktop/Main.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/Main.kt")).first { it.isFile }.readText()
+        val titles = Regex("""title = localized\("([^"]+)"""").findAll(source).map { it.groupValues[1] }.toList()
+        assertTrue("ui.star_outlier_info_window" in titles, "window titles: $titles")
+        assertTrue("ui.star_alignment_info" in titles, "window titles: $titles")
+        assertTrue("ui.outliers_for_frame" !in titles && "ui.alignment_2" !in titles, "the old titles are still a Window's: $titles")
+    }
 }
