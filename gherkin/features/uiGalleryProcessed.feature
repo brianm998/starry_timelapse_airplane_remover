@@ -16,6 +16,7 @@ Feature: The screens of a processed sequence are saved for the gallery
       And I click "right.changemode"
     Then  "changemode.ok" is shown
     When  I save a screenshot named "changemode"
+      And I click the label "ui.automatic"
       And I click "changemode.ok"
     Then  "changemode.ok" is not shown
     When  I choose the menu command "renderVideo"
