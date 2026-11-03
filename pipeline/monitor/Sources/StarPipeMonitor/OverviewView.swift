@@ -12,6 +12,7 @@ struct OverviewView: View {
             VStack(alignment: .leading, spacing: 22) {
                 Text("Overview").scaledFont(.title2, weight: .bold)
                 if let error = store.lastError { Text(error).foregroundStyle(.red).scaledFont(.caption) }
+                pipelineStatus
                 activeModels
                 concurrency
                 landingQueue
@@ -28,6 +29,30 @@ struct OverviewView: View {
             Button("Cancel", role: .cancel) {}
         } message: { _ in
             Text("CI, the overlap re-test and the stop-line wait are skipped, and the PR says the owner bypassed them. A conflict still goes to the conflict stage, and an explicit landing pause still holds it.")
+        }
+    }
+
+    // 0. pipeline status --------------------------------------------------------------------------------------------
+    private var pipelineStatus: some View {
+        section("Pipeline status") {
+            Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 6) {
+                ForEach(store.statusRows) { row in
+                    GridRow {
+                        Text(row.label).foregroundStyle(.secondary)
+                        Text(row.value).foregroundStyle(color(row.severity)).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private func color(_ severity: Overview.Severity) -> Color {
+        switch severity {
+        case .normal: .secondary
+        case .ok: .green
+        case .warn: .orange
+        case .bad: .red
         }
     }
 

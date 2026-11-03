@@ -119,6 +119,43 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(emphases(["developing", "review"]), [.idle, .idle, .idle, .active, .idle, .active, .idle])
     }
 
+    func testStatusRows() throws {
+        let base = try Self.snapshot()
+        func rows(_ s: Snapshot?, _ c: Connection = .live, update: Bool = false) -> [Overview.StatusRow] {
+            Overview.statusRows(snapshot: s, connection: c, updateAvailable: update, rebuildCommand: "make app",
+                                timeZone: TimeZone(identifier: "UTC")!)
+        }
+        let r = rows(base)
+        XCTAssertEqual(r.map(\.label).prefix(4), ["Daemon", "Heavy lock", "Landing", "develop"])
+        XCTAssertEqual(r.first { $0.label == "Daemon" }?.value, "up, \(base.runtime.sha)" + (base.runtime.behindDevelop > 0 ? ", behind develop by \(base.runtime.behindDevelop)" : ""))
+        XCTAssertEqual(r.first { $0.label == "Daemon" }?.severity, .ok)
+        XCTAssertEqual(r.first { $0.label == "Landing" }?.value, "running")
+        XCTAssertTrue(r.first { $0.label == "develop" }!.value.hasPrefix("pr-gate"))
+        XCTAssertEqual(r.first { $0.label == "Last nightly" }?.value, base.nightly?.line ?? "none yet")
+        for gone in ["Usage limit", "Monitor update", "Paused"] { XCTAssertNil(r.first { $0.label == gone }, gone) }
+        XCTAssertEqual(Overview.attentionWords(r), [])
+
+        var s = base
+        s.landing.stopLine = "pr-gate red"; s.landing.paused = true
+        s.pause = "owner pause"; s.usagePauseUntil = "0"
+        let bad = rows(s, .down("refused"), update: true)
+        XCTAssertEqual(bad.first { $0.label == "Daemon" }?.value, "down: refused")
+        XCTAssertEqual(bad.first { $0.label == "Daemon" }?.severity, .bad)
+        XCTAssertEqual(bad.first { $0.label == "Landing" }?.value, "stopped: pr-gate red")
+        XCTAssertEqual(bad.first { $0.label == "Landing" }?.severity, .warn)
+        XCTAssertEqual(bad.first { $0.label == "develop" }?.severity, .bad)
+        XCTAssertEqual(bad.first { $0.label == "Monitor update" }?.value, "Update available — make app")
+        XCTAssertEqual(bad.first { $0.label == "Paused" }?.value, "owner pause")
+        XCTAssertTrue(bad.first { $0.label == "Usage limit" }!.value.hasPrefix("model stages wait until "))
+        XCTAssertEqual(Overview.attentionWords(bad),
+                       ["Daemon down", "Landing paused", "develop red", "Usage limit", "Update available", "Paused"])
+
+        let connecting = rows(nil, .connecting)
+        XCTAssertEqual(connecting.map(\.value).prefix(4), ["connecting…", "—", "—", "—"])
+        XCTAssertEqual(connecting.first { $0.label == "Last nightly" }?.value, "none yet")
+        XCTAssertEqual(Overview.attentionWords(connecting), [])
+    }
+
     func testEveryTicketIsInAKnownGroupAndStagesCarryTheirLockWait() throws {
         let s = try Self.snapshot()
         for t in s.tickets { XCTAssertTrue(s.groups.contains(t.group), "\(t.number) is in \(t.group)") }

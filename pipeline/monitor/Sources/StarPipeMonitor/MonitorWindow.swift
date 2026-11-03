@@ -102,24 +102,9 @@ struct HeaderStrip: View {
             Button { store.showOverview() } label: { Image(systemName: "house") }
                 .help("Back to the Overview")
                 .disabled(store.selected == nil)
-            item("Daemon", daemonText, color: store.daemonDown ? .red : .green)
-            item("Heavy lock", lockText, color: .secondary)
-            item("Landing", landingText, color: store.snapshot?.landing.paused == true || store.developRed ? .orange : .secondary)
-            item("develop", developText, color: store.developRed ? .red : .secondary)
-            if let until = store.snapshot?.usagePauseUntil, let t = Double(until) {
-                item("Usage limit", "model stages wait until \(Date(timeIntervalSince1970: t).formatted(date: .omitted, time: .shortened))", color: .orange)
-            }
-            if store.updateAvailable {
-                item("Monitor", "Update available — \(MonitorUpdates.rebuildCommand)", color: .orange)
-            }
-            if let pause = store.snapshot?.pause { item("Paused", pause, color: .orange) }
-            item("Last nightly", store.snapshot?.nightly?.line ?? "none yet",
-                 color: (store.snapshot?.nightly?.reds ?? 0) > 0 || store.snapshot?.nightly?.status == "error" ? .orange : .secondary)
+            attentionIndicator
             Spacer()
             usageLines
-            if let week = store.snapshot?.interventionsWeek, !week.isEmpty {
-                item("Interventions (7 d)", week.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", "), color: .secondary)
-            }
             counters
             Button { enqueueing = true } label: { Image(systemName: "plus") }
                 .help("Enqueue GitHub issues from links")
@@ -130,6 +115,22 @@ struct HeaderStrip: View {
         .sheet(isPresented: $enqueueing) { EnqueueSheet(store: store) }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .scaledFont(.caption)
+    }
+
+    /// Shown only while something needs a look; the details are in the Overview's "Pipeline status" section.
+    @ViewBuilder private var attentionIndicator: some View {
+        let words = Overview.attentionWords(store.statusRows)
+        if !words.isEmpty {
+            let color: Color = store.needsAttention ? .red : .orange
+            Button { store.showOverview() } label: {
+                HStack(spacing: 5) {
+                    Circle().fill(color).frame(width: 8, height: 8)
+                    Text(words.joined(separator: " · ")).foregroundStyle(color).lineLimit(1)
+                }
+            }
+            .buttonStyle(.plain)
+            .help("Open the Overview for the pipeline status")
+        }
     }
 
     /// The account's 5-hour and weekly usage limits, stacked; always shown ("—" until a stage reports) so the bar does not jump.
@@ -171,40 +172,6 @@ struct HeaderStrip: View {
                 }
             }
         }
-    }
-
-    private func item(_ label: String, _ value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(label).foregroundStyle(.secondary).lineLimit(1)
-            Text(value).foregroundStyle(color).lineLimit(2)
-        }
-    }
-
-    private var daemonText: String {
-        if case .down(let why) = store.connection { return "down: \(why)" }
-        guard let s = store.snapshot else { return "connecting…" }
-        let behind = s.runtime.behindDevelop > 0 ? ", behind develop by \(s.runtime.behindDevelop)" : ""
-        return "up, \(s.runtime.sha)\(behind)"
-    }
-
-    private var lockText: String {
-        guard let heavy = store.snapshot?.heavy else { return "—" }
-        guard let h = heavy.holders.first else { return heavy.queue.isEmpty ? "idle" : "\(heavy.queue.count) waiting" }
-        let elapsed = Int((store.snapshot?.now ?? h.since) - h.since)
-        let who = h.ticket.isEmpty ? "interactive" : "#\(h.ticket)"
-        return "\(who) \(h.cmd.prefix(36)) \(elapsed / 60)m" + (heavy.queue.isEmpty ? "" : " · \(heavy.queue.count) queued")
-    }
-
-    private var landingText: String {
-        guard let l = store.snapshot?.landing else { return "—" }
-        if let stop = l.stopLine { return "stopped: \(stop)" }
-        return l.paused ? "paused" : "running"
-    }
-
-    private var developText: String {
-        guard let d = store.snapshot?.develop else { return "—" }
-        let gate = d.gate.isEmpty ? "pr-gate: no data" : "pr-gate " + (d.gate.values.allSatisfy { $0 == "success" } ? "green" : "red")
-        return "\(gate), \(d.knownRed) known red"
     }
 }
 
