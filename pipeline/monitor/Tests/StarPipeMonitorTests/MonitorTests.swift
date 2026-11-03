@@ -152,6 +152,15 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(Overview.attentionWords(bad),
                        ["Daemon down", "Landing paused", "develop red", "Usage limit", "Update available", "Paused"])
 
+        XCTAssertEqual(bad.first { $0.label == "Credits" }?.value, "—")
+        XCTAssertNil(bad.first { $0.label == "Credits in use" })
+        var spending = base
+        spending.creditSupport = "supported"; spending.creditUse = CreditUse(since: 1000, amount: 0.25, window: "overage")
+        let paid = rows(spending)
+        XCTAssertEqual(paid.first { $0.label == "Credits" }?.value, "available")
+        XCTAssertEqual(paid.first { $0.label == "Credits in use" }?.value, "25%")
+        XCTAssertEqual(Overview.attentionWords(paid), ["Credits in use"])
+
         let connecting = rows(nil, .connecting)
         XCTAssertEqual(connecting.map(\.value).prefix(4), ["connecting…", "—", "—", "—"])
         XCTAssertEqual(connecting.first { $0.label == "Last nightly" }?.value, "none yet")
