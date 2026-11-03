@@ -11,6 +11,17 @@ import java.io.StringReader
  * path, in one spelling or another, in the fixture's json files.
  */
 
+/**
+ * The bash that runs the fixture script. Off Windows plain `bash`. On Windows a bare `bash` is found by CreateProcess in System32 first, which is WSL's
+ * launcher (it prints https://aka.ms/wslstore on a runner with no distribution and exits 1), so Git Bash is looked for by its install root (`EXEPATH`,
+ * which Git Bash sets, then `ProgramFiles`) and `bash` is only the fallback.
+ */
+internal fun bashExecutable(isWindows: Boolean, env: Map<String, String> = System.getenv(), exists: (String) -> Boolean = { File(it).isFile }): String {
+    if (!isWindows) return "bash"
+    val roots = listOfNotNull(env["EXEPATH"], env["ProgramFiles"]?.let { "$it\\Git" }, "C:\\Program Files\\Git")
+    return roots.flatMap { listOf("$it\\bin\\bash.exe", "$it\\usr\\bin\\bash.exe") }.firstOrNull(exists) ?: "bash"
+}
+
 /** What `cygpath -m` says about [printed] (`D:/a/x`), or null when there is no cygpath or it fails. */
 internal val runCygpath: (String) -> String? = { printed ->
     runCatching {
