@@ -493,7 +493,11 @@ class DesktopFeatureRunner {
     }
 
     private fun expectShown(t: ComposeUiTest, id: String, shown: Boolean) {
-        waitFor(t, "\"$id\" ${if (shown) "shown" else "not shown"}", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) == shown }
+        // The unmerged tree: a control inside a merging parent (the badge on a grid cell, whose text the cell's own node takes in) is drawn, and so
+        // shown, though only the unmerged tree has it under its own tag; "is not shown" of it would otherwise pass whether it was drawn or not.
+        waitFor(t, "\"$id\" ${if (shown) "shown" else "not shown"}", UI_TIMEOUT_MS) {
+            t.onAllNodes(hasTestTag(id), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() == shown
+        }
     }
 
     private fun semanticsOf(t: ComposeUiTest, id: String) =
