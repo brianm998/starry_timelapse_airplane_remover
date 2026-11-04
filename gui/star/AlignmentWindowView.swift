@@ -686,38 +686,6 @@ struct AlignmentDeviationChart: View {
         if lower < upper { xDomain = lower ... upper }
     }
     
-    var oldBody: some View {
-        Chart {
-            ForEach(points) { point in
-                LineMark(
-                  x: .value(localized("ui.frame_capitalised"), point.baseFrame),
-                  y: .value(localized("ui.deviation"), point.signedDeviation)
-                )
-                  .foregroundStyle(
-                    by: .value(
-                      localized("ui.neighbor"),
-                      point.offset > 0
-                        ? "+\(point.offset)"
-                        : "\(point.offset)"
-                    )
-                  )
-                //                  .foregroundStyle(by: .value("Offset", point.offset))
-                  .interpolationMethod(.linear)
-                
-            }
-        }
-          .chartXAxisLabel(localized("ui.frame_index"))
-          .chartYAxisLabel(localized("ui.deviation"))
-          .chartLegend(position: .trailing)
-          .frame(minHeight: 300)
-          .chartYScale(domain: symmetricDomain())
-    }
-
-    func symmetricDomain() -> ClosedRange<Double> {
-        let maxDeviation = abs(points.map(\.signedDeviation).max() ?? 1)
-        return -maxDeviation ... maxDeviation
-    }
-    
     func makeDeviationPoints(
       frames: [[AlignmentWarpInfoCodable]]
     ) -> [DeviationPoint] {
