@@ -308,7 +308,6 @@ public actor Blob: CustomStringConvertible,
         _blobLine = nil
         _blobLineIntensityScore = nil
         _averageDistanceFromIdealLine = nil
-        _membersArray = nil
         _maxIntensity = nil
         _bunchCount = nil
         _medianBunchSize = nil
@@ -316,28 +315,6 @@ public actor Blob: CustomStringConvertible,
         _bunchCalculator = nil
     }
 
-    private var _membersArray: ([Bool])?
-    
-    public var membersArray: [Bool] {
-        if let _membersArray { return _membersArray }
-        let bounds = self.boundingBox()
-        
-        var members = [Bool](repeating: false,
-                             count: bounds.width*bounds.height)
-
-        for pixel in pixels {
-            let x = pixel.x - bounds.min.x
-            let y = pixel.y - bounds.min.y
-            
-            let index = y*bounds.width+x
-            if index < 0 || index >= members.count {
-                fatalError("bad index \(index) from [\(x), \(y)] and \(bounds)")
-            }
-            members[index] = true
-        }
-        _membersArray = members
-        return members
-    }
     
     public func remove(pixels: Set<SortablePixel>) {
         self.pixels.subtract(pixels)
