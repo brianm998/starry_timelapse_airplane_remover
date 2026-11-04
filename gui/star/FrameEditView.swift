@@ -50,7 +50,6 @@ struct FrameEditView: View {
                     ) {
                         self.imageView
                     }
-                    // .zoomable(min: min, max: max, currentScale: $currentZoomScale)
                       .onAppear {
                           viewModel.minZoomScale = min
                           if viewModel.maxZoomScale < min {
