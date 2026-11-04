@@ -1,7 +1,7 @@
 import Foundation
 import logging
 
-/// Persisted tuning parameters for `HomographyHorizonDetector`.
+/// Persisted tuning parameters for the horizon detectors, stored in `tuned_parameters.json`.
 ///
 /// When a set of user-supplied reference horizon masks are available (painted
 /// in Photoshop to show the true skyline), the pipeline runs a fast
@@ -16,7 +16,7 @@ import logging
 /// the file will not be overwritten once it exists.
 public struct HorizonTunedParameters: Codable, Sendable {
 
-    // MARK: - Algorithm parameters (mirror HomographyHorizonDetector fields)
+    // MARK: - Algorithm parameters (mirror the fields of the former homography horizon detector)
 
     /// Half-width (in columns) of the sliding-window average applied to both
     /// warped-mask and error-boundary results.
@@ -56,10 +56,10 @@ public struct HorizonTunedParameters: Codable, Sendable {
     /// 20-25 px down.  Raise this to let real terrain detail through on a sequence whose
     /// references are painted coarsely; lower it on one where the ground is bright.
     ///
-    /// `HomographyHorizonDetector` reads the same field with its own meaning — a ceiling
-    /// relative to the merged horizon, where 0 disables the clamp outright.  Nothing
-    /// currently runs that detector, but the two readings differ at 0 and a future wiring
-    /// has to keep them apart rather than assume they agree.
+    /// The removed homography horizon detector read the same field with its own meaning — a
+    /// ceiling relative to the merged horizon, where 0 disabled the clamp outright.  The two
+    /// readings differed at 0, so a persisted `tuned_parameters.json` written for that
+    /// detector may carry a value meant the other way.
     public var maxDownwardExtension: Int = 0
 
     // MARK: - Canny snap parameters
