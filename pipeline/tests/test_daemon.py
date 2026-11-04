@@ -763,7 +763,7 @@ def test_hard_exit_is_the_default_exit_and_ends_the_process_without_unwinding(mo
 
 
 def landing_daemon(rig: Rig, window: int = 120) -> Daemon:
-    return Daemon(rig.engine, Config(landing_mode="batch", batch_window_s=window, batch_max=5), token="tok")
+    return Daemon(rig.engine, Config(landing_mode="batch", batch_window_s=window), token="tok")
 
 
 def ready_tickets(rig: Rig, *numbers: int) -> None:
