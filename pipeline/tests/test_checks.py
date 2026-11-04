@@ -109,6 +109,102 @@ def test_hung_check_is_reported_as_hung(tmp_path: Path, monkeypatch: pytest.Monk
     assert db.checks(7)[0]["result"] == "hung"
 
 
+def _xunit_script(cases: list[tuple[str, str, str]], exit_code: int = 0) -> str:
+    """A python program that writes the xunit file named by its first argument, like `swift test --xunit-output`."""
+    body = "".join(
+        f'<testcase classname="{cls}" name="{name}">'
+        + {"pass": "", "fail": '<failure message="boom"/>', "skip": '<skipped message="Test skipped - nope"/>'}[kind]
+        + "</testcase>"
+        for cls, name, kind in cases
+    )
+    xml = f'<testsuites><testsuite name="TestResults">{body}</testsuite></testsuites>'
+    return f"import sys;open(sys.argv[1],'w').write({xml!r});sys.exit({exit_code})"
+
+
+def _wt(tmp_path: Path) -> Path:
+    repo = make_repo(tmp_path)
+    wt, _branch = worktrees.create(repo, 7, "Tidy docs", "origin/develop")
+    return wt
+
+
+def test_parallel_swift_test_counts_come_from_xunit(tmp_path: Path) -> None:
+    wt = _wt(tmp_path)
+    spec = star.CHECKS["test:StarCpp"]
+    assert spec.parser == "xunit"
+    assert "--parallel" in spec.argv and spec.argv[spec.argv.index("--num-workers") + 1] == "{workers}"
+    assert spec.argv[spec.argv.index("--xunit-output") + 1].startswith("{log_dir}/")
+    assert Config().heavy_test_workers == 8
+    # the others keep the serial run and its banner: StarCore and daemon are slower in parallel (see SERIAL_CLASSES)
+    for check_id in ("test:StarCore", "test:daemon", "test:cli"):
+        assert star.CHECKS[check_id].parser == "xctest" and "--parallel" not in star.CHECKS[check_id].argv
+
+    cases = [("A", "t1", "pass"), ("A", "t2", "pass"), ("B", "t3", "skip")]
+    spec = star.CheckSpec("test:par", "parallel", (sys.executable, "-c", _xunit_script(cases), "{log_dir}/par.xml"),
+                          parser="xunit", xunit=("{log_dir}/par.xml",))
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    result = runner.run_spec(spec, wt, "origin/develop", log_dir, allow_skips=True)
+    assert result.green and (result.executed, result.failed, result.skipped) == (3, 0, 1)
+    assert not runner.run_spec(spec, wt, "origin/develop", log_dir).green, "an unexpected skip is still red"
+
+    # no xunit file at all (a crash before it was written) is red, not zero tests
+    gone = star.CheckSpec("test:gone", "no file", (sys.executable, "-c", "pass"), parser="xunit", xunit=("{log_dir}/none.xml",))
+    assert not runner.run_spec(gone, wt, "origin/develop", log_dir).green
+
+
+def test_a_parallel_failure_is_red_and_named(tmp_path: Path) -> None:
+    wt = _wt(tmp_path)
+    cases = [("StarCoreTests.Foo", "testOk", "pass"), ("StarCoreTests.Foo", "testBroken", "fail")]
+    spec = star.CheckSpec("test:par", "parallel", (sys.executable, "-c", _xunit_script(cases, 1), "{log_dir}/par.xml"),
+                          parser="xunit", xunit=("{log_dir}/par.xml",))
+    result = runner.run_spec(spec, wt, "origin/develop", tmp_path)
+    assert result.status == "fail" and not result.green
+    assert (result.executed, result.failed) == (2, 1)
+    assert "StarCoreTests.Foo.testBroken" in result.detail and "testOk" not in result.detail
+
+    # exit 0 with a failure in the file is still red
+    spec = star.CheckSpec("test:par", "parallel", (sys.executable, "-c", _xunit_script(cases, 0), "{log_dir}/par.xml"),
+                          parser="xunit", xunit=("{log_dir}/par.xml",))
+    assert runner.run_spec(spec, wt, "origin/develop", tmp_path).status == "fail"
+
+
+def test_serial_classes_run_in_their_own_pass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    wt = _wt(tmp_path)
+    monkeypatch.setitem(star.SERIAL_CLASSES, "test:StarCpp", ("TimingTests", "OtherTests"))
+    spec = star.swift_test("StarCpp", tid="StarCpp")
+    assert spec.argv.count("--skip") == 2 and "TimingTests" in spec.argv and "OtherTests" in spec.argv
+    assert spec.serial_argv and spec.serial_argv[spec.serial_argv.index("--num-workers") + 1] == "1"
+    assert [a for a in spec.serial_argv if a not in ("--filter",)].count("TimingTests") == 1
+    assert spec.serial_argv.count("--filter") == 2 and "--skip" not in spec.serial_argv
+    assert any(f.endswith("-serial.xml") for f in spec.xunit)
+    # a suite with nothing to run alone has no second pass
+    monkeypatch.setitem(star.SERIAL_CLASSES, "test:StarCpp", ())
+    assert star.swift_test("StarCpp", tid="StarCpp").serial_argv == ()
+
+    # run both passes: the counts add, and each pass is its own process
+    first = _xunit_script([("A", "t1", "pass"), ("A", "t2", "pass")])
+    second = _xunit_script([("TimingTests", "t3", "pass")])
+    ran = tmp_path / "ran"
+    marker = f"import sys;open({str(ran)!r},'a').write(sys.argv[1]+chr(10));"
+    fake = star.CheckSpec(
+        "test:two", "two passes", (sys.executable, "-c", marker + first, "{log_dir}/a.xml"), parser="xunit",
+        xunit=("{log_dir}/a.xml", "{log_dir}/b.xml"),
+        serial_argv=(sys.executable, "-c", marker + second, "{log_dir}/b.xml"),
+    )
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    result = runner.run_spec(fake, wt, "origin/develop", log_dir)
+    assert result.green and (result.executed, result.failed) == (3, 0)
+    assert ran.read_text().splitlines() == [f"{log_dir}/a.xml", f"{log_dir}/b.xml"]
+
+    # a failure in the serial pass is red and named
+    bad = _xunit_script([("TimingTests", "testSlow", "fail")], 1)
+    fake2 = star.CheckSpec("test:two", "two passes", fake.argv, parser="xunit", xunit=fake.xunit,
+                           serial_argv=(sys.executable, "-c", bad, "{log_dir}/b.xml"))
+    red = runner.run_spec(fake2, wt, "origin/develop", log_dir)
+    assert red.status == "fail" and "TimingTests.testSlow" in red.detail
+
+
 def test_run_plan_continues_past_a_red_test_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from starpipe.checks import impact
 
