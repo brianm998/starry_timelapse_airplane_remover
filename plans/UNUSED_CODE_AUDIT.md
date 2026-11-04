@@ -358,7 +358,7 @@ deletion that cannot be split, it is marked **oversize** and the reason is given
 | C03 | Remove the first half of the HomographyHorizonDetector tests | F-01 part 3b (lines 1-454, the file) | 454 | C02 |
 | C04 | Remove the unused HomographyHorizonDetector | F-01 part 1 and 4 | 743 + ~20, **oversize** (single file, nothing references it once C01-C03 land) | C01, C03 |
 | C05 | Remove the unused Combinations copy from StarCore | F-02 | 297 | - |
-| C06 | Remove the unused HoughTransform, BlobImageSaver and HomographyLie chain | F-03, F-06, F-07 | 182 + 25 + 109 = 316 | - |
+| C06 | Remove the unused HoughTransform, BlobImageSaver and HomographyLie chain | F-03, F-06 done (#92); **F-07 kept**: the owner needs the HomographyLie chain for Step 4 of `MOVING_STAR_ALIGNMENT_PROPOSAL.md` | 182 + 25 (the 109-line Lie chain stays) | - |
 | C07 | Remove the duplicate ProcessorUsageReporter and ProcessorUsageTracker | F-04 | 365 | - |
 | C08 | Remove the unused ProcessorUsage parser and its tests | F-05 | 403 | C07 |
 | C09 | Remove unused Blob, outlier and pixel helpers from StarCore | F-10 to F-15, `classifyOutliers(with:)` | ~380 | - |
