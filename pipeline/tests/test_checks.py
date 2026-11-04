@@ -326,7 +326,7 @@ def _run_shards(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail: str = "",
     record.write_text("")
     monkeypatch.setenv("FAKE_RECORD", str(record))
     monkeypatch.setenv("FAKE_FAIL", fail)
-    monkeypatch.setattr(shards, "_PTY", ())  # no pty in the test
+    monkeypatch.setattr(shards, "_pty", list)  # no pty in the test
     logs = tmp_path / "logs"
     code = shards.run("PKG", logs, "stem", 4, ["ClassA|ClassB", "ClassC"], list(serial))
     return code, [line.split() for line in record.read_text().splitlines()], logs

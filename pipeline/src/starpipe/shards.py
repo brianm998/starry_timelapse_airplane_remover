@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -29,8 +30,14 @@ from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-# xctest runs on a pty (`script`) so it line-buffers its progress; see adapter_star.LIVE_LOG
-_PTY = ("script", "-q", "/dev/null")
+
+def _pty(argv: Sequence[str]) -> list[str]:
+    """argv run on a pty (`script`) so xctest line-buffers its progress; see adapter_star.LIVE_LOG. BSD `script` (macOS) takes the
+    command as arguments; util-linux `script` (the CI runners, where the tests fake xctest) takes it as one `-c` string."""
+    if sys.platform == "darwin":
+        return ["script", "-q", "/dev/null", *argv]
+    return ["script", "-qefc", shlex.join(argv), "/dev/null"]
+
 
 _out_lock = threading.Lock()
 
@@ -70,7 +77,7 @@ def _say(k: int, line: bytes) -> None:
 
 
 def _run_shard(bundle: Path, log: Path, k: int, classes: list[str]) -> int:
-    argv = [*_PTY, "xcrun", "xctest", "-XCTest", ",".join(classes), str(bundle)]
+    argv = _pty(["xcrun", "xctest", "-XCTest", ",".join(classes), str(bundle)])
     with log.open("wb") as out:
         proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         assert proc.stdout is not None
