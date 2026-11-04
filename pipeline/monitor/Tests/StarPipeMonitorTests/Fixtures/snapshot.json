@@ -46,6 +46,7 @@
   "landing": {
     "batch": {
       "age_s": 90,
+      "ci": "running",
       "members": [
         3
       ],
@@ -57,6 +58,7 @@
     "batches": [
       {
         "age_s": 90,
+        "ci": "running",
         "members": [
           3
         ],
