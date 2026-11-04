@@ -7,6 +7,8 @@ name: opencv
 #   3. a build (opencv/release.sh, or opencv/build.sh on Windows), which is then uploaded as that asset
 # Tier 2 is what makes a build reusable across refs: a cache saved by a PR is visible to that PR only, so
 # without it develop's push run, and the next batch PR, would each build OpenCV again.
+# macOS looks up tier 2 first on ubuntu-24.04 (job macos-lookup, no macOS runner); the macos-15 job, which runs
+# all three tiers, is then needed only when that asset is missing.
 # Whatever the tier, the job uploads the artifact opencv-<os> (lib/<os> and include); callers download it into opencv/.
 #   opencv-linux    ubuntu-24.04  lib/linux/libopencv2.a
 #   opencv-macos    macos-15      lib/macos/libopencv2.a      universal; the key says macos15 on purpose: the
@@ -102,9 +104,59 @@ jobs:
           path: opencv-artifact
           if-no-files-found: error
 
+  # The prebuilt macOS library is a plain release asset (gh + tar), so fetching it needs no macOS runner. This job
+  # does that on Linux; the macos job below, which does need one, runs only when the asset is missing.
+  macos-lookup:
+    name: OpenCV (macOS lookup)
+    if: contains(inputs.platforms, 'macos')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    outputs:
+      hit: ${{ steps.release.outputs.hit }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: OpenCV cache key
+        id: key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
+      # a miss is a normal exit here (hit stays unset), not a failure: the macos job then builds
+      - name: Fetch from the opencv-prebuilt release
+        id: release
+        shell: bash
+        run: |
+          if opencv/ci_release_asset.sh download opencv-macos15 macos libopencv2.a; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stage the artifact
+        if: steps.release.outputs.hit == 'true'
+        shell: bash
+        run: |
+          echo "::notice::OpenCV (macos) from: release asset (Linux lookup)"
+          echo "OpenCV (macos, key opencv-macos15-${{ steps.key.outputs.key }}): **release asset (no macOS runner)**" >> "$GITHUB_STEP_SUMMARY"
+          test -f opencv/lib/macos/libopencv2.a
+          # same layout as the macos job: lib/macos and include
+          rm -rf opencv-artifact
+          mkdir -p opencv-artifact/lib
+          cp -R opencv/lib/macos opencv-artifact/lib/macos
+          cp -R opencv/include opencv-artifact/include
+
+      - uses: actions/upload-artifact@v4
+        if: steps.release.outputs.hit == 'true'
+        with:
+          name: opencv-macos
+          path: opencv-artifact
+          if-no-files-found: error
+
   macos:
     name: OpenCV (macOS, macos-15)
-    if: contains(inputs.platforms, 'macos')
+    needs: macos-lookup
+    if: contains(inputs.platforms, 'macos') && needs.macos-lookup.outputs.hit != 'true'
     runs-on: macos-15
     # the release tier uploads with the workflow token; a caller job must grant this too
     permissions:
