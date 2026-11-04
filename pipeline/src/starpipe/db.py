@@ -164,6 +164,16 @@ class Database:
         cols = ", ".join(f"{k}=?" for k in fields)
         self._exec(f"UPDATE tickets SET {cols}, updated_at=? WHERE number=?", (*fields.values(), self.clock(), number))
 
+    def set_blocked_by(self, number: int, blocked_by: list[int]) -> None:
+        t = self.ticket(number)
+        if t is not None and t.blocked_by != blocked_by:
+            self._exec("UPDATE tickets SET blocked_by=? WHERE number=?", (json.dumps(blocked_by), number))
+
+    def held_retries(self) -> list[tuple[int, str]]:
+        """(ticket, stage) for every `retry --when-unblocked` still waiting."""
+        return [(int(r["key"].split(":", 1)[1]), r["value"])
+                for r in self._all("SELECT key, value FROM kv WHERE key LIKE 'held_retry:%' ORDER BY key")]
+
     def open_blockers(self, number: int) -> list[int]:
         """Blockers that have not landed or closed yet."""
         t = self.ticket(number)
@@ -229,6 +239,10 @@ class Database:
         rows = self._all("SELECT conclusion FROM develop_baseline WHERE workflow=? AND job=?", (workflow, job))
         return rows[0]["conclusion"] if rows else None
 
+    def baseline_sha(self, workflow: str, job: str) -> str | None:
+        rows = self._all("SELECT sha FROM develop_baseline WHERE workflow=? AND job=?", (workflow, job))
+        return rows[0]["sha"] if rows else None
+
     def set_baseline(self, workflow: str, job: str, sha: str, conclusion: str) -> None:
         self._exec("INSERT INTO develop_baseline(workflow,job,sha,conclusion,at) VALUES (?,?,?,?,?) "
                    "ON CONFLICT(workflow,job) DO UPDATE SET sha=excluded.sha, conclusion=excluded.conclusion, at=excluded.at",
@@ -274,6 +288,16 @@ class Database:
 
     def batch_add(self, batch: int, ticket: int, position: int) -> None:
         self._exec("INSERT OR REPLACE INTO batch_members(batch,ticket,position) VALUES (?,?,?)", (batch, ticket, position))
+
+    def batch_remove(self, batch: int, tickets: list[int]) -> None:
+        for n in tickets:
+            self._exec("DELETE FROM batch_members WHERE batch=? AND ticket=?", (batch, n))
+
+    def last_abandoned_batch(self, since: float) -> dict[str, Any] | None:
+        """The most recent batch that was given up (abandoned or red) at or after `since`; its `note` is the reason."""
+        rows = self._all("SELECT * FROM batches WHERE state IN ('abandoned','failed') AND ended >= ? ORDER BY ended DESC, id DESC LIMIT 1",
+                         (since,))
+        return dict(rows[0]) if rows else None
 
     def batch_members(self, batch: int) -> list[int]:
         return [r["ticket"] for r in self._all("SELECT ticket FROM batch_members WHERE batch=? ORDER BY position", (batch,))]
@@ -346,6 +370,9 @@ class Database:
                    (key, text, self.clock()))
         self.event("alert", None, key=key, text=text)
         return True
+
+    def open_alerts(self) -> list[dict[str, Any]]:
+        return [dict(r) for r in self._all("SELECT key,text,opened FROM alerts WHERE closed IS NULL ORDER BY opened")]
 
     def close_alert(self, key: str) -> None:
         self._exec("UPDATE alerts SET closed=? WHERE key=? AND closed IS NULL", (self.clock(), key))

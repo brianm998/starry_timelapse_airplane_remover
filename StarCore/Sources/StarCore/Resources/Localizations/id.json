@@ -763,7 +763,7 @@
   "ui.preview": "Pratinjau",
   "ui.preview_creation_error": "galat saat membuat pratinjau bingkai {0}: {1}",
   "ui.preview_first": "Pratinjau dulu",
-  "ui.preview_while_processing_help": "Pemrosesan tetap berjalan di latar belakang. Pratinjau memungkinkan Anda melihat bingkai yang sudah selesai selagi pemrosesan berjalan; gunakan Tampilkan kemajuan di sebelah kiri untuk kembali ke sini.",
+  "ui.preview_while_processing_help": "Pemrosesan tetap berjalan di latar belakang. Pratinjau memungkinkan Anda melihat bingkai yang sudah selesai selagi pemrosesan berjalan; gunakan Tampilkan kemajuan untuk kembali ke sini.",
   "ui.process": "Proses",
   "ui.process_all_frames": "Proses semua bingkai",
   "ui.process_all_frames_2": "Proses semua bingkai",

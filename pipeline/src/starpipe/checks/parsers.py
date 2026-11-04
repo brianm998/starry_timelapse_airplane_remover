@@ -22,9 +22,13 @@ class Counts:
 _XCTEST_TOTAL = re.compile(r"Executed (\d+) tests?, with (\d+) failures?(?: \((\d+) unexpected\))?")
 _XCTEST_SKIPPED = re.compile(r"Test Case '.*' skipped \(")
 # A test that skips itself because its data is not in the repo or it is an opt-in measurement skips on every machine and every
-# develop run: that is not a test the change silently lost. Only these reasons are expected; any other skip is still red.
+# develop run: that is not a test the change silently lost. So does one that measures behaviour only some hardware has (the GCD
+# width test skips on x86_64; the unified-memory test skips on a discrete GPU), and so does one that only runs in a release build
+# or behind an env var (`set STAR_KP_MEASURE=1`), and so does one that needs the machine to let it redirect $HOME (the Intel Mac's
+# NSHomeDirectory ignores it). Only these reasons are expected; any other skip is still red.
 _XCTEST_EXPECTED_SKIP = re.compile(
-    r"Test skipped - (?:opt-in|no horizon (?:reference fixtures|test sequence)|set STAR_\w+ to\b)")
+    r"Test skipped - (?:opt-in|no horizon (?:reference fixtures|test sequence)|set STAR_\w+(?: to\b|=)|STAR_\w+ is not set to\b"
+    r"|NSHomeDirectory\(\) ignores \$HOME|run with 'swift test -c release'|a discrete GPU always copies|GCD's width narrowing)")
 # swift-testing: "✔ Test run with 12 tests in 3 suites passed after 0.1 seconds."
 _SWIFT_TESTING = re.compile(r"Test run with (\d+) tests?.* (passed|failed)")
 

@@ -36,9 +36,52 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
 
 jobs:
+  # On a push to develop that merges a batch PR whose tree this workflow already passed, `tested` is true and the heavy jobs below
+  # skip (already-tested.yml). It is always false on pull requests, tags and workflow_dispatch, so they run as before.
+  tested:
+    name: Already tested?
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    uses: ./.github/workflows/already-tested.yml
+
   # ─── Linux ───────────────────────────────────────────────────────────────────
+  # ─── OpenCV: built once per OS per key by opencv.yml (cache, then the opencv-prebuilt release, then a build) ───
+  opencv-linux:
+    name: OpenCV (linux)
+    needs: tested
+    if: needs.tested.outputs.tested != 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: linux
+
+  opencv-macos:
+    name: OpenCV (macos)
+    needs: tested
+    if: needs.tested.outputs.tested != 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: macos
+
+  opencv-windows:
+    name: OpenCV (windows)
+    needs: tested
+    if: needs.tested.outputs.tested != 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: windows
+
   linux:
     name: Linux (ubuntu-24.04)
+    needs: [tested, opencv-linux]
+    if: needs.tested.outputs.tested != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -56,13 +99,11 @@ jobs:
         with:
           swift-version: '6.0'
 
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/linux
-            opencv/include
-          key: opencv-linux-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          name: opencv-linux
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -102,13 +143,15 @@ jobs:
   # inline using the same sub-scripts the macOS release uses.
   #
   # macos-15, not macos-14: GitHub retires the macos-14 image on 2026-11-02 and its brownouts already cancel
-  # this job (https://github.com/actions/runner-images/issues/13518). The OpenCV and StarDecisionTrees caches
-  # below carry their own macos15 keys (shared with pr-gate.yml's macos-15 job): the StarDecisionTrees
-  # .swiftmodule only imports under the compiler that built it (see gherkin.yml), so they must not restore
-  # what the remaining macos-14 jobs (macos-signed-release, kotlin-client.yml macos-signed) saved under the
-  # plain keys.
+  # this job (https://github.com/actions/runner-images/issues/13518). OpenCV comes from opencv.yml (its
+  # macos15 key leaves the remaining macos-14 jobs' opencv-macos- caches alone). The StarDecisionTrees cache below
+  # has its own macos15 key (shared with pr-gate.yml's macos-15 job): its .swiftmodule only imports under the
+  # compiler that built it (see gherkin.yml), so it must not restore what the remaining macos-14 jobs
+  # (macos-signed-release, kotlin-client.yml macos-signed) saved under the plain key.
   macos:
     name: macOS (macos-15)
+    needs: [tested, opencv-macos]
+    if: needs.tested.outputs.tested != 'true'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -129,13 +172,11 @@ jobs:
         # which the macos-15 runner uses).
         run: brew install eigen
 
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/macos
-            opencv/include
-          key: opencv-macos15-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          name: opencv-macos
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -144,14 +185,6 @@ jobs:
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
           key: dt-macos15-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/macos/libopencv2.a ]; then
-            cd opencv && ./release.sh
-          else
-            echo "OpenCV: restored from cache"
-          fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -259,6 +292,11 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
       # Share caches with the unsigned macos smoke job — same keys.
       - name: Cache OpenCV
         uses: actions/cache@v4
@@ -266,7 +304,7 @@ jobs:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -505,6 +543,11 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
       # Same keys as the unsigned macos smoke job and macos-signed-release.
       - name: Cache OpenCV
         uses: actions/cache@v4
@@ -512,7 +555,7 @@ jobs:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -643,6 +686,8 @@ jobs:
   # ─── Windows ─────────────────────────────────────────────────────────────────
   windows:
     name: Windows (windows-2022)
+    needs: [tested, opencv-windows]
+    if: needs.tested.outputs.tested != 'true'
     runs-on: windows-2022
     defaults:
       run:
@@ -828,16 +873,11 @@ jobs:
               }
           }
 
-      # NOTE: cache keys include "msvc14.40" so changing the toolset pin
-      # above invalidates these caches automatically (otherwise an older
-      # toolset's libs could get linked against a newer toolset's code).
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/windows
-            opencv/include
-          key: opencv-windows-msvc14.40-sdk22621-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          name: opencv-windows
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4

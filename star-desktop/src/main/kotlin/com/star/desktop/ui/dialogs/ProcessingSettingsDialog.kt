@@ -1,6 +1,8 @@
 package com.star.desktop.ui.dialogs
 
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -602,6 +604,23 @@ private fun InfoRow(id: String, open: SnapshotStateMap<String, Boolean>, help: S
     }
 }
 
+/** A yes/no setting shown as a two-choice row, as the macOS client does: [choices] in display order, each with its own label and hover text. */
+@Composable
+private fun ChoiceRow(label: String, choices: List<BoolChoice>, value: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+        // As in ToggleRow, the label wraps rather than pushing the choices out of the row.
+        Text(label, color = if (enabled) StarColors.textPrimary else StarColors.textDisabled, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        StarPicker(
+            options = choices,
+            selected = choices.firstOrNull { it.value == value } ?: choices.first(),
+            label = { localized(it.labelKey) },
+            onSelect = { onChange(it.value) },
+            enabled = enabled,
+            tip = { localized(it.helpKey) },
+        )
+    }
+}
+
 @Composable
 private fun ToggleRow(label: String, value: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -723,6 +742,9 @@ internal class DoubleField(
     override fun isValid(text: String, frameCount: Int) = FieldInput.double(text, min, max) != null
 }
 
+/** One option of a two-choice row: the value it sets, its label and its hover text (catalogue keys). */
+internal class BoolChoice(val value: Boolean, val labelKey: String, val helpKey: String)
+
 internal class BoolField(
     override val label: String,
     override val labelKey: String,
@@ -730,6 +752,8 @@ internal class BoolField(
     val set: (Config.Builder, Boolean) -> Config.Builder,
     override val has: (Config) -> Boolean,
     override val enabled: (SettingsEdit) -> Boolean = ALWAYS,
+    /** When set, the row offers these two choices (in this order) instead of a switch. */
+    val choices: List<BoolChoice>? = null,
 ) : ExpertField
 
 // The ids the rules refer to.
@@ -743,6 +767,9 @@ private val NEEDS_HORIZON: (SettingsEdit) -> Boolean = { !it.skyOnly }
 
 /** The reference-horizon rows: they smooth between horizons the user painted, which only a camera that moved has. */
 private val NEEDS_MOVING_HORIZON: (SettingsEdit) -> Boolean = { !it.skyOnly && !it.cameraFixed }
+
+/** The number fields a UI test can reach: the box's id and its message line's id (literals, for the id registry). */
+private val NUMBER_FIELD_TAGS: Map<String, Pair<String, String>> = mapOf("Max keypoints" to Pair("settings.alignment.maxkeypoints", "settings.alignment.maxkeypoints.message"))
 
 // The gui's order (P8): ... the base image threshold, the keypoint divisor, earth alignment, the debug images, and the smoothing last.
 internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
@@ -772,13 +799,15 @@ internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
 
 internal val HORIZON_FIELDS: List<ExpertField> = listOf(
     BoolField(CANNY, "ui.canny_edge_detection", { it.useCannyForHorizonDetection }, { b, v -> b.setUseCannyForHorizonDetection(v) }, { it.hasUseCannyForHorizonDetection() },
-        enabled = NEEDS_HORIZON),
+        enabled = NEEDS_HORIZON,
+        choices = listOf(BoolChoice(true, "ui.yes", "ui.canny_yes_help"), BoolChoice(false, "ui.no", "ui.canny_no_help"))),
     DoubleField("Canny min threshold", "ui.canny_min_threshold", { it.cannyMinThreshold }, { b, v -> b.setCannyMinThreshold(v) }, { it.hasCannyMinThreshold() },
         min = 1.0, max = 300.0, enabled = { !it.skyOnly && it.isOn(CANNY) }),
     DoubleField("Canny max threshold", "ui.canny_max_threshold", { it.cannyMaxThreshold }, { b, v -> b.setCannyMaxThreshold(v) }, { it.hasCannyMaxThreshold() },
         min = 1.0, max = 300.0, enabled = { !it.skyOnly && it.isOn(CANNY) }),
     BoolField("Canny L2 gradient", "ui.canny_gradient_method", { it.cannyUseL2Gradient }, { b, v -> b.setCannyUseL2Gradient(v) }, { it.hasCannyUseL2Gradient() },
-        enabled = { !it.skyOnly && it.isOn(CANNY) }),
+        enabled = { !it.skyOnly && it.isOn(CANNY) },
+        choices = listOf(BoolChoice(false, "ui.l1_norm", "ui.l1_norm_help"), BoolChoice(true, "ui.l2_norm", "ui.l2_norm_help"))),
     BoolField(SMOOTHING, "ui.reference_horizon_smoothing", { it.useReferenceHorizonSmoothing }, { b, v -> b.setUseReferenceHorizonSmoothing(v) }, { it.hasUseReferenceHorizonSmoothing() },
         enabled = NEEDS_MOVING_HORIZON),
     IntField("Smoothing max distance", "ui.reference_smoothing_distance", { it.referenceHorizonSmoothingMaxDistance }, { b, v -> b.setReferenceHorizonSmoothingMaxDistance(v) }, 1, 10000, { it.hasReferenceHorizonSmoothingMaxDistance() },
@@ -900,9 +929,14 @@ private fun ExpertGroup(
             val revert = { drafts.remove(f.label); Unit }
             InfoRow(f.label, info, f.helpText()) {
                 when (f) {
-                    is BoolField -> ToggleRow(label, boolEdits[f.label] ?: f.get(cfg), enabled = enabled) { boolEdits[f.label] = it }
+                    is BoolField -> {
+                        val value = boolEdits[f.label] ?: f.get(cfg)
+                        if (f.choices != null) ChoiceRow(label, f.choices, value, enabled = enabled) { boolEdits[f.label] = it }
+                        else ToggleRow(label, value, enabled = enabled) { boolEdits[f.label] = it }
+                    }
                     is IntField -> NumberRow(
                         label, shown.orEmpty(), enabled,
+                        tag = NUMBER_FIELD_TAGS[f.label]?.first, messageTag = NUMBER_FIELD_TAGS[f.label]?.second,
                         problem = if (f.isValid(shown.orEmpty(), frameCount)) null
                         else localized("ui.enter_a_whole_number_from_a_to_b", f.min, f.maxFor(frameCount)),
                         onCommit = commit, onRevert = revert,
@@ -976,6 +1010,8 @@ private fun GPUHardwareStatusRow(available: Boolean, device: String?) {
 @Composable
 private fun NumberRow(
     label: String, value: String, enabled: Boolean, problem: String?,
+    /** The ids a UI test finds the box and its message line by (`gherkin/ui/ids.json`), when it has them. */
+    tag: String? = null, messageTag: String? = null,
     /** Return or leaving the box takes the typed text in; Esc puts back what was there (the number-field rule of both clients). */
     onCommit: () -> Unit, onRevert: () -> Unit,
     onChange: (String) -> Unit,
@@ -997,9 +1033,13 @@ private fun NumberRow(
                     .background(StarColors.sidePanel)
                     .border(1.dp, if (shownProblem != null) StarColors.red else StarColors.cellDefault, RoundedCornerShape(4.dp))
                     .padding(horizontal = 8.dp, vertical = 6.dp)
-                    .numberFieldRules(commit = onCommit, revert = onRevert),
+                    .numberFieldRules(commit = onCommit, revert = onRevert)
+                    .let { if (tag != null) it.testTag(tag) else it },
             )
         }
-        if (shownProblem != null) Text(shownProblem, color = StarColors.red, fontSize = 10.sp, modifier = Modifier.align(Alignment.End))
+        if (shownProblem != null) Text(
+            shownProblem, color = StarColors.red, fontSize = 10.sp,
+            modifier = Modifier.align(Alignment.End).let { if (messageTag != null) it.semantics(mergeDescendants = true) { testTag = messageTag } else it },
+        )
     }
 }

@@ -13,9 +13,9 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from . import gitutil, guards, load, negctl, ship, tickets, trust, worktrees
+from . import gitutil, guards, landing, load, negctl, ship, tickets, trust, worktrees
 from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
 from .announce import Announcer, Kind, SilentAnnouncer
 from .checks import impact, ledger
@@ -31,7 +31,9 @@ BUDGET_S = {"explore": 45 * 60, "develop": 4 * 3600, "fix": 90 * 60, "review": 4
             "ci-fix": 90 * 60, "conflict": 60 * 60}
 STAGE_STATE = {"explore": "exploring", "develop": "developing", "fix": "verifying", "review": "review",
                "ci-fix": "ci", "conflict": "landing"}
+CATCH_UP_STATES = frozenset({"exploring", "developing", "verifying", "review"})  # where a restarted ticket takes in develop first
 RETRY_STATE = {**STAGE_STATE, "publish": "ready", "ci": "ci", "land": "landing"}  # what `starpipe retry <n> <stage>` re-enters
+HOLDABLE_STATES = ("failed", "cancelled")  # where `retry --when-unblocked` may park a retry
 LANDING_STAGES = frozenset({"conflict", "ci-fix"})  # stages a ticket in the landing train waits on: they outrank new work for an LLM slot
 MAX_FIX_CYCLES, MAX_REVIEW_ROUNDS, MAX_CRASH_RESUMES = 2, 2, 3
 PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
@@ -106,6 +108,39 @@ class Engine:
         for t in self.db.tickets(("needs-input",)):
             self._collect_answer(t)
 
+    def refresh_blockers(self, n: int) -> None:
+        """Re-read a ticket's blocked-by links from GitHub now (sync_issues skips an issue whose updated_at did not move)."""
+        self.issue_memo.pop(n, None)
+        try:
+            self.db.set_blocked_by(n, self.gh.blocked_by(n))
+        except GitHubError:
+            pass  # the stored blockers stand
+
+    def retry_ticket(self, n: int, stage: str) -> None:
+        """What `starpipe retry <n> <stage>` does, for the owner's request and for a held one alike."""
+        self.db.put(f"held_retry:{n}", None)
+        self.db.intervention(n, "retry", stage)
+        self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
+        self.parked.discard(n)
+        if RETRY_STATE[stage] in CATCH_UP_STATES:
+            self.db.put(f"catch_up:{n}", "1")  # drive merges develop in before the stage resumes
+        self._to_state(n, RETRY_STATE[stage])
+
+    def release_held_retries(self) -> None:
+        """Retry the failed tickets whose `retry --when-unblocked` has nothing left to wait for. Each fires once."""
+        for n, stage in self.db.held_retries():
+            t = self.db.ticket(n)
+            if t is None or t.state not in HOLDABLE_STATES or stage not in RETRY_STATE:
+                self.db.put(f"held_retry:{n}", None)  # the owner retried or cancelled it meanwhile: the record is stale
+                continue
+            if self.db.open_blockers(n):
+                continue
+            self.refresh_blockers(n)  # a link added since the last sync must count before this fires
+            if self.db.open_blockers(n):
+                continue
+            self.retry_ticket(n, stage)  # drops the record first
+            log.info("#%d: blockers landed, retrying from %s", n, stage)
+
     def _collect_answer(self, t: Ticket) -> None:
         q = self.db.open_question(t.number)
         if q is None or q["comment_id"] is None:
@@ -170,9 +205,23 @@ class Engine:
         sessions, cpu_limit = self.limits()
         return load.room(self.llm_active(), self.cpu(), sessions + extra, cpu_limit)
 
+    def update_hold(self) -> dict[str, Any] | None:
+        """The self-update holding new work, while its drain window is open: {sha, left_s, waiting_on}; None otherwise.
+
+        The window runs from `self_update_pending_since` (missing counts as just started). Once it has passed the daemon swaps
+        regardless of running stages, so the hold ends here too."""
+        sha = self.db.get("self_update_pending")
+        if not sha:
+            return None
+        since = self.db.get("self_update_pending_since")
+        left = self.config.self_update_drain_s - (self.clock() - float(since)) if since else float(self.config.self_update_drain_s)
+        if left <= 0:
+            return None
+        return {"sha": sha, "left_s": left, "waiting_on": [s["ticket"] for s in self.db.running_stages()]}
+
     def claimable(self) -> Ticket | None:
-        if self.db.get("pause") in ("all", "claims") or self.db.get("self_update_pending"):
-            return None  # the second is the daemon waiting to swap to new code: nothing new starts, running stages finish
+        if self.db.get("pause") in ("all", "claims") or self.update_hold():
+            return None  # the second is the daemon waiting to swap to new code: nothing new starts for at most the drain window
         if self.landing_waiting:
             return None  # a ticket in the landing train needs the next LLM slot
         if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
@@ -189,11 +238,41 @@ class Engine:
             pass  # best effort: a stale base is fixed again when landing
         wt, branch = worktrees.create(self.repo, t.number, t.title, self.base_ref)
         self.db.set_fields(t.number, worktree=str(wt), branch=branch, claimed_at=self.clock())
-        self._to_state(t.number, "exploring")
         self.db.event("claimed", t.number, branch=branch)
         updated = self.db.ticket(t.number)
         assert updated is not None
-        return updated
+        self._to_state(t.number, "developing" if self._plan_from_ticket(updated) else "exploring")
+        refreshed = self.db.ticket(t.number)
+        assert refreshed is not None
+        return refreshed
+
+    def _plan_from_ticket(self, t: Ticket) -> bool:
+        """Take the plan written into the ticket, when it passes the checks EXPLORE's plan passes.
+
+        Any owner-authored ticket qualifies, whoever filed it (an interactive session, an agent, an approved proposal): the agent
+        that writes the ticket is the exploration agent. Tickets the pipeline files itself (`auto:<n>`) and anyone else's, and any
+        plan that does not parse or validate against the fresh worktree, go to EXPLORE (a rejected plan's reasons are appended to
+        its prompt)."""
+        if not self._owner_filed(t):
+            return False
+        self.db.put(f"plan_rejected:{t.number}", None)  # a stale reason from an earlier claim
+        supplied, errors = tickets.ticket_plan(t.body)
+        if supplied is not None:
+            contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db)
+            supplied, errors = contract.check_plan(supplied.model_dump())
+        if supplied is None and not errors:
+            return False  # no '## Plan': nothing was supplied, nothing to report
+        if supplied is None:
+            self.db.put(f"plan_rejected:{t.number}", "\n".join(f"- {e}" for e in errors))
+            self.db.event("ticket-plan-rejected", t.number, reasons=errors)
+            return False
+        self._store_plan(t, supplied.model_dump())
+        self.db.event("plan-from-ticket", t.number)
+        return True
+
+    def _store_plan(self, t: Ticket, plan: dict[str, Any]) -> None:
+        self.db.set_fields(t.number, plan_json=json.dumps(plan))
+        (worktrees.ticket_dir(t.number) / "plan.json").write_text(json.dumps(plan, indent=2))
 
     # model stages --------------------------------------------------------------------------------------------------
     def _usage_paused_until(self) -> float:
@@ -205,7 +284,7 @@ class Engine:
         self.db.put("usage_pause_until", None)
 
     async def _wait_for_update_hold(self) -> None:
-        while self.db.get("self_update_pending"):
+        while self.update_hold():
             await self.sleep(5)
 
     def _fence(self, t: Ticket, stage: str) -> guards.Fence:
@@ -244,12 +323,43 @@ class Engine:
                 effort = chosen[key]
         return model, effort
 
+    def _owner_filed(self, t: Ticket) -> bool:
+        return t.author.lower() == self.config.owner.lower() and not self.db.get(f"auto:{t.number}")
+
+    def _record_usage_windows(self, windows: dict[str, Any]) -> None:
+        """Keep the latest five_hour / seven_day utilization and reset time a stage's stream reported. An event carrying
+        only one window leaves the other as it was; anything malformed changes nothing."""
+        stored: dict[str, Any] = {}
+        raw = self.db.get("usage_windows")
+        try:
+            loaded: object = json.loads(raw) if raw else {}
+            if isinstance(loaded, dict):
+                stored = cast("dict[str, Any]", loaded)
+        except ValueError:
+            pass
+        changed = False
+        for key in ("five_hour", "seven_day"):
+            w: object = windows.get(key)
+            if not isinstance(w, dict):
+                continue
+            fields = cast("dict[str, Any]", w)
+            u, r = fields.get("utilization"), fields.get("resetsAt")
+            if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (u, r)):
+                stored[key] = {"utilization": u, "resetsAt": r}
+                changed = True
+        if changed:
+            self.db.put("usage_windows", json.dumps(stored))
+
     async def model_stage(self, t: Ticket, stage: str, prompt: str, *, fresh: bool = False,
-                          allow_resolve: bool = True) -> tuple[StageResult, Contract]:
+                          allow_resolve: bool = True, as_landing: bool | None = None) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
         contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db, self.gh, self.check_runner,
-                            owner_filed=t.author.lower() == self.config.owner.lower() and not self.db.get(f"auto:{t.number}"))
+                            self.notifier, owner_filed=self._owner_filed(t))
         resume = None if fresh else self._last_session(t, stage)
+        note = self.db.get(f"catch_up_note:{t.number}")
+        if note:  # develop was merged into the branch while the ticket was stopped: the resumed session did not make those commits
+            self.db.put(f"catch_up_note:{t.number}", None)
+            prompt = f"{note}\n\n{prompt}"
         pending = self._undelivered_answer(t)
         if pending:
             prompt = f"The owner's answer to your question:\n\n{pending['answer']}\n\nContinue the stage.\n\n{prompt}"
@@ -260,12 +370,13 @@ class Engine:
             await self._wait_for_usage()
             await self._wait_for_update_hold()
             model, effort = self._stage_choice(t, stage, attempt)
-            stage_id = await self._begin_when_room(t, stage, attempt, model)
+            stage_id = await self._begin_when_room(t, stage, attempt, model, landing=as_landing)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
             req = StageRequest(t.number, stage, attempt, body,
                                prompt_text("_preamble") + "\n\n" + prompt_text(stage.replace("-", "_")), model,
                                effort, BUDGET_S[stage], contract, self._fence(t, stage), resume,
-                               on_session=lambda sid, sid_row=stage_id: self.db.set_session(sid_row, sid))
+                               on_session=lambda sid, sid_row=stage_id: self.db.set_session(sid_row, sid),
+                               on_usage=self._record_usage_windows)
             out: StageOutcome = await self.agent.run(req)
             if out.session_id:
                 self.db.set_session(stage_id, out.session_id)
@@ -294,10 +405,11 @@ class Engine:
             attempt += 1
         return self.park(t, f"{stage}: no accepted result after 3 attempts. {summary}"), contract
 
-    async def _begin_when_room(self, t: Ticket, stage: str, attempt: int, model: str) -> int:
+    async def _begin_when_room(self, t: Ticket, stage: str, attempt: int, model: str, landing: bool | None = None) -> int:
         """Start a stage's session only while there is room: fewer than the limit of LLM sessions running and CPU not saturated.
         Waits (and says why, in the ticket's activity line) instead of starting a session the machine cannot afford."""
-        landing = stage in LANDING_STAGES
+        if landing is None:
+            landing = stage in LANDING_STAGES
         if landing:
             self.landing_waiting.add(t.number)
         try:
@@ -364,6 +476,24 @@ class Engine:
         self.db.set_question_comment(qid, cid)
         return self.park(t, f"waiting on the owner: {q['question'][:120]}", state="needs-input")
 
+    def escalate_orphaned_questions(self) -> list[int]:
+        """Finish an escalation a restart cut short: the question is recorded but never posted, and the ticket was
+        left in an active state, so it kept running and showed "running" while the owner was never asked.
+        Called at daemon start, when no stage can be mid-escalation. Returns the tickets it parked."""
+        parked: list[int] = []
+        for t in self.db.tickets(ACTIVE_STATES):
+            rows = self.db._all("SELECT * FROM questions WHERE ticket=? ORDER BY id DESC LIMIT 1", (t.number,))  # pyright: ignore[reportPrivateUsage]
+            if not rows or rows[0]["answer"] is not None or rows[0]["comment_id"] is not None:
+                continue
+            q = dict(rows[0])
+            payload = json.loads(q["payload"] or "{}")
+            payload.setdefault("question", q["text"])
+            payload.setdefault("why", "")
+            self.db.event("question-reescalated", t.number, question=q["id"])
+            self._escalate(t, q["stage"], q["id"], payload)
+            parked.append(t.number)
+        return parked
+
     def _issue(self, t: Ticket) -> dict[str, Any]:
         return {"title": t.title, "body": t.body, "user": {"login": t.author}}
 
@@ -378,6 +508,10 @@ class Engine:
             t = self.db.ticket(number)
             if t is None or t.number in self.parked:
                 return
+            if t.state in CATCH_UP_STATES and self.db.get(f"catch_up:{t.number}"):
+                self.db.put(f"catch_up:{t.number}", None)
+                if not await self._catch_up_restarted(t):
+                    return
             if t.state == "queued":
                 t = self.claim(t)
             elif t.state == "exploring":
@@ -408,6 +542,54 @@ class Engine:
             else:
                 return
 
+    async def _catch_up_restarted(self, t: Ticket) -> bool:
+        """A ticket the owner restarted (`retry`, `answer`) first takes in the develop it missed while stopped. A dirty worktree (a stage was
+        interrupted mid-edit) is left alone. Conflicts go to the conflict stage and the dropped-lines audit, as at landing. False: parked."""
+        if not t.worktree:
+            return True
+        wt = Path(t.worktree)
+        base = f"origin/{self.config.base_branch}"
+        try:
+            step = await asyncio.to_thread(self._prepare_catch_up, t.number, wt, base)
+        except RuntimeError as exc:
+            self.db.event("catch-up-skipped", t.number, reason=f"git failed: {str(exc)[:200]}")
+            return True
+        if step is None:
+            return True
+        mb, head, conflicted, count = step
+        if conflicted:
+            prompt = f"{self._ticket_text(t)}\n\nConflicts merging {base}:\n" + "\n".join(conflicted)
+            result, _ = await self.model_stage(t, "conflict", prompt, fresh=True, as_landing=False)  # the ticket is not landing: no priority
+            if not result.ok:
+                return False
+        dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
+        if dropped:
+            shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
+            self.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
+            return False
+        self.db.put(f"gherkin_ok:{t.number}", None)  # the head changed: an old feature run proves nothing about it
+        self.db.put(f"catch_up_note:{t.number}", f"{base} was merged into this branch while the ticket was stopped: {count} commit(s) "
+                                                "you did not make are now in the tree. Re-read what you rely on before continuing.")
+        self.db.event("caught-up", t.number, commits=count, conflicts=len(conflicted))
+        return True
+
+    def _prepare_catch_up(self, number: int, wt: Path, base: str) -> tuple[str, str, list[str], int] | None:
+        """Worker thread: fetch, then merge develop in if the branch is clean and behind. Returns (merge-base, old head, conflicted files,
+        commits taken in), or None when there is nothing to merge or the worktree is dirty (that is recorded)."""
+        ship.fetch(self, wt)
+        if not gitutil.is_clean(wt):
+            self.db.event("catch-up-skipped", number, reason="the worktree has uncommitted changes")
+            return None
+        if gitutil.is_ancestor(wt, base, "HEAD"):
+            return None
+        head = gitutil.head_sha(wt)
+        mb = gitutil.git(wt, "merge-base", base, head).strip()
+        count = int(gitutil.git(wt, "rev-list", "--count", f"{head}..{base}").strip() or 0)
+        done, conflicted = ship._merge_develop(wt, base)  # pyright: ignore[reportPrivateUsage]
+        if not conflicted and "CONFLICT" in done:
+            conflicted = ["(see git status)"]
+        return mb, head, conflicted, count
+
     async def _publish_when_room(self, t: Ticket) -> bool:
         """PUBLISH, but only while fewer than `max_in_ci` tickets are in CI or landing. Several PRs at once queue for the same GitHub
         runners and invalidate each other (each landing makes the others catch up and run CI again), so the rest wait here as `ready`."""
@@ -421,12 +603,13 @@ class Engine:
             await self.sleep(30)
 
     async def _explore(self, t: Ticket) -> bool:
-        result, _ = await self.model_stage(t, "explore", f"{self._ticket_text(t)}\n\nBase: {self.base_ref}")
+        rejected = self.db.get(f"plan_rejected:{t.number}")
+        note = f"\n\nThe plan this ticket carried was rejected, so plan it yourself. What was wrong with it:\n{rejected}" if rejected else ""
+        result, _ = await self.model_stage(t, "explore", f"{self._ticket_text(t)}{note}\n\nBase: {self.base_ref}")
         if not result.ok:
             return False
         if result.kind == "plan":
-            self.db.set_fields(t.number, plan_json=json.dumps(result.value))
-            (worktrees.ticket_dir(t.number) / "plan.json").write_text(json.dumps(result.value, indent=2))
+            self._store_plan(t, result.value)
             self._to_state(t.number, "developing")
             return True
         if result.kind == "close":
@@ -508,6 +691,7 @@ class Engine:
         for r in results:
             self.db.record_check(t.number, sha, r.check, r.status,
                                  {"executed": r.executed, "failed": r.failed, "skipped": r.skipped}, r.log)
+        self.notifier.hung_checks(t.number, results)
         red = [r for r in results if not r.green]
         if red:
             return "\n".join(f"{r.status.upper()} {r.check}: {r.detail} (log {r.log})" for r in red)

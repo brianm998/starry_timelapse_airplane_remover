@@ -12,6 +12,7 @@ struct OverviewView: View {
             VStack(alignment: .leading, spacing: 22) {
                 Text("Overview").scaledFont(.title2, weight: .bold)
                 if let error = store.lastError { Text(error).foregroundStyle(.red).scaledFont(.caption) }
+                pipelineStatus
                 activeModels
                 concurrency
                 landingQueue
@@ -28,6 +29,30 @@ struct OverviewView: View {
             Button("Cancel", role: .cancel) {}
         } message: { _ in
             Text("CI, the overlap re-test and the stop-line wait are skipped, and the PR says the owner bypassed them. A conflict still goes to the conflict stage, and an explicit landing pause still holds it.")
+        }
+    }
+
+    // 0. pipeline status --------------------------------------------------------------------------------------------
+    private var pipelineStatus: some View {
+        section("Pipeline status") {
+            Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 6) {
+                ForEach(store.statusRows) { row in
+                    GridRow {
+                        Text(row.label).foregroundStyle(.secondary)
+                        Text(row.value).foregroundStyle(color(row.severity)).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private func color(_ severity: Overview.Severity) -> Color {
+        switch severity {
+        case .normal: .secondary
+        case .ok: .green
+        case .warn: .orange
+        case .bad: .red
         }
     }
 
@@ -88,6 +113,9 @@ struct OverviewView: View {
                 if landing?.paused == true { Chip(text: "landing paused", color: .orange) }
                 if landing?.stopLine == nil && landing?.paused != true { Chip(text: "landing open", color: .green) }
             }
+            ForEach(Array(Overview.landingLines(landing).enumerated()), id: \.offset) { _, line in
+                Text(line.text).monospacedDigit().foregroundStyle(line.slow ? Color.orange : Color.secondary)
+            }
             if queue.isEmpty {
                 Text("Nothing is waiting to land.").foregroundStyle(.secondary)
             }
@@ -96,6 +124,7 @@ struct OverviewView: View {
                     Text("#\(t.number)").monospacedDigit().foregroundStyle(.secondary)
                     Text(t.title).lineLimit(1)
                     Spacer()
+                    if t.state == "ready" { Text(t.activity).scaledFont(.caption).foregroundStyle(.secondary).lineLimit(1) }
                     Chip(text: t.state, color: stateColor(t.state))
                     Button("Land now (skip tests)") { confirming = t }
                 }

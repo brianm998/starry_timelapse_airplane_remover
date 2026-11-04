@@ -4,6 +4,8 @@ import StarCore
 struct FinderStyleDropZone: View {
     @State private var isTargeted = false
     var onDropAction: ([NSItemProvider]) -> Void
+    /// A click on the zone, which the desktop client's zone has too: it opens the image sequence chooser.
+    var onTap: () -> Void = {}
 
     var body: some View {
         ZStack {
@@ -29,6 +31,10 @@ struct FinderStyleDropZone: View {
         }
         .frame(minWidth: 280, minHeight: 150)
         .padding()
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
+        .help(localized("ui.load_an_image_sequence_yet_to_be_processed"))
+        .accessibilityIdentifier("startup.dropzone")
         .onDrop(of: ["public.file-url"], isTargeted: $isTargeted) { providers in
             handleDrop(providers)
             return true

@@ -1031,7 +1031,9 @@ struct ProcessingSettingsView: View {
                       textColor: .white,
                       focusedField: $focusedField,
                       focusField: .alignmentMaxKeypoints,
-                      alwaysOpen: true            
+                      alwaysOpen: true,
+                      identifier: "settings.alignment.maxkeypoints",
+                      messageIdentifier: "settings.alignment.maxkeypoints.message"
                     )
                     Spacer()
                 }

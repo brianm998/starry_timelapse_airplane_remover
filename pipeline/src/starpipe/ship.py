@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
+from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from . import ci, gitutil, landing, trust, worktrees
+from . import ci, gherkin_nightly, gitutil, landing, tickets, trust, worktrees
 from .db import Ticket
 from .github import GitHubError
 
@@ -19,6 +21,9 @@ if TYPE_CHECKING:
     from .engine import Engine
 
 MAX_CI_FIX = 2
+GATE_ERROR_LIMIT = 5  # the same feature-gate error on the same head this many polls in a row parks the ticket
+TRANSIENT_ERROR = re.compile(r"HTTP 5\d\d|timed out|timeout|connection|network|temporar|rate limit|could not resolve", re.IGNORECASE)
+FEATURE_RUN_WAIT_S = 600.0  # a dispatched feature run that has not appeared by then is dispatched again
 LANDING_STATES = ("ci", "landing")
 BYPASS_NOTE = "The owner landed this with land-now: CI, the overlap re-test and the stop-line wait were bypassed."
 
@@ -70,8 +75,12 @@ def publish(eng: Engine, t: Ticket) -> bool:
     return True
 
 
-def fetch_jobs(eng: Engine, sha: str) -> list[ci.Job]:
-    runs, post_merge = ci.split_post_merge(eng.gh.workflow_runs(sha=sha), eng.config.ci_post_merge_workflows)
+def fetch_jobs(eng: Engine, sha: str, keep_titles: tuple[str, ...] = ()) -> list[ci.Job]:
+    """The PR's jobs. Runs of post-merge-only workflows are ignored and cancelled, except a dispatched run whose display_title is in
+    `keep_titles` (a ticket's own Gherkin feature run): feature_gate owns it, so the PR judge neither cancels nor judges it."""
+    every = [r for r in eng.gh.workflow_runs(sha=sha)
+             if not (r.get("event") == "workflow_dispatch" and r.get("display_title") in keep_titles)]
+    runs, post_merge = ci.split_post_merge(every, eng.config.ci_post_merge_workflows)
     for run in post_merge:
         if run.get("status") != "completed":
             eng.gh.cancel_run(int(run["id"]))  # nobody waits for it, and it holds a macOS runner other work needs
@@ -87,9 +96,9 @@ def _infra(eng: Engine, job: ci.Job) -> bool:
         return False
 
 
-def _judge(eng: Engine, key: int | str, sha: str, reran: set[tuple[str, str]]) -> ci.Verdict:
+def _judge(eng: Engine, key: int | str, sha: str, reran: set[tuple[str, str]], keep_titles: tuple[str, ...] = ()) -> ci.Verdict:
     """Fetch the PR's jobs and judge them. Network calls: runs in a worker thread, never on the event loop."""
-    return ci.judge(fetch_jobs(eng, sha), eng.db.baseline, now=eng.clock(),
+    return ci.judge(fetch_jobs(eng, sha, keep_titles), eng.db.baseline, now=eng.clock(),
                     head_pushed_at=float(eng.db.get(f"pushed_at:{key}") or eng.clock()),
                     settle_s=eng.config.ci_settle_s, blocking_wait_s=eng.config.ci_blocking_wait_s,
                     reran=reran, infra=lambda j: _infra(eng, j))
@@ -114,6 +123,143 @@ def _finish_ci(eng: Engine, cur: Ticket, notes: list[str]) -> None:
     eng._to_state(cur.number, "landing")  # pyright: ignore[reportPrivateUsage]
 
 
+def _dispatch_features(eng: Engine, t: Ticket, sha: str, title: str, features: list[str]) -> None:
+    """Make the ticket's head exist on origin, then dispatch gherkin.yml there with the features. Worker thread."""
+    pushed = push(eng, t)
+    if pushed != sha:
+        raise RuntimeError(f"the branch head moved from {sha[:10]} to {pushed[:10]} while it was being pushed")
+    eng.gh.dispatch_workflow(gherkin_nightly.WORKFLOW_FILE, t.branch or "", {"features": ",".join(features)})
+    eng.db.put(f"gherkin_run:{t.number}", json.dumps({"sha": sha, "title": title, "at": eng.clock()}))
+    eng.db.put(f"gherkin_reran:{t.number}", None)
+    eng.db.event("gherkin-dispatched", t.number, sha=sha, features=features)
+
+
+def _is_feature_run(run: dict[str, Any], sha: str, title: str, since: float) -> bool:
+    """A dispatched run for this head: titled `title`, or, on a branch cut before gherkin.yml had a run-name, titled by the workflow's
+    name (the REST API) or path (`gh`) and created no earlier than the dispatch (GitHub's title for a run-name-less workflow; matching only by title redispatched
+    every ten minutes and each new run cancelled the last)."""
+    if run.get("event") != "workflow_dispatch" or run.get("head_sha") != sha:
+        return False
+    if run.get("display_title") == title:
+        return True
+    created = str(run.get("created_at") or "")
+    return (run.get("display_title") in (gherkin_nightly.WORKFLOW_PATH, run.get("name")) and bool(created)
+            and datetime.fromisoformat(created).timestamp() >= since)
+
+
+def _feature_verdict(eng: Engine, t: Ticket, sha: str, title: str, since: float, reran: set[tuple[str, str]]) -> ci.Verdict | None:
+    """Judge the newest dispatched run for this head and title; None when GitHub does not list one yet. Worker thread."""
+    runs = [r for r in eng.gh.workflow_file_runs(gherkin_nightly.WORKFLOW_FILE, t.branch or "") if _is_feature_run(r, sha, title, since)]
+    if not runs:
+        return None
+    run = max(runs, key=lambda r: int(r["id"]))
+    rid = int(run["id"])
+    jobs = ci.parse_jobs([run], {rid: eng.gh.run_jobs(rid, ci.run_version(run))})
+    return ci.judge_feature_run(jobs, reran, run_completed=run.get("status") == "completed",
+                                run_conclusion=run.get("conclusion"), run_id=rid)
+
+
+def _is_transient(message: str) -> bool:
+    return bool(TRANSIENT_ERROR.search(message))
+
+
+def _behind_develop(eng: Engine, wt: Path) -> tuple[str, str] | None:
+    """(base, merge-base) when the ticket's head is missing commits of develop, else None. Worker thread."""
+    try:
+        fetch(eng, wt)
+    except RuntimeError:  # offline or no ssh here: judge by the origin/develop we already have
+        pass
+    base = f"origin/{eng.config.base_branch}"
+    mb = gitutil.git(wt, "merge-base", base, "HEAD").strip()
+    return None if mb == gitutil.git(wt, "rev-parse", base).strip() else (base, mb)
+
+
+async def _gate_error(eng: Engine, t: Ticket, sha: str, exc: Exception, rejoin: bool) -> str:
+    """The feature gate's dispatch or poll raised. Returns 'sleep' (try again after a poll), 'again' (the head is new: loop at once)
+    or 'stop' (parked, or the catch-up did not end well).
+
+    A 422 saying the workflow has no workflow_dispatch trigger is a branch that has fallen behind develop (its gherkin.yml is
+    unparsable there): merge develop in, as the train does, and dispatch on the new head. The same error on the same head
+    GATE_ERROR_LIMIT polls in a row parks the ticket, except an error that may clear by itself (5xx, network), which retries."""
+    n, message = t.number, str(exc)
+    eng.db.event("gherkin-poll-failed", n, error=message[:200])
+    rec = json.loads(eng.db.get(f"gherkin_err:{n}") or "null")
+    count = rec["count"] + 1 if rec and rec["sha"] == sha and rec["error"] == message else 1
+    eng.db.put(f"gherkin_err:{n}", json.dumps({"sha": sha, "error": message, "count": count}))
+    if _is_transient(message):
+        return "sleep"
+    if count >= GATE_ERROR_LIMIT:
+        eng.db.put(f"gherkin_err:{n}", None)
+        eng.park(t, f"the Gherkin feature gate failed {count} times in a row on {sha[:10]}: {message[:300]}")
+        return "stop"
+    if "workflow_dispatch" in message and "422" in message:
+        behind = await asyncio.to_thread(_behind_develop, eng, Path(t.worktree or ""))
+        if behind is not None:
+            base, mb = behind
+            eng.db.event("gherkin-catch-up", n, sha=sha, base=base)
+            if not await catch_up(eng, t, base, mb, sha, landing.Overlap([], []), rejoin=rejoin):
+                return "stop"
+            return "again"
+    return "sleep"
+
+
+async def feature_gate(eng: Engine, t: Ticket, rejoin: bool = False) -> str:
+    """Prove the ticket's Gherkin features (its `gherkin:` Pipeline value plus the plan's gherkin_features_to_run) on its own branch.
+
+    'proven': no features, land-now, or the head's feature run is green (the proof is remembered per head sha, kv gherkin_ok:<n>).
+    'retry': the run was red twice and CI-FIX changed the branch, so the head is new. 'stop': the ticket left its state or was parked.
+    `rejoin` is the landing train: the ticket waits in `ready` and CI-FIX ends with it back there, not on its own PR."""
+    n = t.number
+    while True:
+        cur = eng.db.ticket(n)
+        if cur is None or cur.state != ("ready" if rejoin else "ci"):
+            return "stop"
+        features = tickets.gherkin_features(cur.body, cur.plan)
+        if not features or land_now(eng, n):
+            return "proven"
+        sha = await asyncio.to_thread(gitutil.head_sha, Path(cur.worktree or ""))
+        if eng.db.get(f"gherkin_ok:{n}") == sha:
+            return "proven"
+        title = tickets.feature_title(features)
+        rec = json.loads(eng.db.get(f"gherkin_run:{n}") or "null")
+        try:
+            if not rec or rec["sha"] != sha or rec["title"] != title:
+                await asyncio.to_thread(_dispatch_features, eng, cur, sha, title, features)
+                eng.db.put(f"gherkin_err:{n}", None)
+                continue
+            reran = {tuple(k) for k in json.loads(eng.db.get(f"gherkin_reran:{n}") or "[]")}
+            verdict = await asyncio.to_thread(_feature_verdict, eng, cur, sha, title, float(rec["at"]) - 60, reran)
+        except (GitHubError, RuntimeError) as exc:
+            step = await _gate_error(eng, cur, sha, exc, rejoin)
+            if step == "stop":
+                return "stop"
+            if step == "sleep":
+                await eng.sleep(eng.config.ci_poll_s)
+            continue
+        eng.db.put(f"gherkin_err:{n}", None)
+        age = eng.clock() - float(rec["at"])
+        if verdict is None:
+            if age > FEATURE_RUN_WAIT_S:  # dispatched, but no such run ever showed up: dispatch again
+                eng.db.put(f"gherkin_run:{n}", None)
+            else:
+                await eng.sleep(eng.config.ci_poll_s)
+        elif verdict.kind == "pending":
+            await eng.sleep(ci.poll_delay(age, eng.config.ci_poll_s))
+        elif verdict.kind == "rerun":
+            ready = await asyncio.to_thread(_rerun, eng, n, [j for j in verdict.rerun if j.run_done])
+            reran |= {j.key for j in ready}
+            eng.db.put(f"gherkin_reran:{n}", json.dumps(sorted(reran)))
+            await eng.sleep(eng.config.ci_poll_s)
+        elif verdict.kind == "pass":
+            eng.db.put(f"gherkin_ok:{n}", sha)
+            eng.db.event("gherkin-proven", n, sha=sha, features=features)
+            return "proven"
+        else:
+            fixed = await ci_fix(eng, cur, verdict, rejoin)
+            eng.db.put(f"gherkin_ok:{n}", None)
+            return "retry" if fixed else "stop"
+
+
 async def run_ci(eng: Engine, t: Ticket) -> bool:
     """Judge CI until it passes (-> landing), parks, or needs a CI-FIX. True when the ticket should keep going."""
     while True:
@@ -123,10 +269,16 @@ async def run_ci(eng: Engine, t: Ticket) -> bool:
         if land_now(eng, t.number):  # re-read every pass, so a mark set while we sleep in a poll is seen
             await asyncio.to_thread(_finish_ci, eng, cur, ["tests bypassed by the owner (land-now)"])
             return True
+        gate = await feature_gate(eng, cur)  # the ticket's own Gherkin features, before its PR's CI is judged
+        if gate == "stop":
+            return False
+        if gate == "retry":
+            continue
         sha = gitutil.head_sha(Path(cur.worktree or ""))
         reran = {tuple(k) for k in json.loads(eng.db.get(f"reran:{t.number}") or "[]")}
+        keep = (tickets.feature_title(tickets.gherkin_features(cur.body, cur.plan)),)
         try:
-            verdict = await asyncio.to_thread(_judge, eng, t.number, sha, reran)
+            verdict = await asyncio.to_thread(_judge, eng, t.number, sha, reran, keep)
         except GitHubError as exc:
             await eng.sleep(eng.config.ci_poll_s)
             eng.db.event("ci-poll-failed", t.number, error=str(exc))
@@ -171,6 +323,7 @@ async def ci_fix(eng: Engine, t: Ticket, verdict: ci.Verdict, rejoin: bool = Fal
         eng.park(t, f"CI-FIX did not pass local verification: {failure[:300]}")
         return False
     if rejoin:
+        eng.db.put(f"gherkin_ok:{t.number}", None)  # the head changed: the old feature run proves nothing about it
         eng.db.set_fields(t.number, pr_number=None)
         eng._to_state(t.number, "ready")  # pyright: ignore[reportPrivateUsage]
         return True
@@ -244,6 +397,7 @@ async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: la
         eng.park(t, f"after catching up with develop, verification failed: {failure[:300]}")
         return False
     if rejoin:  # the landing train: back in the queue, to be batched on the new develop
+        eng.db.put(f"gherkin_ok:{t.number}", None)  # the head changed (develop merged in): its feature run must be done again
         eng._to_state(t.number, "ready")  # pyright: ignore[reportPrivateUsage]
         return True
     await asyncio.to_thread(push, eng, t)
@@ -283,7 +437,7 @@ def watch_develop(eng: Engine) -> None:
     """Refresh the develop baseline from the latest run of each workflow that ended success or failure; react to new reds
     (§10.3). Gherkin's baseline is kept but never ticketed here: its nightly full run reruns and files its own (gherkin_nightly.py).
     A run cancelled by a newer push is completed but says nothing about the code, so it is skipped: the workflow's
-    earlier success/failure run stays the baseline."""
+    earlier success/failure run stays the baseline. So is a job that concluded `skipped` inside an otherwise finished run."""
     base = eng.config.base_branch
     runs = [r for r in eng.gh.workflow_runs(branch=base)
             if r.get("status") == "completed" and r.get("conclusion") in ("success", "failure")]
@@ -293,6 +447,8 @@ def watch_develop(eng: Engine) -> None:
     seeding = eng.db.baseline_size() == 0
     for run in latest.values():
         for job in ci.parse_jobs([run], {int(str(run["id"])): eng.gh.run_jobs(int(str(run["id"])), ci.run_version(run))}):
+            if job.conclusion == "skipped":
+                continue  # the push run skipped it because the batch PR already tested this tree: that result stays the baseline
             before = eng.db.baseline(job.workflow, job.job)
             now = job.conclusion or "failure"
             eng.db.set_baseline(job.workflow, job.job, str(run.get("head_sha")), now)

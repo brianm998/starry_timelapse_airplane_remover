@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +54,53 @@ async def test_status_and_show_report_the_ticket_and_its_activity(rig: Rig) -> N
         shown = await (await client.get("/v1/tickets/7", headers=AUTH)).json()
         assert shown["title"] == "Tidy the docs" and shown["stages"] == []
         assert (await client.get("/v1/tickets/99", headers=AUTH)).status == 404
+    finally:
+        await client.close()
+
+
+async def test_retry_and_answer_ask_for_a_catch_up(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.db.add_question(7, "develop", "which?", {})
+    rig.db.set_state(7, "needs-input", "waiting")
+    client, _ = await api(rig)
+    try:
+        assert rig.db.get("catch_up:7") is None
+        assert (await client.post("/v1/tickets/7/answer", json={"text": "the first"}, headers=AUTH)).status == 200
+        assert rig.db.get("catch_up:7") == "1", "answer: develop is merged in before the stage resumes"
+        rig.db.put("catch_up:7", None)
+        assert (await client.post("/v1/tickets/7/retry", json={"stage": "review"}, headers=AUTH)).status == 200
+        assert rig.db.get("catch_up:7") == "1", "retry: the same"
+    finally:
+        await client.close()
+
+
+async def test_retry_when_unblocked_records_instead_of_retrying(rig: Rig) -> None:
+    rig.gh.add_issue(7, "failed one")
+    rig.gh.add_issue(174, "first blocker")
+    rig.gh.add_issue(199, "second blocker")
+    rig.gh.deps[7] = [174, 199]
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "failed", "CI still red after 2 fix cycles")
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/tickets/7/retry", json={"stage": "ci", "when_unblocked": True}, headers=AUTH)
+        assert r.status == 200 and "waiting for #174, #199" in (await r.json())["result"]
+        assert rig.state(7) == "failed" and rig.db.get("held_retry:7") == "ci"
+        shown = await (await client.get("/v1/tickets/7", headers=AUTH)).json()
+        assert shown["held_retry"] == "retry from ci when unblocked"
+        assert shown["activity"] == "failed · waiting for #174, #199 → retry from ci"
+        assert [r["kind"] for r in rig.db._all("SELECT kind FROM interventions")] == ["hold-retry"]  # pyright: ignore[reportPrivateUsage]
+
+        rig.db.set_state(174, "landed")  # a blocker landing is reflected at once
+        assert activity(rig.db, rig.db.ticket(7)) == "failed · waiting for #199 → retry from ci"  # type: ignore[arg-type]
+
+        rig.db.set_state(7, "developing")  # only a failed or cancelled ticket can hold a retry
+        r = await client.post("/v1/tickets/7/retry", json={"stage": "ci", "when_unblocked": True}, headers=AUTH)
+        assert r.status == 409
+        rig.db.set_state(7, "failed")
+        await client.post("/v1/tickets/7/cancel", json={}, headers=AUTH)
+        assert rig.db.get("held_retry:7") is None, "cancelling drops the hold"
     finally:
         await client.close()
 
@@ -575,6 +623,49 @@ async def test_a_passing_smoke_check_holds_new_work_and_swaps_only_when_idle(rig
     assert rig.db.get("self_update_pending") is None and rig.engine.claimable() is not None
 
 
+async def test_pending_update_swaps_after_the_drain_window_with_stages_running(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    rig.gh.add_issue(1, "running")
+    rig.gh.add_issue(2, "waiting")
+    rig.engine.sync_issues()
+    rig.db.begin_stage(1, "develop", 1, "sonnet")
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    drain = rig.engine.config.self_update_drain_s
+
+    assert pin.once() == "pending" and rig.db.get("self_update_pending_since") == str(rig.now)
+    rig.now += drain - 1
+    assert pin.once() == "pending" and pin.current_sha() == pin.base and rig.engine.claimable() is None, "inside the window"
+
+    rig.now += 2
+    assert pin.once() == "swapped", "past the window it swaps with the stage still running"
+    assert pin.current_sha() == target and len(rig.db.running_stages()) == 1
+    events = [e for e in rig.db.events_since() if e["kind"] == "self-update"]
+    assert events[0]["data"] == {"old": pin.base, "new": target, "interrupted": [1]}
+    assert rig.db.get("self_update_pending") is None and rig.db.get("self_update_pending_since") is None
+
+    pin.daemon.reconcile()  # the restarted process marks the stage interrupted; drive() resumes it by session id
+    assert rig.db.running_stages() == [] and rig.db.stages(1)[0]["outcome"] == "interrupted"
+
+
+async def test_self_update_still_waits_for_the_nightly(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    rig.db.begin_stage(1, "develop", 1, "sonnet")
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    assert pin.once() == "pending"
+    rig.now += rig.engine.config.self_update_drain_s + 1  # past the window, with a stage running
+    gate = asyncio.Event()
+
+    async def nightly() -> int:
+        await gate.wait()
+        return 0
+
+    pin.daemon.nightly_task = asyncio.create_task(nightly())
+    assert pin.once() is None and pin.current_sha() == pin.base, "a nightly is running: no swap even past the window"
+    gate.set()
+    await pin.daemon.nightly_task
+    assert pin.once() == "swapped" and pin.current_sha() == target
+
+
 async def test_a_pending_update_holds_the_next_model_stage(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
@@ -713,3 +804,145 @@ def test_hard_exit_is_the_default_exit_and_ends_the_process_without_unwinding(mo
     assert daemon_mod.Daemon(rig.engine, rig.engine.config).exit is daemon_mod.hard_exit
     daemon_mod.hard_exit(0)
     assert calls == [0], "os._exit, not sys.exit: SystemExit would wait on non-daemon threads and hang"
+
+
+def landing_daemon(rig: Rig, window: int = 120) -> Daemon:
+    return Daemon(rig.engine, Config(landing_mode="batch", batch_window_s=window, batch_max=5), token="tok")
+
+
+def ready_tickets(rig: Rig, *numbers: int) -> None:
+    for n in numbers:
+        rig.gh.add_issue(n, f"t{n}")
+    rig.engine.sync_issues()
+    for n in numbers:
+        rig.engine._to_state(n, "ready")  # pyright: ignore[reportPrivateUsage]
+
+
+def activity_of(d: Daemon, n: int) -> str:
+    return next(t["activity"] for t in d.snapshot()["tickets"] if t["number"] == n)  # type: ignore[index, union-attr]
+
+
+def test_snapshot_shows_the_active_batch_in_each_phase(rig: Rig) -> None:
+    ready_tickets(rig, 1, 2)
+    d = landing_daemon(rig)
+    assert d.snapshot()["landing"]["batch"] is None  # type: ignore[index]
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_add(bid, 1, 0)
+    rig.db.batch_add(bid, 2, 1)
+    rig.now += 90
+    for phase in ("building", "ci", "landing"):
+        rig.db.batch_update(bid, state=phase)
+        landing = d.snapshot()["landing"]
+        assert landing["batch"] == {"number": bid, "phase": phase, "age_s": 90, "members": [1, 2],  # type: ignore[index]
+                                    "pr_number": None, "slow": False}
+        assert d.status()["landing"]["batch"]["phase"] == phase  # type: ignore[index]
+
+
+def test_ready_ticket_reads_in_batch_n_while_building(rig: Rig) -> None:
+    ready_tickets(rig, 1, 2, 3)
+    d = landing_daemon(rig)
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_add(bid, 1, 0)
+    rig.db.batch_add(bid, 2, 1)
+    assert activity_of(d, 1) == f"ready · in batch {bid} (building)"
+    assert activity_of(d, 2) == f"ready · in batch {bid} (building)"
+    assert activity_of(d, 3) == f"ready · waiting for the next batch (batch {bid} is building)"
+
+
+def test_ready_ticket_reads_waiting_for_the_next_batch_with_the_countdown(rig: Rig) -> None:
+    ready_tickets(rig, 1)
+    d = landing_daemon(rig, window=120)
+    rig.now += 30
+    assert activity_of(d, 1) == "ready · waiting for the next batch (starts in 90s)"
+    assert d.snapshot()["landing"]["next_batch_in_s"] == 90  # type: ignore[index]
+    rig.now += 100
+    assert activity_of(d, 1) == "ready · waiting for the next batch (starting)"
+    assert d.snapshot()["landing"]["next_batch_in_s"] == 0  # type: ignore[index]
+
+
+def test_ready_activity_names_the_feature_gate(rig: Rig) -> None:
+    rig.gh.add_issue(1, "t1", f"{GOOD_BODY}\n## Pipeline\ngherkin: autoMovingTiff16, uiX\n")
+    ready_tickets(rig, 2)
+    rig.engine.sync_issues()
+    rig.engine._to_state(1, "ready")  # pyright: ignore[reportPrivateUsage]
+    d = landing_daemon(rig)
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(bid, state="ci")  # a batch is in CI, but #1 is owed its feature run first
+    assert activity_of(d, 1) == "ready · proving Gherkin features (autoMovingTiff16, uiX)"
+    assert activity_of(d, 2) == f"ready · waiting for the next batch (batch {bid} is ci)", "no features: nothing to prove"
+    rig.db.put("gherkin_err:1", json.dumps({"sha": "abc", "error": "gh: Bad Gateway (HTTP 502)", "count": 2}))
+    assert activity_of(d, 1) == ("ready · proving Gherkin features (autoMovingTiff16, uiX) · "
+                                 "last poll failed: gh: Bad Gateway (HTTP 502)")
+    rig.db.put("gherkin_ok:1", "abc")
+    assert activity_of(d, 1) == f"ready · waiting for the next batch (batch {bid} is ci)", "proven: it waits on the train"
+
+
+def test_snapshot_remembers_the_last_abandoned_batch_for_an_hour(rig: Rig) -> None:
+    d = landing_daemon(rig)
+    old = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(old, state="abandoned", ended=rig.now, note="an older reason")
+    rig.now += 10
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(bid, state="abandoned", ended=rig.now,
+                        note="develop moved with overlapping changes: rebuilding on the new base")
+    rig.now += 18 * 60
+    snap = d.snapshot()["landing"]
+    assert snap["batch"] is None  # type: ignore[index]
+    assert snap["last_abandoned"] == {"number": bid, "state": "abandoned", "ended": rig.now - 18 * 60, "ago_s": 18 * 60,  # type: ignore[index]
+                                      "reason": "develop moved with overlapping changes: rebuilding on the new base"}
+    rig.now += 41 * 60  # 59 minutes since it ended
+    assert d.snapshot()["landing"]["last_abandoned"]["number"] == bid  # type: ignore[index]
+    rig.now += 2 * 60  # over the hour
+    assert d.snapshot()["landing"]["last_abandoned"] is None  # type: ignore[index]
+
+
+def test_a_batch_building_over_ten_minutes_is_marked_slow(rig: Rig) -> None:
+    d = landing_daemon(rig)
+    bid = rig.db.batch_create("0" * 40)
+    rig.now += 599
+    assert d.snapshot()["landing"]["batch"]["slow"] is False  # type: ignore[index]
+    rig.now += 2
+    assert d.snapshot()["landing"]["batch"]["slow"] is True  # type: ignore[index]
+    rig.db.batch_update(bid, state="ci")  # only a batch still building is slow: CI is expected to take long
+    assert d.snapshot()["landing"]["batch"]["slow"] is False  # type: ignore[index]
+
+
+async def test_restart_finishes_an_escalation_it_cut_short(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.engine.claim(rig.engine.claimable() or rig.db.tickets()[0])
+    rig.db.add_question(7, "explore", "ship it?", {"question": "ship it?", "why": "unclear", "options": []})
+    assert rig.db.open_question(7)["comment_id"] is None  # type: ignore[index]  # the daemon died before posting it
+    Daemon(rig.engine, Config(), token="tok").reconcile()
+    assert rig.state(7) == "needs-input"
+    assert rig.db.open_question(7)["comment_id"] is not None  # type: ignore[index]
+
+
+async def test_hung_heavy_job_raises_an_alert(rig: Rig) -> None:
+    from starpipe.checks import ledger
+
+    def hung_runner(worktree: Path, base: str) -> list[ledger.Result]:
+        return [ledger.Result("test:daemon", "hung", "abc", 1.0,
+                              detail="hung: `swift test --package-path daemon` made no progress for 900s and was killed")]
+
+    rig.engine.check_runner = hung_runner
+    rig.gh.add_issue(7, "Tidy the docs")
+    rig.engine.sync_issues()
+    rig.agent.on("explore", explore_ok)
+
+    def develop(req: StageRequest) -> StageOutcome:
+        req.contract.run_checks({})
+        return StageOutcome("no-result")
+
+    rig.agent.on("develop", develop)
+    await rig.engine.drive(7)
+
+    assert "heavy-hung:7" in [a["key"] for a in rig.db.open_alerts()]
+    client, _ = await api(rig)
+    try:
+        status = await (await client.get("/v1/status", headers=AUTH)).json()
+    finally:
+        await client.close()
+    alert = next(a for a in status["alerts"] if a["key"] == "heavy-hung:7")
+    assert "#7" in alert["text"] and "swift test --package-path daemon" in alert["text"]
+    assert [t for t, _ in rig.pages].count("star pipeline: heavy-hung") == 1

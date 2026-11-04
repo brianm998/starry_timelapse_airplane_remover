@@ -25,6 +25,33 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(s.nightly?.line, "Sat 03:00 · aaaaaaaa · 1 red")
         XCTAssertEqual(s.nightly?.running, false)
         XCTAssertNil(s.usagePauseUntil)
+        XCTAssertEqual(s.usageWindows, UsageWindows(fiveHour: UsageWindow(utilization: 0.1, resetsAt: 3600),
+                                                    sevenDay: UsageWindow(utilization: 0.24, resetsAt: 90000)))
+    }
+
+    func testLandingQueueSectionShowsTheBatchTheAbandonedBatchAndTheSlowFlag() throws {
+        var s = try Self.snapshot()
+        XCTAssertEqual(s.landing.batch, BatchInfo(number: 2, phase: "ci", ageS: 90, members: [3], prNumber: 12, slow: false))
+        XCTAssertEqual(s.landing.lastAbandoned?.reason, "develop moved")
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.text),
+                       ["batch 2: ci · age 1m · #3", "batch 1 abandoned 1m ago: develop moved"])
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.slow), [false, false])
+
+        s.landing.batch = BatchInfo(number: 8, phase: "building", ageS: 11 * 60, members: [59, 76], prNumber: nil, slow: true)
+        s.landing.lastAbandoned = AbandonedBatch(number: 7, state: "abandoned", reason: "develop moved with overlapping changes",
+                                                 agoS: 18 * 60)
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.text),
+                       ["batch 8: building · age 11m · #59 #76 · SLOW",
+                        "batch 7 abandoned 18m ago: develop moved with overlapping changes"])
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.slow), [true, false])
+
+        s.landing.batch = nil
+        s.landing.lastAbandoned = nil
+        s.landing.nextBatchInS = 45
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.text), ["no batch yet: the next one starts in 45s"])
+        s.landing.nextBatchInS = nil
+        XCTAssertEqual(Overview.landingLines(s.landing), [])
+        XCTAssertEqual(Overview.landingLines(nil), [])
     }
 
     func testSnapshotDecodesMaxActive() throws {
@@ -51,6 +78,82 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(groups[0].sessions.map(\.ticket.number), [5, 9])
         XCTAssertEqual(groups[0].sessions.map(\.stage), ["review", "develop"])
         XCTAssertEqual(Overview.landingQueue(tickets).map(\.number), [6, 8, 2, 4])
+    }
+
+    func testTopBarCountsBucketTicketStates() throws {
+        // the labels are fixed text, not derived from a snapshot, so the "—" placeholder tiles read the same
+        XCTAssertEqual(Overview.topBarBuckets.map(\.label), ["need you", "queued", "exploring", "developing", "testing", "review", "landing"])
+        let base = try XCTUnwrap(try Self.snapshot().tickets.first)
+        func ticket(_ n: Int, _ state: String) -> TicketSnap {
+            var t = base
+            t.number = n; t.state = state
+            return t
+        }
+        let live = ["queued", "exploring", "developing", "verifying", "review", "ready", "ci", "landing", "needs-input", "paused"]
+        let terminal = ["landed", "failed", "closed", "cancelled"]
+        // two needs-input tickets and two ci tickets to tell a count from a presence check
+        let states = live + terminal + ["needs-input", "ci"]
+        let counts = Overview.topBarCounts(states.enumerated().map { ticket($0.offset + 1, $0.element) })
+        XCTAssertEqual(counts.map(\.label), ["need you", "queued", "exploring", "developing", "testing", "review", "landing"])
+        XCTAssertEqual(counts.map(\.count), [2, 1, 1, 1, 1, 1, 4])
+        // every live state but paused is in exactly one bucket; paused and terminal states in none
+        for state in live + terminal {
+            let hits = counts.filter { $0.states.contains(state) }.count
+            XCTAssertEqual(hits, live.contains(state) && state != "paused" ? 1 : 0, state)
+        }
+        XCTAssertEqual(Overview.topBarCounts([]).map(\.count), [0, 0, 0, 0, 0, 0, 0])
+    }
+
+    func testTopBarTileEmphasis() throws {
+        let base = try XCTUnwrap(try Self.snapshot().tickets.first)
+        func tickets(_ states: [String]) -> [TicketSnap] {
+            states.enumerated().map { var t = base; t.number = $0.offset + 1; t.state = $0.element; return t }
+        }
+        func emphases(_ states: [String]) -> [Overview.TileEmphasis] { Overview.topBarCounts(tickets(states)).map(\.emphasis) }
+        // nothing in flight: every tile is idle, needs-input included
+        XCTAssertEqual(emphases([]), Array(repeating: .idle, count: 7))
+        // a needs-input ticket is the only attention tile; the other non-zero buckets are active
+        XCTAssertEqual(emphases(["needs-input", "queued", "landing"]),
+                       [.attention, .active, .idle, .idle, .idle, .idle, .active])
+        // non-zero buckets other than needs-input never draw attention
+        XCTAssertEqual(emphases(["developing", "review"]), [.idle, .idle, .idle, .active, .idle, .active, .idle])
+    }
+
+    func testStatusRows() throws {
+        let base = try Self.snapshot()
+        func rows(_ s: Snapshot?, _ c: Connection = .live, update: Bool = false) -> [Overview.StatusRow] {
+            Overview.statusRows(snapshot: s, connection: c, updateAvailable: update, rebuildCommand: "make app",
+                                timeZone: TimeZone(identifier: "UTC")!)
+        }
+        let r = rows(base)
+        XCTAssertEqual(r.map(\.label).prefix(4), ["Daemon", "Heavy lock", "Landing", "develop"])
+        XCTAssertEqual(r.first { $0.label == "Daemon" }?.value, "up, \(base.runtime.sha)" + (base.runtime.behindDevelop > 0 ? ", behind develop by \(base.runtime.behindDevelop)" : ""))
+        XCTAssertEqual(r.first { $0.label == "Daemon" }?.severity, .ok)
+        XCTAssertEqual(r.first { $0.label == "Landing" }?.value, "running")
+        XCTAssertTrue(r.first { $0.label == "develop" }!.value.hasPrefix("pr-gate"))
+        XCTAssertEqual(r.first { $0.label == "Last nightly" }?.value, base.nightly?.line ?? "none yet")
+        for gone in ["Usage limit", "Monitor update", "Paused"] { XCTAssertNil(r.first { $0.label == gone }, gone) }
+        XCTAssertEqual(Overview.attentionWords(r), [])
+
+        var s = base
+        s.landing.stopLine = "pr-gate red"; s.landing.paused = true
+        s.pause = "owner pause"; s.usagePauseUntil = "0"
+        let bad = rows(s, .down("refused"), update: true)
+        XCTAssertEqual(bad.first { $0.label == "Daemon" }?.value, "down: refused")
+        XCTAssertEqual(bad.first { $0.label == "Daemon" }?.severity, .bad)
+        XCTAssertEqual(bad.first { $0.label == "Landing" }?.value, "stopped: pr-gate red")
+        XCTAssertEqual(bad.first { $0.label == "Landing" }?.severity, .warn)
+        XCTAssertEqual(bad.first { $0.label == "develop" }?.severity, .bad)
+        XCTAssertEqual(bad.first { $0.label == "Monitor update" }?.value, "Update available — make app")
+        XCTAssertEqual(bad.first { $0.label == "Paused" }?.value, "owner pause")
+        XCTAssertTrue(bad.first { $0.label == "Usage limit" }!.value.hasPrefix("model stages wait until "))
+        XCTAssertEqual(Overview.attentionWords(bad),
+                       ["Daemon down", "Landing paused", "develop red", "Usage limit", "Update available", "Paused"])
+
+        let connecting = rows(nil, .connecting)
+        XCTAssertEqual(connecting.map(\.value).prefix(4), ["connecting…", "—", "—", "—"])
+        XCTAssertEqual(connecting.first { $0.label == "Last nightly" }?.value, "none yet")
+        XCTAssertEqual(Overview.attentionWords(connecting), [])
     }
 
     func testEveryTicketIsInAKnownGroupAndStagesCarryTheirLockWait() throws {
@@ -92,14 +195,17 @@ final class DetailTests: XCTestCase {
         XCTAssertEqual(d.checks.first?.result, "pass")
         XCTAssertNil(d.question)
         XCTAssertEqual(d.blockers, [BlockerRef(number: 27, title: "Processing Frames dialog: remember the window size")])
+        XCTAssertEqual(d.heldRetry, "retry from ci when unblocked")
     }
 
     func testADetailWithoutBlockersFromAnOlderDaemonDecodesToNone() throws {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "detail", withExtension: "json", subdirectory: "Fixtures"))
         var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         raw["blockers"] = nil
+        raw["held_retry"] = nil
         let d = try JSONDecoder().decode(TicketDetail.self, from: JSONSerialization.data(withJSONObject: raw))
         XCTAssertEqual(d.blockers, [])
+        XCTAssertNil(d.heldRetry)
         XCTAssertEqual(d.number, 28)
     }
 }
@@ -162,6 +268,49 @@ final class StoreTests: XCTestCase {
         s.tickets.removeAll { $0.number == 5 }
         store.apply(s)
         XCTAssertNil(store.selected)
+    }
+
+    /// Fixture ticket 3 blocked by a ticket (6) and a non-ticket issue (99).
+    private func blockedSnapshot() throws -> Snapshot {
+        var s = try FixtureTests.snapshot()
+        let i = try XCTUnwrap(s.tickets.firstIndex { $0.number == 3 })
+        s.tickets[i].blockedBy = [6, 99]
+        return s
+    }
+
+    func testSelectingBlockerShowsItInPanel() throws {
+        let store = MonitorStore()
+        store.apply(try blockedSnapshot())
+        store.selectIssue(6)
+        XCTAssertEqual(store.selectedTicket?.number, 6)
+        XCTAssertNil(store.selectedIssue)
+        store.selectIssue(99, title: "outside")
+        XCTAssertNil(store.selectedTicket)
+        XCTAssertEqual(store.selectedIssue?.number, 99)
+        XCTAssertEqual(store.selectedIssue?.title, "outside")
+    }
+
+    func testSnapshotKeepsSelectedBlockerNotInTickets() throws {
+        let store = MonitorStore()
+        store.apply(try blockedSnapshot())
+        store.selectIssue(99, title: "outside")
+        store.apply(try blockedSnapshot())
+        XCTAssertEqual(store.selected, 99)
+        XCTAssertNil(store.selectedTicket)
+        XCTAssertEqual(store.selectedIssue?.title, "outside")
+        store.apply(try FixtureTests.snapshot())   // nothing is blocked by 99 any more
+        XCTAssertNil(store.selected)
+    }
+
+    func testBlockerSelectionIsInHistory() throws {
+        let store = MonitorStore()
+        store.apply(try blockedSnapshot())
+        store.selectIssue(99)
+        store.selected = 6
+        store.goBack()
+        XCTAssertEqual(store.selected, 99)
+        store.goForward()
+        XCTAssertEqual(store.selected, 6)
     }
 
     func testShowOverviewClearsTheSelectionAndDetail() async throws {
@@ -574,5 +723,47 @@ final class UpdateTests: XCTestCase {
         answer(#"{"behind": null, "latest": null}"#)
         let unknown = try await client().monitorUpdate(sha: "abc123")
         XCTAssertEqual(unknown, MonitorUpdateInfo(behind: nil, latest: nil))
+    }
+}
+
+final class UsageLimitTextTests: XCTestCase {
+    let zone = TimeZone(identifier: "America/Los_Angeles")!
+    /// Wednesday 2026-11-04 12:00 in Los Angeles (UTC-8).
+    let now = Date(timeIntervalSince1970: 1_793_822_400)
+
+    func window(_ utilization: Double, in seconds: TimeInterval) -> UsageWindow {
+        UsageWindow(utilization: utilization, resetsAt: now.timeIntervalSince1970 + seconds)
+    }
+
+    func line(_ kind: UsageLimitText.Kind, _ w: UsageWindow?) -> (text: String, level: UsageLimitText.Level) {
+        UsageLimitText.line(kind: kind, window: w, now: now, timeZone: zone)
+    }
+
+    func testUsageLineFormat() {
+        XCTAssertEqual(line(.fiveHour, window(0.10, in: 4 * 3600)).text, "5 hour: 10% resets in 4 hours (4pm)")
+        XCTAssertEqual(line(.fiveHour, window(0.10, in: 3600)).text, "5 hour: 10% resets in 1 hour (1pm)")
+        XCTAssertEqual(line(.fiveHour, window(0.42, in: 2 * 3600 + 40 * 60)).text, "5 hour: 42% resets in 3 hours (2:40pm)")
+        XCTAssertEqual(line(.fiveHour, window(0.5, in: 30 * 60)).text, "5 hour: 50% resets in 30 min (12:30pm)")
+        XCTAssertEqual(line(.fiveHour, window(0.5, in: 22 * 3600 + 30 * 60)).text, "5 hour: 50% resets in 23 hours (10:30am)")
+        XCTAssertEqual(line(.fiveHour, window(0.5, in: 12 * 3600)).text, "5 hour: 50% resets in 12 hours (12am)")
+        // Friday 10:00 in Los Angeles is one day and 22 hours after Wednesday noon.
+        XCTAssertEqual(line(.weekly, window(0.24, in: (24 + 22) * 3600)).text, "weekly: 24% resets at 10am friday")
+        XCTAssertEqual(line(.weekly, window(0.24, in: (24 + 22) * 3600 + 30 * 60)).text, "weekly: 24% resets at 10:30am friday")
+    }
+
+    func testUsageLineColourBands() {
+        let levels = [0.79, 0.80, 0.89, 0.90].map { line(.fiveHour, window($0, in: 3600)).level }
+        XCTAssertEqual(levels, [.ok, .warn, .warn, .critical])
+        XCTAssertEqual(line(.weekly, window(0.0, in: 3600)).level, .ok)
+        XCTAssertEqual(line(.weekly, window(1.0, in: 3600)).level, .critical)
+    }
+
+    func testUsageLineStaleOrMissing() {
+        XCTAssertEqual(line(.fiveHour, nil).text, "5 hour: —")
+        XCTAssertEqual(line(.weekly, nil).text, "weekly: —")
+        XCTAssertEqual(line(.fiveHour, nil).level, .unknown)
+        XCTAssertEqual(line(.weekly, window(0.95, in: -1)).text, "weekly: —")  // reset already: the old 95% no longer applies
+        XCTAssertEqual(line(.weekly, window(0.95, in: -1)).level, .unknown)
+        XCTAssertEqual(line(.fiveHour, window(0.95, in: 0)).level, .unknown)
     }
 }

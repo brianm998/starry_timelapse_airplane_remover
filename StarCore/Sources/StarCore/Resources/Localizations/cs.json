@@ -763,7 +763,7 @@
   "ui.preview": "Náhled",
   "ui.preview_creation_error": "chyba při vytváření náhledu snímku {0}: {1}",
   "ui.preview_first": "Nejdřív náhled",
-  "ui.preview_while_processing_help": "Zpracování pokračuje na pozadí. Náhled umožňuje prohlížet hotové snímky, zatímco zpracování běží; zpět sem se vrátíte pomocí Zobrazit průběh vlevo.",
+  "ui.preview_while_processing_help": "Zpracování pokračuje na pozadí. Náhled umožňuje prohlížet hotové snímky, zatímco zpracování běží; zpět sem se vrátíte pomocí Zobrazit průběh.",
   "ui.process": "Zpracovat",
   "ui.process_all_frames": "Zpracovat všechny snímky",
   "ui.process_all_frames_2": "Zpracovat všechny snímky",

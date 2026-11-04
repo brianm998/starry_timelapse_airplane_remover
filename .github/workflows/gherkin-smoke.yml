@@ -46,7 +46,22 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
 
 jobs:
+  # On a push to develop that merges a batch PR whose tree this workflow already passed, `tested` is true and the heavy jobs below
+  # skip (already-tested.yml). It is always false on pull requests, tags and workflow_dispatch, so they run as before.
+  tested:
+    name: Already tested?
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    uses: ./.github/workflows/already-tested.yml
+
   smoke:
+    needs: tested
+    if: needs.tested.outputs.tested != 'true'
+    # opencv.yml's release tier uploads with the workflow token, and a called workflow cannot hold more than its caller grants
+    permissions:
+      contents: write
     uses: ./.github/workflows/gherkin.yml
     with:
       smoke: true
