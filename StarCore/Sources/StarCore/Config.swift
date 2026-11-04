@@ -998,10 +998,6 @@ public struct Config: Codable, Sendable {
     // true is for the L2Gradient, which is the default
     public var cannyUseL2Gradient: Bool = true
     
-    // the vertical bounds of the horizon over the entire image sequence, if known
-    public var horizonMinY: Int?
-    public var horizonMaxY: Int?
-
     // How many frames the pipeline may work on at once.  Physical cores rather than the
     // logical count `ProcessInfo` reports: see `PhysicalCores`, which explains why the
     // hyperthreads are not worth counting here and why over-counting them costs RAM.
@@ -1655,8 +1651,6 @@ public struct Config: Codable, Sendable {
         self.cannyMaxThreshold = try c.decodeIfPresent(Double.self, forKey: .cannyMaxThreshold) ?? self.cannyMaxThreshold
         self.cannyUseL2Gradient = try c.decodeIfPresent(Bool.self, forKey: .cannyUseL2Gradient) ?? self.cannyUseL2Gradient
 
-        self.horizonMinY = try c.decodeIfPresent(Int.self, forKey: .horizonMinY)
-        self.horizonMaxY = try c.decodeIfPresent(Int.self, forKey: .horizonMaxY)
         self.numberOfFramesToProcessConcurrently = try c.decodeIfPresent(Int.self, forKey: .numberOfFramesToProcessConcurrently) ?? self.numberOfFramesToProcessConcurrently
         // Old configs have no profile and start at Full; their frame count waits in Custom.
         self.resourceProfile = try c.decodeIfPresent(ResourceProfile.self, forKey: .resourceProfile) ?? self.resourceProfile
