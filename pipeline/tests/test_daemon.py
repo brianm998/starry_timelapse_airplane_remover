@@ -1003,6 +1003,14 @@ def labels_of(rig: Rig, n: int) -> set[str]:
     return {lab["name"] for lab in rig.gh.issues[n]["labels"]}
 
 
+async def test_snapshot_proposal_without_a_marker_has_author_and_no_by(rig: Rig) -> None:
+    rig.gh.add_issue(30, "By hand", body=GOOD_BODY, author="someone", labels=("pipe:proposed",))
+    d = Daemon(rig.engine, Config(), token="tok")
+    await d.poll_once()
+    assert d.snapshot()["proposals"] == [{"number": 30, "title": "By hand", "by": None, "author": "someone",
+                                          "created_at": "2026-11-01T10:00:00Z"}]
+
+
 async def test_snapshot_lists_proposals_from_the_last_poll(rig: Rig) -> None:
     propose(rig, 21, "Show the retry budget")
     propose(rig, 22, "Rename a key", by="interactive")
@@ -1010,8 +1018,10 @@ async def test_snapshot_lists_proposals_from_the_last_poll(rig: Rig) -> None:
     d = Daemon(rig.engine, Config(), token="tok")
     assert d.snapshot()["proposals"] == []  # nothing polled yet
     await d.poll_once()
-    expected = [{"number": 21, "title": "Show the retry budget", "by": "review agent"},
-                {"number": 22, "title": "Rename a key", "by": "interactive"}]
+    expected = [{"number": 21, "title": "Show the retry budget", "by": "review agent",
+                 "author": "brianm998", "created_at": "2026-11-01T10:00:00Z"},
+                {"number": 22, "title": "Rename a key", "by": "interactive",
+                 "author": "brianm998", "created_at": "2026-11-01T10:00:00Z"}]
     assert d.snapshot()["proposals"] == expected
 
     def boom(path: str) -> list[dict[str, Any]]:

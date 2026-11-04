@@ -43,17 +43,59 @@ public struct Snapshot: Codable, Sendable, Equatable {
     }
 }
 
-/// A proposed issue: filed by `by` (an agent or "interactive"), waiting for approve or reject.
+/// A proposed issue: filed by `by` (an agent or "interactive") when it carries a marker, else opened on GitHub by `author`.
 public struct ProposalSnap: Codable, Sendable, Equatable, Identifiable {
     public var number: Int
     public var title: String
-    public var by: String
+    /// The starpipe filed-by marker's name; nil when there is none (missing, empty and the legacy "unknown" all mean that).
+    public var by: String?
+    public var author: String?
+    public var createdAt: String?
     public var id: Int { number }
 
-    public init(number: Int, title: String, by: String) {
+    public init(number: Int, title: String, by: String? = nil, author: String? = nil, createdAt: String? = nil) {
         self.number = number
         self.title = title
-        self.by = by
+        self.by = ProposalSnap.filer(by)
+        self.author = author
+        self.createdAt = createdAt
+    }
+
+    enum CodingKeys: String, CodingKey { case number, title, by, author, createdAt = "created_at" }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(number: try c.decode(Int.self, forKey: .number), title: try c.decode(String.self, forKey: .title),
+                  by: try c.decodeIfPresent(String.self, forKey: .by),
+                  author: try c.decodeIfPresent(String.self, forKey: .author),
+                  createdAt: try c.decodeIfPresent(String.self, forKey: .createdAt))
+    }
+
+    private static func filer(_ by: String?) -> String? {
+        guard let by, !by.isEmpty, by != "unknown" else { return nil }
+        return by
+    }
+
+    private var authorName: String? { (author?.isEmpty == false) ? author : nil }
+
+    /// The row's second line: "review agent · 3d ago", "opened by brianm998 · 3d ago", or just "3d ago".
+    public func byline(now: Double) -> String {
+        let who = by ?? authorName.map { "opened by \($0)" }
+        return [who, ProposalText.shortAge(iso: createdAt, now: now)].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// The detail header: "Proposed by review agent 3 days ago; waiting for your go-ahead."
+    public func headerSentence(now: Double) -> String {
+        let age = ProposalText.age(iso: createdAt, now: now)
+        let lead: String
+        if let by {
+            lead = ["Proposed by \(by)", age].compactMap { $0 }.joined(separator: " ")
+        } else if let a = authorName {
+            lead = ["Opened on GitHub by \(a)", age].compactMap { $0 }.joined(separator: " ")
+        } else {
+            return "Waiting for your go-ahead."
+        }
+        return lead + "; waiting for your go-ahead."
     }
 }
 

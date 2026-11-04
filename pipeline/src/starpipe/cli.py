@@ -196,7 +196,8 @@ def proposals() -> None:
     except GitHubError as exc:
         raise click.ClickException(str(exc)) from exc
     for p in found:
-        click.echo(f"#{p.number:<5} {p.title[:70]:<70}  by {p.by}")
+        who = p.by or (f"@{p.author}" if p.author else "unknown")
+        click.echo(f"#{p.number:<5} {p.title[:70]:<70}  by {who}")
     if not found:
         click.echo("no proposals waiting")
 

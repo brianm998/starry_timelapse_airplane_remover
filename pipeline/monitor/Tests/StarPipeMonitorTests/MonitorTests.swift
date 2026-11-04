@@ -940,10 +940,52 @@ final class ProposalTests: XCTestCase {
 
     func testProposalsDecodeAndOldSnapshotsStillDo() throws {
         XCTAssertEqual(try FixtureTests.snapshot().proposals,
-                       [ProposalSnap(number: 31, title: "Show the retry budget", by: "review agent")])
+                       [ProposalSnap(number: 31, title: "Show the retry budget", by: "review agent",
+                                     author: "brianm998", createdAt: "1970-01-01T00:00:00Z")])
         let old = try olderDaemonsSnapshot()
         XCTAssertEqual(old.proposals, [])
         XCTAssertEqual(old.tickets.count, 6)
+    }
+
+    private func decode(_ json: String) throws -> ProposalSnap {
+        try JSONDecoder().decode(ProposalSnap.self, from: Data(json.utf8))
+    }
+
+    func testProposalWithoutAMarkerDecodesAsUnfiled() throws {
+        let missing = try decode(#"{"number": 1, "title": "t", "author": "brianm998", "created_at": "2026-11-01T12:00:00Z"}"#)
+        XCTAssertNil(missing.by)
+        XCTAssertEqual(missing.author, "brianm998")
+        XCTAssertEqual(missing.createdAt, "2026-11-01T12:00:00Z")
+        XCTAssertNil(try decode(#"{"number": 1, "title": "t", "by": null, "author": "x"}"#).by)
+        XCTAssertNil(try decode(#"{"number": 1, "title": "t", "by": ""}"#).by)
+    }
+
+    func testLegacyUnknownByIsTreatedAsNoFiler() throws {
+        let p = try decode(#"{"number": 1, "title": "t", "by": "unknown"}"#)
+        XCTAssertNil(p.by)
+        XCTAssertNil(p.author)
+        XCTAssertFalse(p.byline(now: 0).contains("unknown"))
+    }
+
+    private let nowSeconds = ISO8601DateFormatter().date(from: "2026-11-04T12:00:00Z")!.timeIntervalSince1970
+
+    func testProposalBylineWording() {
+        let when = "2026-11-01T12:00:00Z"
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t", by: "review agent", author: "brianm998", createdAt: when).byline(now: nowSeconds),
+                       "review agent · 3d ago")
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t", author: "brianm998", createdAt: when).byline(now: nowSeconds),
+                       "opened by brianm998 · 3d ago")
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t", createdAt: when).byline(now: nowSeconds), "3d ago")
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t", by: "unknown").byline(now: nowSeconds), "")
+    }
+
+    func testProposalHeaderSentenceWording() {
+        let when = "2026-11-01T12:00:00Z"
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t", by: "review agent", createdAt: when).headerSentence(now: nowSeconds),
+                       "Proposed by review agent 3 days ago; waiting for your go-ahead.")
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t", author: "brianm998", createdAt: when).headerSentence(now: nowSeconds),
+                       "Opened on GitHub by brianm998 3 days ago; waiting for your go-ahead.")
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t").headerSentence(now: nowSeconds), "Waiting for your go-ahead.")
     }
 
     func testProposalRowsComeFromTheSnapshot() throws {
@@ -1215,9 +1257,6 @@ final class ProposalTextTests: XCTestCase {
         XCTAssertEqual(ProposalText.age(iso: "2026-11-04T11:59:30.250Z", now: now), "just now")
         XCTAssertNil(ProposalText.age(iso: "yesterday", now: now))
         XCTAssertNil(ProposalText.age(iso: nil, now: now))
-        let d = try JSONDecoder().decode(ProposalDetail.self, from: Data(
-            #"{"number": 1, "title": "t", "author": "octocat", "created_at": "2026-11-01T12:00:00Z"}"#.utf8))
-        XCTAssertEqual(ProposalText.byLine(d, now: now), "by octocat, opened 3 days ago")
         XCTAssertEqual(ProposalText.commentHeader(ProposalComment(author: "octocat", createdAt: "2026-11-04T10:00:00Z", body: ""), now: now),
                        "octocat · 2 hours ago")
     }
