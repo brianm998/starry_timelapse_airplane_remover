@@ -91,11 +91,6 @@ public actor ImageSequence {
         self.images.removeValue(forKey: key)
     }
     
-    // how many images are in ram right now
-    var numberOfResidentImages: Int {
-        return images.count
-    }
-
     private var loadedFilenames: [String] = []
 
     private var maxImages: Int? // XXX set this low for gui, eating more ram than necessary

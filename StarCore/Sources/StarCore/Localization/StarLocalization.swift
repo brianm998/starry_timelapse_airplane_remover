@@ -183,11 +183,6 @@ public final class StarLocalization: @unchecked Sendable {
         return table(for: Self.sourceLanguageCode)[key] ?? key
     }
 
-    /// Every key in the English table. Used by the parity test and by the sync tooling.
-    public func allKeys() -> [String] {
-        table(for: Self.sourceLanguageCode).keys.sorted()
-    }
-
     // MARK: - Substitution
 
     static func substitute(_ arguments: [Any], into format: String) -> String {
