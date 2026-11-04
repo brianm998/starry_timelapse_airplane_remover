@@ -362,14 +362,18 @@ def file_ticket(gh: GitHub, title: str, body: str, blocked_by: list[int] | None 
 class Proposal:
     number: int
     title: str
-    by: str
+    by: str  # the filed-by marker's name, or "" when the issue has none
+    author: str = ""  # the GitHub user who opened the issue
+    created_at: str = ""  # ISO timestamp from the issue
 
 
 def proposals(gh: GitHub) -> list[Proposal]:
     out: list[Proposal] = []
     for issue in _open_with(gh, PROPOSED):
         m = FILED_BY.search(issue.get("body") or "")
-        out.append(Proposal(int(issue["number"]), issue["title"], m.group(1) if m else "unknown"))
+        user: dict[str, Any] = issue.get("user") or {}
+        out.append(Proposal(int(issue["number"]), issue["title"], m.group(1) if m else "",
+                            user.get("login") or "", issue.get("created_at") or ""))
     return out
 
 

@@ -102,12 +102,6 @@ public enum PixelatedImageBridge {
         return MatWrapper(ref: r)
     }
 
-    public static func maskRaisedBy(_ image: MatWrapper, mask: MatWrapper,
-                                     border: Int32) -> MatWrapper? {
-        guard let r = pib_mask_raised_by(image.ref, mask.ref, border) else { return nil }
-        return MatWrapper(ref: r)
-    }
-
     public static func warpImage(_ image: MatWrapper,
                                   withHomography homography: MatWrapper) -> MatWrapper? {
         guard let r = pib_warp_image(image.ref, homography.ref) else { return nil }

@@ -196,7 +196,8 @@ def proposals() -> None:
     except GitHubError as exc:
         raise click.ClickException(str(exc)) from exc
     for p in found:
-        click.echo(f"#{p.number:<5} {p.title[:70]:<70}  by {p.by}")
+        who = p.by or (f"@{p.author}" if p.author else "unknown")
+        click.echo(f"#{p.number:<5} {p.title[:70]:<70}  by {who}")
     if not found:
         click.echo("no proposals waiting")
 
@@ -260,7 +261,7 @@ def landing_lines(landing: dict[str, Any]) -> list[str]:
     if batches := landing.get("batches") or ([landing["batch"]] if landing.get("batch") else []):
         for b in batches:
             members = " ".join(f"#{n}" for n in b["members"])
-            lines.append(f"batch {b['number']}: {b['phase']} · age {_span(b['age_s'])}" + (f" · {members}" if members else "")
+            lines.append(f"batch {b['number']}: {b['phase']}{' ' + b['ci'] if b.get('ci') else ''} · age {_span(b['age_s'])}" + (f" · {members}" if members else "")
                          + (" · SLOW" if b.get("slow") else ""))
     elif landing.get("next_batch_in_s") is not None:
         lines.append(f"no batch yet: the next one starts in {landing['next_batch_in_s']}s")

@@ -33,9 +33,4 @@ public actor Classifier {
     public func get(for treeType: TreeType) -> NamedOutlierGroupClassifier? { classifiers[treeType]?() }
 }
 
-public enum StreakDirection: Sendable {
-    case forwards
-    case backwards
-}
-
 

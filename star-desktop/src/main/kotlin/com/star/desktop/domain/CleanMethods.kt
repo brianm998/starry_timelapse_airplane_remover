@@ -4,9 +4,11 @@ import com.star.proto.CleanMethod
 
 /**
  * Whether this clean method reviews outliers (macOS `CleanMethod.usesOutliers`). Plain automatic mode replaces
- * every bad pixel without per-frame review, so the editing tools have nothing to act on there.
+ * every bad pixel without per-frame review, so the editing tools have nothing to act on there; the dirty sky / dirty earth
+ * methods don't review outliers either.
  */
-val CleanMethod.usesOutliers: Boolean get() = this != CleanMethod.CLEAN_AUTOMATIC
+val CleanMethod.usesOutliers: Boolean
+    get() = this == CleanMethod.CLEAN_AUTOMATIC_TRUE || this == CleanMethod.CLEAN_SELECTIVE
 
 /**
  * The tool to have selected after the session's clean method becomes [method]: the one that was, unless the new

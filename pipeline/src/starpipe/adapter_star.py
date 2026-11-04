@@ -93,9 +93,9 @@ def nightly_local_checks() -> list[str]:
 # Top-level directories that hold no source the impact map needs to know about.
 IGNORED_TOP_LEVEL = {
     ".claude", ".git", ".github", "docs", "plans", "demo_videos", "test_data", "ffmpeg", "opencv",
-    "wgpu", "external_binaries", "logging-objc", "StarDecisionTrees", "removal_tools", "blobber",
+    "wgpu", "external_binaries", "logging-objc", "StarDecisionTrees", "removal_tools",
     "horizon_test_bench", "outlier_feature_data_classifier",
-    "tile_classifier_tester", "tile_extractor", "tools", "emacs_load_swift.sh", "packaging",
+    "tile_extractor", "tools", "emacs_load_swift.sh", "packaging",
 }
 
 

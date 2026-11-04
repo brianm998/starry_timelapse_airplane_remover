@@ -51,7 +51,6 @@
 		D35618732D24CCF80001814D /* OutlierWindowViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35618722D24CCF80001814D /* OutlierWindowViewModel.swift */; };
 		D35618742D24CCF80001814D /* OutlierWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35618712D24CCF80001814D /* OutlierWindowView.swift */; };
 		D35A28462E4FC8AE007121E6 /* FinderStyleDropZone.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35A28452E4FC8AE007121E6 /* FinderStyleDropZone.swift */; };
-		D35A284B2E50E176007121E6 /* ZoomableModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35A28482E50E176007121E6 /* ZoomableModifier.swift */; };
 		D35A284C2E50E176007121E6 /* ZoomableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35A28492E50E176007121E6 /* ZoomableView.swift */; };
 		D3636C522CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3636C512CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift */; };
 		D3636C562CE087B000514D39 /* ReProcessCurrentFrameButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3636C552CE087B000514D39 /* ReProcessCurrentFrameButton.swift */; };
@@ -183,7 +182,6 @@
 		D35618712D24CCF80001814D /* OutlierWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlierWindowView.swift; sourceTree = "<group>"; };
 		D35618722D24CCF80001814D /* OutlierWindowViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OutlierWindowViewModel.swift; sourceTree = "<group>"; };
 		D35A28452E4FC8AE007121E6 /* FinderStyleDropZone.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderStyleDropZone.swift; sourceTree = "<group>"; };
-		D35A28482E50E176007121E6 /* ZoomableModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableModifier.swift; sourceTree = "<group>"; };
 		D35A28492E50E176007121E6 /* ZoomableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableView.swift; sourceTree = "<group>"; };
 		D3636C512CDFBD8C00514D39 /* FindOutliersOnCurrentFrameButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FindOutliersOnCurrentFrameButton.swift; sourceTree = "<group>"; };
 		D3636C552CE087B000514D39 /* ReProcessCurrentFrameButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReProcessCurrentFrameButton.swift; sourceTree = "<group>"; };
@@ -288,7 +286,6 @@
 			isa = PBXGroup;
 			children = (
 				D326F57B2E510DC1008E71A2 /* OldZoomableModifier.swift */,
-				D35A28482E50E176007121E6 /* ZoomableModifier.swift */,
 				D35A28492E50E176007121E6 /* ZoomableView.swift */,
 			);
 			path = Zoomable;
@@ -675,7 +672,6 @@
 				D32425812EE5075000CEF78F /* StartupView.swift in Sources */,
 				D3CC7C682F5E1B2400CCCB59 /* HorizonPainterView.swift in Sources */,
 				D3CC7C692F5E1B2400CCCB59 /* HorizonPaintState.swift in Sources */,
-				D35A284B2E50E176007121E6 /* ZoomableModifier.swift in Sources */,
 				D35A284C2E50E176007121E6 /* ZoomableView.swift in Sources */,
 				D32F6DBA2A4E6FCE00704870 /* BottomRightView.swift in Sources */,
 				D3E680492E3FB75600A97C28 /* RenderVideoSheetView.swift in Sources */,
