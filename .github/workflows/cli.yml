@@ -3,6 +3,8 @@ name: CLI Build
 # A change that only touches paths that cannot affect the star program does not start this workflow.
 # The same list is decided in pr-gate.yml's `changes` job: keep the two in step.
 # GitHub does not evaluate path filters for tag pushes, so release/* tags (and workflow_dispatch) run everything.
+# A pull request (the batch PR) skips the Windows jobs, `windows` and `windows-e2e`: they are the slowest legs and run post-merge on
+# the push to develop instead, even when "Already tested?" says the PR run covered the tree (it did not cover Windows).
 on:
   push:
     branches: [main, develop]
@@ -70,8 +72,8 @@ jobs:
 
   opencv-windows:
     name: OpenCV (windows)
-    needs: tested
-    if: needs.tested.outputs.tested != 'true'
+    # the Windows jobs run on everything but a pull request, whatever `tested` says (see the header of the Windows section)
+    if: github.event_name != 'pull_request'
     permissions:
       contents: write
     uses: ./.github/workflows/opencv.yml
@@ -684,10 +686,14 @@ jobs:
           rm -rf "$RUNNER_TEMP/private_keys"
 
   # ─── Windows ─────────────────────────────────────────────────────────────────
+  # Windows is the slowest leg of a batch (~18 min here, plus windows-e2e), so a pull request skips it (and opencv-windows, and
+  # windows-e2e through `needs`). It runs on every push (develop, main, release tags) and workflow_dispatch, and does NOT honour the
+  # "Already tested?" answer: that answer says a green PR run tested this tree, but the PR run never ran Windows. The develop push is
+  # where a Windows break is found; the pipeline's post-merge watch files a ticket when the job is red on two runs.
   windows:
     name: Windows (windows-2022)
-    needs: [tested, opencv-windows]
-    if: needs.tested.outputs.tested != 'true'
+    needs: opencv-windows
+    if: github.event_name != 'pull_request'
     runs-on: windows-2022
     defaults:
       run:

@@ -7,6 +7,9 @@ name: Gherkin smoke
 # It also runs on pushes to develop: the judge blocks a red job only when develop has it green, so a smoke job that never ran on
 # develop could never block anything. This is a separate workflow file because a workflow's `name:` cannot be an expression, and the
 # name is how the pipeline tells smoke from full. See "The smoke subset on a PR" in gherkin/README.md.
+#
+# A pull request skips the Windows legs (cli-windows, desktop-windows): they are the slowest jobs of a batch. They run post-merge, on
+# the push to develop (the `smoke-windows` job when "Already tested?" skips the rest), and on the nightly full run.
 
 on:
   push:
@@ -65,3 +68,17 @@ jobs:
     uses: ./.github/workflows/gherkin.yml
     with:
       smoke: true
+      # the Windows legs are the slowest of the batch, so a PR skips them; they run on the push to develop (below) and the nightly
+      windows: ${{ github.event_name == 'pull_request' && 'skip' || 'run' }}
+
+  # On a push to develop that merges an already-tested batch PR, `smoke` above skips. That PR run did not include Windows, so the
+  # Windows legs (and only those) run here: this is the per-landing Windows Gherkin coverage.
+  smoke-windows:
+    needs: tested
+    if: github.event_name == 'push' && needs.tested.outputs.tested == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/gherkin.yml
+    with:
+      smoke: true
+      windows: only
