@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from starpipe import ci as ci_mod
 from starpipe import ship
 from starpipe import train as train_mod
 from starpipe.agent import StageOutcome, StageRequest
@@ -526,6 +527,64 @@ async def test_a_feature_run_happens_per_ticket_before_batching_not_per_batch(ri
     assert len(at_publish) == 1 and len(at_publish[0]) == 2, "both feature runs were done before the one batch was published"
     assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2 and len(rig.gh.prs) == 1, "still one PR and one CI for the two"
     assert rig.gh.cancelled_runs == []
+
+
+def test_jobs_carry_their_runner_labels() -> None:
+    runs = [{"id": 5, "name": "pr-gate"}]
+    jobs = ci_mod.parse_jobs(runs, {5: [{"name": "mac", "status": "queued", "conclusion": None, "labels": ["macos-15"]},
+                                         {"name": "linux", "status": "queued", "conclusion": None}]})
+    assert [j.labels for j in jobs] == [("macos-15",), ()], "labels come from the job JSON, and are empty when it has none"
+    assert [j.queued_for_macos for j in jobs] == [True, False]
+
+
+async def test_feature_gates_wait_while_batch_macos_jobs_are_queued(rig: Rig) -> None:
+    ready_ticket(rig, 1, "b1.md", "1\n")
+    rig.gh.job_labels["macos"] = ["macos-15"]
+    polls: list[int] = []  # feature runs dispatched so far, at each poll of the batch's CI
+
+    def hook(_sha: str) -> Ci:
+        polls.append(len(rig.gh.dispatches))
+        linux: Ci = [("pr-gate", "linux", "completed", "success")]
+        if len(polls) <= 3:  # a macOS job still waiting for a runner
+            return [*linux, ("pr-gate", "macos", "queued", None)]
+        if len(polls) <= 5:  # running now: no longer queued
+            return [*linux, ("pr-gate", "macos", "in_progress", None)]
+        return PASS
+
+    rig.gh.ci_hook = hook
+    real_sleep = rig.engine.sleep
+    added: list[int] = []
+
+    async def sleep(s: float) -> None:
+        if not added:  # the batch is in CI: a ticket that owes a feature run becomes ready meanwhile
+            added.append(2)
+            ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoMovingTiff16"))
+        await real_sleep(s)
+
+    rig.engine.sleep = sleep
+    await train_of(rig).run_until_idle()
+    assert polls[:4] == [0, 0, 0, 0], f"no feature run started while a macOS job was queued: {polls}"
+    assert polls[-1] == 1, f"it started once nothing was queued, while the batch was still in CI: {polls}"
+    assert len(rig.gh.dispatches) == 1 and rig.gh.cancelled_runs == [], "dispatched once, never cancelled or redone"
+    deferred = [e for e in rig.db.events_since() if e["kind"] == "gate-deferred"]
+    assert [(e["ticket"], e["data"]["batch"], e["data"]["queued_macos"]) for e in deferred] == [(2, 1, 1)], "reported once"
+    assert [rig.state(n) for n in (1, 2)] == ["landed", "landed"]
+
+
+async def test_a_feature_run_already_going_is_left_alone_while_macos_jobs_are_queued(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    train = train_of(rig)
+    batch = rig.db.batch_create("base")
+    train._macos_queued = 2  # pyright: ignore[reportPrivateUsage]
+    going = asyncio.get_running_loop().create_future()
+    train._gates[1] = going  # type: ignore[assignment]  # pyright: ignore[reportPrivateUsage]
+    train._start_gates()  # pyright: ignore[reportPrivateUsage]
+    assert train._gates[1] is going and not going.cancelled() and rig.gh.dispatches == []  # pyright: ignore[reportPrivateUsage]
+    del train._gates[1]  # pyright: ignore[reportPrivateUsage]
+    rig.db.batch_update(batch, state="abandoned")  # no batch active: nothing holds the run back
+    train._start_gates()  # pyright: ignore[reportPrivateUsage]
+    assert 1 in train._gates  # pyright: ignore[reportPrivateUsage]
+    await asyncio.wait(list(train._gates.values()))  # pyright: ignore[reportPrivateUsage]
 
 
 async def test_a_ticket_still_owing_a_feature_run_is_not_batched(rig: Rig) -> None:

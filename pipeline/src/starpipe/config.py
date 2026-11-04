@@ -61,7 +61,7 @@ class Config(BaseModel):
     ci_blocking_wait_s: int = 4 * 3600
     # Workflows whose result a PR does not wait for. Gherkin's full matrix takes ~3 h and is mostly queueing for GitHub's few macOS runners,
     # so waiting for it capped landings at a few a day (2026-10-31). Any run of it on the PR is cancelled at once, to free those runners;
-    # the push to develop runs it, and the post-merge watch files a regression ticket if it goes red. What a PR runs instead is
+    # the nightly full run (gherkin_nightly.py) runs it, reruns its failures once and files the tickets. What a PR runs instead is
     # "Gherkin smoke" (gherkin-smoke.yml, the features of gherkin/smoke.json): it is deliberately NOT listed here (names match exactly),
     # so the judge waits for it and blocks on it like any other workflow. A ticket that names Gherkin features (`gherkin:` in its
     # Pipeline section, or the plan's gherkin_features_to_run) additionally has ship.feature_gate dispatch gherkin.yml on its own branch
@@ -79,6 +79,7 @@ class Config(BaseModel):
     ci_poll_s: float = 60.0
     ci_settle_s: float = 90.0
     max_auto_tickets: int = 2
+    gherkin_nightly_max_tickets: int = 6  # new tickets one Gherkin nightly may file (red before flaky); the rest wait for the next night
     max_open_tickets: int = 30  # open issues labelled `pipeline`: `ticket new` and `approve` refuse past this
     max_proposed: int = 10  # open issues labelled `pipe:proposed`: waiting on the owner
     poll_s: float = 60.0

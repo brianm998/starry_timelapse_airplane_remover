@@ -225,7 +225,7 @@ The full matrix takes about 3 hours, so it is not what a PR runs. What runs when
 | Workflow (name) | File | Runs on | The pipeline |
 |---|---|---|---|
 | **Gherkin smoke** | `gherkin-smoke.yml`, which calls `gherkin.yml` with `smoke: true` | every PR touching program code (without the Windows legs), pushes to `develop` (with them), by hand (with them) | waits for it and blocks on it |
-| **Gherkin** (the full matrix) | `gherkin.yml` | pushes to `develop`/`main`, by hand (`workflow_dispatch`, optionally `features`) | does not wait for it on a PR (`ci_post_merge_workflows` in `pipeline/src/starpipe/config.py` lists this name only); a red run on `develop` is found by the post-merge watch |
+| **Gherkin** (the full matrix) | `gherkin.yml` | pushes to `main`, the nightly dispatch, by hand (`workflow_dispatch`, optionally `features`) | does not wait for it on a PR (`ci_post_merge_workflows` in `pipeline/src/starpipe/config.py` lists this name only); the nightly reruns its failed jobs once and files the tickets (`Gherkin nightly red: …`, `Gherkin flaky: …`); the post-merge watch only updates its baseline |
 
 `gherkin/smoke.json` is the subset, a client name to a list of feature names:
 
