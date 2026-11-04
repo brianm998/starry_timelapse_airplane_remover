@@ -105,10 +105,4 @@ public struct VideoFrameTimes: Sendable, Equatable {
         if let expectedFrames, expectedFrames > 0, table.count != expectedFrames { return nil }
         return table
     }
-
-    /// `index / rate`, for a video whose timestamps could not be read.  Only as good as the video is constant frame rate.
-    public static func evenlySpaced(frameCount: Int, framesPerSecond: Double) -> VideoFrameTimes {
-        let rate = framesPerSecond > 0 ? framesPerSecond : 24
-        return VideoFrameTimes(times: (0..<max(frameCount, 0)).map { Double($0) / rate })
-    }
 }
