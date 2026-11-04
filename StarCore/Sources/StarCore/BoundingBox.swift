@@ -125,65 +125,6 @@ public struct BoundingBox: Codable,
         return nil
     }
     
-    // returns the number of overlapping pixels divided by the average size of the two boxes
-    public func overlapAmount(with other: BoundingBox) -> Double {
-        if let overlap = overlap(with: other) {
-            let avgSize = (self.size + other.size)/2
-            return Double(overlap.size)/Double(avgSize)
-        }
-        return 0
-    }
-
-    // theta in degrees of the line between the centers of the two bounding boxes
-    func centerTheta(with box2: BoundingBox) -> Double {
-        let box1 = self
-
-        let center1X = Double(box1.min.x) + Double(box1.width)/2
-        let center1Y = Double(box1.min.y) + Double(box1.height)/2
-
-        //Log.v("1 center [\(center1X), \(center1Y)]")
-        
-        let center2X = Double(box2.min.x) + Double(box2.width)/2
-        let center2Y = Double(box2.min.y) + Double(box2.height)/2
-        
-        //Log.v("2 center [\(center2X), \(center2Y)]")
-
-        // special case horizontal alignment, theta 0 degrees
-        if center1Y == center2Y { return 0 }
-
-        // special case vertical alignment, theta 90 degrees
-        if center1X == center2X { return 90 }
-
-        var theta: Double = 0
-
-        let width = Double(abs(center1X - center2X))
-        let height = Double(abs(center1Y - center2Y))
-
-        let ninetyDegreesInRadians = 90 * Double.pi/180
-        
-        if center1X < center2X {
-            if center1Y < center2Y {
-                // 90 + case
-                theta = ninetyDegreesInRadians + atan(height/width)
-            } else { // center1Y > center2Y
-                // 0 - 90 case
-                theta = atan(width/height)
-            }
-        } else { // center1X > center2X
-            if center1Y < center2Y {
-                // 0 - 90 case
-                theta = atan(width/height)
-            } else { // center1Y > center2Y
-                // 90 + case
-                theta = ninetyDegreesInRadians + atan(height/width)
-            }
-        }
-
-        // XXX what about rho?
-        let thetaDegrees = theta*180/Double.pi // convert from radians to degrees
-        return  thetaDegrees
-    }
-
     // XXX this method sucks
 
     /*
