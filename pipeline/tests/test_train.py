@@ -661,3 +661,142 @@ async def test_a_land_now_ticket_does_not_wait_for_the_ci_of_unflagged_batch_mat
     await t.run_until_idle()  # the mixed batch is given up and the flagged ticket goes alone
     assert rig.db.batch(1)["state"] == "abandoned" and rig.db.batch_members(2) == [2]  # type: ignore[index]
     assert rig.state(2) == "landed" and rig.state(1) != "landed"
+
+
+# two batches at once -------------------------------------------------------------------------------------------------
+PENDING: Ci = [("pr-gate", "linux", "in_progress", None)]
+
+
+def has_file(rig: Rig, sha: str, path: str) -> bool:
+    return __import__("subprocess").run(["git", "-C", str(rig.gh.origin), "cat-file", "-e", f"{sha}:{path}"],
+                                        capture_output=True, check=False).returncode == 0
+
+
+def hold_polls(rig: Rig) -> asyncio.Event:
+    """Every sleep (the CI poll above all) blocks until the returned event is set, so a batch stays in CI while the test looks."""
+    gate = asyncio.Event()
+    real_sleep = rig.engine.sleep
+
+    async def sleep(s: float) -> None:
+        await gate.wait()
+        await real_sleep(s)
+
+    rig.engine.sleep = sleep
+    return gate
+
+
+async def test_a_disjoint_batch_starts_while_another_is_in_ci(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n")
+    rig.gh.ci_hook = lambda sha: PENDING
+    gate = hold_polls(rig)
+    t = train_of(rig)
+    assert await t.step() is True
+    assert [b["id"] for b in rig.db.active_batches()] == [1] and rig.db.batch(1)["state"] == "ci"  # type: ignore[index]
+    ready_ticket(rig, 2, "f2.md", "2\n")  # finishes while batch 1 is in CI, and shares no file with it
+    assert await t.step() is True
+    assert [(b["id"], b["state"]) for b in rig.db.active_batches()] == [(1, "ci"), (2, "ci")]
+    assert rig.db.batch_members(1) == [1] and rig.db.batch_members(2) == [2] and len(rig.gh.prs) == 2
+    assert batch_wt(rig, 1).is_dir() and batch_wt(rig, 2).is_dir() and batch_wt(rig, 1) != batch_wt(rig, 2)
+    assert {rig.db.batch(b)["branch"] for b in (1, 2)} == {"pipe/batch-1", "pipe/batch-2"}  # type: ignore[index]
+    ready_ticket(rig, 3, "f3.md", "3\n")
+    assert await t.step() is False and rig.state(3) == "ready", "a third batch is never formed: batch_parallel is 2"
+    rig.gh.ci_hook = lambda sha: PASS
+    gate.set()
+    await t.run_until_idle()
+    assert [rig.state(n) for n in (1, 2, 3)] == ["landed"] * 3 and rig.db.batch_members(3) == [3], "#3 rode once a slot was free"
+
+
+async def test_batch_parallel_one_keeps_the_train_single_file(rig: Rig) -> None:
+    rig.engine.config.batch_parallel = 1
+    ready_ticket(rig, 1, "f1.md", "1\n")
+    rig.gh.ci_hook = lambda sha: PENDING
+    gate = hold_polls(rig)
+    t = train_of(rig)
+    await t.step()
+    ready_ticket(rig, 2, "f2.md", "2\n")
+    assert await t.step() is False and [b["id"] for b in rig.db.active_batches()] == [1] and rig.state(2) == "ready"
+    rig.gh.ci_hook = lambda sha: PASS
+    gate.set()
+    await t.run_until_idle()
+    assert rig.state(1) == "landed" and rig.state(2) == "landed" and rig.db.batch_members(2) == [2]
+
+
+async def test_an_overlapping_ticket_waits_for_the_batch_in_ci(rig: Rig) -> None:
+    ready_ticket(rig, 1, "shared.md", "one\n")
+    rig.gh.ci_hook = lambda sha: PENDING
+    gate = hold_polls(rig)
+    t = train_of(rig)
+    await t.step()
+    ready_ticket(rig, 2, "shared.md", "two\n")  # the same file batch 1 changes
+    ready_ticket(rig, 3, "f3.md", "3\n")
+    assert await t.step() is True
+    assert rig.db.batch_members(2) == [3], "the disjoint ticket went beside batch 1; the overlapping one stayed out"
+    assert rig.state(2) == "ready" and rig.db.batch_of(2) is None
+    rig.gh.ci_hook = lambda sha: PASS
+    gate.set()
+    await t.drain()
+    assert rig.state(1) == "landed" and rig.state(3) == "landed" and rig.state(2) == "ready"
+    assert rig.db.batch(3) is None, "no batch for #2 was formed while it overlapped one in flight"
+
+
+async def test_a_split_group_overlapping_a_batch_in_flight_waits_for_it(rig: Rig) -> None:
+    ready_ticket(rig, 1, "shared.md", "one\n")
+    ready_ticket(rig, 2, "f2.md", "2\n")
+    ready_ticket(rig, 3, "f3.md", "3\n")
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(bid, state="ci")
+    rig.db.batch_add(bid, 3, 0)
+    rig.db.set_state(3, "ci")
+    rig.db.put("train_groups", json.dumps([[1, 2]]))
+    t = train_of(rig)
+    assert t._pick({1: frozenset({"docs/shared.md"}), 2: frozenset({"docs/f2.md"}), 3: frozenset({"docs/shared.md"})}) == []  # pyright: ignore[reportPrivateUsage]
+    assert json.loads(rig.db.get("train_groups") or "[]") == [[1, 2]], "the group is kept whole"
+    assert t._pick({1: frozenset({"docs/f1.md"}), 2: frozenset({"docs/f2.md"}), 3: frozenset({"docs/f3.md"})}) == [1, 2]  # pyright: ignore[reportPrivateUsage]
+    assert rig.db.get("train_groups") is None
+
+
+@pytest.mark.parametrize("first,folder", [(1, "docs"), (2, "docs"), (1, "pipeline/src"), (2, "pipeline/src")])
+async def test_two_batches_land_in_either_order(rig: Rig, first: int, folder: str) -> None:
+    ext = "md" if folder == "docs" else "py"
+    files = {1: f"{folder}/f1.{ext}", 2: f"{folder}/f2.{ext}"}
+    ready_ticket(rig, 1, f"f1.{ext}", "1\n", folder=folder)
+    # CI for the batch that must land second stays pending until the other has landed (its catch-up merge then carries the other's file)
+    rig.gh.ci_hook = lambda sha: PASS if has_file(rig, sha, files[first]) or rig.state(first) == "landed" else PENDING
+    gate = hold_polls(rig)
+    t = train_of(rig)
+    await t.step()
+    ready_ticket(rig, 2, f"f2.{ext}", "2\n", folder=folder)
+    await t.step()
+    assert len(rig.db.active_batches()) == 2
+    gate.set()
+    await t.run_until_idle()
+    assert rig.state(1) == "landed" and rig.state(2) == "landed"
+    assert [rig.db.batch(b)["state"] for b in (1, 2)] == ["landed", "landed"] and rig.db.batch(3) is None  # type: ignore[index]
+    assert len(rig.gh.prs) == 2 and develop_has(rig, files[1]) and develop_has(rig, files[2])
+    assert not batch_wt(rig, 1).exists() and not batch_wt(rig, 2).exists()
+    caught_up = [e["data"]["batch"] for e in rig.db.events_since() if e["kind"] == "batch-caught-up"]
+    late = 2 if first == 1 else 1
+    # the same T1 checks under pipeline/src: develop moved under the second batch with overlapping checks, so it ran CI again
+    assert caught_up == ([late] if folder == "pipeline/src" else [])
+
+
+async def test_restart_resumes_both_batches(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n")
+    rig.gh.ci_hook = lambda sha: PENDING
+    real_sleep = rig.engine.sleep
+    gate = hold_polls(rig)
+    first = train_of(rig)
+    await first.step()
+    ready_ticket(rig, 2, "f2.md", "2\n")
+    await first.step()
+    assert [b["state"] for b in rig.db.active_batches()] == ["ci", "ci"]
+    for task in list(first._drivers.values()):  # pyright: ignore[reportPrivateUsage]
+        task.cancel()  # the daemon dies
+    await asyncio.gather(*first._drivers.values(), return_exceptions=True)  # pyright: ignore[reportPrivateUsage]
+    rig.engine.issue_memo.clear()
+    rig.engine.sleep = real_sleep
+    rig.gh.ci_hook = lambda sha: PASS
+    second = train_of(rig)  # a new process: only the database and the worktrees remain
+    assert await second.step() is True and len(second._drivers) == 2  # pyright: ignore[reportPrivateUsage]
+    await second.run_until_idle()
+    assert rig.state(1) == "landed" and rig.state(2) == "landed" and len(rig.gh.prs) == 2 and rig.db.batch(3) is None

@@ -261,6 +261,7 @@ class Train:
                 return group
         if flying:
             ready = [t for t in ready if disjoint([t.number])]
+            ids = [t.number for t in ready]
         if not ready:
             return []
         flagged = [t.number for t in ready if ship.land_now(eng, t.number)]
