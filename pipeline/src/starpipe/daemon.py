@@ -78,6 +78,9 @@ def ready_activity(db: Database, t: Ticket, config: Config, now: float) -> str:
     if (member := db.batch_of(t.number)) is not None:
         row = db.batch(member)
         return f"ready · in batch {member} ({row['state'] if row else 'building'})"
+    if (features := tickets.gherkin_features(t.body, t.plan)) and not db.get(f"gherkin_ok:{t.number}"):
+        err = json.loads(db.get(f"gherkin_err:{t.number}") or "null")
+        return f"ready · proving Gherkin features ({', '.join(features)})" + (f" · last poll failed: {err['error']}" if err else "")
     if (active := db.active_batch()) is not None:
         return f"ready · waiting for the next batch (batch {active['id']} is {active['state']})"
     left = train.window_left(db, config, now)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from ..config import home
@@ -23,6 +23,7 @@ class Result:
     log: str = ""
     detail: str = ""
     at: float = 0.0
+    failures: list[str] = field(default_factory=list[str])  # names of the failing tests (old rows have none)
 
     @property
     def green(self) -> bool:

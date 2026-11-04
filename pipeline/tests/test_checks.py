@@ -36,3 +36,22 @@ def test_hung_check_is_reported_as_hung(tmp_path: Path, monkeypatch: pytest.Monk
     told = Contract(ticket, wt, "origin/develop", db, check_runner=lambda _w, _b: [result]).run_checks({})
     assert told.startswith("HUNG test:wedged") and "rerun run_checks" in told
     assert db.checks(7)[0]["result"] == "hung"
+
+
+def test_run_plan_continues_past_a_red_test_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from starpipe.checks import impact, ledger
+
+    repo = make_repo(tmp_path)
+    ran: list[str] = []
+
+    def fake(check_id: str, root: Path, base: str, log_dir: Path, **_k: object) -> ledger.Result:
+        ran.append(check_id)
+        return ledger.Result(check_id, "fail" if check_id in ("test:a", "build:z") else "pass", "s", 0.0)
+
+    monkeypatch.setattr(runner, "run_check", fake)
+    out = runner.run_plan(impact.Plan(builds=["build:a"], tests=["test:a", "test:b", "test:c"]), repo, "origin/develop", {"t1"})
+    assert ran == ["build:a", "test:a", "test:b", "test:c"] and [r.check for r in out if not r.green] == ["test:a"]
+
+    ran.clear()
+    out = runner.run_plan(impact.Plan(builds=["build:z"], tests=["test:b"]), repo, "origin/develop", {"t1"})
+    assert ran == ["build:z"], "a red build's tests could not run"

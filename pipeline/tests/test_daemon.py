@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import Any
 
@@ -857,6 +858,23 @@ def test_ready_ticket_reads_waiting_for_the_next_batch_with_the_countdown(rig: R
     rig.now += 100
     assert activity_of(d, 1) == "ready · waiting for the next batch (starting)"
     assert d.snapshot()["landing"]["next_batch_in_s"] == 0  # type: ignore[index]
+
+
+def test_ready_activity_names_the_feature_gate(rig: Rig) -> None:
+    rig.gh.add_issue(1, "t1", f"{GOOD_BODY}\n## Pipeline\ngherkin: autoMovingTiff16, uiX\n")
+    ready_tickets(rig, 2)
+    rig.engine.sync_issues()
+    rig.engine._to_state(1, "ready")  # pyright: ignore[reportPrivateUsage]
+    d = landing_daemon(rig)
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(bid, state="ci")  # a batch is in CI, but #1 is owed its feature run first
+    assert activity_of(d, 1) == "ready · proving Gherkin features (autoMovingTiff16, uiX)"
+    assert activity_of(d, 2) == f"ready · waiting for the next batch (batch {bid} is ci)", "no features: nothing to prove"
+    rig.db.put("gherkin_err:1", json.dumps({"sha": "abc", "error": "gh: Bad Gateway (HTTP 502)", "count": 2}))
+    assert activity_of(d, 1) == ("ready · proving Gherkin features (autoMovingTiff16, uiX) · "
+                                 "last poll failed: gh: Bad Gateway (HTTP 502)")
+    rig.db.put("gherkin_ok:1", "abc")
+    assert activity_of(d, 1) == f"ready · waiting for the next batch (batch {bid} is ci)", "proven: it waits on the train"
 
 
 def test_snapshot_remembers_the_last_abandoned_batch_for_an_hour(rig: Rig) -> None:

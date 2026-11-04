@@ -12,6 +12,7 @@ import pytest
 
 from starpipe import ci, gitutil, landing, ship, worktrees
 from starpipe.agent import StageOutcome, StageRequest
+from starpipe.github import GitHubError
 
 from .fakes import GOOD_BODY, FakeGitHub, accepted, sh
 from .test_engine import Rig
@@ -190,17 +191,44 @@ async def test_a_resolution_that_drops_a_landed_line_is_caught(rig: Rig) -> None
         wt = req.contract.worktree
         (wt / "docs" / "shared.md").write_text("mine\n")  # develop's line is gone
         sh(wt, "git", "add", "-A")
-        sh(wt, "git", "commit", "-q", "--no-edit")
+        if subprocess.run(["git", "rev-parse", "-q", "--verify", "MERGE_HEAD"], check=False, cwd=wt, capture_output=True).returncode == 0:
+            sh(wt, "git", "commit", "-q", "--no-edit")  # the first round finishes the merge; the second finds it already committed
         req.contract.run_checks({})
         req.contract.submit_change({"summary": "resolved"})
         return accepted(req, "S-conflict")
 
-    rig.agent.on("conflict", drop)
+    rig.agent.on("conflict", drop, drop)  # the second round, given the line, still does not restore it
     await rig.engine.drive(1)
     assert rig.state(1) == "failed"
+    assert [r.stage for r in rig.agent.requests] == ["conflict", "conflict"], "one more round, then parked"
     t = rig.db.ticket(1)
     assert t and "dropped 1 landed line" in (t.park_reason or "") and "develop's line" in (t.park_reason or "")
     assert not origin_has(rig, 1)
+
+
+async def test_dropped_lines_go_back_to_the_conflict_stage_once(rig: Rig) -> None:
+    ready_ticket(rig, 1, "shared.md", "mine\n")
+    advance_develop(rig, "shared.md", "develop's line\n")
+    prompts: list[str] = []
+
+    def conflict(req: StageRequest) -> StageOutcome:
+        prompts.append(req.prompt)
+        wt = req.contract.worktree
+        # the first round drops develop's line; the second restores it on top of the first resolution
+        (wt / "docs" / "shared.md").write_text("mine\n" if len(prompts) == 1 else "develop's line\nmine\n")
+        sh(wt, "git", "add", "-A")
+        sh(wt, "git", "commit", "-q", "-m", f"round {len(prompts)}")
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "resolved"})
+        return accepted(req, "S-conflict")
+
+    rig.agent.on("conflict", conflict, conflict)
+    await rig.engine.drive(1)
+    assert rig.state(1) == "landed"  # a clean second audit carries on as after a clean first one
+    assert [r.stage for r in rig.agent.requests] == ["conflict", "conflict"]
+    assert "Conflicts merging" in prompts[0]
+    assert "docs/shared.md: develop's line" in prompts[1] and "already committed" in prompts[1] and "restore" in prompts[1].lower()
+    assert sh(rig.engine.repo, "git", "show", "origin/develop:docs/shared.md") == "develop's line\nmine\n"
 
 
 async def test_a_reported_merge_that_is_not_on_develop_is_a_phantom_landing(rig: Rig) -> None:
@@ -868,6 +896,61 @@ async def test_gherkin_features_are_dispatched_on_the_branch_and_block_landing(r
     assert rig.gh.feature_runs[5000]["title"] == "Gherkin: autoMovingTiff16"
     assert len(during) >= 2 and set(during) == {("ci", False)}, "it waited for the run in CI and nothing landed meanwhile"
     assert rig.state(1) == "landed" and rig.gh.cancelled_runs == [], "the feature run was not cancelled as a PR's full matrix is"
+
+
+NO_TRIGGER = "gh api -X POST repos/o/r/actions/workflows/gherkin.yml/dispatches failed: Workflow does not have 'workflow_dispatch' trigger (HTTP 422)"
+
+
+def failing_dispatch(rig: Rig, errors: list[str]) -> None:
+    """The fake's dispatch raises each of `errors` in turn, then works."""
+    real = rig.gh.dispatch_workflow
+    pending = list(errors)
+
+    def dispatch(file: str, ref: str, inputs: dict[str, str]) -> None:
+        if pending:
+            raise GitHubError(pending.pop(0))
+        real(file, ref, inputs)
+
+    rig.gh.dispatch_workflow = dispatch  # type: ignore[method-assign]
+
+
+async def test_a_dispatch_422_catches_the_branch_up_then_dispatches_again(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n", body=with_gherkin("autoMovingTiff16"))
+    advance_develop(rig, "later.md", "a develop change the branch has not got\n")
+    failing_dispatch(rig, [NO_TRIGGER])
+    await rig.engine.drive(1)
+    assert [d[2] for d in rig.gh.dispatches] == [{"features": "autoMovingTiff16"}], "dispatched once, on the caught-up head"
+    assert rig.gh.origin is not None
+    ran = sh(rig.gh.origin, "git", "log", "--oneline", rig.gh.feature_runs[5000]["sha"])
+    assert "develop: later.md" in ran, "the run is of a head with develop merged in"
+    assert rig.state(1) == "landed"
+    assert rig.db.get("gherkin_err:1") is None
+
+
+async def test_a_repeating_gate_error_parks_the_ticket(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n", body=with_gherkin("autoMovingTiff16"))
+    failing_dispatch(rig, ["gh: Resource not accessible by integration (HTTP 403)"] * 50)
+    await rig.engine.drive(1)
+    t = rig.db.ticket(1)
+    assert t and t.state == "failed"
+    assert "HTTP 403" in (t.park_reason or "") and "5" in (t.park_reason or "")
+    assert len(rig.slept) < 20, "it gave up rather than looping"
+
+
+async def test_a_422_with_nothing_to_catch_up_on_also_parks(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n", body=with_gherkin("autoMovingTiff16"))
+    failing_dispatch(rig, [NO_TRIGGER] * 50)
+    await rig.engine.drive(1)
+    assert rig.state(1) == "failed"
+    assert [r for r in rig.agent.requests if r.stage == "conflict"] == []
+
+
+async def test_a_transient_gate_error_still_retries(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n", body=with_gherkin("autoMovingTiff16"))
+    failing_dispatch(rig, ["gh: Bad Gateway (HTTP 502)"] * 8 + ["gh api timed out after 120s"] * 3)  # more than the parking limit
+    await rig.engine.drive(1)
+    assert rig.state(1) == "landed"
+    assert len(rig.gh.dispatches) == 1
 
 
 async def test_a_feature_run_red_twice_goes_back_to_ci_fix_with_the_log(rig: Rig) -> None:
