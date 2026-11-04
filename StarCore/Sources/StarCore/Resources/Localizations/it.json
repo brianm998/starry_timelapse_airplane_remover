@@ -1239,5 +1239,16 @@
   "ui.menu_bar.tooltip.failed": "star — non riuscito",
   "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth tiene solo il terreno sotto l'orizzonte, quindi richiede il rilevamento dell'orizzonte e non può funzionare se è disattivato (--no-horizon).",
   "view_mode.dirtySkyProcessed": "cielo non pulito",
-  "view_mode.dirtyEarthProcessed": "terreno non pulito"
+  "view_mode.dirtyEarthProcessed": "terreno non pulito",
+  "ui.dirty_sky": "Cielo non pulito",
+  "ui.dirty_earth": "Terreno non pulito",
+  "ui.clean_method_tip.dirty_sky": "Mantiene solo ciò che si è mosso nel cielo: le stelle fisse diventano nere, mentre aerei, satelliti e meteore conservano il loro colore. Il terreno è nero.",
+  "ui.clean_method_tip.dirty_earth": "Mantiene solo ciò che si è mosso sul terreno: il terreno fisso diventa nero. Il cielo è nero. Richiede il rilevamento dell'orizzonte.",
+  "ui.clean_method_tip.dirty_earth_needs_horizon": "Terreno non pulito richiede il rilevamento dell'orizzonte. Imposta il tipo di scena su Cielo + Orizzonte per sceglierlo.",
+  "ui.mode_desc_dirty_sky": "Star verrà eseguito in modalità cielo non pulito, il contrario della pulizia. Ogni pixel del cielo diventa l'originale meno il fotogramma di riferimento allineato: le stelle fisse diventano nere e solo ciò che si è mosso, come aerei, satelliti e meteore, conserva il suo colore. Il terreno è nero. Non vengono rilevati valori anomali, quindi non c'è nulla da esaminare fotogramma per fotogramma. Senza il rilevamento dell'orizzonte l'intero fotogramma conta come cielo.",
+  "ui.mode_desc_dirty_earth": "Star verrà eseguito in modalità terreno non pulito, il contrario della pulizia. Ogni pixel del terreno diventa l'originale meno il fotogramma di riferimento allineato: il terreno fisso diventa nero e solo ciò che si è mosso conserva il suo colore. Il cielo è nero. Non vengono rilevati valori anomali, quindi non c'è nulla da esaminare fotogramma per fotogramma. Questa modalità richiede il rilevamento dell'orizzonte.",
+  "ui.frame_mode_desc_dirty_sky": "Mantiene solo ciò che si è mosso nel cielo di questo fotogramma (l'originale meno il riferimento allineato); il terreno è nero. Su questo fotogramma non c'è nulla da esaminare.",
+  "ui.frame_mode_desc_dirty_earth": "Mantiene solo ciò che si è mosso sul terreno di questo fotogramma (l'originale meno il riferimento allineato); il cielo è nero. Su questo fotogramma non c'è nulla da esaminare.",
+  "ui.this_frame_uses_dirty_sky": "Questo fotogramma usa la modalità cielo non pulito",
+  "ui.this_frame_uses_dirty_earth": "Questo fotogramma usa la modalità terreno non pulito"
 }

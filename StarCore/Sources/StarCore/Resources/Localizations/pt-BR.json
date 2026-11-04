@@ -1239,5 +1239,16 @@
   "ui.menu_bar.tooltip.failed": "star — falhou",
   "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth mantém só o solo abaixo do horizonte, então precisa da detecção de horizonte e não pode ser executado com ela desativada (--no-horizon).",
   "view_mode.dirtySkyProcessed": "céu sem limpeza",
-  "view_mode.dirtyEarthProcessed": "solo sem limpeza"
+  "view_mode.dirtyEarthProcessed": "solo sem limpeza",
+  "ui.dirty_sky": "Céu sem limpeza",
+  "ui.dirty_earth": "Solo sem limpeza",
+  "ui.clean_method_tip.dirty_sky": "Mantém só o que se moveu no céu: as estrelas fixas ficam pretas, enquanto aviões, satélites e meteoros mantêm sua cor. O solo fica preto.",
+  "ui.clean_method_tip.dirty_earth": "Mantém só o que se moveu no solo: o solo fixo fica preto. O céu fica preto. Requer detecção do horizonte.",
+  "ui.clean_method_tip.dirty_earth_needs_horizon": "Solo sem limpeza requer detecção do horizonte. Defina o tipo de cena como Céu + Horizonte para escolhê-lo.",
+  "ui.mode_desc_dirty_sky": "O Star será executado no modo céu sem limpeza, o oposto de limpar. Cada pixel do céu passa a ser o original menos o quadro de referência alinhado: as estrelas fixas ficam pretas e só o que se moveu ali, como aviões, satélites e meteoros, mantém sua cor. O solo fica preto. Nenhum valor atípico é detectado, então não há nada para revisar em cada quadro. Sem detecção do horizonte, o quadro inteiro conta como céu.",
+  "ui.mode_desc_dirty_earth": "O Star será executado no modo solo sem limpeza, o oposto de limpar. Cada pixel do solo passa a ser o original menos o quadro de referência alinhado: o solo fixo fica preto e só o que se moveu ali mantém sua cor. O céu fica preto. Nenhum valor atípico é detectado, então não há nada para revisar em cada quadro. Este modo requer detecção do horizonte.",
+  "ui.frame_mode_desc_dirty_sky": "Mantém só o que se moveu no céu deste quadro (o original menos a referência alinhada); o solo fica preto. Não há nada para revisar neste quadro.",
+  "ui.frame_mode_desc_dirty_earth": "Mantém só o que se moveu no solo deste quadro (o original menos a referência alinhada); o céu fica preto. Não há nada para revisar neste quadro.",
+  "ui.this_frame_uses_dirty_sky": "Este quadro usa o modo céu sem limpeza",
+  "ui.this_frame_uses_dirty_earth": "Este quadro usa o modo solo sem limpeza"
 }
