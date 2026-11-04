@@ -894,6 +894,15 @@ class Daemon:
             self.db.put("max_active", str(n))  # lowering it never stops a running ticket, it only stops new claims
             return web.json_response({"result": "ok"})
 
+        @r.post("/v1/land-all")
+        async def land_all(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            """Land-now for every ticket in the landing queue at once (they all get the mark before the train looks again)."""
+            await body_of(req)
+            landed = [t.number for t in self.db.tickets(LAND_NOW_STATES)]
+            for n in landed:
+                self.mutate(n, "land-now", {})
+            return web.json_response({"result": "ok", "tickets": landed})
+
         @r.post("/v1/mute")
         async def mute(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             body = await body_of(req)

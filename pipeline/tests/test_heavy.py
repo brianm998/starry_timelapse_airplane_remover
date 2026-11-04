@@ -158,6 +158,73 @@ def test_idle_job_is_killed_and_lock_released() -> None:
     heavy.release(heavy.acquire("probe", config=FAST, poll=0.05))  # the slot is free again
 
 
+def _spawn_tree_script(pidfile: Path) -> str:
+    """A job whose child moves itself into a new session (so a new process group), records its pid, and sleeps."""
+    child = "import time;time.sleep(60)"
+    return (
+        "import subprocess,sys,time\n"
+        f"c=subprocess.Popen([sys.executable,'-c',{child!r}],start_new_session=True)\n"
+        f"open({str(pidfile)!r},'w').write(str(c.pid))\n"
+        "time.sleep(60)"
+    )
+
+
+def _gone(pid: int) -> bool:
+    import psutil
+
+    try:
+        return psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return True
+
+
+def test_idle_kill_reaches_a_child_in_its_own_process_group(tmp_path: Path) -> None:
+    pidfile = tmp_path / "child.pid"
+    result = heavy.run_job([sys.executable, "-c", _spawn_tree_script(pidfile)], config=FAST)
+    assert result.hung is not None
+    child = int(pidfile.read_text())
+    try:
+        assert _gone(child)
+    finally:
+        import os
+        import signal
+
+        if not _gone(child):
+            os.kill(child, signal.SIGKILL)
+
+
+def test_an_interrupted_job_kills_children_in_other_groups(tmp_path: Path) -> None:
+    pidfile = tmp_path / "child.pid"
+    popen: Any = subprocess.Popen
+    real_wait = popen.wait
+    interrupted: list[int] = []
+
+    def wait(self: Any, timeout: float | None = None) -> int:
+        if not interrupted:
+            assert wait_until(pidfile.exists)
+            time.sleep(0.2)  # the pid is written before the file is flushed closed; let it settle
+            interrupted.append(self.pid)
+            raise KeyboardInterrupt
+        return real_wait(self, timeout)
+
+    popen.wait = wait
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            heavy.run_job([sys.executable, "-c", _spawn_tree_script(pidfile)], config=CFG)
+    finally:
+        popen.wait = real_wait
+    child = int(pidfile.read_text())
+    try:
+        assert _gone(child)
+    finally:
+        import os
+        import signal
+
+        if not _gone(child):
+            os.kill(child, signal.SIGKILL)
+    assert heavy.status().holders == []
+
+
 def test_busy_job_is_not_killed(tmp_path: Path) -> None:
     spin = "import time;t=time.time()\nwhile time.time()-t<4: pass"
     writer = "import time,sys\nfor _ in range(14):\n  print('x',flush=True);time.sleep(0.3)"
