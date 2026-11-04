@@ -79,6 +79,13 @@
   },
   "now": 2000.0,
   "pause": null,
+  "proposals": [
+    {
+      "by": "review agent",
+      "number": 31,
+      "title": "Show the retry budget"
+    }
+  ],
   "repo": "brianm998/starry_timelapse_airplane_remover",
   "resources": {
     "cpu_limit": 85.0,
@@ -96,6 +103,7 @@
     {
       "activity": "needs you \u00b7 asked 0m ago",
       "blocked_by": [],
+      "body": "## Goal\nDo it.\n\n## Context\nc\n\n## Acceptance criteria\n- A1: works \u2014 check: FooTests\n\n## Tests\nnone: docs only\n\n## Out of scope\nx\n",
       "branch": null,
       "group": "needs_you",
       "model": null,
@@ -112,6 +120,7 @@
     {
       "activity": "developing \u00b7 attempt 1/3 \u00b7 0m",
       "blocked_by": [],
+      "body": "## Goal\nDo it.\n\n## Context\nc\n\n## Acceptance criteria\n- A1: works \u2014 check: FooTests\n\n## Tests\nnone: docs only\n\n## Out of scope\nx\n",
       "branch": null,
       "group": "running",
       "model": "opus",
@@ -138,6 +147,7 @@
     {
       "activity": "CI \u00b7 batch #2 (1 tickets together)",
       "blocked_by": [],
+      "body": "## Goal\nDo it.\n\n## Context\nc\n\n## Acceptance criteria\n- A1: works \u2014 check: FooTests\n\n## Tests\nnone: docs only\n\n## Out of scope\nx\n",
       "branch": null,
       "group": "waiting",
       "model": null,
@@ -154,6 +164,7 @@
     {
       "activity": "queued",
       "blocked_by": [],
+      "body": "## Goal\nDo it.\n\n## Context\nc\n\n## Acceptance criteria\n- A1: works \u2014 check: FooTests\n\n## Tests\nnone: docs only\n\n## Out of scope\nx\n",
       "branch": null,
       "group": "queued",
       "model": null,
@@ -170,6 +181,7 @@
     {
       "activity": "landed",
       "blocked_by": [],
+      "body": "## Goal\nDo it.\n\n## Context\nc\n\n## Acceptance criteria\n- A1: works \u2014 check: FooTests\n\n## Tests\nnone: docs only\n\n## Out of scope\nx\n",
       "branch": null,
       "group": "landed_today",
       "model": null,
@@ -186,6 +198,7 @@
     {
       "activity": "failed \u00b7 CI still red after 2 fix cycles",
       "blocked_by": [],
+      "body": "## Goal\nDo it.\n\n## Context\nc\n\n## Acceptance criteria\n- A1: works \u2014 check: FooTests\n\n## Tests\nnone: docs only\n\n## Out of scope\nx\n",
       "branch": null,
       "group": "failed",
       "model": null,

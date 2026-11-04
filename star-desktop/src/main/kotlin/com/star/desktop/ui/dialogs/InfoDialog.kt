@@ -168,7 +168,7 @@ fun InfoDialog(selected: InfoType, onSelect: (InfoType) -> Unit, onClose: () -> 
                     selected = selected,
                     label = { localized(it.labelKey) },
                     onSelect = onSelect,
-                    modifier = Modifier.width(120.dp),
+                    modifier = Modifier.width(infoPickerWidth()),
                 )
                 Text(
                     selected.infoText,
@@ -183,3 +183,8 @@ fun InfoDialog(selected: InfoType, onSelect: (InfoType) -> Unit, onClose: () -> 
         }
     }
 }
+
+/** The picker's column: 120dp, or as wide as its widest label word needs (13sp, plus the 8dp padding of an option and the picker's own 2dp, each side). */
+@Composable
+internal fun infoPickerWidth(): androidx.compose.ui.unit.Dp =
+    maxOf(120.dp, com.star.desktop.ui.components.widestWord(InfoType.entries.map { localized(it.labelKey) }, 13.sp) + 20.dp)

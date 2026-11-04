@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -85,7 +86,10 @@ fun PreferencesDialog(app: AppViewModel) {
                 ) { processingWindow = it; prefs.showProcessingWindow = it }
             }
             Row(Modifier.fillMaxWidth()) {
-                Button(onClick = app::closePreferences, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.close")) }
+                Button(
+                    onClick = app::closePreferences, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                    modifier = Modifier.testTag("preferences.close"),
+                ) { Text(localized("ui.close")) }
             }
         }
     }

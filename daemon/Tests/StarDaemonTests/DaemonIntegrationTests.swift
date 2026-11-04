@@ -89,25 +89,42 @@ final class DaemonIntegrationTests: XCTestCase {
 
 // MARK: - Minimal DaemonProcess driver
 
+/// Every test that talks to `stard` (DaemonIntegrationTests, the ExportEndToEndTestCase subclasses,
+/// SessionConfigPersistenceTests) goes through this driver, and its reads used to have no bound
+/// (ticket #209: `swift test` sat at 0% CPU for 95 minutes with the main thread in XCTWaiter).
 final class DaemonProcess: @unchecked Sendable {
     private let process: Process
     private let stdinPipe:  Pipe
     private let stdoutPipe: Pipe
     private var nextID: UInt64 = 1
     private let lock = NSLock()
+    /// How long the daemon may send nothing while a call waits on it.  The reads below block in the
+    /// kernel and ignore task cancellation, so a daemon that goes quiet would otherwise hold the test
+    /// (and `swift test`, and the heavy lock) for ever.  It is per message, not per call: an export
+    /// that keeps reporting progress can take as long as it likes.
+    private let idleTimeout: TimeInterval
+    private var timedOutWaitingFor: String?
 
     /// `environment` replaces the daemon's whole environment if given; nil is this process's own.
-    init(binaryPath: String, scratchDir: String, environment: [String: String]? = nil) throws {
+    init(binaryPath: String, scratchDir: String, environment: [String: String]? = nil,
+         arguments: [String]? = nil, idleTimeout: TimeInterval = 60) throws {
         process = Process()
         process.executableURL = URL(fileURLWithPath: binaryPath)
-        process.arguments = ["--scratch", scratchDir]
+        process.arguments = arguments ?? ["--scratch", scratchDir]
+        self.idleTimeout = idleTimeout
         if let environment { process.environment = environment }
         stdinPipe  = Pipe()
         stdoutPipe = Pipe()
         process.standardInput  = stdinPipe
         process.standardOutput = stdoutPipe
         process.standardError  = FileHandle.standardError
+        // Writing to a daemon that has already died must be an error, not a SIGPIPE that kills xctest.
+        signal(SIGPIPE, SIG_IGN)
         try process.run()
+        // The daemon holds its ends now.  Keeping ours open means the read end never sees end of
+        // file when the daemon dies, so a crashed daemon looked exactly like a quiet one: a hang.
+        try? stdoutPipe.fileHandleForWriting.close()
+        try? stdinPipe.fileHandleForReading.close()
     }
 
     var hasTerminated: Bool { !process.isRunning }
@@ -129,17 +146,34 @@ final class DaemonProcess: @unchecked Sendable {
     private func writeEnvelope(_ env: Star_V1_Envelope) throws {
         let data  = try env.serializedData()
         let frame = encodeFrame(data)
-        stdinPipe.fileHandleForWriting.write(frame)
+        try stdinPipe.fileHandleForWriting.write(contentsOf: frame)
     }
 
-    private func readEnvelope() throws -> Star_V1_Envelope {
-        let handle = stdoutPipe.fileHandleForReading
-        let headerData = handle.readData(ofLength: 4)
-        guard headerData.count == 4 else { throw DaemonDriverError.eof }
-        let len = headerData.reduce(0) { ($0 << 8) | Int($1) }
-        let body = handle.readData(ofLength: len)
-        guard body.count == len else { throw DaemonDriverError.eof }
-        return try Star_V1_Envelope(serializedBytes: body)
+    /// Reads one envelope.  If the daemon sends nothing for `idleTimeout`, it is killed, which ends
+    /// the read with end of file, and the error says what was being waited for.
+    private func readEnvelope(waitingFor what: String) throws -> Star_V1_Envelope {
+        let watchdog = DispatchWorkItem { [self] in
+            lock.lock(); timedOutWaitingFor = what; lock.unlock()
+            process.terminate()
+            // A daemon that ignores SIGTERM, or a child of it holding the pipe open, must not outlive this.
+            let pid = process.processIdentifier
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) { if self.process.isRunning { kill(pid, SIGKILL) } }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + idleTimeout, execute: watchdog)
+        defer { watchdog.cancel() }
+        do {
+            let handle = stdoutPipe.fileHandleForReading
+            let headerData = handle.readData(ofLength: 4)
+            guard headerData.count == 4 else { throw DaemonDriverError.eof }
+            let len = headerData.reduce(0) { ($0 << 8) | Int($1) }
+            let body = handle.readData(ofLength: len)
+            guard body.count == len else { throw DaemonDriverError.eof }
+            return try Star_V1_Envelope(serializedBytes: body)
+        } catch {
+            lock.lock(); let timedOut = timedOutWaitingFor; lock.unlock()
+            if timedOut != nil { throw DaemonDriverError.timedOut(what, idleTimeout) }
+            throw error
+        }
     }
 
     func rawCall(id: UInt64, method: String, payload: Data) async -> Response {
@@ -151,7 +185,7 @@ final class DaemonProcess: @unchecked Sendable {
             env.payload = payload
             do {
                 try self.writeEnvelope(env)
-                let reply = try self.readEnvelope()
+                let reply = try self.readEnvelope(waitingFor: method)
                 switch reply.kind {
                 case .response:   return .response(reply.payload)
                 case .error:      return .error(reply.error, reply.errorCode)
@@ -200,7 +234,7 @@ final class DaemonProcess: @unchecked Sendable {
             do {
                 try self.writeEnvelope(sent)
                 while true {
-                    let reply = try self.readEnvelope()
+                    let reply = try self.readEnvelope(waitingFor: sent.method)
                     switch reply.kind {
                     case .streamItem:
                         result.items.append(reply.payload)
@@ -223,9 +257,20 @@ final class DaemonProcess: @unchecked Sendable {
         }.value
     }
 
-    enum DaemonDriverError: Error {
+    enum DaemonDriverError: Error, CustomStringConvertible {
         case eof
+        /// The daemon sent nothing for this long, while this call waited on it.
+        case timedOut(String, TimeInterval)
         case remoteError(String, Int32)
         case unexpectedShape
+
+        var description: String {
+            switch self {
+            case .eof: return "the daemon closed its output (it exited or crashed)"
+            case .timedOut(let what, let seconds): return "timed out after \(seconds)s waiting for \(what); the daemon was killed"
+            case .remoteError(let message, let code): return "remoteError(\(message), \(code))"
+            case .unexpectedShape: return "unexpectedShape"
+            }
+        }
     }
 }

@@ -26,14 +26,34 @@ public struct Snapshot: Codable, Sendable, Equatable {
     public var version: String
     public var repo: String
     public var nightly: NightlyInfo?
+    /// Open `pipe:proposed` issues awaiting the owner's go-ahead; absent from an older daemon's snapshot.
+    public var proposalList: [ProposalSnap]?
+
+    /// `proposalList` without the optional: empty for a daemon that does not send proposals.
+    public var proposals: [ProposalSnap] { proposalList ?? [] }
 
     enum CodingKeys: String, CodingKey {
         case daemon, pause, muted, heavy, tickets, groups, runtime, landing, develop, now, version, repo, nightly
+        case proposalList = "proposals"
         case usagePauseUntil = "usage_pause_until"
         case usageWindows = "usage_windows"
         case maxActive = "max_active"
         case interventionsWeek = "interventions_week"
         case eventsCursor = "events_cursor"
+    }
+}
+
+/// A proposed issue: filed by `by` (an agent or "interactive"), waiting for approve or reject.
+public struct ProposalSnap: Codable, Sendable, Equatable, Identifiable {
+    public var number: Int
+    public var title: String
+    public var by: String
+    public var id: Int { number }
+
+    public init(number: Int, title: String, by: String) {
+        self.number = number
+        self.title = title
+        self.by = by
     }
 }
 
@@ -174,14 +194,35 @@ public struct TicketSnap: Codable, Sendable, Equatable, Identifiable {
     public var parkReason: String?
     public var question: String?
     public var stages: [StageSnap]
+    /// The GitHub issue body, for the sidebar search; empty from a daemon that predates the field.
+    public var body: String
 
     public var id: Int { number }
 
     enum CodingKeys: String, CodingKey {
-        case number, title, state, priority, group, activity, model, branch, worktree, question, stages
+        case number, title, state, priority, group, activity, model, branch, worktree, question, stages, body
         case blockedBy = "blocked_by"
         case prNumber = "pr_number"
         case parkReason = "park_reason"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        number = try c.decode(Int.self, forKey: .number)
+        title = try c.decode(String.self, forKey: .title)
+        state = try c.decode(String.self, forKey: .state)
+        priority = try c.decode(Int.self, forKey: .priority)
+        group = try c.decode(String.self, forKey: .group)
+        activity = try c.decode(String.self, forKey: .activity)
+        model = try c.decodeIfPresent(String.self, forKey: .model)
+        blockedBy = try c.decode([Int].self, forKey: .blockedBy)
+        prNumber = try c.decodeIfPresent(Int.self, forKey: .prNumber)
+        branch = try c.decodeIfPresent(String.self, forKey: .branch)
+        worktree = try c.decodeIfPresent(String.self, forKey: .worktree)
+        parkReason = try c.decodeIfPresent(String.self, forKey: .parkReason)
+        question = try c.decodeIfPresent(String.self, forKey: .question)
+        stages = try c.decode([StageSnap].self, forKey: .stages)
+        body = try c.decodeIfPresent(String.self, forKey: .body) ?? ""
     }
 }
 
@@ -307,8 +348,12 @@ public enum Overview {
     public struct StageCount: Equatable, Sendable, Identifiable {
         public var label: String
         public var states: [String]
+        public var help: String
         public var count: Int
         public var id: String { label }
+
+        /// The hover text: what the stage does, then which daemon states the tile counts.
+        public var tooltip: String { Overview.tooltip(help: help, states: states) }
 
         /// How loudly the tile draws: the owner's queue when it is non-empty, a muted tile for zero, otherwise normal.
         public var emphasis: TileEmphasis {
@@ -319,18 +364,44 @@ public enum Overview {
 
     public enum TileEmphasis: Equatable, Sendable { case attention, active, idle }
 
+    /// One top-bar bucket: its tile label, the daemon states it counts, and what the stage means (the hover help).
+    public struct TopBarBucket: Sendable {
+        public var label: String
+        public var states: [String]
+        public var help: String
+
+        /// The hover text: what the stage does, then which daemon states the tile counts.
+        public var tooltip: String { Overview.tooltip(help: help, states: states) }
+    }
+
+    static func tooltip(help: String, states: [String]) -> String {
+        help + "\nCounts tickets in: " + states.joined(separator: ", ")
+    }
+
     /// The top bar's seven buckets, in display order. `paused` and terminal states belong to none.
     /// Labels are short and lowercase so they fit a tile on one line.
-    public static let topBarBuckets: [(label: String, states: [String])] = [
-        ("need you", ["needs-input"]), ("queued", ["queued"]), ("exploring", ["exploring"]),
-        ("developing", ["developing"]), ("testing", ["verifying"]), ("review", ["review"]),
-        ("landing", landingStates),
+    public static let topBarBuckets: [TopBarBucket] = [
+        TopBarBucket(label: "need you", states: ["needs-input"],
+                     help: "An agent stopped and asked a question, or parked the ticket. It waits for your answer and does nothing until you give one."),
+        TopBarBucket(label: "queued", states: ["queued"],
+                     help: "Approved tickets waiting for a free slot (max_active). No agent has started on them."),
+        TopBarBucket(label: "exploring", states: ["exploring"],
+                     help: "An agent is reading the code and writing the plan for the ticket. Skipped when the ticket carries its own ## Plan."),
+        TopBarBucket(label: "developing", states: ["developing"],
+                     help: "An agent is writing the change in the ticket's own worktree, including rework after review findings."),
+        TopBarBucket(label: "testing", states: ["verifying"],
+                     help: "The builds and tests the change needs are running. A failure goes to a fix agent and back here."),
+        TopBarBucket(label: "review", states: ["review"],
+                     help: "A fresh reviewer is checking the diff against the acceptance criteria. It either approves or sends the ticket back to developing."),
+        TopBarBucket(label: "landing", states: landingStates,
+                     help: "Approved changes on their way into develop: ready (waiting for a CI slot), ci (checks running on the PR or batch), landing (merging, resolving conflicts)."),
     ]
 
     /// Tickets per top-bar bucket, zeros included.
     public static func topBarCounts(_ tickets: [TicketSnap]) -> [StageCount] {
         topBarBuckets.map { bucket in
-            StageCount(label: bucket.label, states: bucket.states, count: tickets.filter { bucket.states.contains($0.state) }.count)
+            StageCount(label: bucket.label, states: bucket.states, help: bucket.help,
+                       count: tickets.filter { bucket.states.contains($0.state) }.count)
         }
     }
 

@@ -164,6 +164,7 @@ private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
             enabled = canRender,
             onClick = { doRender() },
             colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+            modifier = Modifier.testTag("render.start"),
         ) { Text(localized("ui.render")) }
     }
 }
@@ -358,10 +359,11 @@ private fun Picker(label: String, options: List<Pair<String, String>>, selected:
                     .clickable(enabled = options.isNotEmpty()) { expanded = true }
                     .padding(horizontal = 10.dp, vertical = 6.dp),
             ) {
-                Text(
-                    options.firstOrNull { it.first == selected }?.second ?: selected.ifEmpty { "—" },
-                    color = StarColors.textPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
+                // One line, ellipsized; the hover tip has all of it.
+                val shown = options.firstOrNull { it.first == selected }?.second ?: selected.ifEmpty { "—" }
+                com.star.desktop.ui.components.HoverTip(shown) {
+                    Text(shown, color = StarColors.textPrimary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 options.forEach { (value, shown) ->
