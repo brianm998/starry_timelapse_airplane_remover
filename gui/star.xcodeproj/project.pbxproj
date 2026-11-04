@@ -70,7 +70,6 @@
 		D392EB1B2E104D410020E16A /* ChangeToolButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB1A2E104D410020E16A /* ChangeToolButton.swift */; };
 		D392EB682E1395CB0020E16A /* DebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB672E1395CB0020E16A /* DebugView.swift */; };
 		D392EB6D2E16C6940020E16A /* Space.swift in Sources */ = {isa = PBXBuildFile; fileRef = D392EB6C2E16C6940020E16A /* Space.swift */; };
-		D39728C42F05C2D200F1CBC2 /* ExpandDownButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39728C32F05C2D200F1CBC2 /* ExpandDownButton.swift */; };
 		D39728C62F06CC5400F1CBC2 /* AlignmentWindowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D39728C52F06CC5400F1CBC2 /* AlignmentWindowView.swift */; };
 		D397FEF92E96005500680C78 /* NewReleaseSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D397FEF82E96005500680C78 /* NewReleaseSheetView.swift */; };
 		D3F1DE0100000000000A0002 /* VideoImportSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F1DE0100000000000A0001 /* VideoImportSheetView.swift */; };
@@ -205,7 +204,6 @@
 		D392EB1A2E104D410020E16A /* ChangeToolButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangeToolButton.swift; sourceTree = "<group>"; };
 		D392EB672E1395CB0020E16A /* DebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugView.swift; sourceTree = "<group>"; };
 		D392EB6C2E16C6940020E16A /* Space.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Space.swift; sourceTree = "<group>"; };
-		D39728C32F05C2D200F1CBC2 /* ExpandDownButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExpandDownButton.swift; sourceTree = "<group>"; };
 		D39728C52F06CC5400F1CBC2 /* AlignmentWindowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlignmentWindowView.swift; sourceTree = "<group>"; };
 		D397FEF82E96005500680C78 /* NewReleaseSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewReleaseSheetView.swift; sourceTree = "<group>"; };
 		D3F1DE0100000000000A0001 /* VideoImportSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoImportSheetView.swift; sourceTree = "<group>"; };
@@ -325,7 +323,6 @@
 				D3CC7C672F5E1B2400CCCB59 /* HorizonPaintState.swift */,
 				D367B33D2F4DF65B00C2160A /* PreviewOp.swift */,
 				D39728C52F06CC5400F1CBC2 /* AlignmentWindowView.swift */,
-				D39728C32F05C2D200F1CBC2 /* ExpandDownButton.swift */,
 				D32425802EE5075000CEF78F /* StartupView.swift */,
 				D324257E2EE5030100CEF78F /* ProcessingSettingsView.swift */,
 				D397FEF82E96005500680C78 /* NewReleaseSheetView.swift */,
@@ -660,7 +657,6 @@
 				D392EB682E1395CB0020E16A /* DebugView.swift in Sources */,
 				D3FBFA212CE91B3800A23FC6 /* CircularProgressView.swift in Sources */,
 				D392EB0C2E0AFE320020E16A /* CursorView.swift in Sources */,
-				D39728C42F05C2D200F1CBC2 /* ExpandDownButton.swift in Sources */,
 				D3E6804B2E424B0700A97C28 /* FocusedField.swift in Sources */,
 				D39728C62F06CC5400F1CBC2 /* AlignmentWindowView.swift in Sources */,
 				D3FBFA0C2CE1B18700A23FC6 /* StarPicker.swift in Sources */,
