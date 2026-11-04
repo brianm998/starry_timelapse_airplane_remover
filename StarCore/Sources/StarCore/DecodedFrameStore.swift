@@ -156,12 +156,6 @@ public final class DecodedFrameStore: @unchecked Sendable {
         sourcesLock.unlock()
     }
 
-    public func unregisterSource(folder: String) {
-        sourcesLock.lock()
-        extractingSources[folder] = nil
-        sourcesLock.unlock()
-    }
-
     /// The loader is called by the C++ merge on a native thread, by filename.  A frame of a video that is still being extracted is
     /// waited for there (blocking, which is safe because this thread is never one of the cooperative pool's: see
     /// `waitUntilAvailableBlocking`).  The merge ops depend on `FrameAvailableOp`s, so this is a backstop for one that was missed.
