@@ -89,6 +89,10 @@ public final actor FrameGraphBuilder {
     // take one of the frame queue's slots.
     let frameAvailabilityQueue = OperationQueue()
 
+    // Every cancel goes through this, so no cancelled operation is freed while one it depends on is still running (it crashes
+    // the Linux and Windows Foundation otherwise; see `CancelledOperationKeeper`).
+    let cancelledOperations = CancelledOperationKeeper()
+
     let keypointLimiter = KeypointLimiter(max: max(1, ProcessInfo.processInfo.processorCount / 2))
 
     public init() {
@@ -1185,11 +1189,11 @@ public final actor FrameGraphBuilder {
               Task { await errors.append(errorString) }
               errorClosure(errorString)
           },
-          abortClosure: { [queue] errorString in
+          abortClosure: { [queue, cancelledOperations] errorString in
               // Nothing downstream can run without a homography.  Cancelled ops are
               // skipped, but that includes the completion op, so report completion
               // here or whoever waits on it hangs.
-              queue.cancelAllOperations()
+              cancelledOperations.cancelAll(on: [queue])
               errorClosure(errorString)
               Task {
                   await errors.append(errorString)
@@ -1593,9 +1597,7 @@ public final actor FrameGraphBuilder {
     /// must reset that state themselves after calling this method.
     public func cancelAllOperations() {
         cancelGeneration += 1
-        queue.cancelAllOperations()
-        previewQueue.cancelAllOperations()
-        frameAvailabilityQueue.cancelAllOperations()
+        cancelledOperations.cancelAll(on: [queue, previewQueue, frameAvailabilityQueue])
         Log.i("FrameGraphBuilder: all operations cancelled")
     }
 
@@ -1632,6 +1634,7 @@ public final actor FrameGraphBuilder {
             try? await Task.sleep(for: .milliseconds(100))
         }
         Log.i("FrameGraphBuilder: the operation queue has drained")
+        cancelledOperations.purge()
         return true
     }
 
