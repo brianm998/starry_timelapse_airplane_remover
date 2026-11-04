@@ -80,6 +80,7 @@ class FakeGitHub(GitHub):
         self.origin = origin
         self.prs: dict[int, dict[str, Any]] = {}
         self.ci: dict[str, Ci] = {}
+        self.job_steps: dict[str, list[dict[str, Any]]] = {}  # job name -> the `steps` GitHub reports for it (absent: no key)
         self.job_labels: dict[str, list[str]] = {}  # job name -> the runner labels GitHub reports for it
         self.develop_ci: Ci = []
         self.develop_history: list[Ci] = []  # older develop runs, newest first, after develop_ci
@@ -239,7 +240,9 @@ class FakeGitHub(GitHub):
                 run_id = self.run_ids.setdefault((key, wf), 1000 + len(self.run_ids))
                 mine = [(j, st, c) for w, j, st, c in jobs if w == wf]
                 self.run_jobs_by_id[run_id] = [{"name": j, "status": st, "conclusion": c, "completed_at": None,
-                                                "labels": self.job_labels.get(j, [])} for j, st, c in mine]
+                                                "labels": self.job_labels.get(j, []),
+                                                **({"steps": self.job_steps[j]} if j in self.job_steps else {})}
+                                               for j, st, c in mine]
                 done = all(st == "completed" for _, st, _ in mine)
                 conclusions = {c for _, _, c in mine}
                 # a run's own conclusion: cancelled when the runner cancelled all of it, as a newer push does
