@@ -81,6 +81,8 @@ class Train:
         self.eng = eng
         self._catch_ups: set[asyncio.Task[None]] = set()
         self._gates: dict[int, asyncio.Task[None]] = {}  # a ticket's Gherkin feature run, beside the train, before it may be batched
+        self._macos_queued = 0  # the active batch's CI jobs still waiting for a macOS runner, as of its last poll
+        self._deferred: set[tuple[int, int]] = set()  # (ticket, batch) pairs whose feature-run deferral was already reported
 
     # the loop ------------------------------------------------------------------------------------------------------
     async def run_forever(self) -> None:
@@ -136,10 +138,21 @@ class Train:
 
     def _start_gates(self) -> None:
         """Start the feature run of each ready ticket that needs one. It runs on the ticket's own branch, once per ticket: the batch
-        branch is a new merge commit, so the batch's CI never carries a feature run."""
+        branch is a new merge commit, so the batch's CI never carries a feature run.
+
+        While the active batch still has macOS jobs queued, no new run starts: it would take a macOS runner ahead of them. A run already
+        going is left alone."""
         eng = self.eng
+        active = eng.db.active_batch()
+        hold = active is not None and self._macos_queued > 0
         for t in eng.db.tickets(("ready",)):
             if eng.db.batch_of(t.number) is None and self._gated(t) and t.number not in self._gates:
+                if hold:
+                    assert active is not None
+                    if (t.number, int(active["id"])) not in self._deferred:
+                        self._deferred.add((t.number, int(active["id"])))
+                        eng.db.event("gate-deferred", t.number, batch=int(active["id"]), queued_macos=self._macos_queued)
+                    continue
                 task = asyncio.create_task(self._gate_beside(t))
                 self._gates[t.number] = task
                 task.add_done_callback(lambda _t, n=t.number: self._gates.pop(n, None))
@@ -280,7 +293,10 @@ class Train:
         if batch["state"] == "landing":  # died between the merge and the bookkeeping
             await asyncio.to_thread(self._resume_landing, bid)
             return
-        outcome = await self._ci(bid)
+        try:
+            outcome = await self._ci(bid)
+        finally:
+            self._macos_queued = 0
         if outcome[0] == "abandon":
             await asyncio.to_thread(self._abandon, bid, str(outcome[1]))
         elif outcome[0] == "red" and isinstance(outcome[1], ci.Verdict):
@@ -305,11 +321,12 @@ class Train:
                 return ("abandon", "a land-now ticket is in a batch with tickets that still need CI: rebuilding without the wait")
             reran = {tuple(k) for k in json.loads(eng.db.get(f"reran:batch{bid}") or "[]")}
             try:
-                verdict = await asyncio.to_thread(ship._judge, eng, f"batch{bid}", batch["head_sha"], reran)  # pyright: ignore[reportPrivateUsage]
+                jobs, verdict = await asyncio.to_thread(ship._judge_jobs, eng, f"batch{bid}", batch["head_sha"], reran)  # pyright: ignore[reportPrivateUsage]
             except GitHubError as exc:
                 eng.db.event("ci-poll-failed", None, batch=bid, error=str(exc)[:200])
                 await eng.sleep(eng.config.ci_poll_s)
                 continue
+            self._macos_queued = sum(1 for j in jobs if j.queued_for_macos)
             eng.db.record_ci(0, batch["head_sha"], verdict.kind, {"batch": bid, "reason": verdict.reason})
             if verdict.kind == "pending":
                 age = eng.clock() - float(eng.db.get(f"pushed_at:batch{bid}") or eng.clock())

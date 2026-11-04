@@ -102,12 +102,20 @@ def _infra(eng: Engine, job: ci.Job) -> bool:
         return False
 
 
+def _judge_jobs(eng: Engine, key: int | str, sha: str, reran: set[tuple[str, str]],
+                keep_titles: tuple[str, ...] = ()) -> tuple[list[ci.Job], ci.Verdict]:
+    """Fetch the PR's jobs and judge them; the jobs come back too, for callers that look at more than the verdict. Network calls:
+    runs in a worker thread, never on the event loop."""
+    jobs = fetch_jobs(eng, sha, keep_titles)
+    return jobs, ci.judge(jobs, eng.db.baseline, now=eng.clock(),
+                          head_pushed_at=float(eng.db.get(f"pushed_at:{key}") or eng.clock()),
+                          settle_s=eng.config.ci_settle_s, blocking_wait_s=eng.config.ci_blocking_wait_s,
+                          reran=reran, infra=lambda j: _infra(eng, j))
+
+
 def _judge(eng: Engine, key: int | str, sha: str, reran: set[tuple[str, str]], keep_titles: tuple[str, ...] = ()) -> ci.Verdict:
     """Fetch the PR's jobs and judge them. Network calls: runs in a worker thread, never on the event loop."""
-    return ci.judge(fetch_jobs(eng, sha, keep_titles), eng.db.baseline, now=eng.clock(),
-                    head_pushed_at=float(eng.db.get(f"pushed_at:{key}") or eng.clock()),
-                    settle_s=eng.config.ci_settle_s, blocking_wait_s=eng.config.ci_blocking_wait_s,
-                    reran=reran, infra=lambda j: _infra(eng, j))
+    return _judge_jobs(eng, key, sha, reran, keep_titles)[1]
 
 
 def _rerun(eng: Engine, number: int | None, jobs: list[ci.Job]) -> list[ci.Job]:
