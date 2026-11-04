@@ -536,6 +536,42 @@ class Daemon:
         self.proposals = [p for p in self.proposals if p["number"] != n]
         return "approved" if action == "approve" else "rejected"
 
+    def proposal_detail(self, n: int) -> dict[str, Any] | None:
+        """One live `pipe:proposed` issue in full (blocking: GitHub calls), or None when #n is not one. GitHubError propagates."""
+        gh = self.engine.gh
+        issue = next((i for i in tickets.open_issues(gh, tickets.PROPOSED) if int(i["number"]) == n), None)
+        if issue is None:
+            return None
+        body = issue.get("body") or ""
+        title = str(issue["title"])
+        every = gh.comments(n)
+        comments: list[dict[str, Any]] = []
+        for c in every[-20:]:
+            text = str(c.get("body") or "")
+            user: dict[str, Any] = c.get("user") or {}
+            comments.append({"author": user.get("login"), "created_at": c.get("created_at"),
+                             "body": text if len(text) <= 4000 else text[:4000] + "\u2026 [truncated]"})
+        blockers: list[dict[str, object]] = []
+        for b in gh.blocked_by(n):
+            blocker = gh.issue(b)
+            if blocker.get("state") == "open":
+                blockers.append({"number": b, "title": str(blocker.get("title") or "")})
+        author: dict[str, Any] = issue.get("user") or {}
+        report = tickets.lint(body, title, self.config.allow_fable)
+        m = tickets.FILED_BY.search(body)
+        return {
+            "number": n, "title": title, "author": author.get("login"),
+            "created_at": issue.get("created_at"), "updated_at": issue.get("updated_at"),
+            "labels": [lab["name"] for lab in issue.get("labels", []) if lab["name"] != tickets.PROPOSED],
+            "by": m.group(1) if m else None, "body": body,
+            "comments": comments, "comment_count": len(every), "blockers": blockers,
+            "readiness": {
+                "lint_ok": report.ok, "errors": report.errors, "warnings": report.warnings,
+                "has_plan": tickets.ticket_plan(body)[0] is not None, "pipeline": tickets.parse_pipeline(body),
+                "queue": {"open": len(tickets.open_issues(gh, "pipeline")), "max": self.config.max_open_tickets},
+            },
+        }
+
     def snapshot(self) -> dict[str, object]:
         """Everything the monitor shows, in one document. The daemon decides groups and activity lines, not the client."""
         base = {k: v for k, v in self.status().items() if k not in ("self_update", "gherkin_nightly", "landing", "alerts")}  # the monitor's contract is pinned by a fixture
@@ -899,6 +935,19 @@ class Daemon:
                 raise web.HTTPBadRequest(text="models must be an object of stage to model name")
             models = cast("dict[str, str]", chosen)
             return web.json_response({"results": await asyncio.to_thread(self.enqueue, numbers, models)})
+
+        @r.get("/v1/proposals/{n}")
+        async def proposal(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            if not req.match_info["n"].isdigit():
+                raise web.HTTPBadRequest(text="the issue number must be an integer")
+            n = int(req.match_info["n"])
+            try:
+                detail = await asyncio.to_thread(self.proposal_detail, n)
+            except GitHubError as exc:
+                raise web.HTTPBadGateway(text=str(exc)) from exc
+            if detail is None:
+                raise web.HTTPNotFound(text=f"#{n} is not a proposal")
+            return web.json_response(detail)
 
         @r.post("/v1/proposals/{n}/{action}")
         async def settle(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
