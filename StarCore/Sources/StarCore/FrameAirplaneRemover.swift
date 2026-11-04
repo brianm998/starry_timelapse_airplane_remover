@@ -22,8 +22,6 @@ You should have received a copy of the GNU General Public License along with sta
 
 // the first pass is done upon init, finding and pruning outlier groups
 
-// used for finding outliers in frames when processing
-public let maxFramesProcessing = IntegralActor(value: 20) // XXX read this initial value from #-CPU's
 
 public let finalMonitor = FileSystemMonitor(max: 32)
 
@@ -712,18 +710,6 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         if state == .complete {
             state = .outlierProcessingComplete
         }
-    }
-
-    public func removeSubtractionImages() {
-        // get rid of the subtraction here image too,
-        // as it is a product of the star aligned images
-        try? imageAccessor.deleteImage(frameIndex: frameIndex,
-                                       ofType: .subtraction,
-                                       atSize: .original)
-
-        try? imageAccessor.deleteImage(frameIndex: frameIndex,
-                                       ofType: .subtraction,
-                                       atSize: .preview)
     }
 
 
