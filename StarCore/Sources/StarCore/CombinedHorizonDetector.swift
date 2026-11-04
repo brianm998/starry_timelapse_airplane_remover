@@ -1575,26 +1575,6 @@ public enum CombinedHorizonDetector {
         return 0.3 * coverage + 0.4 * smoothness + 0.3 * clampedPlausibility
     }
 
-    /// Check if a horizon Y array is plausible: mean Y within 10-90% of height,
-    /// stddev < 15% of height, and reasonable coverage.
-    static func isPlausibleHorizon(_ horizonY: [Int?], imageHeight: Int) -> Bool {
-        let defined = horizonY.compactMap { $0 }
-        guard defined.count > horizonY.count / 10 else { return false } // <10% coverage
-
-        let avg = Double(defined.reduce(0, +)) / Double(defined.count)
-        let heightFrac = avg / Double(imageHeight)
-
-        // Mean horizon Y must be in [10%, 90%] of image height
-        guard heightFrac > 0.1 && heightFrac < 0.9 else { return false }
-
-        // Stddev must be < 15% of image height (not wildly noisy)
-        let variance = defined.map { pow(Double($0) - avg, 2) }.reduce(0, +) / Double(defined.count)
-        let stddev = sqrt(variance)
-        guard stddev < Double(imageHeight) * 0.15 else { return false }
-
-        return true
-    }
-
     /// Scale image for processing.
     static func scaleForProcessing(
         _ image: PixelatedImage,
