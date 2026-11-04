@@ -56,21 +56,21 @@ def api_token() -> str:
 
 
 def train_info(db: Database, config: Config, now: float) -> dict[str, object]:
-    """The landing train's state, computed here for status, the snapshot and the monitor: the active batch (number, phase, age,
-    members, slow flag), the last abandoned batch while it is under an hour old, and the countdown to the next batch."""
-    batch = db.active_batch()
-    active: dict[str, object] | None = None
-    if batch is not None:
+    """The landing train's state, computed here for status, the snapshot and the monitor: every active batch (`batches`, oldest first:
+    number, phase, age, members, slow flag; `batch` is the oldest, for clients that show one), the last abandoned batch while it is
+    under an hour old, and the countdown to the next batch."""
+    batches: list[dict[str, object]] = []
+    for batch in db.active_batches():
         age = max(0.0, now - float(batch["created"]))
-        active = {"number": batch["id"], "phase": batch["state"], "age_s": int(age), "members": db.batch_members(int(batch["id"])),
-                  "pr_number": batch["pr_number"], "slow": batch["state"] == "building" and age > train.SLOW_BUILDING_S}
+        batches.append({"number": batch["id"], "phase": batch["state"], "age_s": int(age), "members": db.batch_members(int(batch["id"])),
+                        "pr_number": batch["pr_number"], "slow": batch["state"] == "building" and age > train.SLOW_BUILDING_S})
     gone = db.last_abandoned_batch(now - train.ABANDONED_MEMORY_S)
     abandoned: dict[str, object] | None = None
     if gone is not None:
         abandoned = {"number": gone["id"], "state": gone["state"], "reason": gone["note"] or "", "ended": gone["ended"],
                      "ago_s": int(max(0.0, now - float(gone["ended"])))}
     left = train.window_left(db, config, now)
-    return {"batch": active, "last_abandoned": abandoned, "next_batch_in_s": None if left is None else math.ceil(left)}
+    return {"batch": batches[0] if batches else None, "batches": batches, "last_abandoned": abandoned, "next_batch_in_s": None if left is None else math.ceil(left)}
 
 
 def ready_activity(db: Database, t: Ticket, config: Config, now: float) -> str:
@@ -81,8 +81,8 @@ def ready_activity(db: Database, t: Ticket, config: Config, now: float) -> str:
     if (features := tickets.gherkin_features(t.body, t.plan)) and not db.get(f"gherkin_ok:{t.number}"):
         err = json.loads(db.get(f"gherkin_err:{t.number}") or "null")
         return f"ready · proving Gherkin features ({', '.join(features)})" + (f" · last poll failed: {err['error']}" if err else "")
-    if (active := db.active_batch()) is not None:
-        return f"ready · waiting for the next batch (batch {active['id']} is {active['state']})"
+    if active := db.active_batches():
+        return f"ready · waiting for the next batch ({', '.join(f'batch {b['id']} is {b['state']}' for b in active)})"
     left = train.window_left(db, config, now)
     if left is None or left <= 0:
         return "ready · waiting for the next batch (starting)"
@@ -289,7 +289,7 @@ class Daemon:
                          test: Callable[[Path], tuple[bool, str]] | None = None) -> str | None:
         """Notice newer pipeline/ code on origin/develop, stage and smoke-check it, then swap once nothing is running.
 
-        Returns None (nothing to do or not allowed now), "failed", "pending" (staged and good, waiting for stages to finish) or
+        Returns None (nothing to do or not allowed now, or the staged runtime vanished and will be rebuilt on the next poll), "failed", "pending" (staged and good, waiting for stages to finish) or
         "swapped" (the caller exits so launchd restarts the daemon on the new runtime). A staged version that fails its smoke check
         is recorded against its sha and never retried; the running version stays."""
         plist = plist or Path.home() / "Library" / "LaunchAgents" / f"{selfupdate.LABEL}.plist"
@@ -326,7 +326,13 @@ class Daemon:
             running = [s["ticket"] for s in self.db.running_stages()]
             if running and self.engine.update_hold():
                 return "pending"  # inside the drain window: let the running stages finish
-            selfupdate.switch(selfupdate.runtime_dir(target), plist, restart=False)
+            try:
+                selfupdate.switch(selfupdate.runtime_dir(target), plist, restart=False)
+            except RuntimeError as exc:
+                # pruned or damaged since it was staged: treat as a failed staging, not a bad version; the next poll rebuilds it
+                log.warning("self-update: the staged runtime for %s is unusable, restaging: %s", target[:12], exc)
+                self._clear_pending()
+                return None
             self.db.event("self-update", None, old=have, new=target, **({"interrupted": running} if running else {}))
             self._clear_pending()
             self.db.put("self_update_failed", None)
