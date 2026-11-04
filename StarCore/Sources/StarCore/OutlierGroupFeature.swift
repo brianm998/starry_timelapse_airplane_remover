@@ -484,25 +484,6 @@ public enum OutlierGroupFeature: String,
     }        
 }
 
-// x,y origin at 0,0
-fileprivate func hasPixelAt(x: Int, y: Int,
-                            with bounds: BoundingBox,
-                            and pixels: [UInt16]) -> Bool
-{
-    if x < 0 || y < 0 {
-        return false
-    } else {
-        let index = (y-bounds.min.y)*bounds.width + (x-bounds.min.x)
-        if index >= 0,
-           index < pixels.count
-        {
-            return pixels[index] != 0
-        } else {
-            return false
-        }
-    }
-}
-
 fileprivate func calculateMedianBrightness(of group: OutlierGroup) -> Double {
     var values: [UInt16] = []
     for pixel in group.pixelSet {  

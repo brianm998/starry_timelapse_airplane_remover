@@ -28,6 +28,33 @@ def test_a_proposal_waits_for_approval_and_says_who_filed_it(gh: FakeGitHub) -> 
     assert [(p.number, p.by) for p in tickets.proposals(gh)] == [(n, "review agent")]
 
 
+def test_a_hand_opened_proposal_reports_its_github_author(gh: FakeGitHub) -> None:
+    gh.add_issue(40, "By hand", author="brianm998", labels=("pipe:proposed",), created_at="2026-11-01T10:00:00Z")
+    gh.add_issue(41, "By agent", body=f"{GOOD_BODY}\n<!-- starpipe:filed-by:review agent -->", author="bot",
+                 labels=("pipe:proposed",))
+    by_number = {p.number: p for p in tickets.proposals(gh)}
+    assert (by_number[40].by, by_number[40].author, by_number[40].created_at) == ("", "brianm998", "2026-11-01T10:00:00Z")
+    assert by_number[41].by == "review agent"
+    assert all(p.by != "unknown" for p in by_number.values())
+
+
+def test_proposals_command_falls_back_to_the_github_author(monkeypatch: pytest.MonkeyPatch, gh: FakeGitHub) -> None:
+    from click.testing import CliRunner
+
+    from starpipe import cli, github
+
+    gh.add_issue(40, "By hand", author="brianm998", labels=("pipe:proposed",))
+    gh.add_issue(41, "By agent", body=f"{GOOD_BODY}\n<!-- starpipe:filed-by:review agent -->", labels=("pipe:proposed",))
+    gh.add_issue(42, "Nobody", labels=("pipe:proposed",))
+    gh.issues[42]["user"] = {}
+    monkeypatch.setattr(github, "GitHub", lambda _cfg: gh)  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
+    monkeypatch.setattr(cli.config_mod, "load", lambda: None)  # type: ignore[arg-type]
+    out = CliRunner().invoke(cli.main, ["proposals"])
+    assert out.exit_code == 0, out.output
+    lines = {int(line.split()[0].lstrip("#")): line for line in out.output.splitlines()}
+    assert lines[40].endswith("by @brianm998") and lines[41].endswith("by review agent") and lines[42].endswith("by unknown")
+
+
 def test_an_ordinary_ticket_carries_the_pipeline_label_and_its_author(gh: FakeGitHub) -> None:
     n = tickets.file_ticket(gh, "Do a thing", GOOD_BODY)
     assert labels(gh, n) == {"pipeline"} and "Filed by: interactive" in gh.issues[n]["body"]

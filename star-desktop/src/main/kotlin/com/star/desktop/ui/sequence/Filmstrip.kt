@@ -183,6 +183,8 @@ private fun FilmstripCell(
                             when (fi.cleanMethod) {
                                 com.star.proto.CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.this_frame_uses_auto_select"
                                 com.star.proto.CleanMethod.CLEAN_AUTOMATIC -> "ui.this_frame_uses_automatic_mode"
+                                com.star.proto.CleanMethod.CLEAN_DIRTY_SKY -> "ui.this_frame_uses_dirty_sky"
+                                com.star.proto.CleanMethod.CLEAN_DIRTY_EARTH -> "ui.this_frame_uses_dirty_earth"
                                 else -> "ui.this_frame_uses_selective_mode"
                             },
                         ),

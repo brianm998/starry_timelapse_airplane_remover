@@ -347,15 +347,6 @@ public actor ReferenceHorizonStatsCache {
         curvesInFlight.removeValue(forKey: frameIndex)
         invalidations[frameIndex, default: 0] += 1
     }
-
-    /// Up to `maxCount` cached entries nearest by frame distance to `target`.
-    public func nearestStats(to target: Int, maxCount: Int = 2) -> [ReferenceHorizonFrameStats] {
-        Array(
-            cache.values
-                .sorted { abs($0.frameIndex - target) < abs($1.frameIndex - target) }
-                .prefix(maxCount)
-        )
-    }
 }
 
 // MARK: - Stats computation
@@ -537,21 +528,6 @@ extension PixelatedImage {
             return (r, g, b)
         }
         return (sumR / count, sumG / count, sumB / count)
-    }
-
-    /// Average normalised [0,1] brightness of pixel (x, y) across all channels.
-    func normalizedBrightness(x: Int, y: Int, maxVal: Double) -> Double {
-        let base = (y * width + x) * componentsPerPixel
-        var sum = 0.0
-        switch imageData {
-        case .eightBit(let buf):
-            for c in 0..<componentsPerPixel { sum += Double(buf[base + c]) }
-        case .sixteenBit(let buf):
-            for c in 0..<componentsPerPixel { sum += Double(buf[base + c]) }
-        case .thirtyTwoBit(let buf):
-            for c in 0..<componentsPerPixel { sum += Double(max(0, buf[base + c])) }
-        }
-        return (sum / Double(componentsPerPixel)) / maxVal
     }
 
     /// Fill `out` with normalised [0,1] per-channel values for pixel (x, y).

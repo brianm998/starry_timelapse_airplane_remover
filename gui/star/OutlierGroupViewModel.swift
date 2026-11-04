@@ -32,10 +32,6 @@ class OutlierGroupViewModel: Identifiable {
 
     let id = UUID()
     
-    fileprivate func setWillPaint(from paintReason: RemoveReason?) {
-        removeObserver.shouldRemove = paintReason
-    }
-
     private var _line: Line?
 
     public var lineLoaded = false

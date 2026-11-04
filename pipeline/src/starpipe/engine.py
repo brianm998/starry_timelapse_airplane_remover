@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any, cast
 
 from . import gitutil, guards, landing, load, negctl, ship, tickets, trust, worktrees
-from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
+from .agent import READ_ONLY_STAGES, STAGE_TOOLS, AgentRunner, StageOutcome, StageRequest
 from .announce import Announcer, Kind, SilentAnnouncer
-from .checks import impact, ledger
+from .checks import baseline, impact, ledger
 from .config import Config, home
 from .contracts import CheckRunner, Contract
 from .db import ACTIVE_STATES, Database, Ticket
@@ -46,6 +46,24 @@ def prompt_text(name: str) -> str:
     return (PROMPTS / f"{name}.md").read_text()
 
 
+def contract_tool(stage: str) -> str:
+    """The tool a stage must finish by calling: its `submit_*` one."""
+    return next(name for name in STAGE_TOOLS[stage] if name.startswith("submit_"))
+
+
+def resume_note(stage: str) -> str:
+    return (f"The daemon restarted and this session was resumed. Your last tool call may have been cut off, and any "
+            f"acceptance you had earlier was not kept. Do not start over and do not treat the ticket as already done: "
+            f"re-check the tree (git status, git log, the diff against the base), redo whatever is missing, and finish "
+            f"by calling `{contract_tool(stage)}`.")
+
+
+def nudge_note(stage: str) -> str:
+    return (f"Your last turn ended without an accepted `{contract_tool(stage)}` call, so the stage has not finished. "
+            f"Check what is left and finish by calling `{contract_tool(stage)}`. If it reports a problem, fix that and "
+            f"call it again.")
+
+
 @dataclass
 class StageResult:
     ok: bool
@@ -68,6 +86,7 @@ class Engine:
     sleep: Sleep = asyncio.sleep
     negative_control: Callable[[Path, str, list[str]], list[negctl.Control]] = negctl.run
     shim: str = ""
+    baseline_runner: baseline.BaselineRunner = baseline.result_at_base
     parked: set[int] = field(default_factory=lambda: set[int]())
     cpu: Callable[[], float] = lambda: 0.0  # the rolling CPU average; the daemon injects its meter
     llm_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-start is one step
@@ -354,7 +373,7 @@ class Engine:
                           allow_resolve: bool = True, as_landing: bool | None = None) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
         contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db, self.gh, self.check_runner,
-                            self.notifier, owner_filed=self._owner_filed(t))
+                            self.notifier, owner_filed=self._owner_filed(t), baseline_runner=self.baseline_runner)
         resume = None if fresh else self._last_session(t, stage)
         note = self.db.get(f"catch_up_note:{t.number}")
         if note:  # develop was merged into the branch while the ticket was stopped: the resumed session did not make those commits
@@ -364,14 +383,28 @@ class Engine:
         if pending:
             prompt = f"The owner's answer to your question:\n\n{pending['answer']}\n\nContinue the stage.\n\n{prompt}"
             self.db.put(f"delivered:{pending['id']}", "1")
+        restarted = bool(resume) and (self.db.stages(t.number, stage) or [{}])[-1].get("outcome") == "interrupted"
+        opening = ""  # what the first request says when it resumes after a restart, in place of the ticket prompt
+        if restarted:
+            opening = resume_note(stage)
+            if note:
+                opening = f"{note}\n\n{opening}"
+            if pending:
+                opening = f"The owner's answer to your question:\n\n{pending['answer']}\n\nContinue the stage.\n\n{opening}"
         attempt, crashes = 1, 0
         summary = ""
+        nudge: str | None = None  # set to send the nudge in place of the prompt
+        nudged = False
         while attempt <= 3:
             await self._wait_for_usage()
             await self._wait_for_update_hold()
             model, effort = self._stage_choice(t, stage, attempt)
             stage_id = await self._begin_when_room(t, stage, attempt, model, landing=as_landing)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
+            if nudge:
+                body, nudge = nudge, None
+            elif restarted:
+                body, restarted = opening, False
             req = StageRequest(t.number, stage, attempt, body,
                                prompt_text("_preamble") + "\n\n" + prompt_text(stage.replace("-", "_")), model,
                                effort, BUDGET_S[stage], contract, self._fence(t, stage), resume,
@@ -401,7 +434,11 @@ class Engine:
                 resume = known or resume
                 continue
             crashes = 0
+            if out.status == "no-result" and out.session_id and not nudged:
+                resume, nudge, nudged = out.session_id, nudge_note(stage), True
+                continue  # one nudge in the same session before the attempt counts
             resume = known if out.status == "timeout" else None
+            nudged = False
             attempt += 1
         return self.park(t, f"{stage}: no accepted result after 3 attempts. {summary}"), contract
 
@@ -562,15 +599,32 @@ class Engine:
             result, _ = await self.model_stage(t, "conflict", prompt, fresh=True, as_landing=False)  # the ticket is not landing: no priority
             if not result.ok:
                 return False
-        dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
-        if dropped:
-            shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
-            self.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
+        if not await self.audit_conflict(t, wt, mb, base, head, as_landing=False):
             return False
         self.db.put(f"gherkin_ok:{t.number}", None)  # the head changed: an old feature run proves nothing about it
         self.db.put(f"catch_up_note:{t.number}", f"{base} was merged into this branch while the ticket was stopped: {count} commit(s) "
                                                 "you did not make are now in the tree. Re-read what you rely on before continuing.")
         self.db.event("caught-up", t.number, commits=count, conflicts=len(conflicted))
+        return True
+
+    async def audit_conflict(self, t: Ticket, wt: Path, mb: str, base: str, head: str, *, as_landing: bool | None = None) -> bool:
+        """The dropped-lines audit after a merge of develop. Lines found missing go back to the conflict stage once, listed, in a fresh
+        session; the audit then runs again. Parks (naming what is still missing) and returns False only if lines are still dropped."""
+        dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
+        if dropped:
+            listing = "\n".join(f"- {d.file}: {d.line.strip()[:200]}" for d in dropped[:30])
+            prompt = (f"{self._ticket_text(t)}\n\nThe merge of {base} into this branch is already committed, but the audit found "
+                      f"{len(dropped)} line(s) that {base} added and the branch no longer has:\n{listing}\n\n"
+                      "Do not redo the merge: commit on top of the current HEAD. Restore each of these lines, or remove it only where this "
+                      "ticket's own change replaces it. A line merely reworded or moved is fine only if its content is still there.")
+            result, _ = await self.model_stage(t, "conflict", prompt, fresh=True, as_landing=as_landing)
+            if not result.ok:
+                return False
+            dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
+        if dropped:
+            shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
+            self.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
+            return False
         return True
 
     def _prepare_catch_up(self, number: int, wt: Path, base: str) -> tuple[str, str, list[str], int] | None:
@@ -682,6 +736,13 @@ class Engine:
         self._to_state(t.number, "review")
         return True
 
+    def _known_red(self, t: Ticket, sha: str, wt: Path, r: ledger.Result) -> bool:
+        """A red test check whose failing tests develop shares is not this change's (checks/baseline.py)."""
+        found = baseline.known_red(wt, self.base_ref, r, self.baseline_runner, self.notifier)
+        if found:
+            baseline.note(self.db, t.number, sha, found)
+        return found is not None
+
     def _run_verification(self, t: Ticket, wt: Path) -> str:
         """The daemon's own run of T0+T1 at HEAD and the negative control. Empty string means green."""
         sha = gitutil.head_sha(wt)
@@ -692,7 +753,7 @@ class Engine:
             self.db.record_check(t.number, sha, r.check, r.status,
                                  {"executed": r.executed, "failed": r.failed, "skipped": r.skipped}, r.log)
         self.notifier.hung_checks(t.number, results)
-        red = [r for r in results if not r.green]
+        red = [r for r in results if not r.green and not self._known_red(t, sha, wt, r)]
         if red:
             return "\n".join(f"{r.status.upper()} {r.check}: {r.detail} (log {r.log})" for r in red)
         plan = t.plan or {}

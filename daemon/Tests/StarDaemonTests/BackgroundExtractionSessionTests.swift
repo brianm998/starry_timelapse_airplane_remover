@@ -46,7 +46,7 @@ final class BackgroundExtractionSessionTests: XCTestCase {
           "-frames:v", "\(frames)", "-c:v", "prores_ks", "-profile:v", "0", "-pix_fmt", "yuv422p10le", path]
         process.standardInput = FileHandle.nullDevice
         try process.run()
-        process.waitUntilExit()
+        waitUntilExit(process, what: "ffmpeg making the test ProRes video")
         XCTAssertEqual(process.terminationStatus, 0)
         return path
     }
@@ -96,7 +96,7 @@ final class BackgroundExtractionSessionTests: XCTestCase {
         var first: Star_V1_FrameExtraction?
         var sawAvailable = false
         let deadline = Date().addingTimeInterval(30)
-        for await event in stream {
+        for await event in boundedStream(stream, seconds: 120, what: "the subscriber's first extraction events") {
             switch event.kind {
             case .frameExtraction(let extraction)? where first == nil: first = extraction
             case .framesAvailable? : sawAvailable = true

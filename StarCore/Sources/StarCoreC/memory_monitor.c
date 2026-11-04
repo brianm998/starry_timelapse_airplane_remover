@@ -7,6 +7,7 @@
 #include <mach/mach_host.h>
 #include <mach/vm_statistics.h>
 #include <unistd.h>
+#include <sys/sysctl.h>
 
 // What the machine can still hand out without compressing or swapping something that is
 // currently live: free pages, purgeable pages, and the file-backed cache.
@@ -50,6 +51,30 @@ uint64_t star_available_system_memory(void) {
     return pages * pageSize;
 }
 
+int star_system_memory_breakdown(StarMemoryBreakdown *out) {
+    vm_statistics64_data_t vmStats;
+    mach_msg_type_number_t infoCount = HOST_VM_INFO64_COUNT;
+    if (host_statistics64(mach_host_self(), HOST_VM_INFO64,
+                          (host_info64_t)&vmStats, &infoCount) != KERN_SUCCESS) {
+        return -1;
+    }
+    uint64_t pageSize = (uint64_t)getpagesize();
+    uint64_t total = 0;
+    size_t len = sizeof(total);
+    if (sysctlbyname("hw.memsize", &total, &len, NULL, 0) != 0) total = 0;
+    out->total = total;
+    out->free_bytes = (uint64_t)vmStats.free_count * pageSize;
+    out->inactive = (uint64_t)vmStats.inactive_count * pageSize;
+    out->active = (uint64_t)vmStats.active_count * pageSize;
+    out->wired = (uint64_t)vmStats.wire_count * pageSize;
+    out->purgeable = (uint64_t)vmStats.purgeable_count * pageSize;
+    out->file_backed = (uint64_t)vmStats.external_page_count * pageSize;
+    out->anonymous = (uint64_t)vmStats.internal_page_count * pageSize;
+    out->compressed = (uint64_t)vmStats.compressor_page_count * pageSize;
+    out->available = out->free_bytes + out->purgeable + out->file_backed;
+    return 0;
+}
+
 #elif defined(__linux__)
 
 #include <stdio.h>
@@ -78,6 +103,10 @@ uint64_t star_available_system_memory(void) {
 // Unknown platform — caller will fall back to a default estimate.
 uint64_t star_available_system_memory(void) { return 0; }
 
+#endif
+
+#if !defined(__APPLE__)
+int star_system_memory_breakdown(StarMemoryBreakdown *out) { (void)out; return -1; }
 #endif
 
 // --- Per-process footprint --------------------------------------------------

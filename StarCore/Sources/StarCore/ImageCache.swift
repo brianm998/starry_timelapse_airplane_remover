@@ -12,13 +12,6 @@ final class WeakBox<T: AnyObject>: @unchecked Sendable {
     }
 }
 
-final class CompletionBox: @unchecked Sendable {
-    let completion: (MatWrapper?) -> Void
-    init(_ completion: @escaping (MatWrapper?) -> Void) {
-        self.completion = completion
-    }
-}
-
 
 public actor ImageCache {
 

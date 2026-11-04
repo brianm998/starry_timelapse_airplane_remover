@@ -140,9 +140,9 @@ private fun ChartTitle(text: String) {
 }
 
 @Composable
-private fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+internal fun Toggle(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         Checkbox(checked = checked, onCheckedChange = onChange)
-        Text(label, color = StarColors.textPrimary, fontSize = 12.sp)
+        Text(label, color = StarColors.textPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
     }
 }

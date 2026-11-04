@@ -222,7 +222,7 @@ Tool-only, not findings (see §7): `LimitedTaskGroup`/`LimitedThrowingTaskGroup`
 | F-12 | `BoundingBox.swift`: free function `distanceOn(box:slope:yIntercept:theta:)` (36) | P; X n=1 |
 | F-13 | `OutlierGroup.swift`: `pixelOverlap(with:)` (46), `exisitingNeighborLineScores` (1); `OutlierGroupDecision.swift`: `StreakDirection` (4); `OutlierGroupFeature.swift`: free `hasPixelAt(x:y:with:and:)` (18) | P; X n=1 each |
 | F-14 | `PixelatedImage.swift`: `isZero(atX:andY:)` (13), `horizonTest()` (11), `uInt32Array` (2), `uInt8Array` (2), `raiseLoweredBy(_:)` (11) | P; X n=1 each (`isZero` is a common name: the count includes Swift's `.isZero`, and still n=1) |
-| F-15 | `CombinedHorizonDetector.swift`: `runGrabCut(scaled:image:gcWorkingWidth:iterations:)` (6), `runFFT(scaled:image:searchTopFraction:searchBottomFraction:...)` (9); `Horizon.swift`: `combinedHorizonExtents()` (18) | P; X n=1 each |
+| F-15 | `CombinedHorizonDetector.swift`: `runGrabCut(scaled:image:gcWorkingWidth:iterations:)` (6), `runFFT(scaled:image:searchTopFraction:searchBottomFraction:...)` (9); `Horizon.swift`: `combinedHorizonExtents()` (18) | P; X n=1 each; **done (#285)** |
 | F-16 | `FileSystemMonitor.swift`: global `finalFileSystemMonitor` (25); `FrameAirplaneRemover.swift`: global `maxFramesProcessing` (5), `removeSubtractionImages()` (11); `FrameGraphViewModel.swift`: `hasOperations(ofType:atMax:)` (22); `ImageCache.swift`: `CompletionBox` (6); `ImageSequence.swift`: `numberOfResidentImages` (4); `KeypointCache.swift`: `hitCount()` (1); `DecodedFrameStore.swift`: `unregisterSource(folder:)` (5) | P; X n=1 each |
 | F-17 | `Localization/StarLanguage.swift`: `baseCode` (5); `Localization/StarLocalization.swift`: `allKeys()` (4); `RemoveReason.swift`: `testRemovePixel` (2); `ResizableGate.swift`: `withSlot(_:)` (6); `UpdatableProgressMonitor.swift`: `lastUpdateTime` (4); `VideoAccess.swift`: `evenlySpaced(frameCount:framesPerSecond:)` (5) | P; X n=1 each |
 | F-18 | `daemon/Sources/stard/Session.swift:487`: `reprocessWithReferenceHorizon()` (7); `StdioTransport.swift:94`: global `protocolOutputClosed` (1); `logging/Sources/logging/Log.swift`: `struct LogTest` (4), `threadName` (17); `UpdatableLog.swift`: `setScreenWidth(_:)` (3) | P; X n=1 each; R the dispatcher's `Horizon.Reprocess` goes to `HorizonHandlers.reprocess`, which does not call it, and `star.proto` has no request that maps to it |
@@ -340,8 +340,9 @@ user gets. Only the helper rows marked **remove** are in a batch (C11).
 
 None was filed. The two "dead branch" patterns the audit looked for (a config flag whose only reader is a `false`
 constant; an `if` on a symbol that is never assigned) turned up one candidate, `FrameOutlierProcessor.maybeApplyOutlierGroupClassifier`'s
-validation-image path, which is already commented out (lines 369-396); its private target `classifyOutliers(with:)`
-(36 lines, `FrameOutlierProcessor.swift:425`) is dead for that reason and is listed in C09. A repeatable
+validation-image path (`FrameOutlierProcessor.swift` ~380-397). It is **live**, not commented out: it calls
+`classifyOutliers(with:)`, and `FrameAirplaneRemover.swift` writes `.validation` images (~1029, ~2181). So
+`classifyOutliers(with:)` is not dead and is not a removal candidate. A repeatable
 search for the other pattern needs flow analysis that periphery does not do.
 
 ## 8. Removal batches and follow-ups
@@ -358,10 +359,10 @@ deletion that cannot be split, it is marked **oversize** and the reason is given
 | C03 | Remove the first half of the HomographyHorizonDetector tests | F-01 part 3b (lines 1-454, the file) | 454 | C02 |
 | C04 | Remove the unused HomographyHorizonDetector | F-01 part 1 and 4 | 743 + ~20, **oversize** (single file, nothing references it once C01-C03 land) | C01, C03 |
 | C05 | Remove the unused Combinations copy from StarCore | F-02 | 297 | - |
-| C06 | Remove the unused HoughTransform, BlobImageSaver and HomographyLie chain | F-03, F-06, F-07 | 182 + 25 + 109 = 316 | - |
+| C06 | Remove the unused HoughTransform, BlobImageSaver and HomographyLie chain | F-03, F-06 done (#92); **F-07 kept**: the owner needs the HomographyLie chain for Step 4 of `MOVING_STAR_ALIGNMENT_PROPOSAL.md` | 182 + 25 (the 109-line Lie chain stays) | - |
 | C07 | Remove the duplicate ProcessorUsageReporter and ProcessorUsageTracker | F-04 | 365 | - |
 | C08 | Remove the unused ProcessorUsage parser and its tests | F-05 | 403 | C07 |
-| C09 | Remove unused Blob, outlier and pixel helpers from StarCore | F-10 to F-15, `classifyOutliers(with:)` | ~380 | - |
+| C09 | Remove unused Blob, outlier and pixel helpers from StarCore | F-10 to F-15 | ~380 | - |
 | C10 | Remove unused one-off helpers from StarCore, the daemon and logging | F-16 to F-18 | ~140 | - |
 | C11 | Remove geometry and statistics helpers that only their own unit tests call | §6 helper rows marked remove | ~190 + tests | - |
 | D01 | Remove unreachable C bridge functions and C++ leftovers in StarCpp | F-20 to F-29 | ~115 | - |

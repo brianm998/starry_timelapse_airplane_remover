@@ -227,40 +227,6 @@ public final class PixelatedImage: Sendable {
 
 extension PixelatedImage {
 
-    private func bufferIsZero<T: Numeric & Comparable>(
-      _ buffer: UnsafeBufferPointer<T>,
-      atX x: Int,
-      andY y: Int
-    ) -> Bool {
-        let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
-        let red = buffer[offset]
-
-        if red != 0 { return false }
-        if self.componentsPerPixel >= 2 {
-            let green = buffer[offset+1]
-            if green != 0 { return false }
-        }
-        if self.componentsPerPixel >= 3 {
-            let blue = buffer[offset+2]
-            if blue != 0 { return false }
-        }
-        return true
-    }
-    
-    func isZero(atX x: Int, andY y: Int) -> Bool {
-        switch imageData {
-        case .sixteenBit(let buffer):
-            return bufferIsZero(buffer, atX: x, andY: y)
-
-        case .eightBit(let buffer):
-            return bufferIsZero(buffer, atX: x, andY: y)
-
-        case .thirtyTwoBit(let buffer):
-            return bufferIsZero(buffer, atX: x, andY: y)
-            
-        }
-    }
-
     private func bufferIsMax<T: FixedWidthInteger>(
       _ buffer: UnsafeBufferPointer<T>,
       atX x: Int,
@@ -523,18 +489,6 @@ extension PixelatedImage {
         self.mat.writeCache(to: imageFilename)
     }
 
-    public func horizonTest() throws -> PixelatedImage {
-        let selfMat = self.mat
-        guard let resultMat = PixelatedImageBridge.detectHorizon(selfMat) else {
-            throw "detectHorizon returned nil"
-        }
-        if let ret = PixelatedImage(mat: resultMat) {
-            return ret
-        } else {
-            throw "cannot create horizon mask"
-        }
-    }
-
     public func bitwiseNot() throws -> PixelatedImage {
         let selfMat = self.mat
         guard let resultMat = PixelatedImageBridge.bitwiseNot(selfMat) else {
@@ -689,6 +643,28 @@ extension PixelatedImage {
         } else {
             throw "cannot create PixelatedImage from resulting mat during image subtraction"
         }
+    }
+
+    /// The colour counterpart of `subtract`, for the dirty clean methods: `self - otherFrame`
+    /// per channel, clipped at 0, in this image's own bit depth and channel count.  With a
+    /// `mask`, only the pixels on the kept side survive (white is above 128, the split `apply`
+    /// makes) and every other pixel is exactly 0.  Done in c++ like `subtract`, which stays the
+    /// grayscale one outlier detection reads.
+    public func subtractColor(
+      _ otherFrame: PixelatedImage,
+      mask: PixelatedImage? = nil,
+      keepingMaskWhite: Bool = true
+    ) throws -> PixelatedImage {
+        guard let resultMat = PixelatedImageBridge.subtractImageColor(
+                otherFrame.mat,
+                fromImage: self.mat,
+                mask: mask?.mat,
+                keepMaskWhite: keepingMaskWhite)
+        else {
+            throw "subtractImageColor returned nil"
+        }
+        if let ret = PixelatedImage(mat: resultMat) { return ret }
+        throw "cannot create PixelatedImage from resulting mat during colour subtraction"
     }
 
     public var isEmpty: Bool { self.mat.isEmpty }
@@ -892,14 +868,8 @@ fileprivate func isImage(_ image: PixelatedImage,
 extension ContiguousBytes {
     func objects<T>() -> [T] { withUnsafeBytes { .init($0.bindMemory(to: T.self)) } }
 
-    // convert Data to [Int32]
-    public var uInt32Array: [Int32] { objects() }
-
     // convert Data to [UInt16]
     public var uInt16Array: [UInt16] { objects() }
-
-    // convert Data to [UInt8]
-    public var uInt8Array: [UInt8] { objects() }
 }
 
 // convert a [Int32] array to Data
@@ -1106,18 +1076,6 @@ extension PixelatedImage {
                 gradientDistance: Int32(borderAmount)
               ) else { return nil }
         return PixelatedImage(mat: gradient)
-    }
-    
-    // raises the mask by the given amount, creating a gradient
-    // areas that were non zero and within borderAmount of the border
-    // will be part of the gradient
-    public func raiseLoweredBy(_ borderAmount: Int) -> PixelatedImage? {
-        PixelatedImage(
-          mat: ImageAligner.createGradientMaskIntoGround(
-            self.mat,
-            gradientDistance: Int32(borderAmount)
-          )
-        )
     }
     
     public func horizonBounds() -> HorizonBounds? {
