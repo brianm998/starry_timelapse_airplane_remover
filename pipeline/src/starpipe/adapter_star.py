@@ -202,6 +202,7 @@ CHECKS: dict[str, CheckSpec] = {
         swift_test("StarCore"),
         swift_test("cli", "--skip", "GherkinTests"),
         swift_test("daemon"),
+        swift_test("gherkin/StarGherkin", tid="gherkin"),
         swift_test("trail_tools"),
         swift_test("decision_tree_generator"),
         CheckSpec(
@@ -264,6 +265,8 @@ RULES: list[Rule] = [
     Rule(("StarCore/",), tests=("test:StarCore",), package="StarCore"),
     Rule(("cli/Tests/GherkinTests/",), note="gherkin runners: CI / nightly"),
     Rule(("cli/",), tests=("test:cli",), package="cli"),
+    Rule(("gherkin/StarGherkin/", "gherkin/steps.json", "gherkin/features/", "gherkin/generated/"),
+         tests=("test:gherkin",), note="step coverage of the three runners; generated-files check (T0)"),
     Rule(("gherkin/",), note="generated-files check (T0); features run when the plan names them"),
     Rule(("daemon/proto/",), builds=("build:daemon", "build:desktop"), tests=("test:daemon",), package="daemon"),
     Rule(("daemon/",), tests=("test:daemon",), package="daemon"),

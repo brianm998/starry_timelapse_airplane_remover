@@ -12,6 +12,7 @@ from starpipe import selfupdate
 from starpipe.agent import StageOutcome, StageRequest
 from starpipe.config import Config
 from starpipe.daemon import Daemon, activity
+from starpipe.github import GitHubError
 from starpipe.tickets import lint, parse_pipeline
 
 from .fakes import GOOD_BODY, accepted, plan_args, sh
@@ -946,6 +947,98 @@ async def test_hung_heavy_job_raises_an_alert(rig: Rig) -> None:
     alert = next(a for a in status["alerts"] if a["key"] == "heavy-hung:7")
     assert "#7" in alert["text"] and "swift test --package-path daemon" in alert["text"]
     assert [t for t, _ in rig.pages].count("star pipeline: heavy-hung") == 1
+
+
+def propose(rig: Rig, n: int, title: str, by: str = "review agent", labels: tuple[str, ...] = ("pipe:proposed",)) -> None:
+    rig.gh.add_issue(n, title, body=f"{GOOD_BODY}\n<!-- starpipe:filed-by:{by} -->", labels=labels)
+
+
+def labels_of(rig: Rig, n: int) -> set[str]:
+    return {lab["name"] for lab in rig.gh.issues[n]["labels"]}
+
+
+async def test_snapshot_lists_proposals_from_the_last_poll(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    propose(rig, 22, "Rename a key", by="interactive")
+    rig.gh.add_issue(23, "Ordinary ticket")
+    d = Daemon(rig.engine, Config(), token="tok")
+    assert d.snapshot()["proposals"] == []  # nothing polled yet
+    await d.poll_once()
+    expected = [{"number": 21, "title": "Show the retry budget", "by": "review agent"},
+                {"number": 22, "title": "Rename a key", "by": "interactive"}]
+    assert d.snapshot()["proposals"] == expected
+
+    def boom(path: str) -> list[dict[str, Any]]:
+        raise AssertionError(f"snapshot asked GitHub for {path}")
+    rig.gh.paged = boom  # type: ignore[method-assign]
+    assert d.snapshot()["proposals"] == expected  # served from the cache
+    del rig.gh.paged  # type: ignore[attr-defined]
+    real = rig.gh.paged
+
+    def down(path: str) -> list[dict[str, Any]]:
+        raise GitHubError("HTTP 502")
+    rig.gh.paged = down  # type: ignore[method-assign]
+    await d.poll_once()  # a failing refresh keeps the last list
+    assert d.last_error.startswith("github:") and d.snapshot()["proposals"] == expected
+    rig.gh.paged = real  # type: ignore[method-assign]
+
+
+async def test_approve_endpoint_labels_the_issue_and_drops_it_from_the_list(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    propose(rig, 22, "Rename a key")
+    client, d = await api(rig)
+    try:
+        await d.poll_once()
+        r = await client.post("/v1/proposals/21/approve", json={"priority": "p1"}, headers=AUTH)
+        assert r.status == 200 and (await r.json()) == {"result": "approved"}
+        assert labels_of(rig, 21) == {"pipeline", "p1"}
+        assert [p["number"] for p in d.snapshot()["proposals"]] == [22]  # type: ignore[union-attr, index]
+        r = await client.post("/v1/proposals/22/approve", headers=AUTH)  # priority is optional
+        assert r.status == 200 and labels_of(rig, 22) == {"pipeline"}
+        assert d.snapshot()["proposals"] == []
+        bad = await client.post("/v1/proposals/21/approve", json={"priority": "p9"}, headers=AUTH)
+        assert bad.status == 400
+    finally:
+        await client.close()
+
+
+async def test_approve_endpoint_refuses_a_full_queue_and_a_non_proposal(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    rig.gh.add_issue(23, "Ordinary ticket", labels=("pipeline",))
+    rig.gh.add_issue(24, "Unlabelled", labels=())
+    client = TestClient(TestServer(Daemon(rig.engine, Config(max_open_tickets=1), token="tok").app()))
+    await client.start_server()
+    try:
+        full = await client.post("/v1/proposals/21/approve", headers=AUTH)
+        assert full.status == 409 and "already open" in await full.text()
+        assert labels_of(rig, 21) == {"pipe:proposed"}  # untouched
+        for n in (23, 24, 999):
+            r = await client.post(f"/v1/proposals/{n}/approve", headers=AUTH)
+            assert 400 <= r.status < 500 and "not a proposal" in await r.text(), n
+        assert labels_of(rig, 24) == set()  # an arbitrary issue is never labelled `pipeline`
+    finally:
+        await client.close()
+
+
+async def test_reject_endpoint_comments_closes_and_drops_it(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    propose(rig, 22, "Rename a key")
+    rig.gh.add_issue(23, "Ordinary ticket")
+    client, d = await api(rig)
+    try:
+        await d.poll_once()
+        r = await client.post("/v1/proposals/21/reject", json={"reason": "not now"}, headers=AUTH)
+        assert r.status == 200 and (await r.json()) == {"result": "rejected"}
+        assert rig.gh.issues[21]["state"] == "closed" and "pipe:proposed" not in labels_of(rig, 21)
+        assert [c["body"] for c in rig.gh.comment_list[21]] == ["Not taking this up: not now"]
+        assert [p["number"] for p in d.snapshot()["proposals"]] == [22]  # type: ignore[union-attr, index]
+        r = await client.post("/v1/proposals/22/reject", headers=AUTH)  # the reason is optional
+        assert r.status == 200 and [c["body"] for c in rig.gh.comment_list[22]] == ["Not taking this up."]
+        assert (await client.post("/v1/proposals/23/reject", headers=AUTH)).status == 409
+        assert rig.gh.issues[23]["state"] == "open"
+        assert (await client.post("/v1/proposals/22/reject", json={"reason": 5}, headers=AUTH)).status == 400
+    finally:
+        await client.close()
 
 
 async def test_land_all_marks_every_ticket_in_the_landing_queue(rig: Rig) -> None:

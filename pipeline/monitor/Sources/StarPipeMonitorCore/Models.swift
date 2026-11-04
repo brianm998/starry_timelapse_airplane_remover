@@ -26,14 +26,34 @@ public struct Snapshot: Codable, Sendable, Equatable {
     public var version: String
     public var repo: String
     public var nightly: NightlyInfo?
+    /// Open `pipe:proposed` issues awaiting the owner's go-ahead; absent from an older daemon's snapshot.
+    public var proposalList: [ProposalSnap]?
+
+    /// `proposalList` without the optional: empty for a daemon that does not send proposals.
+    public var proposals: [ProposalSnap] { proposalList ?? [] }
 
     enum CodingKeys: String, CodingKey {
         case daemon, pause, muted, heavy, tickets, groups, runtime, landing, develop, now, version, repo, nightly
+        case proposalList = "proposals"
         case usagePauseUntil = "usage_pause_until"
         case usageWindows = "usage_windows"
         case maxActive = "max_active"
         case interventionsWeek = "interventions_week"
         case eventsCursor = "events_cursor"
+    }
+}
+
+/// A proposed issue: filed by `by` (an agent or "interactive"), waiting for approve or reject.
+public struct ProposalSnap: Codable, Sendable, Equatable, Identifiable {
+    public var number: Int
+    public var title: String
+    public var by: String
+    public var id: Int { number }
+
+    public init(number: Int, title: String, by: String) {
+        self.number = number
+        self.title = title
+        self.by = by
     }
 }
 
