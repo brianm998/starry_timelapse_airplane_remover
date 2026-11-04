@@ -255,12 +255,13 @@ def _span(seconds: float) -> str:
 
 
 def landing_lines(landing: dict[str, Any]) -> list[str]:
-    """The landing train's lines for `status`: the active batch, then the last abandoned one. The daemon computed all of it."""
+    """The landing train's lines for `status`: every active batch, then the last abandoned one. The daemon computed all of it."""
     lines: list[str] = []
-    if b := landing.get("batch"):
-        members = " ".join(f"#{n}" for n in b["members"])
-        lines.append(f"batch {b['number']}: {b['phase']} · age {_span(b['age_s'])}" + (f" · {members}" if members else "")
-                     + (" · SLOW" if b.get("slow") else ""))
+    if batches := landing.get("batches") or ([landing["batch"]] if landing.get("batch") else []):
+        for b in batches:
+            members = " ".join(f"#{n}" for n in b["members"])
+            lines.append(f"batch {b['number']}: {b['phase']} · age {_span(b['age_s'])}" + (f" · {members}" if members else "")
+                         + (" · SLOW" if b.get("slow") else ""))
     elif landing.get("next_batch_in_s") is not None:
         lines.append(f"no batch yet: the next one starts in {landing['next_batch_in_s']}s")
     if a := landing.get("last_abandoned"):

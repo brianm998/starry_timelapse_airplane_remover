@@ -1053,3 +1053,26 @@ async def test_land_all_marks_every_ticket_in_the_landing_queue(rig: Rig) -> Non
         assert rig.db.get("land_now:7") == "1" and rig.db.get("land_now:8") == "1" and rig.db.get("land_now:9") is None
     finally:
         await client.close()
+
+
+def test_train_info_lists_every_active_batch(rig: Rig) -> None:
+    from starpipe.cli import landing_lines
+
+    ready_tickets(rig, 1, 2, 3)
+    d = landing_daemon(rig)
+    first = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(first, state="ci", pr_number=11)
+    rig.db.batch_add(first, 1, 0)
+    rig.now += 60
+    second = rig.db.batch_create("0" * 40)
+    rig.db.batch_add(second, 2, 0)  # still building
+    rig.now += 30
+    expected = [{"number": first, "phase": "ci", "age_s": 90, "members": [1], "pr_number": 11, "slow": False},
+                {"number": second, "phase": "building", "age_s": 30, "members": [2], "pr_number": None, "slow": False}]
+    for landing in (d.snapshot()["landing"], d.status()["landing"]):
+        assert landing["batches"] == expected  # type: ignore[index]
+        assert landing["batch"] == expected[0], "`batch` stays the oldest, so a client that shows one keeps working"  # type: ignore[index]
+        lines = landing_lines(landing)  # type: ignore[arg-type]
+        assert [line.split(":")[0] for line in lines] == [f"batch {first}", f"batch {second}"]
+    assert activity_of(d, 3) == f"ready · waiting for the next batch (batch {first} is ci, batch {second} is building)"
+    assert activity_of(d, 2) == f"ready · in batch {second} (building)"
