@@ -108,15 +108,18 @@ class FakeGitHub(GitHub):
         self._feature_ids = itertools.count(5000)  # dispatches come from worker threads: a counter, not len()
 
     def add_issue(self, number: int, title: str, body: str = GOOD_BODY, author: str = OWNER,
-                  labels: tuple[str, ...] = ("pipeline",)) -> None:
+                  labels: tuple[str, ...] = ("pipeline",),
+                  created_at: str = "2026-11-01T10:00:00Z", updated_at: str = "2026-11-02T10:00:00Z") -> None:
         self.issues[number] = {"number": number, "title": title, "body": body, "state": "open",
+                               "created_at": created_at, "updated_at": updated_at,
                                "user": {"login": author}, "labels": [{"name": n} for n in labels]}
         self.timelines[number] = [{"event": "labeled", "label": {"name": "pipeline"}, "actor": {"login": OWNER}}]
         self.comment_list[number] = []
 
-    def say(self, number: int, user: str, body: str) -> int:
+    def say(self, number: int, user: str, body: str, created_at: str = "2026-11-02T12:00:00Z") -> int:
         self.next_id += 1
-        self.comment_list[number].append({"id": self.next_id, "user": {"login": user}, "body": body})
+        self.comment_list[number].append({"id": self.next_id, "user": {"login": user}, "body": body,
+                                          "created_at": created_at})
         return self.next_id
 
     def paged(self, path: str) -> list[dict[str, Any]]:

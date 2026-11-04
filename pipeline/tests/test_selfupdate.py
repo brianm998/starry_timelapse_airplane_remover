@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import plistlib
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -375,6 +377,39 @@ def test_only_the_current_and_previous_runtimes_are_kept(tmp_path: Path) -> None
     assert selfupdate.prune() == []
 
 
+def test_a_swap_keeps_the_runtime_it_replaced(tmp_path: Path) -> None:
+    """Pruning in the swap itself once deleted the runtime a rollback needs; the daemon prunes later, once the new one has settled."""
+    repo, _ = make_pipeline_repo(tmp_path)
+    plist, lc = fake_plist(tmp_path), Launchctl()
+    shas: list[str] = []
+    for i in range(2):
+        (repo / "pipeline" / f"v{i}").write_text(str(i))
+        sh(repo, "git", "add", "-A")
+        sh(repo, "git", "commit", "-q", "-m", f"v{i}")
+        shas.append(sh(repo, "git", "rev-parse", "HEAD").strip())
+    first = selfupdate.build(repo, shas[0], noop_sync)
+    selfupdate.switch(first, plist, lc, now=1.0, sleep=lambda _s: None)
+    stray = selfupdate.runtime_root() / "runtime-stray"
+    stray.mkdir()
+    report = selfupdate.update(repo, shas[1], plist, sessions=lambda: 0, sync=noop_sync, test=ok_test, launchctl=lc, sleep=lambda _s: None)
+    second = selfupdate.runtime_dir(shas[1])
+    assert report.switched and "removed" not in report.detail
+    assert selfupdate.link("current") == second.resolve() and selfupdate.link("previous") == first.resolve()
+    assert first.is_dir() and second.is_dir() and stray.is_dir(), "nothing is deleted in the swap"
+
+
+def test_settled_after_the_crash_window(tmp_path: Path) -> None:
+    root = selfupdate.runtime_root()
+    root.mkdir(parents=True, exist_ok=True)
+    assert selfupdate.settled(5.0), "no switch ever recorded"
+    (root / "switched_at").write_text("2000.0")
+    assert not selfupdate.settled(2000.0)
+    assert not selfupdate.settled(2000.0 + selfupdate.CRASH_WINDOW_S), "the window is inclusive, as in crash_loop"
+    assert selfupdate.settled(2000.0 + selfupdate.CRASH_WINDOW_S + 1)
+    for t in (2000.0, 2000.0 + selfupdate.CRASH_WINDOW_S, 2000.0 + selfupdate.CRASH_WINDOW_S + 1):
+        assert selfupdate.settled(t) == (t - 2000.0 > selfupdate.CRASH_WINDOW_S)
+
+
 def test_a_target_that_lacks_the_running_commit_is_not_an_update(tmp_path: Path) -> None:
     """Found live: the daemon ran the owner's unpushed pipeline commits, origin/develop moved on without them (tickets landing), and
     the auto-update 'updated' the daemon to origin's tip: a downgrade that took the landing train away."""
@@ -402,3 +437,44 @@ def test_a_target_that_lacks_the_running_commit_is_not_an_update(tmp_path: Path)
     assert selfupdate.pipeline_commits_behind(tmp_path, mine, theirs) == 0, "diverged: the running code has commits the target lacks"
     assert selfupdate.pipeline_commits_behind(tmp_path, theirs, base) == 0, "the target is older"
     assert selfupdate.pipeline_commits_behind(tmp_path, "f" * 40, theirs) == 1, "an unknown running sha still counts as behind"
+
+
+def _two_runtimes(tmp_path: Path) -> tuple[Path, Path]:
+    repo, sha = make_pipeline_repo(tmp_path)
+    first = selfupdate.build(repo, sha, noop_sync)
+    (repo / "pipeline" / "new.txt").write_text("v2")
+    sh(repo, "git", "add", "-A")
+    sh(repo, "git", "commit", "-q", "-m", "v2")
+    return first, selfupdate.build(repo, sh(repo, "git", "rev-parse", "HEAD").strip(), noop_sync)
+
+
+def test_switch_logs_who_switched_what(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    first, second = _two_runtimes(tmp_path)
+    plist, lc = fake_plist(tmp_path), Launchctl()
+    selfupdate.switch(first, plist, lc, now=1.0, sleep=lambda _s: None)
+    caplog.clear()
+    with caplog.at_level("INFO", logger="starpipe.selfupdate"):
+        selfupdate.switch(second, plist, lc, now=2.0)
+    records = [r for r in caplog.records if r.name == "starpipe.selfupdate"]
+    assert len(records) == 1 and records[0].levelname == "WARNING"
+    line = records[0].getMessage()
+    for part in (first.name, second.name, str(os.getpid()), str(sys.argv[0:3])):
+        assert part in line
+    assert f"current {first.name} -> {second.name}, previous {first.name}" in line
+
+
+def test_switch_records_an_event_when_the_database_exists(tmp_path: Path) -> None:
+    from starpipe.db import Database, db_path
+
+    first, second = _two_runtimes(tmp_path)
+    plist, lc = fake_plist(tmp_path), Launchctl()
+    selfupdate.switch(first, plist, lc, now=1.0, sleep=lambda _s: None, reason="install")
+    assert not db_path().exists(), "no database: the switch works and creates none"
+    Database().close()
+    selfupdate.switch(second, plist, lc, now=2.0)
+    selfupdate.rollback(plist, lc, lambda: 3.0)
+    db = Database(read_only=True)
+    events = [e["data"] for e in db.events_since() if e["kind"] == "runtime-switch"]
+    db.close()
+    assert events == [{"old": first.name, "new": second.name, "reason": "update"},
+                      {"old": second.name, "new": first.name, "reason": "rollback"}]

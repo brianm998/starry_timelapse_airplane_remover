@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+import time
 from pathlib import Path
 from typing import Any
 
@@ -625,6 +626,32 @@ async def test_a_passing_smoke_check_holds_new_work_and_swaps_only_when_idle(rig
     assert rig.db.get("self_update_pending") is None and rig.engine.claimable() is not None
 
 
+async def test_the_swap_does_not_prune(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    stray = selfupdate.runtime_root() / "runtime-stray"
+    stray.mkdir()
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    await pin.daemon.update_step(pin.plist, pin.sync, pin.check)
+    assert pin.exits == [0] and pin.current_sha() == target
+    assert selfupdate.link("previous") == selfupdate.runtime_dir(pin.base).resolve() and selfupdate.runtime_dir(pin.base).is_dir()
+    assert stray.is_dir(), "nothing is pruned in the swap, so a rollback still has its runtime"
+
+
+async def test_prune_runs_once_the_runtime_has_settled(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    assert pin.once() == "swapped"
+    stray = selfupdate.runtime_root() / "runtime-stray"
+    stray.mkdir()
+    await pin.daemon.update_step(pin.plist, pin.sync, pin.check)
+    assert stray.is_dir(), "inside the crash-loop window nothing is pruned"
+    (selfupdate.runtime_root() / "switched_at").write_text(str(time.time() - selfupdate.CRASH_WINDOW_S - 1))
+    await pin.daemon.update_step(pin.plist, pin.sync, pin.check)
+    assert not stray.exists(), "an unlinked runtime goes once the current one has settled"
+    assert pin.current_sha() == target and selfupdate.link("previous") == selfupdate.runtime_dir(pin.base).resolve()
+    assert selfupdate.runtime_dir(pin.base).is_dir() and pin.exits == []
+
+
 async def test_pending_update_swaps_after_the_drain_window_with_stages_running(rig: Rig, tmp_path: Path) -> None:
     pin = Pinned(rig, tmp_path)
     rig.gh.add_issue(1, "running")
@@ -1070,6 +1097,93 @@ async def test_land_all_marks_every_ticket_in_the_landing_queue(rig: Rig) -> Non
         r = await client.post("/v1/land-all", headers=AUTH)
         assert r.status == 200 and (await r.json())["tickets"] == [7, 8]
         assert rig.db.get("land_now:7") == "1" and rig.db.get("land_now:8") == "1" and rig.db.get("land_now:9") is None
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_returns_the_issue(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget", labels=("pipe:proposed", "bug"))
+    rig.gh.add_issue(22, "By hand", body=GOOD_BODY, author="someone", labels=("pipe:proposed",))
+    client, _ = await api(rig)
+    try:
+        r = await client.get("/v1/proposals/21", headers=AUTH)
+        assert r.status == 200
+        d = await r.json()
+        assert (d["number"], d["title"], d["author"]) == (21, "Show the retry budget", "brianm998")
+        assert (d["created_at"], d["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-02T10:00:00Z")
+        assert d["labels"] == ["bug"] and d["by"] == "review agent"
+        assert d["body"] == rig.gh.issues[21]["body"]
+        by_hand = await (await client.get("/v1/proposals/22", headers=AUTH)).json()
+        assert by_hand["by"] is None and by_hand["author"] == "someone"
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_includes_the_latest_comments(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    for i in range(25):
+        rig.gh.say(21, f"u{i}", "x" * 5000 if i == 24 else f"c{i}", created_at=f"2026-11-02T12:{i:02d}:00Z")
+    client, _ = await api(rig)
+    try:
+        d = await (await client.get("/v1/proposals/21", headers=AUTH)).json()
+        assert d["comment_count"] == 25 and len(d["comments"]) == 20
+        assert d["comments"][0] == {"author": "u5", "created_at": "2026-11-02T12:05:00Z", "body": "c5"}
+        last = d["comments"][-1]["body"]
+        assert last.startswith("x" * 4000) and len(last) < 4100 and last != "x" * 4000 and "truncated" in last
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_lists_open_blockers(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    rig.gh.add_issue(30, "Still open")
+    rig.gh.add_issue(31, "Done already")
+    rig.gh.close_issue(31)
+    rig.gh.block(21, 30)
+    rig.gh.block(21, 31)
+    client, _ = await api(rig)
+    try:
+        d = await (await client.get("/v1/proposals/21", headers=AUTH)).json()
+        assert d["blockers"] == [{"number": 30, "title": "Still open"}]
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_says_how_ready_the_body_is(rig: Rig) -> None:
+    planned = GOOD_BODY + "\n## Pipeline\neffort_develop: medium · gherkin: no\n\n## Plan\nsummary: do the whole thing\nparity: neither\nlocalization: no\n- approach: edit it\n"
+    rig.gh.add_issue(21, "Planned", body=planned, labels=("pipe:proposed",))
+    rig.gh.add_issue(22, "Bad", body="just words", labels=("pipe:proposed",))
+    rig.gh.add_issue(23, "Queued", labels=("pipeline",))
+    d = Daemon(rig.engine, Config(max_open_tickets=7), token="tok")
+    client = TestClient(TestServer(d.app()))
+    await client.start_server()
+    try:
+        good = (await (await client.get("/v1/proposals/21", headers=AUTH)).json())["readiness"]
+        assert good["lint_ok"] is True and good["errors"] == [] and good["has_plan"] is True
+        assert good["pipeline"] == {"effort_develop": "medium", "gherkin": "no"}
+        assert good["queue"] == {"open": 1, "max": 7}
+        bad = (await (await client.get("/v1/proposals/22", headers=AUTH)).json())["readiness"]
+        assert bad["lint_ok"] is False and bad["errors"] and bad["has_plan"] is False and bad["pipeline"] == {}
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_refuses_non_proposals_and_reports_github_errors(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    rig.gh.add_issue(23, "Ordinary ticket", labels=("pipeline",))
+    rig.gh.add_issue(24, "Unlabelled", labels=())
+    client, _ = await api(rig)
+    try:
+        for n in (23, 24, 999):
+            r = await client.get(f"/v1/proposals/{n}", headers=AUTH)
+            assert r.status == 404 and "not a proposal" in await r.text(), n
+        assert (await client.get("/v1/proposals/abc", headers=AUTH)).status == 400
+
+        def down(path: str) -> list[dict[str, Any]]:
+            raise GitHubError("HTTP 502 from GitHub")
+        rig.gh.paged = down  # type: ignore[method-assign]
+        r = await client.get("/v1/proposals/21", headers=AUTH)
+        assert r.status == 502 and "HTTP 502 from GitHub" in await r.text()
     finally:
         await client.close()
 
