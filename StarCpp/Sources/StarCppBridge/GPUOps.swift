@@ -138,24 +138,6 @@ public enum GPUOps {
         #endif
     }
 
-    static func debugBuildAkazePyramid(img: MatWrapperRef, soffset: Float,
-                                       levels: UnsafePointer<GPUAkazeLevelInfo>, levelCount: Int,
-                                       stepCounts: UnsafePointer<Int32>, tsteps: UnsafePointer<Float>?,
-                                       tstepsCount: Int, kcontrastBase: Float,
-                                       outLt: UnsafeMutablePointer<MatWrapperRef?>,
-                                       outLsmooth: UnsafeMutablePointer<MatWrapperRef?>) -> Bool {
-        #if canImport(Metal) && os(macOS)
-        _ = didRegister
-        return activeBackend?.buildAkazePyramid(img: img, soffset: soffset, levels: levels,
-                                                levelCount: levelCount, stepCounts: stepCounts,
-                                                tsteps: tsteps, tstepsCount: tstepsCount,
-                                                kcontrastBase: kcontrastBase,
-                                                outLt: outLt, outLsmooth: outLsmooth) ?? false
-        #else
-        return false
-        #endif
-    }
-
     /// Readback buffers the pool had to make because it had none of that size, since launch,
     /// and how many it handed back out of the pool. Diagnostics for the zero-copy readback,
     /// where a buffer comes back only when the CPU tail drops its Mat.

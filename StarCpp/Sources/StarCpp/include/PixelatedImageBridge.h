@@ -52,9 +52,6 @@ MatWrapperRef pib_brighten_darks(MatWrapperRef image, MatWrapperRef mask,
 MatWrapperRef pib_darken_darks(MatWrapperRef image, MatWrapperRef mask,
                                double amount);
 
-MatWrapperRef pib_mask_raised_by(MatWrapperRef image, MatWrapperRef mask,
-                                 int border);
-
 MatWrapperRef pib_warp_image(MatWrapperRef image, MatWrapperRef homography);
 
 MatWrapperRef pib_abs_diff_grayscale(MatWrapperRef image1, MatWrapperRef image2);
