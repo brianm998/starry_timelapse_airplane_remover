@@ -371,8 +371,9 @@ def proposals(gh: GitHub) -> list[Proposal]:
     out: list[Proposal] = []
     for issue in _open_with(gh, PROPOSED):
         m = FILED_BY.search(issue.get("body") or "")
+        user: dict[str, Any] = issue.get("user") or {}
         out.append(Proposal(int(issue["number"]), issue["title"], m.group(1) if m else "",
-                            (issue.get("user") or {}).get("login") or "", issue.get("created_at") or ""))
+                            user.get("login") or "", issue.get("created_at") or ""))
     return out
 
 

@@ -48,7 +48,7 @@ def test_proposals_command_falls_back_to_the_github_author(monkeypatch: pytest.M
     gh.add_issue(42, "Nobody", labels=("pipe:proposed",))
     gh.issues[42]["user"] = {}
     monkeypatch.setattr(github, "GitHub", lambda _cfg: gh)  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
-    monkeypatch.setattr(cli.config_mod, "load", lambda *a, **k: None)  # pyright: ignore[reportUnknownLambdaType]
+    monkeypatch.setattr(cli.config_mod, "load", lambda: None)  # type: ignore[arg-type]
     out = CliRunner().invoke(cli.main, ["proposals"])
     assert out.exit_code == 0, out.output
     lines = {int(line.split()[0].lstrip("#")): line for line in out.output.splitlines()}
