@@ -159,7 +159,76 @@ async def test_the_clean_members_publish_while_a_conflicted_one_is_still_being_c
     batch = rig.db.active_batch()
     assert batch is not None and batch["state"] == "ci" and rig.db.batch_members(1) == [1]
     release.set()
-    await asyncio.wait(t._catch_ups)  # pyright: ignore[reportPrivateUsage]
+    await asyncio.wait(list(t._beside.values()))  # pyright: ignore[reportPrivateUsage]
+
+
+async def _step_with_catch_up_held(rig: Rig) -> tuple[train_mod.Train, asyncio.Event]:
+    """#1 is batched and in CI; #2 (disjoint from it) is conflicting with develop, its catch-up held until the event is set."""
+    ready_ticket(rig, 1, "f1.md", "one\n")
+    ready_ticket(rig, 2, "f2.md", "two\n")
+    release = asyncio.Event()
+    t = train_of(rig)
+
+    async def catch_up(n: int) -> None:
+        await release.wait()
+
+    t._catch_up = catch_up  # pyright: ignore[reportPrivateUsage]
+    real_build = t._build  # pyright: ignore[reportPrivateUsage]
+
+    def build(bid: int, tickets: list[Ticket], base: str) -> train_mod.Built:
+        built = real_build(bid, tickets, base)
+        built.merged.remove(2)
+        built.catch_up.append(2)  # as if #2 conflicted with develop itself
+        return built
+
+    t._build = build  # pyright: ignore[reportPrivateUsage]
+    assert await t.step() is True
+    return t, release
+
+
+async def test_a_ticket_catching_up_is_not_batched_until_done(rig: Rig) -> None:
+    t, release = await _step_with_catch_up_held(rig)
+    assert set(t._beside) == {2}  # pyright: ignore[reportPrivateUsage]
+    assert rig.state(2) == "ready" and rig.db.batch_of(2) is None
+    assert t._pick() == [], "#2 is ready and the window is 0, but its catch-up is still running"  # pyright: ignore[reportPrivateUsage]
+    release.set()
+    await asyncio.wait(list(t._beside.values()))  # pyright: ignore[reportPrivateUsage]
+
+
+async def test_a_caught_up_ticket_is_batched_again(rig: Rig) -> None:
+    t, release = await _step_with_catch_up_held(rig)
+    release.set()
+    await asyncio.wait(list(t._beside.values()))  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(0)  # the done callback that forgets the ticket
+    assert t._beside == {}  # pyright: ignore[reportPrivateUsage]
+    assert t._pick() == [2]  # pyright: ignore[reportPrivateUsage]
+
+
+async def test_a_catch_up_stops_once_its_ticket_has_landed(rig: Rig) -> None:
+    ready_ticket(rig, 1, "shared.md", "from one\n")
+    advance_develop(rig, "shared.md", "from develop\n")
+    t = rig.db.ticket(1)
+    assert t is not None
+    sh(rig.engine.repo, "git", "fetch", "-q")
+    base = "origin/develop"
+    head = sh(rig.engine.repo, "git", "rev-parse", t.branch or "").strip()
+    mb = sh(rig.engine.repo, "git", "merge-base", base, head).strip()
+
+    def land_meanwhile(req: StageRequest) -> StageOutcome:  # the batch landed the ticket while its conflict session was working
+        wt = req.contract.worktree
+        (wt / "docs" / "shared.md").write_text("from develop\nfrom one\n")
+        sh(wt, "git", "add", "-A")
+        sh(wt, "git", "commit", "-q", "--no-edit")
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "resolved"})
+        rig.db.set_state(1, "landed")
+        return accepted(req, "S-conflict")
+
+    rig.agent.on("conflict", land_meanwhile)
+    from starpipe import landing
+    assert await ship.catch_up(rig.engine, t, base, mb, head, landing.Overlap([], []), rejoin=True) is False
+    assert rig.state(1) == "landed", "not sent back to ready"
+    assert [r.stage for r in rig.agent.requests] == ["conflict"], "no second round"
 
 
 async def test_a_red_batch_is_split_until_the_culprit_is_alone_and_the_rest_land(rig: Rig) -> None:
