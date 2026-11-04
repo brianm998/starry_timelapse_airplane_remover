@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import importlib.metadata
 import json
-import asyncio
 import os
 import plistlib
 import subprocess
@@ -204,7 +204,8 @@ def test_retry_without_the_flag_is_unchanged(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def _run_daemon(monkeypatch: pytest.MonkeyPatch) -> Any:
-    from starpipe import cli, daemon as daemon_mod
+    from starpipe import cli
+    from starpipe import daemon as daemon_mod
 
     class Stub:
         def run(self) -> object:
