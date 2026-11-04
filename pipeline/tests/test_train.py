@@ -249,21 +249,19 @@ async def test_develop_moving_with_a_conflicting_overlap_abandons_and_names_the_
 
     rig.engine.sleep = sleep
     t = train_of(rig)
-    for _ in range(10):
-        await t.step()
-        if rig.db.batch(1)["state"] != "ci":  # type: ignore[index]
-            break
+    await t.step()
+    await t.drain()  # the batch's driver ends with the batch given up; no step follows, so nothing rebuilds it
     batch = rig.db.batch(1)
     assert batch and batch["state"] == "abandoned" and "rebuilding" in batch["note"]
     assert "pipeline/src/mine.py" in batch["note"], "the note names the overlapping file"
     assert rig.gh.prs[int(batch["pr_number"])]["state"] == "closed"
     assert rig.state(1) == "ready"
-    status = sh(batch_wt(rig), "git", "status", "--porcelain") if batch_wt(rig).exists() else ""
-    assert "UU" not in status and not (batch_wt(rig) / ".git").is_dir()
+    status = sh(batch_wt(rig, 1), "git", "status", "--porcelain") if batch_wt(rig, 1).exists() else ""
+    assert "UU" not in status and not (batch_wt(rig, 1) / ".git").is_dir()
 
 
-def batch_wt(rig: Rig) -> Path:
-    return train_mod.batch_worktree(rig.engine.repo)
+def batch_wt(rig: Rig, bid: int) -> Path:
+    return train_mod.batch_worktree(rig.engine.repo, bid)
 
 
 def test_the_overlap_note_names_at_most_five_files() -> None:
@@ -352,10 +350,10 @@ async def test_a_batch_found_still_building_after_a_crash_is_abandoned_and_nothi
     ready_ticket(rig, 1, "f1.md", "1\n")
     bid = rig.db.batch_create("0" * 40)
     rig.db.batch_add(bid, 1, 0)
-    await train_of(rig).step()
-    assert rig.db.batch(bid)["state"] == "abandoned" and rig.state(1) == "ready"  # type: ignore[index]
-    await train_of(rig).run_until_idle()
-    assert rig.state(1) == "landed"
+    t = train_of(rig)
+    await t.step()  # the driver gives the batch up while step is looking at the queue, so the ticket is batched again at once
+    await t.run_until_idle()
+    assert rig.db.batch(bid)["state"] == "abandoned" and rig.state(1) == "landed"  # type: ignore[index]
 
 
 async def test_a_refused_merge_abandons_the_batch_and_it_lands_on_the_next_try(rig: Rig) -> None:
@@ -575,7 +573,7 @@ async def test_a_feature_run_already_going_is_left_alone_while_macos_jobs_are_qu
     ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
     train = train_of(rig)
     batch = rig.db.batch_create("base")
-    train._macos_queued = 2  # pyright: ignore[reportPrivateUsage]
+    train._macos_queued[batch] = 2  # pyright: ignore[reportPrivateUsage]
     going = asyncio.get_running_loop().create_future()
     train._gates[1] = going  # type: ignore[assignment]  # pyright: ignore[reportPrivateUsage]
     train._start_gates()  # pyright: ignore[reportPrivateUsage]
@@ -659,8 +657,7 @@ async def test_a_land_now_ticket_does_not_wait_for_the_ci_of_unflagged_batch_mat
     t = train_of(rig)
     await t._start([1, 2])  # pyright: ignore[reportPrivateUsage]
     rig.db.put("land_now:2", "1")
-    await t.step()  # the mixed batch is given up
-    assert rig.state(1) == "ready" and rig.state(2) == "ready"
-    await t.step()  # and the flagged ticket goes alone
-    await t.run_until_idle()
+    await t.step()
+    await t.run_until_idle()  # the mixed batch is given up and the flagged ticket goes alone
+    assert rig.db.batch(1)["state"] == "abandoned" and rig.db.batch_members(2) == [2]  # type: ignore[index]
     assert rig.state(2) == "landed" and rig.state(1) != "landed"

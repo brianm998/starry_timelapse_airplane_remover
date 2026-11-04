@@ -40,6 +40,9 @@ class Config(BaseModel):
     cpu_window_s: int = 60
     landing_mode: str = "batch"  # "batch": the landing train, one CI for many tickets; "single": a PR and a CI per ticket
     batch_window_s: int = 120  # wait this long for more tickets once one is ready and no batch is running; a batch takes everything ready
+    # Batches in CI at once. A second batch forms only from ready tickets whose files no in-flight batch touches; 1 is the old
+    # one-at-a-time train. GitHub has 5 macOS runners and one batch's CI wants about 8 macOS jobs, so more than 2 would just queue.
+    batch_parallel: int = 2
     max_in_ci: int = 3  # tickets in CI or landing at once; a finished ticket waits as `ready` for room (runners are shared)
     heavy_slots: int = 1
     auto_self_update: bool = True  # switch the daemon to a new pinned runtime when origin/develop has newer pipeline/ code; the kill switch
