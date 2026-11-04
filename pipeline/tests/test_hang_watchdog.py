@@ -40,7 +40,7 @@ def watch(seconds: float, limit: int = 2) -> str:
 
 
 def testWatchdogDumpsWhenStardLogGoesQuiet(fake_stard):
-    proc, log = fake_stard
+    proc, _log = fake_stard
     out = watch(9)
     assert out.count(BANNER) >= 1, out
     assert out.count(BANNER) <= 2, out  # a first dump and one more, then silence for that pid
@@ -53,7 +53,7 @@ def testWatchdogDumpsWhenStardLogGoesQuiet(fake_stard):
 
 
 def testWatchdogStaysSilentWhileStardLogGrows(fake_stard):
-    proc, log = fake_stard
+    _proc, log = fake_stard
     grower = subprocess.Popen(["bash", "-c", f"while :; do echo tick >> '{log}'; sleep 0.5; done"])
     try:
         out = watch(7)
