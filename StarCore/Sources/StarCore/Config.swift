@@ -2549,6 +2549,26 @@ public struct Config: Codable, Sendable {
                 return nil
             }
 
+        case .dirtySkyProcessed:
+            switch size {
+            case .original:
+                return "\(self.tempOutputPath)/dirty-sky-processed"
+            case .preview:
+                return "\(self.tempOutputPath)/dirty-sky-processed-previews"
+            case .thumbnail:
+                return nil
+            }
+
+        case .dirtyEarthProcessed:
+            switch size {
+            case .original:
+                return "\(self.tempOutputPath)/dirty-earth-processed"
+            case .preview:
+                return "\(self.tempOutputPath)/dirty-earth-processed-previews"
+            case .thumbnail:
+                return nil
+            }
+
         case .final:
             switch size {
             case .original:
@@ -2585,6 +2605,8 @@ public struct Config: Codable, Sendable {
         if let dir = self.dirForImage(ofType: .autoProcessed) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .autoSelectiveProcessed) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .selectiveProcessed) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .dirtySkyProcessed) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .dirtyEarthProcessed) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .final) { ret.append(dir) }
         
         if self.writeFramePreviewFiles {
@@ -2609,6 +2631,8 @@ public struct Config: Codable, Sendable {
             if let dir = self.dirForImage(ofType: .autoProcessed, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .autoSelectiveProcessed, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .selectiveProcessed, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .dirtySkyProcessed, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .dirtyEarthProcessed, atSize: .preview) { ret.append(dir) }
         }
         return ret
     }

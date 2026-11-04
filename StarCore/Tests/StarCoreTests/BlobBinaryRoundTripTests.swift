@@ -24,6 +24,20 @@ final class BlobBinaryRoundTripTests: XCTestCase {
         return try await BlobBinaryLoader().load(from: dir, with: 0)
     }
 
+    /// Outlier files are read straight from disk, not through URLSession (which failed the
+    /// load with NSURLErrorUnsupportedURL on Linux): a directory with spaces, `%` and `#` in
+    /// its name must load too.
+    func testLoadsFromADirectoryWithURLSpecialCharacters() async throws {
+        let dir = NSTemporaryDirectory() + "blob rt %41 #\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        await BlobBinarySaver(blobMap: [1: blob(id: 1, count: 12)])
+            .save(to: "\(dir)/\(BlobBinarySaver.outlierBinaryFilename)")
+        let loaded = try await BlobBinaryLoader().load(from: dir, with: 0)
+        let n = await loaded[1]?.size()
+        XCTAssertEqual(n, 12)
+    }
+
     func testSmallBlobsRoundTrip() async throws {
         let loaded = try await roundTrip([blob(id: 1, count: 10), blob(id: 2, count: 20, rowOffset: 100)])
         let s1 = await loaded[1]?.size(), s2 = await loaded[2]?.size()

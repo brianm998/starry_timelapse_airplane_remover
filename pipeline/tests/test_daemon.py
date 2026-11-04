@@ -808,7 +808,7 @@ def test_hard_exit_is_the_default_exit_and_ends_the_process_without_unwinding(mo
 
 
 def landing_daemon(rig: Rig, window: int = 120) -> Daemon:
-    return Daemon(rig.engine, Config(landing_mode="batch", batch_window_s=window, batch_max=5), token="tok")
+    return Daemon(rig.engine, Config(landing_mode="batch", batch_window_s=window), token="tok")
 
 
 def ready_tickets(rig: Rig, *numbers: int) -> None:
@@ -1037,5 +1037,19 @@ async def test_reject_endpoint_comments_closes_and_drops_it(rig: Rig) -> None:
         assert (await client.post("/v1/proposals/23/reject", headers=AUTH)).status == 409
         assert rig.gh.issues[23]["state"] == "open"
         assert (await client.post("/v1/proposals/22/reject", json={"reason": 5}, headers=AUTH)).status == 400
+    finally:
+        await client.close()
+
+
+async def test_land_all_marks_every_ticket_in_the_landing_queue(rig: Rig) -> None:
+    for n, state in ((7, "ready"), (8, "ci"), (9, "developing")):
+        rig.gh.add_issue(n, "t")
+        rig.engine.sync_issues()
+        rig.db.set_state(n, state)
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/land-all", headers=AUTH)
+        assert r.status == 200 and (await r.json())["tickets"] == [7, 8]
+        assert rig.db.get("land_now:7") == "1" and rig.db.get("land_now:8") == "1" and rig.db.get("land_now:9") is None
     finally:
         await client.close()
