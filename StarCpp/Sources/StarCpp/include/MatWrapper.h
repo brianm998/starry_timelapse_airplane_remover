@@ -107,11 +107,11 @@ bool          mat_wrapper_get_homography_values(MatWrapperRef ref, double *out9)
 MatWrapperRef mat_wrapper_from_homography_values(const double *values9);
 
 // --- Matrix split/combine ---
-// Returns count of tiles. Caller must free results with mat_wrapper_free_split.
+// Returns count of tiles. The caller takes ownership of the images and must free the
+// array itself (Swift MatWrapper.split does both).
 int  mat_wrapper_split(MatWrapperRef ref, int tileWidth, int tileHeight,
                        double overlapPercent,
                        CImageMatrixElement **outElements);
-void mat_wrapper_free_split(CImageMatrixElement *elements, int count);
 
 MatWrapperRef mat_wrapper_combine(const CImageMatrixElement *elements, int count);
 

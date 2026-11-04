@@ -134,6 +134,8 @@ The string- and id-level parity tests cannot see a drop zone that is a fraction 
 "<name>"`; `starpipe.gallery` then lays the two folders side by side in one page. It is advisory: nothing compares pictures and no run fails on a difference.
 
 * **Where.** `<dir>/<client>/<name>.png`, client `mac-gui` or `desktop`, `<dir>` being `STAR_GALLERY_DIR` (to xcodebuild as `TEST_RUNNER_STAR_GALLERY_DIR`), else `<repo>/.test-data/gallery/latest`.
+  The gui's runner is sandboxed and on CI cannot write there (`Code=513`); when it cannot make that folder it saves into its container's tmp
+  (`~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gallery/latest`), which the mac-gui job uploads as `gherkin-gui-shard-<shard>-gallery`.
   A run overwrites only the names it saves. The same name on both clients is the same screen; a name only one client saves is a gap in the page.
 * **Size.** The desktop's test window is 1400 by 1100 pixels. The gui's is 1400 by 1100 points: XCUITest cannot size a window, so a feature that saves a screenshot launches the app with
   `-StarUITestWindowSize 1400x1100`, which `starApp.swift` applies to the main window (needs a display at least that tall). A gui PNG is Retina, twice the pixels; the page shows both at

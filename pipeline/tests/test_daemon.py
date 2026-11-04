@@ -881,7 +881,7 @@ def test_snapshot_shows_the_active_batch_in_each_phase(rig: Rig) -> None:
         rig.db.batch_update(bid, state=phase)
         landing = d.snapshot()["landing"]
         assert landing["batch"] == {"number": bid, "phase": phase, "age_s": 90, "members": [1, 2],  # type: ignore[index]
-                                    "pr_number": None, "slow": False}
+                                    "pr_number": None, "ci": "running", "slow": False}
         assert d.status()["landing"]["batch"]["phase"] == phase  # type: ignore[index]
 
 
@@ -1003,6 +1003,14 @@ def labels_of(rig: Rig, n: int) -> set[str]:
     return {lab["name"] for lab in rig.gh.issues[n]["labels"]}
 
 
+async def test_snapshot_proposal_without_a_marker_has_author_and_no_by(rig: Rig) -> None:
+    rig.gh.add_issue(30, "By hand", body=GOOD_BODY, author="someone", labels=("pipe:proposed",))
+    d = Daemon(rig.engine, Config(), token="tok")
+    await d.poll_once()
+    assert d.snapshot()["proposals"] == [{"number": 30, "title": "By hand", "by": None, "author": "someone",
+                                          "created_at": "2026-11-01T10:00:00Z"}]
+
+
 async def test_snapshot_lists_proposals_from_the_last_poll(rig: Rig) -> None:
     propose(rig, 21, "Show the retry budget")
     propose(rig, 22, "Rename a key", by="interactive")
@@ -1010,8 +1018,10 @@ async def test_snapshot_lists_proposals_from_the_last_poll(rig: Rig) -> None:
     d = Daemon(rig.engine, Config(), token="tok")
     assert d.snapshot()["proposals"] == []  # nothing polled yet
     await d.poll_once()
-    expected = [{"number": 21, "title": "Show the retry budget", "by": "review agent"},
-                {"number": 22, "title": "Rename a key", "by": "interactive"}]
+    expected = [{"number": 21, "title": "Show the retry budget", "by": "review agent",
+                 "author": "brianm998", "created_at": "2026-11-01T10:00:00Z"},
+                {"number": 22, "title": "Rename a key", "by": "interactive",
+                 "author": "brianm998", "created_at": "2026-11-01T10:00:00Z"}]
     assert d.snapshot()["proposals"] == expected
 
     def boom(path: str) -> list[dict[str, Any]]:
@@ -1200,8 +1210,8 @@ def test_train_info_lists_every_active_batch(rig: Rig) -> None:
     second = rig.db.batch_create("0" * 40)
     rig.db.batch_add(second, 2, 0)  # still building
     rig.now += 30
-    expected = [{"number": first, "phase": "ci", "age_s": 90, "members": [1], "pr_number": 11, "slow": False},
-                {"number": second, "phase": "building", "age_s": 30, "members": [2], "pr_number": None, "slow": False}]
+    expected = [{"number": first, "phase": "ci", "age_s": 90, "members": [1], "pr_number": 11, "ci": "running", "slow": False},
+                {"number": second, "phase": "building", "age_s": 30, "members": [2], "pr_number": None, "ci": "running", "slow": False}]
     for landing in (d.snapshot()["landing"], d.status()["landing"]):
         assert landing["batches"] == expected  # type: ignore[index]
         assert landing["batch"] == expected[0], "`batch` stays the oldest, so a client that shows one keeps working"  # type: ignore[index]

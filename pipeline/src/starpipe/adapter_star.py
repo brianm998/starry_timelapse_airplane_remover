@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -93,9 +94,9 @@ def nightly_local_checks() -> list[str]:
 # Top-level directories that hold no source the impact map needs to know about.
 IGNORED_TOP_LEVEL = {
     ".claude", ".git", ".github", "docs", "plans", "demo_videos", "test_data", "ffmpeg", "opencv",
-    "wgpu", "external_binaries", "logging-objc", "StarDecisionTrees", "removal_tools", "blobber",
-    "c++_test", "horizon_test_bench", "horizon_tester", "outlier_feature_data_classifier",
-    "tile_classifier_tester", "tile_extractor", "tools", "emacs_load_swift.sh", "packaging",
+    "wgpu", "external_binaries", "logging-objc", "StarDecisionTrees", "removal_tools",
+    "horizon_test_bench", "outlier_feature_data_classifier",
+    "tile_extractor", "tools", "emacs_load_swift.sh", "packaging",
 }
 
 
@@ -198,6 +199,33 @@ def _sharded(check_id: str, pkg: str, plan: ShardPlan) -> CheckSpec:
         argv += ["--serial-shard", cls]
     logs = tuple("{log_dir}/" + f"{stem}.shard{k}.log" for k in range(1 + len(plan.concurrent) + len(plan.serial)))
     return CheckSpec(check_id, f"swift test {pkg} (sharded)", tuple(argv), parser="xctest", shard_logs=logs)
+
+
+# Test classes and features that need the machine to themselves, so a `swift test` naming one is never a light job.
+EXCLUSIVE_TEST_MARKERS = ("Gherkin", *(cls for classes in SERIAL_CLASSES.values() for cls in classes))
+
+
+def job_class(cmd: str) -> str:
+    """`light` for the jobs that may share the machine with another light job (a swift package build or test, a gradle compile),
+    `exclusive` for everything else: star/stard runs, star-gherkin, xcodebuild, gradle tests, and any command not recognised."""
+    try:
+        words = shlex.split(cmd)
+    except ValueError:
+        return "exclusive"
+    for wrapper in (LIVE_LOG, ("script", "-q", "/dev/null")):  # the pty wrapper around xctest, as built here or on macOS
+        if words[:3] == list(wrapper):
+            words = words[3:]
+            break
+    if not words:
+        return "exclusive"
+    tool = words[0].rsplit("/", 1)[-1]
+    if tool == "swift" and len(words) > 1 and words[1] in ("build", "test"):
+        filters = [words[i + 1] for i, w in enumerate(words[:-1]) if w == "--filter"]  # `--skip X` is the parallel pass: light
+        return "exclusive" if any(m in f for f in filters for m in EXCLUSIVE_TEST_MARKERS) else "light"
+    if tool in ("gradle", "gradlew"):
+        tasks = [w for w in words[1:] if not w.startswith("-")]
+        return "light" if tasks and all(t.startswith("compile") for t in tasks) else "exclusive"
+    return "exclusive"
 
 
 def swift_test(pkg: str, *extra: str, tid: str | None = None) -> CheckSpec:

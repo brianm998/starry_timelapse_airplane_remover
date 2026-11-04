@@ -3886,8 +3886,18 @@ final class SharedConstantsTests: XCTestCase {
         case .automatic(false): "automatic"
         case .automatic(true): "autoSelective"
         case .selective: "selective"
-        case .dirtySky: "dirtySky"     // T3
-        case .dirtyEarth: "dirtyEarth" // T3
+        case .dirtySky: "dirtySky"
+        case .dirtyEarth: "dirtyEarth"
+        }
+    }
+
+    private func highLevel(_ name: String?) throws -> HighLevelCleanMethod {
+        switch name {
+        case "automatic": .automatic
+        case "selective": .selective
+        case "dirtySky": .dirtySky
+        case "dirtyEarth": .dirtyEarth
+        default: throw XCTSkip("no clean method choice named \(name ?? "nil")")
         }
     }
 
@@ -3900,7 +3910,8 @@ final class SharedConstantsTests: XCTestCase {
         let auto = try XCTUnwrap(texts["selectiveAutoClean"] as? [String: [String: String]])
         for language in ["en", "de"] {
             StarLocalization.shared.languageOverride = language
-            for (name, option) in [("automatic", HighLevelCleanMethod.automatic), ("selective", .selective)] {
+            for (name, option) in [("automatic", HighLevelCleanMethod.automatic), ("selective", .selective),
+                                   ("dirtySky", .dirtySky), ("dirtyEarth", .dirtyEarth)] {
                 let keys = try XCTUnwrap(clean[name])
                 XCTAssertEqual(option.titleText, localized(try XCTUnwrap(keys["title"])), "\(name) in \(language)")
                 XCTAssertEqual(option.helpText, localized(try XCTUnwrap(keys["tip"])), "\(name) in \(language)")
@@ -3913,6 +3924,9 @@ final class SharedConstantsTests: XCTestCase {
                 XCTAssertEqual(option.descriptionText, localized(try XCTUnwrap(keys["description"])), "\(name) in \(language)")
             }
         }
+        // The tip a switched-off Dirty earth shows is the same key in both clients.
+        XCTAssertEqual(HighLevelCleanMethod.dirtyEarth.unavailableText(horizonDetectionEnabled: false),
+                       localized(try XCTUnwrap(texts["dirtyEarthNeedsHorizon"] as? String)))
         // Every one of them is a real catalogue entry, and German is not English.
         for keys in Array(clean.values) + Array(auto.values) {
             for key in ["tip", "description"] {
@@ -3930,15 +3944,62 @@ final class SharedConstantsTests: XCTestCase {
     func testTheCleanMethodChoiceIsTheDesktops() throws {
         let rule = try XCTUnwrap(try doc()["cleanMethod"] as? [String: Any])
         for c in try XCTUnwrap(rule["cases"] as? [[String: Any]]) {
-            let high: HighLevelCleanMethod = (c["highLevel"] as? String) == "selective" ? .selective : .automatic
+            let high = try highLevel(c["highLevel"] as? String)
             let preservation: AutoPreservationMode = (c["autoPreservation"] as? Bool) == true ? .yes : .no
             XCTAssertEqual(cleanMethodName(CleanMethod(highLevelCleanMethod: high, autoPreservationMode: preservation)), c["expected"] as? String, "\(c)")
         }
         for c in try XCTUnwrap(rule["autoPreservationStart"] as? [[String: Any]]) {
-            let method: CleanMethod = switch c["method"] as? String { case "automatic": .automatic(false); case "autoSelective": .automatic(true); default: .selective }
+            let method: CleanMethod = switch c["method"] as? String { case "automatic": .automatic(false); case "autoSelective": .automatic(true); case "dirtySky": .dirtySky; case "dirtyEarth": .dirtyEarth; default: .selective }
             // ProcessingSettingsView.init: the sheet opens with Selective Auto Clean at Yes whenever the method reviews outliers.
             XCTAssertEqual(method.usesOutliers, c["expected"] as? Bool, "\(c)")
         }
+    }
+
+    /// A5: choosing Dirty sky or Dirty earth builds that `CleanMethod`, whatever Selective Auto Clean was left at, and a
+    /// clean method reads back as the choice it was made from.
+    func testTheDirtyChoicesBuildTheMatchingCleanMethod() {
+        for preservation in AutoPreservationMode.allCases {
+            XCTAssertEqual(CleanMethod(highLevelCleanMethod: .dirtySky, autoPreservationMode: preservation), .dirtySky)
+            XCTAssertEqual(CleanMethod(highLevelCleanMethod: .dirtyEarth, autoPreservationMode: preservation), .dirtyEarth)
+        }
+        XCTAssertEqual(HighLevelCleanMethod.allCases, [.automatic, .selective, .dirtySky, .dirtyEarth])
+        for method: CleanMethod in [.automatic(false), .automatic(true), .selective, .dirtySky, .dirtyEarth] {
+            XCTAssertEqual(CleanMethod(highLevelCleanMethod: HighLevelCleanMethod(method), autoPreservationMode: method.usesOutliers ? .yes : .no).isDirty,
+                           method.isDirty, "\(method)")
+        }
+        XCTAssertEqual(HighLevelCleanMethod(.dirtySky), .dirtySky)
+        XCTAssertEqual(HighLevelCleanMethod(.dirtyEarth), .dirtyEarth)
+        XCTAssertEqual(HighLevelCleanMethod(.automatic(true)), .automatic)
+    }
+
+    /// A2: only Automatic has a Selective Auto Clean row to answer; the dirty methods never use outliers, so the row is off for them.
+    func testTheDirtyChoicesHaveNoAutoPreservationRow() throws {
+        let rows = try XCTUnwrap(try XCTUnwrap(try doc()["cleanMethod"] as? [String: Any])["usesAutoPreservation"] as? [[String: Any]])
+        XCTAssertEqual(rows.count, HighLevelCleanMethod.allCases.count)
+        for c in rows {
+            XCTAssertEqual(try highLevel(c["highLevel"] as? String).usesAutoPreservation, c["expected"] as? Bool, "\(c)")
+        }
+        XCTAssertFalse(CleanMethod.dirtySky.usesOutliers)
+        XCTAssertFalse(CleanMethod.dirtyEarth.usesOutliers)
+    }
+
+    /// A3: Dirty earth needs a horizon, so it is off when horizon detection is off, with the tip saying why; the settings sheet
+    /// falls back to Automatic when the horizon is switched off under it.
+    func testDirtyEarthIsUnavailableWithoutAHorizon() throws {
+        let cases = try XCTUnwrap(try XCTUnwrap(try doc()["cleanMethod"] as? [String: Any])["availability"] as? [[String: Any]])
+        XCTAssertFalse(cases.isEmpty)
+        for c in cases {
+            let choice = try highLevel(c["highLevel"] as? String)
+            let horizon = try XCTUnwrap(c["horizonDetection"] as? Bool)
+            XCTAssertEqual(choice.isAvailable(horizonDetectionEnabled: horizon), c["available"] as? Bool, "\(c)")
+            XCTAssertEqual(choice.coerced(horizonDetectionEnabled: horizon), try highLevel(c["coerced"] as? String), "\(c)")
+            XCTAssertEqual(choice.unavailableText(horizonDetectionEnabled: horizon) != nil, c["available"] as? Bool == false, "\(c)")
+        }
+        // and the CleanMethod it would make is refused by the config the same way
+        var config = Config()
+        config.horizonDetectionEnabled = false
+        config.cleanMethod = .dirtyEarth
+        XCTAssertNotNil(config.cleanMethodConflict)
     }
 
     /// Q7: the playback speeds the Display picker offers are the same in both clients.
@@ -4187,6 +4248,43 @@ final class ClickRuleTests: XCTestCase {
                                                       decided: try XCTUnwrap(c["decided"] as? Bool)),
                            expected, "\(c)")
         }
+    }
+
+    /// The probe (`outlier.first`) is a group a click can hit. On the CI VM's default window the frame is 180 pt wide for a 6000 px frame
+    /// (0.03 pt a pixel), and the old choice, the smallest group, was 0.9 x 0.3 pt: the element existed and was never hittable.
+    func testTheProbeGroupIsOneAClickCanHit() {
+        typealias C = OutlierGroupView.ProbeCandidate
+        func box(_ x: Int, _ y: Int, _ w: Int, _ h: Int) -> BoundingBox {
+            BoundingBox(between: CGPoint(x: x, y: y), and: CGPoint(x: x + w - 1, y: y + h - 1))
+        }
+        let pointsPerPixel: CGFloat = 0.03
+        // ids: big 1, tiny 2, thin 3, few 4, middle 5, cover 6
+        let big = C(id: 1, bounds: box(1000, 1000, 400, 300), size: 5000)        // 12 x 9 pt
+        let tiny = C(id: 2, bounds: box(3000, 500, 30, 10), size: 200)           // 0.9 x 0.3 pt, the old choice
+        let thin = C(id: 3, bounds: box(2000, 2000, 600, 100), size: 900)        // 18 x 3 pt: too thin
+        let few = C(id: 4, bounds: box(4000, 4000, 300, 300), size: 40)           // not over 40 pixels
+
+        // drawn biggest first, so the last is on top; the old rule took the last one with more than 40 pixels
+        let drawn = [big, thin, tiny, few]
+        XCTAssertEqual(drawn.last(where: { $0.size > 40 })?.id, 2, "the old rule picks the sub-point group")
+        XCTAssertEqual(OutlierGroupView.probeGroupId(groups: drawn, pointsPerPixel: pointsPerPixel), 1)
+
+        // a group drawn later on top of the centre of `big` takes the click: the next smallest is chosen
+        let middle = C(id: 5, bounds: box(5000, 1000, 250, 250), size: 3000)   // 7.5 x 7.5 pt
+        let cover = C(id: 6, bounds: box(1100, 1050, 200, 200), size: 2000)     // 6 x 6 pt, on `big`'s centre
+        XCTAssertEqual(OutlierGroupView.probeGroupId(groups: [big, middle, cover, tiny], pointsPerPixel: pointsPerPixel), 6,
+                       "the smallest group a click can hit is `cover`; `big` is under it")
+        XCTAssertEqual(OutlierGroupView.probeGroupId(groups: [big, cover, middle, tiny], pointsPerPixel: pointsPerPixel), 6)
+        XCTAssertEqual(OutlierGroupView.probeGroupId(groups: [cover, big, middle, tiny], pointsPerPixel: pointsPerPixel), 5,
+                       "`big` is drawn over `cover`'s centre, and it is not the smaller one")
+
+        // zoomed in, the small one is big enough
+        XCTAssertEqual(OutlierGroupView.probeGroupId(groups: drawn, pointsPerPixel: 1), 2)
+
+        // nothing is big enough: the smallest group over 40 pixels, as before; nothing over 40 pixels: none
+        XCTAssertEqual(OutlierGroupView.probeGroupId(groups: [thin, tiny, few], pointsPerPixel: pointsPerPixel), 2)
+        XCTAssertNil(OutlierGroupView.probeGroupId(groups: [few], pointsPerPixel: pointsPerPixel))
+        XCTAssertNil(OutlierGroupView.probeGroupId(groups: [], pointsPerPixel: pointsPerPixel))
     }
 }
 

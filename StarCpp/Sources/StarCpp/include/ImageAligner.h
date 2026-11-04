@@ -17,21 +17,10 @@ typedef struct {
 
 // --- Median merge ---
 //
-// Neither of these warps anything, so every source covers every pixel and every
+// The median merges here warp nothing, so every source covers every pixel and every
 // value one of them holds is a real observation, a black one included.  That is
 // the difference between them and ia_align_and_median_merge below, which has holes
 // to describe and carries a coverage plane to describe them with.
-
-// Merge images from filenames. Returns new MatWrapperRef (caller must release).
-//
-// useGPU asks for the Metal-accelerated median-merge kernel when one is
-// registered and the machine has hardware for it (see GPUOps_C.h); the CPU
-// kernel always runs otherwise, unchanged. GPU output uses exact integer
-// arithmetic rather than the CPU kernel's double-precision Welford recurrence
-// — a small, deliberate difference, not a bug — see GPU_IMPLEMENTATION_GUIDE.md.
-MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
-                                        double outlierThreshold, bool includeAll,
-                                        bool useGPU);
 
 // Merge a base image + additional filenames.
 //
@@ -52,8 +41,13 @@ MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
 // order regardless.  The streaming path ignores it and stays serial: holding one
 // source at a time is what it is for.
 //
-// useGPU: see ia_median_merge_filenames above. It only ever applies to the
-// all-resident path — the streaming path (medianImageStreaming) stays
+// useGPU asks for the Metal-accelerated median-merge kernel when one is
+// registered and the machine has hardware for it (see GPUOps_C.h); the CPU
+// kernel always runs otherwise, unchanged. GPU output uses exact integer
+// arithmetic rather than the CPU kernel's double-precision Welford recurrence
+// — a small, deliberate difference, not a bug — see GPU_IMPLEMENTATION_GUIDE.md.
+// This applies only to the all-resident
+// path — the streaming path (medianImageStreaming) stays
 // CPU-only, since it exists for source counts too large to hold on the GPU
 // (or in RAM) at once anyway.
 //
@@ -196,7 +190,8 @@ int ia_compute_homography(OCVFeatureSetRef baseKeypoints,
 // outWarpCount (nullable) receives how many neighbours made it into the merge.
 // Returns NULL if that count is zero, or on error; caller must release the result.
 //
-// useGPU: see ia_median_merge_filenames above, and only on the all-resident
+// useGPU asks for the Metal-accelerated kernels (see ia_median_merge_image_with_filenames
+// above for the semantics), and only on the all-resident
 // path; the streaming path (spiller.merge) stays CPU-only. On the resident
 // path this reaches for a single batched GPU aligned merge — every neighbour's
 // warp plus the final merge on one Metal command buffer (see GPUOps_C.h's
@@ -370,7 +365,6 @@ bool ia_debug_exact_warp_is_available(void);
 // descriptor sets through it and BFMatcher in both directions and returns how many results
 // differ: 0 is a pass.
 void ia_debug_set_pair_match(bool enabled);
-bool ia_debug_pair_match_is_enabled(void);
 int ia_debug_pair_match_selftest(int trials, unsigned int seed);
 // How many pair matches are waiting for their partner's op (emptying them first, if asked).
 int ia_debug_pair_match_waiting(bool clear);

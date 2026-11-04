@@ -182,9 +182,10 @@ struct GridRightPanel: View {
                 infoRow(localized("ui.mode"), value: useOutliers ? localized("ui.auto_selective") : localized("ui.automatic"))
             case .selective:
                 infoRow(localized("ui.mode"), value: localized("ui.selective"))
-            case .dirtySky, .dirtyEarth:
-                // T3: no label of their own yet
-                infoRow(localized("ui.mode"), value: localized("ui.automatic"))
+            case .dirtySky:
+                infoRow(localized("ui.mode"), value: localized("ui.dirty_sky"))
+            case .dirtyEarth:
+                infoRow(localized("ui.mode"), value: localized("ui.dirty_earth"))
             }
 
             if !frame.horizonOverlays.isEmpty {
