@@ -36,12 +36,6 @@ public struct StarLanguage: Sendable, Hashable, Codable, Identifiable {
 
     public var id: String { code }
 
-    /// The base language subtag — `pt` for `pt-BR`, `zh` for `zh-Hans`. Used when matching a
-    /// system locale that names a region or script we have no specific table for.
-    public var baseCode: String {
-        String(code.split(separator: "-").first ?? "")
-    }
-
     public init(code: String, nativeName: String, englishName: String, rightToLeft: Bool = false) {
         self.code = code
         self.nativeName = nativeName

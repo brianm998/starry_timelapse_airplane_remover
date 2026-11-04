@@ -65,9 +65,6 @@ These outlier groups were selected specifically by user in gui.
         }
    }
 
-   // colors used to test remove to show why
-   public var testRemovePixel: Pixel { self.BasicColor.pixel }
-        
    public static func == (lhs: RemoveReason, rhs: RemoveReason) -> Bool {
       switch lhs {
       case .userSelected(let lhsWillRemove):
