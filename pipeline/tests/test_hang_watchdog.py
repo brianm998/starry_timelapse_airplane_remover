@@ -30,10 +30,12 @@ def fake_stard(tmp_path: Path) -> Iterator[tuple[subprocess.Popen[bytes], Path]]
     proc.wait()
 
 
-def watch(seconds: float, limit: int = 2) -> str:
+def watch(seconds: float, limit: int = 2, path_prefix: str = "") -> str:
     """Run the watchdog for `seconds`, then stop it and return its output."""
-    p = subprocess.Popen(["bash", str(SCRIPT), str(limit), "1"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                         env={**os.environ, "HANG_WATCHDOG_PGREP": f"-f {NAME}"})
+    env = {**os.environ, "HANG_WATCHDOG_PGREP": f"-f {NAME}"}
+    if path_prefix:
+        env["PATH"] = path_prefix + os.pathsep + env["PATH"]
+    p = subprocess.Popen(["bash", str(SCRIPT), str(limit), "1"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
     time.sleep(seconds)
     p.terminate()
     out, _ = p.communicate(timeout=30)
@@ -51,6 +53,26 @@ def testWatchdogDumpsWhenStardLogGoesQuiet(fake_stard: tuple[subprocess.Popen[by
     assert "ResourceGovernor: CPU gate 2/2" in out  # the log tail
     assert "--- jstack of every JVM" in out  # tools that are absent degrade to a note, the dump still completes
     assert "::endgroup::" in out
+
+
+def testWatchdogRunsGdbAndStacksThroughTimeout(fake_stard: tuple[subprocess.Popen[bytes], Path], tmp_path: Path) -> None:
+    """`timeout` is an external program: handing it a shell function fails with 'failed to run command' (Linux has timeout, macOS
+    does not).  Shims named timeout, sudo and gdb, first on PATH, make this run the Linux path: the gdb section must get through them."""
+    shims = tmp_path / "shims"
+    shims.mkdir()
+    for name, body in {
+        "timeout": 'shift\nexec "$@"\n',  # like the real one: runs a program, cannot run a function
+        "sudo": 'shift\nexec "$@"\n',  # `sudo -n <cmd>`
+        "gdb": 'echo "GDB-SHIM-RAN $*"\n',
+    }.items():
+        shim = shims / name
+        shim.write_text("#!/bin/bash\n" + body)
+        shim.chmod(0o755)
+    out = watch(7, path_prefix=str(shims))
+    gdb = out.split("--- gdb backtrace", 1)[1].split("--- tail of", 1)[0]
+    assert "GDB-SHIM-RAN -p" in gdb, out
+    assert "failed to run command" not in out, out
+    assert "not found" not in gdb, out
 
 
 def testWatchdogStaysSilentWhileStardLogGrows(fake_stard: tuple[subprocess.Popen[bytes], Path]) -> None:

@@ -276,7 +276,7 @@ stard intermittently wedges on the ubuntu desktop leg (autoHorizonVideo, ticket 
 the governor's 30 s one. When `STAR_HANG_WATCHDOG_SECONDS` is set (the desktop-linux job sets 360), `run-desktop-features.sh` starts
 `gherkin/hang-watchdog.sh` beside the features. It watches `<scratch>/logs/stard.log` (the Kotlin client appends every stard stderr
 line to it; the scratch dir is read from stard's `--scratch` argument), and when that has not grown for that long it prints, once and
-then once more a further interval later, a `::group::stard hang watchdog: dump N ...` into the job log: `ps`, per-thread CPU, the file
+then once more half that interval later (at 6 and 9 minutes, both before the 10 minute stall), a `::group::stard hang watchdog: dump N ...` into the job log: `ps`, per-thread CPU, the file
 descriptors, each stard thread's kernel stack, a gdb backtrace of every thread, the tail of `stard.log` and a `jstack` of every JVM
 (the Gradle test worker). It lands before the runner's 10 minute ProgressStall and the 25 minute attempt cut, which kill everything.
 Read it in the job log of the hung run (artifacts do not survive a cancel). Threads parked in `DecodedFrameStore.load` or

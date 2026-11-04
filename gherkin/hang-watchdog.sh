@@ -6,8 +6,8 @@
 # Runs beside the desktop Gherkin features (gherkin/run-desktop-features.sh starts it when STAR_HANG_WATCHDOG_SECONDS is set).  The
 # Kotlin client appends every line stard writes to stderr to <scratch>/logs/stard.log (DaemonProcess.kt), and stard's ResourceGovernor
 # logs a line every 30 s, so a log that has stopped growing means stard, or the client's stderr reader, is stuck.  After <quiet-seconds>
-# of that it dumps, once, and once more a further <quiet-seconds> later (to show whether the stacks moved), then says nothing more
-# about that stard.  It never kills or fails anything.
+# of that it dumps, once, and once more half that interval later (still before the test JVM's 10 minute ProgressStall ends the run, to
+# show whether the stacks moved), then says nothing more about that stard.  It never kills or fails anything.
 #
 # A dump: ps, per-thread CPU, the file descriptors, each stard thread's kernel stack (/proc/<pid>/task/*), gdb's backtrace of every
 # thread, the tail of stard.log, and a jstack of every JVM (the Gradle test worker).  Every tool is optional: a missing one is a
@@ -25,16 +25,18 @@ fi
 limit=$1
 poll=${2:-15}
 pgrep_args=${HANG_WATCHDOG_PGREP:--x stard}
+second=$((limit / 2))   # the second dump comes this long after the first
+[ "$second" -ge 1 ] || second=1
 
 # Run a command with a time limit when `timeout` exists (not on macOS); a dump must not hang on the very thing that is hung.
 t() {
     if command -v timeout >/dev/null 2>&1; then timeout 60 "$@"; else "$@"; fi
 }
 
-# `sudo -n` when it works without a password (the CI runner), nothing otherwise.
-priv() {
-    if [ "$(id -u)" -eq 0 ]; then "$@"; elif sudo -n true 2>/dev/null; then sudo -n "$@"; else "$@"; fi
-}
+# A command prefix, not a function: `timeout` is an external program and cannot run a shell function.  `sudo -n` when it works
+# without a password (the CI runner; ptrace and /proc/<pid>/task/*/stack need it), nothing as root or when it would ask.
+priv=""
+if [ "$(id -u)" -ne 0 ] && sudo -n true 2>/dev/null; then priv="sudo -n"; fi
 
 scratch_of() {
     # `--scratch <dir>` out of the command line
@@ -43,7 +45,7 @@ scratch_of() {
 
 dump() {
     local pid=$1 log=$2 n=$3 task tid
-    echo "::group::stard hang watchdog: dump $n for pid $pid ($(date -u +%H:%M:%S)), $log quiet for at least $((n * limit))s"
+    echo "::group::stard hang watchdog: dump $n for pid $pid ($(date -u +%H:%M:%S)), $log quiet for at least $((limit + (n - 1) * second))s"
     date -u
     uptime || true
     free -m 2>/dev/null || true
@@ -63,7 +65,8 @@ dump() {
         for task in /proc/"$pid"/task/*; do
             tid=${task##*/}
             echo "thread $tid: comm=$(cat "$task/comm" 2>/dev/null) wchan=$(cat "$task/wchan" 2>/dev/null) syscall=$(cat "$task/syscall" 2>/dev/null)"
-            priv cat "$task/stack" 2>/dev/null | sed 's/^/    /' || true
+            # shellcheck disable=SC2086  # $priv is a command prefix
+            t $priv cat "$task/stack" 2>/dev/null | sed 's/^/    /' || true
         done
     else
         echo "(/proc/$pid/task unavailable)"
@@ -71,7 +74,8 @@ dump() {
 
     echo "--- gdb backtrace of $pid"
     if command -v gdb >/dev/null 2>&1; then
-        t priv gdb -p "$pid" -batch -ex 'thread apply all bt 40' 2>&1 | tail -n 600 || true
+        # shellcheck disable=SC2086  # $priv is a command prefix
+        t $priv gdb -p "$pid" -batch -ex 'thread apply all bt 40' 2>&1 | tail -n 600 || true
     else
         echo "(gdb not installed)"
     fi
@@ -116,7 +120,7 @@ while :; do
             size=$cur
             since=$now
             dumped=0
-        elif [ "$dumped" -lt 2 ] && [ $((now - since)) -ge $(((dumped + 1) * limit)) ]; then
+        elif [ "$dumped" -lt 2 ] && [ $((now - since)) -ge $((limit + dumped * second)) ]; then
             dumped=$((dumped + 1))
             dump "$pid" "$log" "$dumped"
         fi

@@ -1066,7 +1066,7 @@ jobs:
           polling_interval_seconds: 5
           warning_on_retry: true
           # The killed run's marker would make the next stard report a crashed run and cover the UI with an alert.
-          on_retry_command: pkill -f hang-watchdog.sh || true; pkill -x stard || true; rm -rf star-desktop/build/run-markers
+          on_retry_command: pkill -x stard || true; rm -rf star-desktop/build/run-markers; pkill -f 'hang-watchdog[.]sh' || true
           shell: bash
           command: gherkin/run-desktop-features.sh "$GITHUB_WORKSPACE/daemon/.build/release/stard" ${{ matrix.shard.features }}
 
