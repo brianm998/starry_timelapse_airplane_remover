@@ -117,6 +117,25 @@ def test_the_snapshot_carries_develop_landing_and_interventions(rig: Rig) -> Non
     assert snap["events_cursor"] >= 1  # type: ignore[operator]
 
 
+def test_the_snapshot_batch_reports_its_ci(rig: Rig) -> None:
+    d = populate(rig)
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(bid, state="ci", pr_number=9)
+
+    def ci() -> object:
+        return d.snapshot()["landing"]["batch"]["ci"]  # type: ignore[index]
+
+    assert ci() == "running"  # no head yet
+    rig.db.batch_update(bid, head_sha="h" * 40)
+    assert ci() == "running"  # no verdict yet
+    rig.db.record_ci(0, "other", "fail", {})  # another sha's verdict is not this batch's
+    rig.db.record_ci(5, "h" * 40, "fail", {})  # nor is a ticket's
+    assert ci() == "running"
+    for verdict, shown in [("pending", "running"), ("rerun", "running"), ("fail", "failure"), ("pass", "success")]:
+        rig.db.record_ci(0, "h" * 40, verdict, {"batch": bid})
+        assert ci() == shown, verdict
+
+
 def test_the_snapshot_has_the_shape_the_monitors_fixture_records(rig: Rig) -> None:
     """The Swift tests decode FIXTURE. If the daemon's snapshot gains or loses a key, this fails until the fixture and the
     Swift models are updated together. Regenerate with STARPIPE_REGEN_FIXTURE=1."""

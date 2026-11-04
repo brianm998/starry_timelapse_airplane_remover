@@ -155,6 +155,8 @@ public enum Star_V1_CleanMethod: SwiftProtobuf.Enum, Swift.CaseIterable {
   case cleanAutomatic // = 0
   case cleanAutomaticTrue // = 1
   case cleanSelective // = 2
+  case cleanDirtySky // = 3
+  case cleanDirtyEarth // = 4
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -166,6 +168,8 @@ public enum Star_V1_CleanMethod: SwiftProtobuf.Enum, Swift.CaseIterable {
     case 0: self = .cleanAutomatic
     case 1: self = .cleanAutomaticTrue
     case 2: self = .cleanSelective
+    case 3: self = .cleanDirtySky
+    case 4: self = .cleanDirtyEarth
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -175,6 +179,8 @@ public enum Star_V1_CleanMethod: SwiftProtobuf.Enum, Swift.CaseIterable {
     case .cleanAutomatic: return 0
     case .cleanAutomaticTrue: return 1
     case .cleanSelective: return 2
+    case .cleanDirtySky: return 3
+    case .cleanDirtyEarth: return 4
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -184,6 +190,8 @@ public enum Star_V1_CleanMethod: SwiftProtobuf.Enum, Swift.CaseIterable {
     .cleanAutomatic,
     .cleanAutomaticTrue,
     .cleanSelective,
+    .cleanDirtySky,
+    .cleanDirtyEarth,
   ]
 
 }
@@ -4756,7 +4764,7 @@ extension Star_V1_OpenStage: SwiftProtobuf._ProtoNameProviding {
 }
 
 extension Star_V1_CleanMethod: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CLEAN_AUTOMATIC\0\u{1}CLEAN_AUTOMATIC_TRUE\0\u{1}CLEAN_SELECTIVE\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CLEAN_AUTOMATIC\0\u{1}CLEAN_AUTOMATIC_TRUE\0\u{1}CLEAN_SELECTIVE\0\u{1}CLEAN_DIRTY_SKY\0\u{1}CLEAN_DIRTY_EARTH\0")
 }
 
 extension Star_V1_DetectionType: SwiftProtobuf._ProtoNameProviding {

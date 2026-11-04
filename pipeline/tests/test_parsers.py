@@ -18,6 +18,18 @@ def test_xctest_total_is_the_largest_nested_line() -> None:
     assert (c.executed, c.failed, c.skipped) == (12, 0, 0)
 
 
+def test_xctest_bundle_total_with_skips_is_read() -> None:
+    """#249: a bundle banner with skips ("with 7 tests skipped and 0 failures") did not match, so a smaller per-suite line (47)
+    was taken as the total."""
+    log = ("\t Executed 47 tests, with 0 failures (0 unexpected) in 1.0 (1.0) seconds\n"
+           "Test Suite 'StarCppTests.xctest' passed at x\n"
+           "\t Executed 254 tests, with 7 tests skipped and 0 failures (0 unexpected) in 9.0 (9.0) seconds\n")
+    c = parsers.parse_xctest(log)
+    assert (c.executed, c.failed) == (254, 0)
+    one = parsers.parse_xctest("\t Executed 9 tests, with 1 test skipped and 1 failure (1 unexpected) in 1.0 (1.0) seconds\n")
+    assert (one.executed, one.failed) == (9, 1)
+
+
 def test_zero_tests_is_vacuous_even_with_a_green_banner() -> None:
     c = parsers.parse_xctest("Executed 0 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds\n** TEST SUCCEEDED **")
     assert c.vacuous
