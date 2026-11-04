@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -683,6 +684,24 @@ async def test_a_pending_update_holds_the_next_model_stage(rig: Rig) -> None:
     await rig.engine.drive(7)
     assert requests_when_released == [0], "no stage began while the update was pending"
     assert rig.db.stages(7)[0]["stage"] == "explore", "and it began once the hold cleared"
+
+
+async def test_swap_to_a_vanished_runtime_restages_instead_of_exiting(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    rig.db.begin_stage(1, "develop", 1, "sonnet")
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    assert pin.once() == "pending" and rig.db.get("self_update_pending") == target
+    shutil.rmtree(selfupdate.runtime_dir(target))  # pruned (or damaged) after it was staged
+    rig.db.end_stage(rig.db.running_stages()[0]["id"], "accepted")
+
+    await pin.daemon.update_step(pin.plist, pin.sync, pin.check)
+    assert pin.exits == [] and pin.current_sha() == pin.base, "no exit, and current still points at a runtime that runs"
+    assert rig.db.get("self_update_pending") is None and rig.db.get("self_update_failed") is None
+    assert len(pin.built) == 1, "nothing rebuilt yet"
+
+    await pin.daemon.update_step(pin.plist, pin.sync, pin.check)  # the next poll rebuilds it and swaps
+    assert len(pin.built) == 2 and pin.exits == [0] and pin.current_sha() == target
+    assert (selfupdate.runtime_dir(target) / ".complete").is_file()
 
 
 async def test_a_failing_smoke_check_keeps_the_running_version_and_is_not_retried(rig: Rig, tmp_path: Path) -> None:
