@@ -978,7 +978,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake make git pkg-config perl dpkg-dev zip \
             libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev \
-            libcurl4-openssl-dev
+            libcurl4-openssl-dev gdb
 
       - name: Set up Swift
         uses: SwiftyLab/setup-swift@latest
@@ -1049,10 +1049,14 @@ jobs:
       # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.
       # stard intermittently wedges outright after frame 0's alignment (no governor line for the rest of the run, so it is stuck, not slow;
       # autoHorizonVideo, about 3 runs in 14), and the whole 50 minutes of the test timeout go by. A passing autoHorizonVideo leg takes
-      # 8-13 minutes, so cut an attempt off at 25 and try once more; the retry kills any stard left behind. Root cause: filed as a follow-up.
+      # 8-13 minutes, so cut an attempt off at 25 and try once more; the retry kills any stard left behind.
+      # Root cause (ticket #54): gherkin/hang-watchdog.sh runs beside the features and, after 6 minutes of a silent stard.log (before the
+      # 10 minute ProgressStall and the 25 minute cut), prints ps, stard's thread stacks and a jstack of the test JVM into this step's log.
+      # Read that dump in the next hung run; it is what the fix is built from.
       - name: Run the Gherkin features in the Compose UI
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
+          STAR_HANG_WATCHDOG_SECONDS: '360'
         uses: nick-fields/retry@v3
         with:
           # an attempt of a shard is all its features; a retry runs only those that failed (the script keeps what passed)
@@ -1062,7 +1066,7 @@ jobs:
           polling_interval_seconds: 5
           warning_on_retry: true
           # The killed run's marker would make the next stard report a crashed run and cover the UI with an alert.
-          on_retry_command: pkill -x stard || true; rm -rf star-desktop/build/run-markers
+          on_retry_command: pkill -x stard || true; rm -rf star-desktop/build/run-markers; pkill -f 'hang-watchdog[.]sh' || true
           shell: bash
           command: gherkin/run-desktop-features.sh "$GITHUB_WORKSPACE/daemon/.build/release/stard" ${{ matrix.shard.features }}
 
