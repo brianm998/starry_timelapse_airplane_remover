@@ -599,8 +599,20 @@ def daemon_run() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     selfupdate.record_start()
+    cur = selfupdate.link("current")
+    logging.getLogger("starpipe.daemon").info("daemon start: runtime %s sha %s, %d start(s) since the last switch",
+                                              cur.name if cur else None, (selfupdate.runtime_sha(cur) or "?")[:12] if cur else None,
+                                              selfupdate.starts_since_switch())
     if selfupdate.crash_loop():  # the runtime we switched to does not stay up: go back, and say so
-        name = selfupdate.rollback(_plist_path())
+        marker = selfupdate.runtime_root() / "switched_at"
+        logging.getLogger("starpipe.daemon").warning(
+            "crash loop: %d starts since the switch at %s (window %.0fs); rolling back", selfupdate.starts_since_switch(),
+            marker.read_text() if marker.exists() else "?", selfupdate.CRASH_WINDOW_S)
+        try:
+            name = selfupdate.rollback(_plist_path())
+        except (RuntimeError, OSError) as exc:
+            logging.getLogger("starpipe.daemon").error("rollback failed: %s", exc)
+            sys.exit(1)
         from .db import Database
         from .notify import Notifier
 
@@ -667,7 +679,7 @@ def daemon_install() -> None:
     _plist_path().parent.mkdir(parents=True, exist_ok=True)
     _plist_path().write_text(out)
     if rt is not None:
-        selfupdate.switch(rt, _plist_path(), restart=False)
+        selfupdate.switch(rt, _plist_path(), restart=False, reason="install")
     selfupdate.real_launchctl(["bootstrap", f"gui/{os.getuid()}", str(_plist_path())])
     click.echo(f"installed {_plist_path()}")
 
