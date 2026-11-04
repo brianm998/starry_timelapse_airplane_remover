@@ -325,25 +325,4 @@ extension PixelatedImage {
     }
 }
 
-extension Array where Element == ImageMatrixElement {
-    /// Returns the combined horizon extents across all elements in the array
-    func combinedHorizonExtents() -> (horizonTopY: Int?, horizonBottomY: Int?) {
-        // Collect only non-nil values
-        let allHighestBlackY = self.compactMap { $0.horizonTopY }
-        let allLowestWhiteY  = self.compactMap { $0.horizonBottomY }
-        Log.d("XXX allHighestBlackY \(allHighestBlackY)")
-        Log.d("XXX allLowestWhiteY \(allLowestWhiteY)")
-        
-        // Highest horizon = largest horizonTopY
-        let globalHighestBlackY = allHighestBlackY.min()
-        
-        // Lowest horizon = smallest horizonBottomY
-        let globalLowestWhiteY = allLowestWhiteY.max()
-
-        //Log.d("XXX (\(globalHighestBlackY), \(globalLowestWhiteY))")
-        
-        return (globalHighestBlackY, globalLowestWhiteY)
-    }
-}
-
 
