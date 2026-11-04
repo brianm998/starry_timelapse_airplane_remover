@@ -401,8 +401,11 @@ class DesktopFeatureRunner {
     private fun waitForProcessingToFinish(t: ComposeUiTest) {
         var sawRunning = false
         var last = "(none)"
+        val stall = ProgressStall(STALL_LIMIT_MS * 1_000_000)
         waitFor(t, "processing to finish", 20L * 60_000, { "(last progress: $last)" }) {
-            val state = semanticsOf(t, "processing.progress")?.getOrNull(SemanticsProperties.StateDescription) ?: return@waitFor false
+            val state = semanticsOf(t, "processing.progress")?.getOrNull(SemanticsProperties.StateDescription)
+            stall.observe(state)
+            if (state == null) return@waitFor false
             last = state
             val parts = state.split('/')
             if (parts.size != 3) return@waitFor false
@@ -671,12 +674,15 @@ class DesktopFeatureRunner {
         // "<complete>/<total>/<running|idle>", set on the left panel's progress line. Finished: every frame complete and the run over.
         var last = "(none)"
         var lastDump = 0L
+        val stall = ProgressStall(STALL_LIMIT_MS * 1_000_000)
         waitFor(t, "processing to finish", PROCESS_TIMEOUT_MS, { "last progress: $last" }) {
             model.error.value?.let { throw RunnerError("the app reported an error while processing: $it") }
             // A dead engine (killed by the OS, say for memory) never finishes the run: without this the wait sits out its whole timeout.
             model.engineDown.value?.let { throw RunnerError("the engine stopped while processing: $it") }
             val nodes = t.onAllNodes(hasTestTag("processing.progress")).fetchSemanticsNodes()
             val state = nodes.firstOrNull()?.config?.getOrNull(SemanticsProperties.StateDescription)
+            // A run that has stopped moving (the Windows runner sat at 0/19/running for the whole timeout) fails here, not 50 minutes on.
+            stall.observe(state)
             if (state == null) {
                 if (System.nanoTime() - lastDump > 20_000_000_000L) { lastDump = System.nanoTime(); println("no progress node (${nodes.size}); tree:\n" + t.onRoot().printToString(40)) }
                 return@waitFor false
@@ -1084,6 +1090,7 @@ class DesktopFeatureRunner {
         const val DRAG_HALF_PX = 24f   // a drag around a group is a box this far each way from its centre, in pixels
         const val DRAG_STEPS = 8
         const val PROCESS_TIMEOUT_MS = 50L * 60_000   // auto selective on a 4-core runner took over 25 minutes
+        const val STALL_LIMIT_MS = 10L * 60_000   // longest a processing wait may sit on one progress line; see the survey in the commit message
         const val RENDER_TIMEOUT_MS = 10L * 60_000
         val REMOVAL_ACTIONS = setOf(StepAction.AIRPLANES_REMOVED, StepAction.SATELLITES_REMOVED, StepAction.STARS_PRESERVED, StepAction.NOTHING_ELSE_CHANGED)
         val VIDEO_EXTS = setOf("mov", "mp4", "m4v", "avi", "mkv", "mpg", "mpeg")

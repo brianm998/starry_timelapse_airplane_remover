@@ -269,12 +269,32 @@ final class GuiFeatureRunner {
         if e.isHittable { e.click() } else { app.typeKey(.return, modifierFlags: []) }
     }
 
+    /// The longest a processing wait may sit on one progress state before it fails (the desktop runner's STALL_LIMIT_MS).
+    private let stallLimit: TimeInterval = 10 * 60
+
+    /// Fails a processing wait whose progress state has stopped changing. One per wait: it times from when it is made, every change of the
+    /// state (the progress node appearing included) restarts the time, and `observe` throws once the state has sat for `stallLimit`.
+    private struct ProgressStall {
+        let limit: TimeInterval
+        private var state: String?
+        private var changedAt = Date()
+        init(limit: TimeInterval) { self.limit = limit }
+
+        mutating func observe(_ current: String?) throws {
+            if let current, current != state { state = current; changedAt = Date(); return }
+            let stuck = Date().timeIntervalSince(changedAt)
+            if stuck >= limit {
+                throw RunnerError("processing made no progress for \(Int(stuck / 60)) min, stuck at \(state ?? "(no progress line)")")
+            }
+        }
+    }
+
     /// Polls `condition` until it holds. Real-time waits only, never a fixed sleep.
     /// `interval`: a busy app (the horizon overlays, previews) can take longer than XCUITest's snapshot timeout to answer, which fails the
     /// test outright, so the long waits poll slowly.
-    private func waitFor(_ what: String, timeout: TimeInterval, interval: TimeInterval = 1, detail: () -> String = { "" }, _ condition: () -> Bool) throws {
+    private func waitFor(_ what: String, timeout: TimeInterval, interval: TimeInterval = 1, detail: () -> String = { "" }, _ condition: () throws -> Bool) throws {
         let deadline = Date().addingTimeInterval(timeout)
-        while !condition() {
+        while !(try condition()) {
             if Date() > deadline { throw RunnerError("timed out after \(Int(timeout))s waiting for \(what) \(detail())") }
             _ = XCTWaiter.wait(for: [XCTestExpectation(description: "poll")], timeout: interval)
         }
@@ -375,7 +395,9 @@ final class GuiFeatureRunner {
         let progress = element("processing.progress")
         var sawRunning = false
         var last = "(none)"
+        var stall = ProgressStall(limit: stallLimit)
         try waitFor("processing to finish", timeout: 20 * 60, interval: 3, detail: { "(last progress: \(last))" }) {
+            try stall.observe(progress.exists ? progress.label : nil)
             guard progress.exists else { return false }
             let state = progress.label
             last = state
@@ -862,8 +884,12 @@ final class GuiFeatureRunner {
 
         let progress = element("processing.progress")
         var last = "(none)"
+        var stall = ProgressStall(limit: stallLimit)
         try waitFor("processing to finish", timeout: 45 * 60, interval: 5, detail: { "(last progress: \(last))" }) {
-            guard let out = try? outputFrames(), ((try? frameFiles(in: out).count) ?? 0) >= expected else { return false }
+            let onDisk = (try? outputFrames()).flatMap { try? frameFiles(in: $0).count } ?? 0
+            // Until every frame is on disk the progress line is not read (a busy app answers slowly), so the frames written are the progress
+            // that is watched: a run stuck at 0 of N fails at the stall limit, and each new frame restarts it. Once the line is read it counts too.
+            guard onDisk >= expected else { try stall.observe("\(onDisk)/\(expected) frames on disk"); return false }
             // With a render afterwards the render sheet covers the window the moment the run ends, and the progress line is no longer in
             // reach: the frames all being on disk (and still so a poll later) is the end of processing.
             if rendersVideo {
@@ -871,6 +897,7 @@ final class GuiFeatureRunner {
                 if settledOnce { completeFrames = expected }
                 return settledOnce
             }
+            try stall.observe("\(onDisk)/\(expected) frames on disk, progress \(progress.exists ? progress.label : "(not shown)")")
             guard progress.exists else { return false }
             let state = progress.label
             if state != last { print("progress: \(state)") }
