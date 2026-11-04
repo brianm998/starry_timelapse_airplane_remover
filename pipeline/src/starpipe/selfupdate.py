@@ -257,6 +257,17 @@ def crash_loop(now: float | None = None) -> bool:
     return len([s for s in starts if s >= switched]) > CRASH_LIMIT
 
 
+def settled(now: float | None = None) -> bool:
+    """The current runtime has outlived the crash-loop window (or no switch was ever recorded), so `previous` is no longer needed as a fallback.
+
+    False exactly when `crash_loop` would still be watching the runtime."""
+    marker = runtime_root() / "switched_at"
+    if not marker.exists():
+        return True
+    now = now if now is not None else time.time()
+    return now - float(marker.read_text()) > CRASH_WINDOW_S
+
+
 def prune() -> list[str]:
     """Delete runtimes that are neither `current` nor `previous` (each is about 400 MB). Returns the names removed."""
     keep = {rt.name for rt in (link("current"), link("previous")) if rt is not None}
@@ -299,8 +310,7 @@ def update(repo: Path, ref: str, plist: Path, *, sessions: Callable[[], int], wa
             return Report(sha, True, True, False, f"{busy} stage session(s) still running after the wait; use --now to switch anyway")
         sleep(10)
     switch(rt, plist, launchctl, clock(), sleep=sleep)
-    gone = prune()
-    return Report(sha, True, True, True, f"switched to {sha[:12]}" + (f"; removed old runtime(s) {', '.join(gone)}" if gone else ""))
+    return Report(sha, True, True, True, f"switched to {sha[:12]}")  # old runtimes are pruned by the daemon once this one has settled
 
 
 def rollback(plist: Path, launchctl: Launchctl = real_launchctl, clock: Callable[[], float] = time.time) -> str:
