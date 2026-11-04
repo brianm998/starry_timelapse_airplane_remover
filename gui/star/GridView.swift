@@ -128,7 +128,7 @@ struct GridCellView: View {
                     SelectiveIcon()
                         .foregroundColor(.white)
                 case .dirtySky, .dirtyEarth:
-                    // T3: no icon of their own yet
+                    // the dirty methods reuse the automatic icon
                     AutoIcon()
                         .font(.system(size: 8))
                         .foregroundColor(.white)

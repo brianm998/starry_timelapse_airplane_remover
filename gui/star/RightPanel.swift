@@ -375,9 +375,10 @@ extension CleanMethod {
             localized(usesOutliers ? "ui.frame_mode_auto_selective" : "ui.frame_mode_automatic")
         case .selective:
             localized("ui.frame_mode_selective")
-        case .dirtySky, .dirtyEarth:
-            // T3: no name of their own in this dialog yet
-            localized("ui.frame_mode_automatic")
+        case .dirtySky:
+            localized("ui.dirty_sky")
+        case .dirtyEarth:
+            localized("ui.dirty_earth")
         }
     }
 
@@ -387,9 +388,10 @@ extension CleanMethod {
             localized(usesOutliers ? "ui.frame_mode_desc_auto_selective" : "ui.frame_mode_desc_automatic")
         case .selective:
             localized("ui.frame_mode_desc_selective")
-        case .dirtySky, .dirtyEarth:
-            // T3: no description of their own in this dialog yet
-            localized("ui.frame_mode_desc_automatic")
+        case .dirtySky:
+            localized("ui.frame_mode_desc_dirty_sky")
+        case .dirtyEarth:
+            localized("ui.frame_mode_desc_dirty_earth")
         }
     }
 }
@@ -432,13 +434,25 @@ struct ChangeProcessingModeView: View {
                         switch value {
                         case .automatic: AutoIcon()
                         case .selective: SelectiveIcon()
+                        case .dirtySky, .dirtyEarth: AutoIcon()
                         }
-                        Text(localized(value == .automatic ? "ui.automatic" : "ui.selective"))
+                        Text(value.titleText)
                     }
+                      .disabled(!value.isAvailable(horizonDetectionEnabled: viewModel.horizonDetectionEnabled))
                 }
             }
               .pickerStyle(.inline)
               .help(localized("ui.clean_method_help"))
+
+            // Why dirty earth is switched off, when it is
+            if let why = HighLevelCleanMethod.dirtyEarth.unavailableText(
+                 horizonDetectionEnabled: viewModel.horizonDetectionEnabled)
+            {
+                Text(why)
+                  .font(.caption)
+                  .foregroundColor(.secondary)
+                  .fixedSize(horizontal: false, vertical: true)
+            }
 
             Picker(localized("ui.auto_select"), selection: $autoSelect) {
                 ForEach(AutoPreservationMode.allCases, id: \.id) { value in
@@ -452,7 +466,7 @@ struct ChangeProcessingModeView: View {
                 }
             }
               .pickerStyle(.inline)
-              .disabled(clean != .automatic)
+              .disabled(!clean.usesAutoPreservation)
               .help(localized("ui.auto_select_help"))
 
             Group {
@@ -492,16 +506,10 @@ struct ChangeProcessingModeView: View {
           .onAppear {
               guard !loaded else { return }
               loaded = true
-              switch currentMethod {
-              case .automatic(let usesOutliers):
-                  clean = .automatic
+              clean = HighLevelCleanMethod(currentMethod)
+              if case .automatic(let usesOutliers) = currentMethod {
                   autoSelect = usesOutliers ? .yes : .no
-              case .selective:
-                  clean = .selective
-                  autoSelect = .no
-              case .dirtySky, .dirtyEarth:
-                  // T3: the dialog has no dirty choice yet
-                  clean = .automatic
+              } else {
                   autoSelect = .no
               }
           }

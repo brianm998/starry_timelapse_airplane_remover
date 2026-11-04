@@ -811,12 +811,8 @@ public final class ImageSequenceViewModel {
                         self._currentFrameHighLevelCleanMethod = .automatic
                         self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
                         
-                    case .selective:
-                        self._currentFrameHighLevelCleanMethod = .selective
-                        self._currentFrameAutoPreservationMode = .no
-                    case .dirtySky, .dirtyEarth:
-                        // T3: the pickers have no dirty choice yet; shown as automatic
-                        self._currentFrameHighLevelCleanMethod = .automatic
+                    case .selective, .dirtySky, .dirtyEarth:
+                        self._currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
                         self._currentFrameAutoPreservationMode = .no
                     }
                     
@@ -826,12 +822,8 @@ public final class ImageSequenceViewModel {
                         self._currentFrameHighLevelCleanMethod = .automatic
                         self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
 
-                    case .selective:
-                        self._currentFrameHighLevelCleanMethod = .selective
-                        self._currentFrameAutoPreservationMode = .no
-                    case .dirtySky, .dirtyEarth:
-                        // T3: the pickers have no dirty choice yet; shown as automatic
-                        self._currentFrameHighLevelCleanMethod = .automatic
+                    case let method:
+                        self._currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
                         self._currentFrameAutoPreservationMode = .no
                     }
                 }
@@ -2472,13 +2464,9 @@ public final class ImageSequenceViewModel {
                         currentFrameHighLevelCleanMethod = .automatic
                         currentFrameAutoPreservationMode = useOutliers ? .yes : .no
 
-                    case .selective:
-                        currentFrameHighLevelCleanMethod = .selective
+                    case let method:
+                        currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
                         currentFrameAutoPreservationMode = .no
-                    case .dirtySky, .dirtyEarth:
-                        // T3: the pickers have no dirty choice yet.  Setting them here would
-                        // run their didSets and overwrite the frame's dirty method, so leave them.
-                        break
                     }
                 }
             }
@@ -3831,6 +3819,8 @@ public final class ImageSequenceViewModel {
             }
         case .selective:
             true
+        case .dirtySky, .dirtyEarth:
+            false
         }
     }
 
@@ -3853,12 +3843,8 @@ public final class ImageSequenceViewModel {
         case .automatic(let useOutliers):
             self._currentFrameHighLevelCleanMethod = .automatic
             self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
-        case .selective:
-            self._currentFrameHighLevelCleanMethod = .selective
-            self._currentFrameAutoPreservationMode = .no
-        case .dirtySky, .dirtyEarth:
-            // T3: the pickers have no dirty choice yet; shown as automatic
-            self._currentFrameHighLevelCleanMethod = .automatic
+        case .selective, .dirtySky, .dirtyEarth:
+            self._currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
             self._currentFrameAutoPreservationMode = .no
         }
         if getCleanMethod(forFrame: currentIndex) != method {

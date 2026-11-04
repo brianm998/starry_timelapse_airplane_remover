@@ -564,6 +564,8 @@ enum FrameViewMode {
   VIEW_AUTO_SELECTIVE_PROCESSED = 14;
   VIEW_SELECTIVE_PROCESSED     = 15;
   VIEW_CONSENSUS_HORIZON       = 16;   // a moving sequence's horizon consensus, drawn as a mask
+  VIEW_DIRTY_SKY_PROCESSED     = 17;   // the output of the dirty sky / dirty earth clean methods
+  VIEW_DIRTY_EARTH_PROCESSED   = 18;
 }
 
 // not_extracted: the frame's original is not extracted from its video yet, so there is no image (path is empty).  A result, not an error: the

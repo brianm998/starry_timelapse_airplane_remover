@@ -450,15 +450,7 @@ struct ProcessingSettingsView: View {
         } else {
             autoPreservationMode = .no
         }
-        switch viewModel.cleanMethod {
-        case .automatic(_):
-            cleanMethod = .automatic
-        case .selective:
-            cleanMethod = .selective
-        case .dirtySky, .dirtyEarth:
-            // T3: the sheet has no dirty choice yet
-            cleanMethod = .automatic
-        }
+        cleanMethod = HighLevelCleanMethod(viewModel.cleanMethod)
     }
 
     var body: some View {
@@ -614,6 +606,11 @@ struct ProcessingSettingsView: View {
           // move — the user would switch from automatic to selective, which changes every
           // output frame, and be told nothing.
           .onChange(of: cleanMethod) { self.applySettings() }
+          // Dirty earth needs a horizon, so switching the scene to sky only while it is chosen
+          // takes it back to Automatic (`Config.cleanMethodConflict` would refuse it).
+          .onChange(of: viewModel.horizonDetectionEnabled) {
+              cleanMethod = cleanMethod.coerced(horizonDetectionEnabled: viewModel.horizonDetectionEnabled)
+          }
           .onChange(of: autoPreservationMode) { self.applySettings() }
           // The whole question as the title, with no message under it.  Splitting it would
           // put the first clause in the bold title and the second in the body, which reads
@@ -811,14 +808,17 @@ struct ProcessingSettingsView: View {
           addSpacer: { addSpacer },
           isPrimary: false
         )        
-          .disabled(self.cleanMethod == .selective)
+          .disabled(!self.cleanMethod.usesAutoPreservation)
     }
     
     private var processingMethodGridRow: some View {
         EnumInstructionGridRow<HighLevelCleanMethod>(
           selection: $cleanMethod,
           showInfo: $showProcessingMethodInfo,
-          addSpacer: { addSpacer }
+          addSpacer: { addSpacer },
+          unavailableText: {
+              $0.unavailableText(horizonDetectionEnabled: viewModel.horizonDetectionEnabled)
+          }
         )        
     }
 
@@ -1889,18 +1889,19 @@ struct ProcessingSettingsView: View {
                 }
            }
         }
-          // Selective always uses outliers, whatever auto-preservation was left at
-          .disabled(cleanMethod == .automatic && autoPreservationMode == .no)
+          // Selective always uses outliers, whatever auto-preservation was left at; the dirty
+          // methods never do
+          .disabled(!self.chosenCleanMethod.usesOutliers)
+    }
+
+    /// The clean method the two choices in this sheet make.
+    private var chosenCleanMethod: CleanMethod {
+        CleanMethod(highLevelCleanMethod: cleanMethod, autoPreservationMode: autoPreservationMode)
     }
 
     private func applySettings() {
 
-        switch self.cleanMethod {
-        case .automatic:
-            viewModel.cleanMethod = .automatic(autoPreservationMode.boolValue)
-        case .selective:
-            viewModel.cleanMethod = .selective
-        }
+        viewModel.cleanMethod = self.chosenCleanMethod
 
         if !viewModel.cleanMethod.usesOutliers {
             viewModel.selectionMode = .none
@@ -1984,17 +1985,22 @@ struct EnumInstructionGridRow<E: InstructionOption>: View {
     @Binding var showInfo: Bool
     let addSpacer: () -> Bool
     let isPrimary: Bool
+    /// Why an option cannot be chosen right now, or nil when it can.  The option is switched off and
+    /// this takes the place of its hover text.
+    let unavailableText: (E) -> String?
     
     init(
       selection: Binding<E>,
       showInfo: Binding<Bool>,
       addSpacer: @escaping () -> Bool,
-      isPrimary: Bool = true
+      isPrimary: Bool = true,
+      unavailableText: @escaping (E) -> String? = { _ in nil }
     ) {
         self._selection = selection
         self._showInfo = showInfo
         self.addSpacer = addSpacer
         self.isPrimary = isPrimary
+        self.unavailableText = unavailableText
     }
     
     var body: some View {
@@ -2034,8 +2040,9 @@ struct EnumInstructionGridRow<E: InstructionOption>: View {
                               Text(item.titleText)
                                 .tag(item)
                                 .foregroundColor(.white)
-                                .help(item.helpText)
+                                .help(unavailableText(item) ?? item.helpText)
                                 .opacity(isPrimary ? 1.0 : 0.6)
+                                .disabled(unavailableText(item) != nil)
                           }
                       }
                         .pickerStyle(.inline)
