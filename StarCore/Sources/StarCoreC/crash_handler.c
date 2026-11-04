@@ -22,6 +22,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#if defined(__linux__) && defined(__GLIBC__)
+// glibc's backtrace_symbols_fd formats straight to a descriptor without malloc, which is
+// what makes it usable from a handler. Linux has no OS crash report the way macOS does, so
+// without this a CI crash names only the signal.
+#include <execinfo.h>
+#define STAR_HAVE_BACKTRACE 1
+#endif
 #define STAR_OPEN(path, flags)  open((path), (flags), 0644)
 #define STAR_WRITE(fd, b, n)    write((fd), (b), (n))
 #define STAR_CLOSE(fd)          close(fd)
@@ -151,6 +158,27 @@ static void star_write_all(int fd, const char *buf, size_t len) {
     }
 }
 
+#if defined(STAR_HAVE_BACKTRACE)
+#define STAR_BACKTRACE_DEPTH 64
+// Written to stderr and appended to star's log, so the next CI log names the crash site.
+static void star_write_backtrace(void) {
+    static const char header[] = "backtrace of the crashing thread:\n";
+    void *frames[STAR_BACKTRACE_DEPTH];
+    int n = backtrace(frames, STAR_BACKTRACE_DEPTH);
+    if (n <= 0) return;
+    star_write_all(STAR_STDERR_FD, header, sizeof(header) - 1);
+    backtrace_symbols_fd(frames, n, STAR_STDERR_FD);
+    if (star_log_path[0] != '\0') {
+        int fd = STAR_OPEN(star_log_path, STAR_APPEND_FLAGS);
+        if (fd >= 0) {
+            star_write_all(fd, header, sizeof(header) - 1);
+            backtrace_symbols_fd(frames, n, fd);
+            STAR_CLOSE(fd);
+        }
+    }
+}
+#endif
+
 static void star_write_file(const char *path, int flags, const char *buf, size_t len) {
     if (path[0] == '\0') return;
     int fd = STAR_OPEN(path, flags);
@@ -179,6 +207,9 @@ static void star_fatal_handler(int signo) {
         // may have been removed under us.
         star_write_all(STAR_STDERR_FD, entry->message, entry->message_len);
         star_write_file(star_log_path, STAR_APPEND_FLAGS, entry->log_line, entry->log_line_len);
+#if defined(STAR_HAVE_BACKTRACE)
+        star_write_backtrace();
+#endif
         star_write_file(star_note_path, STAR_TRUNC_FLAGS, entry->note, entry->note_len);
     }
 
@@ -248,6 +279,14 @@ int star_install_crash_handlers(const char *note_path, const char *log_path) {
         (void)signal(star_entries[i].signo, star_fatal_handler);
     }
 #else
+#if defined(STAR_HAVE_BACKTRACE)
+    // The first backtrace() call may dlopen libgcc, which allocates; do it here, not in the
+    // handler.
+    {
+        void *warm[2];
+        (void)backtrace(warm, 2);
+    }
+#endif
     stack_t alt;
     alt.ss_sp = star_altstack;
     alt.ss_size = sizeof(star_altstack);

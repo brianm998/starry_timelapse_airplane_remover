@@ -195,6 +195,12 @@ final public actor FrameOutlierProcessor {
         guard let frame else { return }
         let blobMap = try await blobProcessor.process(frame: frame)
 
+        // A stopped run cancels the op that is in here, but cancelling only marks it. Without
+        // these checks the frame carries on to classification and writes its outliers (and
+        // moves to readyForInterFrameProcessing) after the stop, which is what a superseding
+        // start sees as frames the stopped run "finished".
+        try Task.checkCancellation()
+
         // blobs to promote to outlier groups
         let blobs = Array(blobMap.values)
 
@@ -219,7 +225,9 @@ final public actor FrameOutlierProcessor {
         }
         
         // XXX promote featureTime and classificationTime to the gui
-        
+
+        try Task.checkCancellation()
+
         await outlierGroups?.add(good)
         await outlierGroups?.dumpInTrash(bad)
         
@@ -270,7 +278,16 @@ final public actor FrameOutlierProcessor {
                 // find outlying bright pixels between frames,
                 // and group neighboring outlying pixels into groups
                 // this can take a long time
-                try await findOutliers()
+                do {
+                    try await findOutliers()
+                } catch is CancellationError {
+                    // Stopped part way: leave the frame as if outliers had never been tried, so
+                    // a later run finds them again instead of being refused ("Not loading
+                    // twice") or taking the empty groups for a finished result.
+                    outlierGroups = nil
+                    isLoadingOutliers = false
+                    throw CancellationError()
+                }
 
                 await frame?.updateCombineSubjects()
                 
