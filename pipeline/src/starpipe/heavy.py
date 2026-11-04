@@ -18,6 +18,7 @@ import time
 from collections.abc import Callable, Generator
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 import psutil
 
@@ -157,7 +158,120 @@ def release(held: Held) -> None:
     os.close(held.fd)
 
 
-def run(
+@dataclass(frozen=True)
+class Hung:
+    """A job that was killed because it made no progress."""
+    cmd: str
+    idle_s: float
+
+
+@dataclass(frozen=True)
+class RunResult:
+    code: int
+    waited: float
+    hung: Hung | None = None
+
+
+@dataclass
+class _Sample:
+    at: float
+    cpu: float  # cumulative CPU seconds used by the job's group, exiting children never lowering it
+    log_size: int
+
+
+class _Activity:
+    """Judges whether a job has been idle: CPU in its whole process group, or its log growing, counts as activity."""
+
+    def __init__(self, leader: int, log_fd: int | None, idle_s: float) -> None:
+        self.leader, self.log_fd, self.idle_s = leader, log_fd, idle_s
+        self.seen: dict[int, float] = {}
+        self.total = 0.0
+        self.samples: list[_Sample] = []
+
+    def _members(self) -> list[psutil.Process]:
+        return _tree(self.leader)
+
+    def sample(self, now: float) -> None:
+        for p in self._members():
+            try:
+                t = p.cpu_times()
+            except psutil.Error:
+                continue
+            used = t.user + t.system
+            self.total += max(0.0, used - self.seen.get(p.pid, 0.0))
+            self.seen[p.pid] = used
+        size = 0
+        if self.log_fd is not None:
+            try:
+                size = os.fstat(self.log_fd).st_size
+            except OSError:
+                pass
+        self.samples.append(_Sample(now, self.total, size))
+        while len(self.samples) > 1 and self.samples[1].at <= now - self.idle_s:
+            self.samples.pop(0)
+
+    def idle_for(self, now: float) -> float | None:
+        """Seconds the job has been idle, once that is at least idle_s; else None."""
+        first, last = self.samples[0], self.samples[-1]
+        span = now - first.at
+        if span < self.idle_s:
+            return None
+        if last.cpu - first.cpu >= 0.01 * span or last.log_size > first.log_size:
+            return None
+        return span
+
+
+def _tree(leader: int) -> list[psutil.Process]:
+    """The job's processes: the leader, all its descendants (whatever process group they moved to) and its group's members."""
+    found: dict[int, psutil.Process] = {}
+    try:
+        root = psutil.Process(leader)
+        found[root.pid] = root
+        for child in root.children(recursive=True):
+            found[child.pid] = child
+    except psutil.Error:
+        pass
+    for p in psutil.process_iter():
+        try:
+            if p.pid not in found and os.getpgid(p.pid) == leader:
+                found[p.pid] = p
+        except (psutil.Error, OSError):
+            continue
+    return list(found.values())
+
+
+def _signal_tree(leader: int, tree: list[psutil.Process], sig: signal.Signals) -> None:
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(leader, sig)
+    for p in tree:
+        with contextlib.suppress(psutil.Error, OSError):
+            p.send_signal(sig)
+
+
+def _running(p: psutil.Process) -> bool:
+    try:
+        return p.is_running() and p.status() != psutil.STATUS_ZOMBIE
+    except psutil.Error:
+        return False
+
+
+def _kill_group(proc: subprocess.Popen[bytes], grace: float) -> None:
+    """TERM then, after the grace, KILL the job's whole tree. The tree is collected first: once the leader dies its
+    children are reparented and can no longer be found from it. Children in other process groups are signalled
+    individually, so the lock is never released with part of the job still running."""
+    tree = [p for p in _tree(proc.pid) if p.pid != proc.pid]
+    if grace > 0:
+        _signal_tree(proc.pid, tree, signal.SIGTERM)
+        deadline = time.monotonic() + grace
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(grace)
+        while time.monotonic() < deadline and any(_running(p) for p in tree):
+            time.sleep(0.05)
+    _signal_tree(proc.pid, tree, signal.SIGKILL)  # whatever ignored the TERM, or outlived its leader
+    proc.wait()
+
+
+def run_job(
     argv: list[str],
     *,
     priority: int | None = None,
@@ -167,19 +281,21 @@ def run(
     cwd: str | None = None,
     stdout: int | None = None,
     env: dict[str, str] | None = None,
-) -> tuple[int, float]:
-    """Wait for a slot, run argv in its own process group, release. Returns (exit code, lock wait s)."""
+) -> RunResult:
+    """Wait for a slot, run argv in its own process group, release. A job idle for `heavy_idle_kill_s` is killed and
+    reported as hung, so a wedged test run cannot hold the slot until the owner notices."""
+    cfg = config or load()
     cmd = " ".join(argv)
-    held = acquire(cmd, priority=priority, config=config, report=report)
+    held = acquire(cmd, priority=priority, config=cfg, report=report)
     try:
-        _holder_file(held.slot).write_text(json.dumps({
-            "pid": os.getpid(), "ticket": os.environ.get("STARPIPE_TICKET", ""),
-            "cmd": cmd, "since": time.time(),
-        }))
+        holder = _holder_file(held.slot)
+        record = {"pid": os.getpid(), "ticket": os.environ.get("STARPIPE_TICKET", ""), "cmd": cmd, "since": time.time()}
+        holder.write_text(json.dumps(record))
         if keep_display_awake:  # XCUITest / Compose UI freeze when the display sleeps
             argv = ["caffeinate", "-d", "-u", *argv]
         proc = subprocess.Popen(argv, process_group=0, cwd=cwd, stdout=stdout, env=env,
                                 stderr=subprocess.STDOUT if stdout is not None else None)
+        holder.write_text(json.dumps({**record, "job_pid": proc.pid}))  # `pid` is the caller; this is what is running
 
         def forward(signum: int, _frame: object) -> None:
             if proc.poll() is None:
@@ -191,19 +307,40 @@ def run(
         old = {}
         if threading.current_thread() is threading.main_thread():
             old = {s: signal.signal(s, forward) for s in (signal.SIGINT, signal.SIGTERM)}
+        hung: Hung | None = None
         try:
-            code = proc.wait()
+            watch = _Activity(proc.pid, stdout, cfg.heavy_idle_kill_s) if cfg.heavy_idle_kill_s > 0 else None
+            while True:
+                try:
+                    code = proc.wait(cfg.heavy_idle_poll_s if watch else None)
+                    break
+                except subprocess.TimeoutExpired:
+                    pass
+                assert watch is not None
+                now = time.monotonic()
+                watch.sample(now)
+                idle = watch.idle_for(now)
+                if idle is not None:
+                    hung = Hung(cmd, idle)
+                    _kill_group(proc, cfg.heavy_idle_grace_s)
+                    code = proc.returncode
+                    break
         except BaseException:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(proc.pid, signal.SIGKILL)  # never release the lock while the job is still running
-            proc.wait()
+            _kill_group(proc, 0)  # never release the lock while any of the job is still running
             raise
         finally:
             for s, h in old.items():
                 signal.signal(s, h)
-        return (128 + -code if code < 0 else code), held.waited
+        code = 128 + -code if code < 0 else code
+        return RunResult(code or (128 + signal.SIGTERM if hung else 0), held.waited, hung)
     finally:
         release(held)
+
+
+def run(argv: list[str], **kwargs: Any) -> tuple[int, float]:
+    """run_job for callers that only want (exit code, lock wait s)."""
+    result = run_job(argv, **kwargs)
+    return result.code, result.waited
 
 
 @dataclass
@@ -212,6 +349,7 @@ class Holder:
     ticket: str
     cmd: str
     since: float
+    job_pid: int = 0
 
 
 @dataclass

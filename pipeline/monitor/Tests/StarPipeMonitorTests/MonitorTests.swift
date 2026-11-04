@@ -119,6 +119,43 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(emphases(["developing", "review"]), [.idle, .idle, .idle, .active, .idle, .active, .idle])
     }
 
+    func testStatusRows() throws {
+        let base = try Self.snapshot()
+        func rows(_ s: Snapshot?, _ c: Connection = .live, update: Bool = false) -> [Overview.StatusRow] {
+            Overview.statusRows(snapshot: s, connection: c, updateAvailable: update, rebuildCommand: "make app",
+                                timeZone: TimeZone(identifier: "UTC")!)
+        }
+        let r = rows(base)
+        XCTAssertEqual(r.map(\.label).prefix(4), ["Daemon", "Heavy lock", "Landing", "develop"])
+        XCTAssertEqual(r.first { $0.label == "Daemon" }?.value, "up, \(base.runtime.sha)" + (base.runtime.behindDevelop > 0 ? ", behind develop by \(base.runtime.behindDevelop)" : ""))
+        XCTAssertEqual(r.first { $0.label == "Daemon" }?.severity, .ok)
+        XCTAssertEqual(r.first { $0.label == "Landing" }?.value, "running")
+        XCTAssertTrue(r.first { $0.label == "develop" }!.value.hasPrefix("pr-gate"))
+        XCTAssertEqual(r.first { $0.label == "Last nightly" }?.value, base.nightly?.line ?? "none yet")
+        for gone in ["Usage limit", "Monitor update", "Paused"] { XCTAssertNil(r.first { $0.label == gone }, gone) }
+        XCTAssertEqual(Overview.attentionWords(r), [])
+
+        var s = base
+        s.landing.stopLine = "pr-gate red"; s.landing.paused = true
+        s.pause = "owner pause"; s.usagePauseUntil = "0"
+        let bad = rows(s, .down("refused"), update: true)
+        XCTAssertEqual(bad.first { $0.label == "Daemon" }?.value, "down: refused")
+        XCTAssertEqual(bad.first { $0.label == "Daemon" }?.severity, .bad)
+        XCTAssertEqual(bad.first { $0.label == "Landing" }?.value, "stopped: pr-gate red")
+        XCTAssertEqual(bad.first { $0.label == "Landing" }?.severity, .warn)
+        XCTAssertEqual(bad.first { $0.label == "develop" }?.severity, .bad)
+        XCTAssertEqual(bad.first { $0.label == "Monitor update" }?.value, "Update available — make app")
+        XCTAssertEqual(bad.first { $0.label == "Paused" }?.value, "owner pause")
+        XCTAssertTrue(bad.first { $0.label == "Usage limit" }!.value.hasPrefix("model stages wait until "))
+        XCTAssertEqual(Overview.attentionWords(bad),
+                       ["Daemon down", "Landing paused", "develop red", "Usage limit", "Update available", "Paused"])
+
+        let connecting = rows(nil, .connecting)
+        XCTAssertEqual(connecting.map(\.value).prefix(4), ["connecting…", "—", "—", "—"])
+        XCTAssertEqual(connecting.first { $0.label == "Last nightly" }?.value, "none yet")
+        XCTAssertEqual(Overview.attentionWords(connecting), [])
+    }
+
     func testEveryTicketIsInAKnownGroupAndStagesCarryTheirLockWait() throws {
         let s = try Self.snapshot()
         for t in s.tickets { XCTAssertTrue(s.groups.contains(t.group), "\(t.number) is in \(t.group)") }
@@ -158,14 +195,17 @@ final class DetailTests: XCTestCase {
         XCTAssertEqual(d.checks.first?.result, "pass")
         XCTAssertNil(d.question)
         XCTAssertEqual(d.blockers, [BlockerRef(number: 27, title: "Processing Frames dialog: remember the window size")])
+        XCTAssertEqual(d.heldRetry, "retry from ci when unblocked")
     }
 
     func testADetailWithoutBlockersFromAnOlderDaemonDecodesToNone() throws {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "detail", withExtension: "json", subdirectory: "Fixtures"))
         var raw = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         raw["blockers"] = nil
+        raw["held_retry"] = nil
         let d = try JSONDecoder().decode(TicketDetail.self, from: JSONSerialization.data(withJSONObject: raw))
         XCTAssertEqual(d.blockers, [])
+        XCTAssertNil(d.heldRetry)
         XCTAssertEqual(d.number, 28)
     }
 }
@@ -228,6 +268,49 @@ final class StoreTests: XCTestCase {
         s.tickets.removeAll { $0.number == 5 }
         store.apply(s)
         XCTAssertNil(store.selected)
+    }
+
+    /// Fixture ticket 3 blocked by a ticket (6) and a non-ticket issue (99).
+    private func blockedSnapshot() throws -> Snapshot {
+        var s = try FixtureTests.snapshot()
+        let i = try XCTUnwrap(s.tickets.firstIndex { $0.number == 3 })
+        s.tickets[i].blockedBy = [6, 99]
+        return s
+    }
+
+    func testSelectingBlockerShowsItInPanel() throws {
+        let store = MonitorStore()
+        store.apply(try blockedSnapshot())
+        store.selectIssue(6)
+        XCTAssertEqual(store.selectedTicket?.number, 6)
+        XCTAssertNil(store.selectedIssue)
+        store.selectIssue(99, title: "outside")
+        XCTAssertNil(store.selectedTicket)
+        XCTAssertEqual(store.selectedIssue?.number, 99)
+        XCTAssertEqual(store.selectedIssue?.title, "outside")
+    }
+
+    func testSnapshotKeepsSelectedBlockerNotInTickets() throws {
+        let store = MonitorStore()
+        store.apply(try blockedSnapshot())
+        store.selectIssue(99, title: "outside")
+        store.apply(try blockedSnapshot())
+        XCTAssertEqual(store.selected, 99)
+        XCTAssertNil(store.selectedTicket)
+        XCTAssertEqual(store.selectedIssue?.title, "outside")
+        store.apply(try FixtureTests.snapshot())   // nothing is blocked by 99 any more
+        XCTAssertNil(store.selected)
+    }
+
+    func testBlockerSelectionIsInHistory() throws {
+        let store = MonitorStore()
+        store.apply(try blockedSnapshot())
+        store.selectIssue(99)
+        store.selected = 6
+        store.goBack()
+        XCTAssertEqual(store.selected, 99)
+        store.goForward()
+        XCTAssertEqual(store.selected, 6)
     }
 
     func testShowOverviewClearsTheSelectionAndDetail() async throws {

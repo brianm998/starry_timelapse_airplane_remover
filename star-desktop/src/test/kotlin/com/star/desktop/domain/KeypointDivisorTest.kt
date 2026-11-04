@@ -59,19 +59,32 @@ class KeypointDivisorTest {
         assertFalse(KeypointDivisor.isRecommended(null, 1.5))
     }
 
-    @Test fun theSectionOpensWhenAReductionIsAdvisedOrAValueIsAlreadySet() {
-        assertTrue(KeypointDivisor.initiallyExpanded(advice(reduce = true), 1.0))
-        assertTrue(KeypointDivisor.initiallyExpanded(advice(reduce = false), 1.5))
-        assertFalse(KeypointDivisor.initiallyExpanded(advice(reduce = false), 1.0))
-        assertFalse(KeypointDivisor.initiallyExpanded(null, 1.0))
-        assertFalse(KeypointDivisor.initiallyExpanded(advice(reduce = true, available = false), 1.0), "no frame size yet: nothing to advise")
+    @Test fun summaryLabelNamesOnlyThePresets() {
+        assertEquals("1 \u2014 Best quality", KeypointDivisor.summaryLabel(1.0))
+        assertEquals("1.5 \u2014 Best balance", KeypointDivisor.summaryLabel(1.5))
+        assertEquals("2 \u2014 Fastest", KeypointDivisor.summaryLabel(2.0))
+        assertEquals("1.5 \u2014 Best balance", KeypointDivisor.summaryLabel(1.5004), "a value that round-tripped through the config still names its preset")
+        assertEquals("3", KeypointDivisor.summaryLabel(3.0))
+        assertEquals("1.25", KeypointDivisor.summaryLabel(1.25))
     }
 
-    @Test fun theTitleNamesAPresetOrShowsTheNumber() {
-        assertEquals("Best quality", KeypointDivisor.currentChoiceName(1.0))
-        assertEquals("Best balance", KeypointDivisor.currentChoiceName(1.5))
-        assertEquals("Fastest", KeypointDivisor.currentChoiceName(2.0))
-        assertEquals("divide by 3", KeypointDivisor.currentChoiceName(3.0))
+    @Test fun cancelKeepsOriginalUpdateCommitsDraft() {
+        val picked = KeypointDivisorDraft(1.0)
+        picked.choose(2.0)
+        assertEquals(2.0, picked.committed())
+        assertEquals(1.0, picked.cancelled(), "cancel leaves the value the modal opened with")
+
+        val typed = KeypointDivisorDraft(1.5)
+        typed.typed("3")
+        typed.typed("3.")
+        typed.typed("3.7")
+        assertEquals(3.7, typed.committed(), "a typed custom value survives Update")
+        assertEquals(1.5, typed.cancelled())
+
+        val junk = KeypointDivisorDraft(2.0)
+        junk.typed("")
+        junk.typed("9")
+        assertEquals(2.0, junk.committed(), "text that is not a value leaves the draft alone")
     }
 
     @Test fun warnsFromFourUp() {

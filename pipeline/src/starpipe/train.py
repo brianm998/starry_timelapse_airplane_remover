@@ -1,6 +1,6 @@
 """The landing train: one CI for many tickets (plan §10, revised 2026-10-31).
 
-Tickets that finish REVIEW wait in `ready`. When no batch is running, the train takes what is ready (up to `batch_max`), builds
+Tickets that finish REVIEW wait in `ready`. When no batch is running, the train takes what is ready (all of it: a batch has no size cap), builds
 one integration branch (develop plus each ticket's branch, merged in order), opens ONE pull request and runs ONE CI. Green: merge it
 and land every member. Red: rerun what looks like a flake, otherwise split the batch in half and try the halves, down to one
 ticket, which goes through CI-FIX and rejoins the queue. CI taking an hour is the collection window: whatever becomes ready meanwhile
@@ -56,13 +56,13 @@ def batch_branch(batch: int) -> str:
 def window_left(db: Database, config: Config, now: float) -> float | None:
     """Seconds until the train forms its next batch (0: it is about to), or None when a batch is active or nothing is ready.
 
-    The same arithmetic as `Train._pick`: a batch forms once `batch_max` tickets are ready or the oldest has waited `batch_window_s`."""
+    The same arithmetic as `Train._pick`: a batch forms once the oldest ready ticket has waited `batch_window_s`."""
     if db.active_batch() is not None:
         return None
     ready = [t for t in db.tickets(("ready",)) if db.batch_of(t.number) is None]
     if not ready:
         return None
-    if len(ready) >= config.batch_max:
+    if any(ship.land_now_mark(db, t.number) for t in ready):
         return 0.0
     oldest = min(db.state_since(t.number, "ready") or t.updated_at for t in ready)
     return max(0.0, config.batch_window_s - (now - oldest))
@@ -99,9 +99,13 @@ class Train:
                 break
         return steps
 
-    def _held(self) -> bool:
+    def _held(self, bypass_stop_line: bool = False) -> bool:
         db = self.eng.db
-        return db.get("pause") in ("all", "landing") or bool(db.get("stop_line"))
+        return db.get("pause") in ("all", "landing") or (bool(db.get("stop_line")) and not bypass_stop_line)
+
+    def _owner_landed(self, members: list[int]) -> bool:
+        """True when every ticket in the batch carries the owner's land-now mark (so CI and the stop line are skipped)."""
+        return bool(members) and all(ship.land_now(self.eng, n) for n in members)
 
     async def step(self) -> bool:
         """Advance the train by one thing. True when something happened (so the caller need not wait)."""
@@ -113,7 +117,9 @@ class Train:
         if batch is not None:
             await self._drive(int(batch["id"]))
             return True
-        if self._held():
+        flagged = [t.number for t in eng.db.tickets(("ready",))
+                   if eng.db.batch_of(t.number) is None and ship.land_now(eng, t.number) and not self._gated(t)]
+        if self._held(bypass_stop_line=bool(flagged)):
             return False
         members = self._pick()
         if not members:
@@ -156,9 +162,12 @@ class Train:
                 return group
         if not ready:
             return []
+        flagged = [t.number for t in ready if ship.land_now(eng, t.number)]
+        if flagged:  # the owner's land-now: a batch of just these, now, without waiting out the window
+            return flagged
         oldest = min(eng.db.state_since(t.number, "ready") or t.updated_at for t in ready)
-        if len(ready) >= eng.config.batch_max or eng.clock() - oldest >= eng.config.batch_window_s:
-            return ids[: eng.config.batch_max]
+        if eng.clock() - oldest >= eng.config.batch_window_s:
+            return ids
         return []
 
     async def _start(self, members: list[int]) -> None:
@@ -290,6 +299,10 @@ class Train:
             gone = [n for n in members if (t := eng.db.ticket(n)) is None or t.state != "ci"]
             if gone:  # cancelled or parked while in the batch: its changes are in the integration branch, so rebuild without it
                 return ("abandon", f"#{gone[0]} left the batch")
+            if self._owner_landed(members):
+                return ("pass", "- tests bypassed by the owner (land-now)")
+            if any(ship.land_now(eng, n) for n in members):  # a flagged ticket must not wait on its unflagged batch-mates' CI
+                return ("abandon", "a land-now ticket is in a batch with tickets that still need CI: rebuilding without the wait")
             reran = {tuple(k) for k in json.loads(eng.db.get(f"reran:batch{bid}") or "[]")}
             try:
                 verdict = await asyncio.to_thread(ship._judge, eng, f"batch{bid}", batch["head_sha"], reran)  # pyright: ignore[reportPrivateUsage]
@@ -317,7 +330,7 @@ class Train:
     async def _land(self, bid: int, notes: str) -> None:
         eng = self.eng
         async with eng.land_lock:
-            while self._held():
+            while self._held(bypass_stop_line=self._owner_landed(eng.db.batch_members(bid))):
                 await eng.sleep(eng.config.ci_poll_s)
             members = eng.db.batch_members(bid)
             if any((t := eng.db.ticket(n)) is None or t.state != "ci" for n in members):

@@ -119,6 +119,7 @@ private func protoCleanMethod(_ cm: CleanMethod) -> Star_V1_CleanMethod {
     case .selective:        return .cleanSelective
     case .automatic(true):  return .cleanAutomaticTrue
     case .automatic(false): return .cleanAutomatic
+    case .dirtySky, .dirtyEarth: return .cleanAutomatic // T2: no proto cases yet
     }
 }
 

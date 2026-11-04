@@ -6,12 +6,14 @@ import SwiftUI
 struct OverviewView: View {
     @Bindable var store: MonitorStore
     @State private var confirming: TicketSnap?
+    @State private var confirmingAll = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 Text("Overview").scaledFont(.title2, weight: .bold)
                 if let error = store.lastError { Text(error).foregroundStyle(.red).scaledFont(.caption) }
+                pipelineStatus
                 activeModels
                 concurrency
                 landingQueue
@@ -28,6 +30,36 @@ struct OverviewView: View {
             Button("Cancel", role: .cancel) {}
         } message: { _ in
             Text("CI, the overlap re-test and the stop-line wait are skipped, and the PR says the owner bypassed them. A conflict still goes to the conflict stage, and an explicit landing pause still holds it.")
+        }
+        .confirmationDialog("Land every ticket in the queue without waiting for tests?", isPresented: $confirmingAll, titleVisibility: .visible) {
+            Button("Land all (skip tests)", role: .destructive) { Task { await store.landAll() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every ticket in the landing queue is marked land-now at once and lands together. CI, the overlap re-test and the stop-line wait are skipped.")
+        }
+    }
+
+    // 0. pipeline status --------------------------------------------------------------------------------------------
+    private var pipelineStatus: some View {
+        section("Pipeline status") {
+            Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 6) {
+                ForEach(store.statusRows) { row in
+                    GridRow {
+                        Text(row.label).foregroundStyle(.secondary)
+                        Text(row.value).foregroundStyle(color(row.severity)).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private func color(_ severity: Overview.Severity) -> Color {
+        switch severity {
+        case .normal: .secondary
+        case .ok: .green
+        case .warn: .orange
+        case .bad: .red
         }
     }
 
@@ -93,6 +125,9 @@ struct OverviewView: View {
             }
             if queue.isEmpty {
                 Text("Nothing is waiting to land.").foregroundStyle(.secondary)
+            }
+            if queue.count > 1 {
+                Button("Land all (skip tests)") { confirmingAll = true }
             }
             ForEach(queue) { t in
                 HStack(spacing: 8) {

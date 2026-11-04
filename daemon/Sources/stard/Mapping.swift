@@ -65,6 +65,9 @@ enum Mapping {
         case .autoProcessed:          return .viewAutoProcessed
         case .autoSelectiveProcessed: return .viewAutoSelectiveProcessed
         case .selectiveProcessed:     return .viewSelectiveProcessed
+        // T2: the proto has no view modes for the dirty methods' outputs yet; until it does a
+        // client cannot ask for them (their final, .viewProcessed, it can)
+        case .dirtySkyProcessed, .dirtyEarthProcessed: return nil
         }
     }
 
@@ -254,6 +257,8 @@ enum Mapping {
         case .selective:        return .cleanSelective
         case .automatic(true):  return .cleanAutomaticTrue
         case .automatic(false): return .cleanAutomatic
+        // T2: no proto cases for the dirty methods yet; the nearest existing one until T2 adds them
+        case .dirtySky, .dirtyEarth: return .cleanAutomatic
         }
     }
 

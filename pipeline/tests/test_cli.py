@@ -11,7 +11,7 @@ import pytest
 from click.testing import CliRunner
 
 from starpipe import selfupdate
-from starpipe.cli import landing_lines, main
+from starpipe.cli import landing_lines, main, update_hold_line
 from starpipe.config import home
 
 from .fakes import sh
@@ -130,3 +130,72 @@ def test_daemon_run_holds_off_idle_sleep(monkeypatch: pytest.MonkeyPatch) -> Non
         raise FileNotFoundError
     monkeypatch.setattr(cli.subprocess, "Popen", missing)
     hold_off()  # no caffeinate: not an error
+
+
+def test_status_says_when_a_self_update_holds_claims(monkeypatch: pytest.MonkeyPatch) -> None:
+    hold = {"sha": "e3c559f6aabbccdd", "left_s": 7 * 60 + 5, "waiting_on": [73]}
+    assert update_hold_line(hold) == "self-update to e3c559f6 pending: holding new work, waiting on #73, swaps in 7m"
+    assert update_hold_line({**hold, "waiting_on": [73, 74], "left_s": 40}) == (
+        "self-update to e3c559f6 pending: holding new work, waiting on #73 #74, swaps in 40s")
+    assert update_hold_line(None) is None
+
+    class FakeClient:
+        def __init__(self, hold: dict[str, object] | None) -> None:
+            self.hold = hold
+
+        def call(self, _method: str, _path: str) -> dict[str, object]:
+            return {"daemon": {"pid": 1, "error": None}, "self_update": {"pending": "e3c559f6", "hold": self.hold}, "tickets": []}
+
+    for h, shown in ((hold, True), (None, False)):
+        monkeypatch.setattr("starpipe.cli._client", lambda h=h: FakeClient(h))  # type: ignore[misc]
+        out = CliRunner().invoke(main, ["status"])
+        assert out.exit_code == 0 and ("self-update to e3c559f6 pending" in out.output) is shown
+
+
+class FakeDaemon:
+    def __init__(self, result: str = "ok") -> None:
+        self.calls: list[tuple[str, str, dict[str, Any] | None]] = []
+        self.result = result
+
+    def call(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+        self.calls.append((method, path, body))
+        return {"result": self.result}
+
+
+def test_block_adds_links_to_an_existing_ticket(monkeypatch: pytest.MonkeyPatch) -> None:
+    from starpipe import github
+
+    from .fakes import FakeGitHub
+
+    gh = FakeGitHub()
+    for n in (7, 174, 199):
+        gh.add_issue(n, f"ticket {n}")
+    gh.add_issue(50, "not a pipeline ticket", labels=())
+    monkeypatch.setattr(github, "GitHub", lambda _cfg: gh)  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
+    run = CliRunner()
+    out = run.invoke(main, ["block", "7", "#174,199"])
+    assert out.exit_code == 0, out.output
+    assert gh.deps[7] == [174, 199]
+    assert run.invoke(main, ["block", "7", "174"]).exit_code == 0 and gh.deps[7] == [174, 199], "an existing link is not added twice"
+    assert run.invoke(main, ["block", "7", "7"]).exit_code != 0, "a ticket cannot block itself"
+    assert run.invoke(main, ["block", "174", "7"]).exit_code != 0, "7 is blocked by 174: the reverse link would close a cycle"
+    assert run.invoke(main, ["block", "50", "7"]).exit_code != 0, "not a pipeline ticket"
+    out = run.invoke(main, ["unblock", "7", "174"])
+    assert out.exit_code == 0, out.output
+    assert gh.deps[7] == [199]
+    assert run.invoke(main, ["unblock", "7", "174"]).exit_code != 0, "no such link"
+
+
+def test_retry_without_the_flag_is_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    from starpipe import cli
+
+    daemon = FakeDaemon("note: #7 is still blocked by #174; retried anyway")
+    monkeypatch.setattr(cli, "_client", lambda: daemon)
+    out = CliRunner().invoke(main, ["retry", "7", "ci"])
+    assert out.exit_code == 0 and "still blocked by #174" in out.output, out.output
+    assert daemon.calls == [("POST", "/v1/tickets/7/retry", {"stage": "ci"})], "no when_unblocked unless asked for"
+
+    daemon.result = "ok"
+    out = CliRunner().invoke(main, ["retry", "7", "ci", "--when-unblocked"])
+    assert out.exit_code == 0 and out.output.strip() == "ok"
+    assert daemon.calls[-1] == ("POST", "/v1/tickets/7/retry", {"stage": "ci", "when_unblocked": True})
