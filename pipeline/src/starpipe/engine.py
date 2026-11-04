@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from . import gitutil, guards, landing, load, negctl, ship, tickets, trust, worktrees
-from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
+from .agent import READ_ONLY_STAGES, STAGE_TOOLS, AgentRunner, StageOutcome, StageRequest
 from .announce import Announcer, Kind, SilentAnnouncer
 from .checks import impact, ledger
 from .config import Config, home
@@ -44,6 +44,24 @@ Sleep = Callable[[float], Awaitable[None]]
 
 def prompt_text(name: str) -> str:
     return (PROMPTS / f"{name}.md").read_text()
+
+
+def contract_tool(stage: str) -> str:
+    """The tool a stage must finish by calling: its `submit_*` one."""
+    return next(name for name in STAGE_TOOLS[stage] if name.startswith("submit_"))
+
+
+def resume_note(stage: str) -> str:
+    return (f"The daemon restarted and this session was resumed. Your last tool call may have been cut off, and any "
+            f"acceptance you had earlier was not kept. Do not start over and do not treat the ticket as already done: "
+            f"re-check the tree (git status, git log, the diff against the base), redo whatever is missing, and finish "
+            f"by calling `{contract_tool(stage)}`.")
+
+
+def nudge_note(stage: str) -> str:
+    return (f"Your last turn ended without an accepted `{contract_tool(stage)}` call, so the stage has not finished. "
+            f"Check what is left and finish by calling `{contract_tool(stage)}`. If it reports a problem, fix that and "
+            f"call it again.")
 
 
 @dataclass
@@ -364,14 +382,28 @@ class Engine:
         if pending:
             prompt = f"The owner's answer to your question:\n\n{pending['answer']}\n\nContinue the stage.\n\n{prompt}"
             self.db.put(f"delivered:{pending['id']}", "1")
+        restarted = bool(resume) and (self.db.stages(t.number, stage) or [{}])[-1].get("outcome") == "interrupted"
+        opening = ""  # what the first request says when it resumes after a restart, in place of the ticket prompt
+        if restarted:
+            opening = resume_note(stage)
+            if note:
+                opening = f"{note}\n\n{opening}"
+            if pending:
+                opening = f"The owner's answer to your question:\n\n{pending['answer']}\n\nContinue the stage.\n\n{opening}"
         attempt, crashes = 1, 0
         summary = ""
+        nudge: str | None = None  # set to send the nudge in place of the prompt
+        nudged = False
         while attempt <= 3:
             await self._wait_for_usage()
             await self._wait_for_update_hold()
             model, effort = self._stage_choice(t, stage, attempt)
             stage_id = await self._begin_when_room(t, stage, attempt, model, landing=as_landing)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
+            if nudge:
+                body, nudge = nudge, None
+            elif restarted:
+                body, restarted = opening, False
             req = StageRequest(t.number, stage, attempt, body,
                                prompt_text("_preamble") + "\n\n" + prompt_text(stage.replace("-", "_")), model,
                                effort, BUDGET_S[stage], contract, self._fence(t, stage), resume,
@@ -401,7 +433,11 @@ class Engine:
                 resume = known or resume
                 continue
             crashes = 0
+            if out.status == "no-result" and out.session_id and not nudged:
+                resume, nudge, nudged = out.session_id, nudge_note(stage), True
+                continue  # one nudge in the same session before the attempt counts
             resume = known if out.status == "timeout" else None
+            nudged = False
             attempt += 1
         return self.park(t, f"{stage}: no accepted result after 3 attempts. {summary}"), contract
 
