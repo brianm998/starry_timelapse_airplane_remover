@@ -286,6 +286,9 @@ final public actor FrameOutlierProcessor {
                     // twice") or taking the empty groups for a finished result.
                     outlierGroups = nil
                     isLoadingOutliers = false
+                    // findOutliers may already have moved the frame on to a classification
+                    // stage it never finished; a frame that did not complete is unprocessed.
+                    await frame?.set(state: .unprocessed)
                     throw CancellationError()
                 }
 

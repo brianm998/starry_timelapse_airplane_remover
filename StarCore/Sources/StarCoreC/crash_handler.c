@@ -204,13 +204,16 @@ static void star_fatal_handler(int signo) {
     if (entry) {
         // Ordered by how likely each is to survive: stderr needs no filesystem, the log
         // append needs a path that already existed, and the note needs a directory that
-        // may have been removed under us.
+        // may have been removed under us. The backtrace goes after all three.
         star_write_all(STAR_STDERR_FD, entry->message, entry->message_len);
         star_write_file(star_log_path, STAR_APPEND_FLAGS, entry->log_line, entry->log_line_len);
+        star_write_file(star_note_path, STAR_TRUNC_FLAGS, entry->note, entry->note_len);
 #if defined(STAR_HAVE_BACKTRACE)
+        // Last, and the least safe step: the unwind runs libgcc over a stack that may be
+        // corrupt, so if it faults the guard above exits immediately. Everything the user
+        // needs (message, log line, note) is already out by then.
         star_write_backtrace();
 #endif
-        star_write_file(star_note_path, STAR_TRUNC_FLAGS, entry->note, entry->note_len);
     }
 
     // Restore the default and re-raise, so the process dies of the signal it was given and
