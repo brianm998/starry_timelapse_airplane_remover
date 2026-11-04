@@ -482,7 +482,8 @@ def watch_develop(eng: Engine) -> None:
                     _new_red(eng, job, sha)
             elif not job.red:
                 eng.db.put(pending, None)  # green again: that was a flake
-            if job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line"):
+            if job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line") == f"{job.workflow}/{job.job}":
+                # only the job that set the line clears it: a green sibling says nothing about the red one
                 eng.db.put("stop_line", None)
                 eng.notifier.clear("develop-red", None)
                 eng.db.event("stop-line-cleared", None, job=job.job)
