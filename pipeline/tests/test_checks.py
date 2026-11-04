@@ -102,7 +102,7 @@ def test_serial_classes_run_in_their_own_pass(tmp_path: Path, monkeypatch: pytes
     monkeypatch.setitem(star.SERIAL_CLASSES, "test:StarCpp", ("TimingTests", "OtherTests"))
     spec = star.swift_test("StarCpp", tid="StarCpp")
     assert spec.argv.count("--skip") == 2 and "TimingTests" in spec.argv and "OtherTests" in spec.argv
-    assert spec.serial_argv and "--parallel" not in spec.serial_argv
+    assert spec.serial_argv and spec.serial_argv[spec.serial_argv.index("--num-workers") + 1] == "1"
     assert [a for a in spec.serial_argv if a not in ("--filter",)].count("TimingTests") == 1
     assert spec.serial_argv.count("--filter") == 2 and "--skip" not in spec.serial_argv
     assert any(f.endswith("-serial.xml") for f in spec.xunit)

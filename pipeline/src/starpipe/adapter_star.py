@@ -132,7 +132,7 @@ def _swift_build(pkg: str, *extra: str) -> CheckSpec:
 # `--parallel --xunit-output` records no `<skipped>`: an XCTSkip reads as a pass (StarCpp's serial banner says 7 skipped, its
 # xunit file 0), so an unexpected skip in a parallel suite goes unseen. A suite is added here only when it wins by that much.
 SERIAL_CLASSES: dict[str, tuple[str, ...]] = {
-    "test:StarCpp": (),
+    "test:StarCpp": ("OpenCVQoSTests",),  # measures QoS-dependent worker counts; skipped here, but never beside other tests
 }
 
 
@@ -148,7 +148,8 @@ def swift_test(pkg: str, *extra: str, tid: str | None = None) -> CheckSpec:
     parallel = ("swift", "test", "--package-path", pkg, *extra, "--parallel", "--num-workers", "{workers}",
                 "--xunit-output", xml, *skips)
     xml_serial = "{log_dir}/" + name + "-serial.xml"
-    serial_argv = ("swift", "test", "--package-path", pkg, "--xunit-output", xml_serial,
+    # one worker is still serial, and a non-parallel `swift test` writes no XCTest xunit file
+    serial_argv = ("swift", "test", "--package-path", pkg, "--parallel", "--num-workers", "1", "--xunit-output", xml_serial,
                    *(arg for cls in serial for arg in ("--filter", cls))) if serial else ()
     files = (xml, xml.removesuffix(".xml") + "-swift-testing.xml")
     if serial:
