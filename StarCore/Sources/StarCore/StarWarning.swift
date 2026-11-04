@@ -208,7 +208,7 @@ extension StarWarning {
 /// separately.  Clients set `Callbacks.warningCallback` and call
 /// `Callbacks.installWarningHandler()`; everything that notices something calls `post`.
 ///
-/// Note the asymmetry with `Log`: warnings are *also* logged here, so a source never has
+/// Note the asymmetry with `Log`: warnings are *also* logged here (once per delivery), so a source never has
 /// to do both.  A warning is a superset of a log line, not an alternative to one.
 public actor StarWarnings {
 
@@ -250,23 +250,47 @@ public actor StarWarnings {
 
     public func latest() -> StarWarning? { mostRecent }
 
-    /// Report a condition.  Logged always; delivered to the client handler unless an
+    /// Where log lines go.  `Log` in production; a test swaps it to count what was written.
+    /// Takes whether the line is critical, so the level is chosen where the line is written.
+    typealias LogSink = @Sendable (_ critical: Bool, _ line: String) -> Void
+    private var logSink: LogSink = { critical, line in
+        if critical { Log.e(line) } else { Log.w(line) }
+    }
+
+    /// Exposed for tests.
+    func set(logSink: @escaping LogSink) {
+        self.logSink = logSink
+    }
+
+    /// How many posts of each kind the dedup has swallowed since that kind was last
+    /// delivered, so the next delivery can say what the log did not.
+    private var suppressedCount: [StarWarning.Kind: Int] = [:]
+
+    /// Report a condition.  Delivered to the client handler and logged, unless an
     /// equally-or-less severe warning of the same kind was delivered recently.
+    ///
+    /// A suppressed post is not logged: a gate re-evaluated twice a second per waiter
+    /// otherwise wrote the same line thousands of times a second (about 90,000 lines in one
+    /// CI smoke test).  Instead the delivery that ends the suppression logs a single line
+    /// with how many were swallowed.
     ///
     /// Returns whether it was delivered, which is what the tests assert on.
     @discardableResult
     public func post(_ warning: StarWarning) -> Bool {
-        switch warning.severity {
-        case .critical: Log.e("WARNING[\(warning.kind.rawValue)]: \(warning.oneLineDescription)")
-        case .warning:  Log.w("WARNING[\(warning.kind.rawValue)]: \(warning.oneLineDescription)")
-        }
-
         if let previous = lastDelivery[warning.kind],
            warning.time.timeIntervalSince(previous) < minimumInterval,
            let seen = lastSeverity[warning.kind],
            warning.severity <= seen
         {
+            suppressedCount[warning.kind, default: 0] += 1
             return false
+        }
+
+        let critical = warning.severity == .critical
+        logSink(critical, "WARNING[\(warning.kind.rawValue)]: \(warning.oneLineDescription)")
+        if let suppressed = suppressedCount.removeValue(forKey: warning.kind), suppressed > 0 {
+            Log.d("WARNING[\(warning.kind.rawValue)]: \(suppressed) repeats suppressed " +
+                  "since the previous one was shown")
         }
 
         lastDelivery[warning.kind] = warning.time
@@ -283,6 +307,7 @@ public actor StarWarnings {
     public func reset() {
         lastDelivery = [:]
         lastSeverity = [:]
+        suppressedCount = [:]
         mostRecent = nil
     }
 }

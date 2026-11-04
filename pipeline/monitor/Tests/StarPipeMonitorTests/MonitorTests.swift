@@ -31,7 +31,7 @@ final class FixtureTests: XCTestCase {
 
     func testLandingQueueSectionShowsTheBatchTheAbandonedBatchAndTheSlowFlag() throws {
         var s = try Self.snapshot()
-        XCTAssertEqual(s.landing.batch, BatchInfo(number: 2, phase: "ci", ageS: 90, members: [3], prNumber: 12, slow: false))
+        XCTAssertEqual(s.landing.batch, BatchInfo(number: 2, phase: "ci", ageS: 90, members: [3], prNumber: 12, slow: false, ci: "running"))
         XCTAssertEqual(s.landing.lastAbandoned?.reason, "develop moved")
         XCTAssertEqual(Overview.landingLines(s.landing).map(\.text),
                        ["batch 2: ci · age 1m · #3", "batch 1 abandoned 1m ago: develop moved"])
@@ -52,6 +52,41 @@ final class FixtureTests: XCTestCase {
         s.landing.nextBatchInS = nil
         XCTAssertEqual(Overview.landingLines(s.landing), [])
         XCTAssertEqual(Overview.landingLines(nil), [])
+    }
+
+    func testLandingQueueColoursFollowTheBatchCI() throws {
+        var s = try Self.snapshot()
+        XCTAssertEqual(s.landing.batch?.ci, "running")
+        let member = try XCTUnwrap(s.tickets.first { $0.number == 3 })
+        let outsider = try XCTUnwrap(s.tickets.first { $0.number != 3 })
+        XCTAssertEqual(Overview.landingLines(s.landing).first?.ci, "running")
+        XCTAssertEqual(Overview.chipCI(member, s.landing), "running")
+        XCTAssertNil(Overview.chipCI(outsider, s.landing), "a ticket outside the batch keeps its own state colour")
+        for ci in ["success", "failure"] {
+            s.landing.batch?.ci = ci
+            XCTAssertEqual(Overview.landingLines(s.landing).first?.ci, ci)
+            XCTAssertEqual(Overview.chipCI(member, s.landing), ci)
+        }
+        // An older daemon sends no `ci`: it decodes, and nothing is coloured.
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.fixture()) as? [String: Any])
+        var landing = try XCTUnwrap(json["landing"] as? [String: Any])
+        var batch = try XCTUnwrap(landing["batch"] as? [String: Any])
+        batch.removeValue(forKey: "ci")
+        landing["batch"] = batch
+        json["landing"] = landing
+        let old = try JSONDecoder().decode(Snapshot.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(old.landing.batch?.ci)
+        XCTAssertNil(Overview.landingLines(old.landing).first?.ci)
+        XCTAssertNil(Overview.chipCI(member, old.landing))
+    }
+
+    func testAnAbandonedBatchShowsRed() throws {
+        var s = try Self.snapshot()
+        s.landing.batch = nil
+        s.landing.lastAbandoned = AbandonedBatch(number: 7, state: "abandoned", reason: "develop moved", agoS: 60)
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.ci), ["failure"])
+        s.landing.lastAbandoned = AbandonedBatch(number: 7, state: "failed", reason: "CI red", agoS: 60)
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.ci), ["failure"])
     }
 
     func testSnapshotDecodesMaxActive() throws {
@@ -872,6 +907,16 @@ final class UsageLimitTextTests: XCTestCase {
     }
 }
 
+private let proposalDetailJSON = Data("""
+{"number": 31, "title": "Show the retry budget", "author": "octocat", "created_at": "2026-11-01T12:00:00Z",
+ "updated_at": "2026-11-02T12:00:00Z", "labels": ["enhancement"], "by": "review agent",
+ "body": "## Goal\\nShow it.", "comments": [{"author": "octocat", "created_at": "2026-11-02T00:00:00Z", "body": "ok"}],
+ "comment_count": 1, "blockers": [{"number": 900, "title": "Land the endpoint"}],
+ "readiness": {"lint_ok": true, "errors": [], "warnings": [], "has_plan": true, "pipeline": {}, "queue": {"open": 1, "max": 30}}}
+""".utf8)
+
+private func waitFor(_ s: DispatchSemaphore) { s.wait() }
+
 @MainActor
 final class ProposalTests: XCTestCase {
     private func client() -> APIClient {
@@ -895,10 +940,52 @@ final class ProposalTests: XCTestCase {
 
     func testProposalsDecodeAndOldSnapshotsStillDo() throws {
         XCTAssertEqual(try FixtureTests.snapshot().proposals,
-                       [ProposalSnap(number: 31, title: "Show the retry budget", by: "review agent")])
+                       [ProposalSnap(number: 31, title: "Show the retry budget", by: "review agent",
+                                     author: "brianm998", createdAt: "1970-01-01T00:00:00Z")])
         let old = try olderDaemonsSnapshot()
         XCTAssertEqual(old.proposals, [])
         XCTAssertEqual(old.tickets.count, 6)
+    }
+
+    private func decode(_ json: String) throws -> ProposalSnap {
+        try JSONDecoder().decode(ProposalSnap.self, from: Data(json.utf8))
+    }
+
+    func testProposalWithoutAMarkerDecodesAsUnfiled() throws {
+        let missing = try decode(#"{"number": 1, "title": "t", "author": "brianm998", "created_at": "2026-11-01T12:00:00Z"}"#)
+        XCTAssertNil(missing.by)
+        XCTAssertEqual(missing.author, "brianm998")
+        XCTAssertEqual(missing.createdAt, "2026-11-01T12:00:00Z")
+        XCTAssertNil(try decode(#"{"number": 1, "title": "t", "by": null, "author": "x"}"#).by)
+        XCTAssertNil(try decode(#"{"number": 1, "title": "t", "by": ""}"#).by)
+    }
+
+    func testLegacyUnknownByIsTreatedAsNoFiler() throws {
+        let p = try decode(#"{"number": 1, "title": "t", "by": "unknown"}"#)
+        XCTAssertNil(p.by)
+        XCTAssertNil(p.author)
+        XCTAssertFalse(p.byline(now: 0).contains("unknown"))
+    }
+
+    private let nowSeconds = ISO8601DateFormatter().date(from: "2026-11-04T12:00:00Z")!.timeIntervalSince1970
+
+    func testProposalBylineWording() {
+        let when = "2026-11-01T12:00:00Z"
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t", by: "review agent", author: "brianm998", createdAt: when).byline(now: nowSeconds),
+                       "review agent · 3d ago")
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t", author: "brianm998", createdAt: when).byline(now: nowSeconds),
+                       "opened by brianm998 · 3d ago")
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t", createdAt: when).byline(now: nowSeconds), "3d ago")
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t", by: "unknown").byline(now: nowSeconds), "")
+    }
+
+    func testProposalHeaderSentenceWording() {
+        let when = "2026-11-01T12:00:00Z"
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t", by: "review agent", createdAt: when).headerSentence(now: nowSeconds),
+                       "Proposed by review agent 3 days ago; waiting for your go-ahead.")
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t", author: "brianm998", createdAt: when).headerSentence(now: nowSeconds),
+                       "Opened on GitHub by brianm998 3 days ago; waiting for your go-ahead.")
+        XCTAssertEqual(ProposalSnap(number: 1, title: "t").headerSentence(now: nowSeconds), "Waiting for your go-ahead.")
     }
 
     func testProposalRowsComeFromTheSnapshot() throws {
@@ -966,5 +1053,211 @@ final class ProposalTests: XCTestCase {
         await store.approve(31)
         XCTAssertEqual(store.lastError, APIError.status(409, "3 tickets are already open for the pipeline").localizedDescription)
         XCTAssertTrue(store.lastError?.contains("already open") ?? false)
+    }
+
+    // proposal detail ---------------------------------------------------------------------------------------------
+
+
+    private final class Seen: @unchecked Sendable { var paths: [String] = []; var posts: [String] = [] }
+
+    func testSelectingAProposalLoadsItsDetail() async throws {
+        let fixture = try FixtureTests.fixture()
+        let seen = Seen()
+        StubProtocol.handler = { request in
+            let path = request.url?.path ?? ""
+            seen.paths.append(path)
+            if path == "/v1/snapshot" { return (200, fixture) }
+            return path == "/v1/proposals/31" ? (200, proposalDetailJSON) : (404, Data("no".utf8))
+        }
+        let store = MonitorStore(client: client())
+        store.apply(try FixtureTests.snapshot())
+        XCTAssertNil(store.proposalDetail)
+        store.selected = 31
+        await store.refreshSelected()
+        XCTAssertEqual(store.proposalDetail?.number, 31)
+        XCTAssertEqual(store.proposalDetail?.body, "## Goal\nShow it.")
+        XCTAssertNil(store.proposalDetailError)
+        XCTAssertEqual(seen.paths, ["/v1/proposals/31"], "no ticket detail or log call for a proposal")
+        await store.refreshSelected()
+        XCTAssertEqual(seen.paths.count, 1, "the poll loop does not refetch a loaded proposal")
+        store.selected = nil
+        XCTAssertNil(store.proposalDetail, "dropped when the selection changes")
+        store.selected = 31
+        await store.refreshSelected()
+        XCTAssertNotNil(store.proposalDetail)
+        store.apply(try olderDaemonsSnapshot())   // the proposal is gone
+        XCTAssertNil(store.selected)
+        XCTAssertNil(store.proposalDetail, "dropped when the proposal disappears")
+    }
+
+    func testALateProposalDetailForAnotherSelectionIsIgnored() async throws {
+        let fixture = try FixtureTests.fixture()
+        let started = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+        StubProtocol.handler = { request in
+            if request.url?.path == "/v1/proposals/31" {
+                started.signal()
+                release.wait()
+                return (200, proposalDetailJSON)
+            }
+            return (200, fixture)
+        }
+        let store = MonitorStore(client: client())
+        store.apply(try withProposals([ProposalSnap(number: 31, title: "a", by: "x"), ProposalSnap(number: 32, title: "b", by: "x")]))
+        store.selected = 31
+        let fetch = Task { await store.refreshSelected() }
+        await Task.detached { waitFor(started) }.value
+        store.selected = 32            // the owner moves on while #31's fetch is in flight
+        release.signal()
+        await fetch.value
+        XCTAssertNil(store.proposalDetail, "#31's body must not show under #32")
+        XCTAssertNil(store.proposalDetailError)
+    }
+
+    func testProposalDetailFailureLeavesTheButtonsUsable() async throws {
+        let fixture = try FixtureTests.fixture()
+        let seen = Seen()
+        StubProtocol.handler = { request in
+            let path = request.url?.path ?? ""
+            if path == "/v1/snapshot" { return (200, fixture) }
+            if path == "/v1/proposals/31" { return (404, Data("not found".utf8)) }
+            seen.posts.append("\(request.httpMethod ?? "") \(path)")
+            return (200, Data(#"{"result": "ok"}"#.utf8))
+        }
+        let store = MonitorStore(client: client())
+        store.apply(try FixtureTests.snapshot())
+        store.selected = 31
+        await store.refreshSelected()
+        XCTAssertNil(store.proposalDetail)
+        XCTAssertTrue(store.proposalDetailError?.contains("404") ?? false, store.proposalDetailError ?? "nil")
+        XCTAssertNil(store.lastError, "approve and reject own lastError")
+        XCTAssertEqual(store.selectedProposal?.number, 31, "the snapshot's facts still show")
+        await store.approve(31)
+        XCTAssertEqual(seen.posts, ["POST /v1/proposals/31/approve"])
+        XCTAssertNil(store.lastError)
+    }
+
+    func testAProposalsBlockerStaysSelectableAcrossSnapshots() async throws {
+        let fixture = try FixtureTests.fixture()
+        StubProtocol.handler = { request in
+            request.url?.path == "/v1/proposals/31" ? (200, proposalDetailJSON) : (200, fixture)
+        }
+        let store = MonitorStore(client: client())
+        store.apply(try FixtureTests.snapshot())
+        store.selected = 31
+        await store.refreshSelected()
+        store.selectIssue(900, title: "Land the endpoint")
+        store.apply(try FixtureTests.snapshot())
+        XCTAssertEqual(store.selected, 900, "the next snapshot must not reset a proposal's blocker to the Overview")
+        XCTAssertEqual(store.selectedIssue?.title, "Land the endpoint")
+    }
+}
+
+final class ProposalTextTests: XCTestCase {
+    func testProposalDetailDecodes() throws {
+        let json = Data("""
+        {"number": 7, "title": "T", "author": null, "created_at": "2026-11-01T12:00:00Z", "updated_at": null,
+         "labels": ["a", "b"], "by": null, "body": "b",
+         "comments": [{"author": "octocat", "created_at": "2026-11-02T00:00:00Z", "body": "hi"}, {"author": null, "created_at": null, "body": "x"}],
+         "comment_count": 25, "blockers": [{"number": 3, "title": "Blocker"}],
+         "readiness": {"lint_ok": false, "errors": ["no ## Goal"], "warnings": ["w"], "has_plan": false,
+                       "pipeline": {"effort_develop": "high"}, "queue": {"open": 12, "max": 30}}}
+        """.utf8)
+        let d = try JSONDecoder().decode(ProposalDetail.self, from: json)
+        XCTAssertEqual(d.number, 7)
+        XCTAssertNil(d.author)
+        XCTAssertEqual(d.createdAt, "2026-11-01T12:00:00Z")
+        XCTAssertEqual(d.labels, ["a", "b"])
+        XCTAssertEqual(d.comments.map(\.author), ["octocat", nil])
+        XCTAssertEqual(d.commentCount, 25)
+        XCTAssertEqual(d.blockers, [BlockerRef(number: 3, title: "Blocker")])
+        XCTAssertEqual(d.readiness?.errors, ["no ## Goal"])
+        XCTAssertEqual(d.readiness?.pipeline, ["effort_develop": "high"])
+        XCTAssertEqual(d.readiness?.queue, ProposalReadiness.Queue(open: 12, max: 30))
+        // the optional parts may all be absent
+        let bare = try JSONDecoder().decode(ProposalDetail.self, from: Data(#"{"number": 1, "title": "t"}"#.utf8))
+        XCTAssertEqual(bare.comments, [])
+        XCTAssertEqual(bare.blockers, [])
+        XCTAssertNil(bare.readiness)
+    }
+
+    func testMarkdownBlocksSplitHeadingsBulletsAndFences() {
+        let md = """
+        <!-- starpipe:filed-by:interactive -->
+        ## Goal
+        Show the `budget`
+        in the pane.
+
+        - one
+          continued
+          - nested
+        * two
+        1. third
+        ```swift
+        let x = 1
+
+        # not a heading
+        ```
+        ###### deep
+        ####### seven hashes
+        ~~~
+        open fence
+        """
+        XCTAssertEqual(MarkdownBlocks.split(md), [
+            .heading(level: 2, text: "Goal"),
+            .paragraph("Show the `budget` in the pane."),
+            .bullet(indent: 0, text: "one continued"),
+            .bullet(indent: 1, text: "nested"),
+            .bullet(indent: 0, text: "two"),
+            .bullet(indent: 0, text: "third"),
+            .code("let x = 1\n\n# not a heading"),
+            .heading(level: 6, text: "deep"),
+            .paragraph("####### seven hashes"),
+            .code("open fence"),
+        ])
+        XCTAssertEqual(MarkdownBlocks.split(""), [])
+    }
+
+    func testReadinessSummaryLines() {
+        let ok = ProposalReadiness(lintOk: true, warnings: ["long title"], hasPlan: true,
+                                   pipeline: ["gherkin": "no", "effort_develop": "high"], queue: .init(open: 12, max: 30))
+        XCTAssertEqual(ProposalReadinessText.lines(ok).map(\.text), [
+            "Ticket lint: passes",
+            "warning: long title",
+            "Carries a ## Plan, so the pipeline skips EXPLORE",
+            "## Pipeline asks for: effort_develop high, gherkin no",
+            "queue: 12 of 30 slots used",
+        ])
+        XCTAssertFalse(ProposalReadinessText.lines(ok).contains { $0.warn })
+
+        let bad = ProposalReadiness(lintOk: false, errors: ["no ## Goal"], hasPlan: false, queue: .init(open: 30, max: 30))
+        let lines = ProposalReadinessText.lines(bad)
+        XCTAssertEqual(lines.map(\.text), [
+            "Ticket lint: fails",
+            "error: no ## Goal",
+            "No ## Plan: an agent explores the code first",
+            "No ## Pipeline overrides",
+            "queue: 30 of 30 slots used",
+            "Approving will be refused: the queue is full",
+        ])
+        XCTAssertEqual(lines.filter(\.warn).count, 3, "lint failure, the error and the full queue")
+    }
+
+    func testCommentOverflowLine() {
+        XCTAssertNil(ProposalText.commentOverflow(count: 3, sent: 3))
+        XCTAssertNil(ProposalText.commentOverflow(count: 0, sent: 0))
+        XCTAssertEqual(ProposalText.commentOverflow(count: 21, sent: 20), "1 earlier comment on GitHub")
+        XCTAssertEqual(ProposalText.commentOverflow(count: 45, sent: 20), "25 earlier comments on GitHub")
+    }
+
+    func testAgesAndTheByLine() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-11-04T12:00:00Z")!.timeIntervalSince1970
+        XCTAssertEqual(ProposalText.age(iso: "2026-11-01T12:00:00Z", now: now), "3 days ago")
+        XCTAssertEqual(ProposalText.age(iso: "2026-11-04T11:00:00Z", now: now), "1 hour ago")
+        XCTAssertEqual(ProposalText.age(iso: "2026-11-04T11:59:30.250Z", now: now), "just now")
+        XCTAssertNil(ProposalText.age(iso: "yesterday", now: now))
+        XCTAssertNil(ProposalText.age(iso: nil, now: now))
+        XCTAssertEqual(ProposalText.commentHeader(ProposalComment(author: "octocat", createdAt: "2026-11-04T10:00:00Z", body: ""), now: now),
+                       "octocat · 2 hours ago")
     }
 }

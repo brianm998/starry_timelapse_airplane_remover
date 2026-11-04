@@ -1239,5 +1239,16 @@
   "ui.menu_bar.tooltip.failed": "star — falló",
   "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth conserva solo la tierra bajo el horizonte, así que necesita la detección del horizonte y no puede ejecutarse con ella desactivada (--no-horizon).",
   "view_mode.dirtySkyProcessed": "cielo sin limpiar",
-  "view_mode.dirtyEarthProcessed": "tierra sin limpiar"
+  "view_mode.dirtyEarthProcessed": "tierra sin limpiar",
+  "ui.dirty_sky": "Cielo sin limpiar",
+  "ui.dirty_earth": "Tierra sin limpiar",
+  "ui.clean_method_tip.dirty_sky": "Conserva solo lo que se movió en el cielo: las estrellas fijas quedan en negro, mientras que los aviones, satélites y meteoros mantienen su color. La tierra queda en negro.",
+  "ui.clean_method_tip.dirty_earth": "Conserva solo lo que se movió en la tierra: la tierra fija queda en negro. El cielo queda en negro. Requiere detección del horizonte.",
+  "ui.clean_method_tip.dirty_earth_needs_horizon": "Tierra sin limpiar requiere detección del horizonte. Ajusta el tipo de escena a Cielo + Horizonte para elegirla.",
+  "ui.mode_desc_dirty_sky": "Star se ejecutará en el modo cielo sin limpiar, lo contrario de limpiar. Cada píxel del cielo pasa a ser el original menos el fotograma de referencia alineado, así que las estrellas fijas quedan en negro y solo lo que se movió allí, como aviones, satélites y meteoros, mantiene su color. La tierra queda en negro. No se detectan valores atípicos, por lo que no hay nada que revisar en cada fotograma. Sin detección del horizonte, todo el fotograma cuenta como cielo.",
+  "ui.mode_desc_dirty_earth": "Star se ejecutará en el modo tierra sin limpiar, lo contrario de limpiar. Cada píxel de la tierra pasa a ser el original menos el fotograma de referencia alineado, así que la tierra fija queda en negro y solo lo que se movió allí mantiene su color. El cielo queda en negro. No se detectan valores atípicos, por lo que no hay nada que revisar en cada fotograma. Este modo requiere detección del horizonte.",
+  "ui.frame_mode_desc_dirty_sky": "Conserva solo lo que se movió en el cielo de este fotograma (el original menos la referencia alineada); la tierra queda en negro. No hay nada que revisar en este fotograma.",
+  "ui.frame_mode_desc_dirty_earth": "Conserva solo lo que se movió en la tierra de este fotograma (el original menos la referencia alineada); el cielo queda en negro. No hay nada que revisar en este fotograma.",
+  "ui.this_frame_uses_dirty_sky": "Este fotograma usa el modo cielo sin limpiar",
+  "ui.this_frame_uses_dirty_earth": "Este fotograma usa el modo tierra sin limpiar"
 }

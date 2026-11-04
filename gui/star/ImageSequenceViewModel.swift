@@ -106,9 +106,6 @@ public enum InteractionMode: String, Equatable, CaseIterable {
     }
 }
 
-// used to limit processing of frames to this max concurrent number
-public let frameProcessingMonitor = FileSystemMonitor(max: 32) // XXX make this configurable
-
 // view model for a sequence of images
 @MainActor @Observable
 public final class ImageSequenceViewModel {
@@ -172,8 +169,6 @@ public final class ImageSequenceViewModel {
     var muxer: FFmpegMuxer = .mov
     var hasAudio = false
     
-    var noImageExplainationText: String = localized("ui.loading_ellipsis")
-
     var backgroundColor = ViewModel.defaultBackgroundColor
 
     var frameStateMap: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
@@ -218,8 +213,6 @@ public final class ImageSequenceViewModel {
     // how long the arrows are
     var outlierArrowLength: CGFloat = 70 // relative to the frame width above
 
-    let finalProcessingCount = CountActor()
-    
     /// Which detection type this sequence is processed with: its own, from its `config.json`, so a sequence keeps the
     /// one it was made with whatever the preference says now.  The preference (`processingType`) only seeds a new one.
     var detectionType: DetectionType {
@@ -364,8 +357,6 @@ public final class ImageSequenceViewModel {
 
     // causes tapping an outlier to open a dialog with multiple choices
     var multiChoice = false
-    
-    var updatingFrameBatch = false
 
     var videoPlaybackFramerate = 30
 
@@ -678,8 +669,6 @@ public final class ImageSequenceViewModel {
     }
 
     var showAllFrameViewModes = false
-    var showAllFrameProcessingStates = false
-    var showAllImageCacheStats = false
 
     var multiSelectionType: MultiSelectionType = .all
     var multiSelectionRemovalType: MultiSelectionRemovalType = .keep
@@ -822,12 +811,8 @@ public final class ImageSequenceViewModel {
                         self._currentFrameHighLevelCleanMethod = .automatic
                         self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
                         
-                    case .selective:
-                        self._currentFrameHighLevelCleanMethod = .selective
-                        self._currentFrameAutoPreservationMode = .no
-                    case .dirtySky, .dirtyEarth:
-                        // T3: the pickers have no dirty choice yet; shown as automatic
-                        self._currentFrameHighLevelCleanMethod = .automatic
+                    case .selective, .dirtySky, .dirtyEarth:
+                        self._currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
                         self._currentFrameAutoPreservationMode = .no
                     }
                     
@@ -837,12 +822,8 @@ public final class ImageSequenceViewModel {
                         self._currentFrameHighLevelCleanMethod = .automatic
                         self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
 
-                    case .selective:
-                        self._currentFrameHighLevelCleanMethod = .selective
-                        self._currentFrameAutoPreservationMode = .no
-                    case .dirtySky, .dirtyEarth:
-                        // T3: the pickers have no dirty choice yet; shown as automatic
-                        self._currentFrameHighLevelCleanMethod = .automatic
+                    case let method:
+                        self._currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
                         self._currentFrameAutoPreservationMode = .no
                     }
                 }
@@ -1068,17 +1049,6 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    /// The aligned-neighbor-frame count actually in effect for the current frame
-    /// (either an override or the global default).
-    var currentFrameAlignedNeighborCount: Int {
-        alignedNeighborFrameOverrides[currentIndex] ?? numberOfAlignedNeighborFrames
-    }
-
-    /// True when the current frame has a per-frame override for numberAlignedNeighborFrames.
-    var currentFrameHasAlignedNeighborOverride: Bool {
-        alignedNeighborFrameOverrides[currentIndex] != nil
-    }
-
     /// Set a per-frame override for numberAlignedNeighborFrames on `frameIndex`.
     /// If star-alignment images already exist for that frame, they are invalidated
     /// and reprocessing is triggered immediately using the new neighbor count.
@@ -1101,27 +1071,6 @@ public final class ImageSequenceViewModel {
         }
     }
 
-    /// Remove any per-frame override for numberAlignedNeighborFrames on `frameIndex`,
-    /// reverting it to the global default.  Invalidates and re-triggers star
-    /// alignment if it has already been computed.
-    func clearAlignedNeighborFrameOverride(forFrame frameIndex: Int) {
-        alignedNeighborFrameOverrides.removeValue(forKey: frameIndex)
-        var realConfig = config.config()
-        realConfig.alignedNeighborFrameOverrides = alignedNeighborFrameOverrides
-        config.update(realConfig)
-
-        Task {
-            if frameIndex < frames.count,
-               let frame = frames[frameIndex].frame
-            {
-                await frame.setNumberOfAlignedFrames()
-                let wasInvalidated = (try? await frame.invalidateStarAlignmentIfExists()) ?? false
-                if wasInvalidated {
-                    processFrames(from: frameIndex, to: frameIndex, performClean: false)
-                }
-            }
-        }
-    }
 
     var cameraMotion: CameraMotion {
         didSet {
@@ -2515,13 +2464,9 @@ public final class ImageSequenceViewModel {
                         currentFrameHighLevelCleanMethod = .automatic
                         currentFrameAutoPreservationMode = useOutliers ? .yes : .no
 
-                    case .selective:
-                        currentFrameHighLevelCleanMethod = .selective
+                    case let method:
+                        currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
                         currentFrameAutoPreservationMode = .no
-                    case .dirtySky, .dirtyEarth:
-                        // T3: the pickers have no dirty choice yet.  Setting them here would
-                        // run their didSets and overwrite the frame's dirty method, so leave them.
-                        break
                     }
                 }
             }
@@ -2589,14 +2534,6 @@ public final class ImageSequenceViewModel {
         }
     }
 
-
-    // nonisolated so it doesn't run on the main thread
-    nonisolated func makePreviews(imageAccessor: ImageAccessor) async throws {
-        Log.d("writing missing images")
-
-        try await imageAccessor.writeMissingImages() { _ in }
-    }
-    
     func makeCallbacks() -> Callbacks {
         var callbacks = Callbacks()
 
@@ -2734,11 +2671,6 @@ public final class ImageSequenceViewModel {
     var outlierLoadingProgress: Double {
         if imageSequenceSize == 0 { return 0 }
         return Double(numberOfFramesWithOutliersLoaded)/Double(imageSequenceSize)
-    }
-    
-    var frameLoadingProgress: Double {
-        if imageSequenceSize == 0 { return 0 }
-        return Double(numberOfFramesLoaded)/Double(imageSequenceSize)
     }
     
     // currently selected index in the sequence
@@ -3887,6 +3819,8 @@ public final class ImageSequenceViewModel {
             }
         case .selective:
             true
+        case .dirtySky, .dirtyEarth:
+            false
         }
     }
 
@@ -3909,12 +3843,8 @@ public final class ImageSequenceViewModel {
         case .automatic(let useOutliers):
             self._currentFrameHighLevelCleanMethod = .automatic
             self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
-        case .selective:
-            self._currentFrameHighLevelCleanMethod = .selective
-            self._currentFrameAutoPreservationMode = .no
-        case .dirtySky, .dirtyEarth:
-            // T3: the pickers have no dirty choice yet; shown as automatic
-            self._currentFrameHighLevelCleanMethod = .automatic
+        case .selective, .dirtySky, .dirtyEarth:
+            self._currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
             self._currentFrameAutoPreservationMode = .no
         }
         if getCleanMethod(forFrame: currentIndex) != method {

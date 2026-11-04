@@ -46,6 +46,7 @@
   "landing": {
     "batch": {
       "age_s": 90,
+      "ci": "running",
       "members": [
         3
       ],
@@ -54,6 +55,19 @@
       "pr_number": 12,
       "slow": false
     },
+    "batches": [
+      {
+        "age_s": 90,
+        "ci": "running",
+        "members": [
+          3
+        ],
+        "number": 2,
+        "phase": "ci",
+        "pr_number": 12,
+        "slow": false
+      }
+    ],
     "last_abandoned": {
       "ago_s": 60,
       "ended": 1940.0,
@@ -81,7 +95,9 @@
   "pause": null,
   "proposals": [
     {
+      "author": "brianm998",
       "by": "review agent",
+      "created_at": "1970-01-01T00:00:00Z",
       "number": 31,
       "title": "Show the retry budget"
     }

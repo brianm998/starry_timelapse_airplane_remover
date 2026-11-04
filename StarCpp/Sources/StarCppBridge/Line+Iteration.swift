@@ -214,41 +214,6 @@ extension Line {
         }
     }
 
-    public func findSpot(between coord1: DoubleCoord,
-                         and coord2: DoubleCoord,
-                         closure: (Int, Int) -> Bool) -> Coord?
-    {
-        let standardLine = self.standardLine
-
-        switch self.iterationOrientation {
-        case .horizontal:
-            var minX = coord1.x
-            var maxX = coord2.x
-            if coord2.x < minX {
-                minX = coord2.x
-                maxX = coord1.x
-            }
-            for x in Int(minX)...Int(maxX) {
-                let y = Int(standardLine.y(forX: Double(x)))
-
-                if closure(x, y) { return Coord(x: x, y: y) }
-            }
-        case .vertical:
-            var minY = coord1.y
-            var maxY = coord2.y
-            if coord2.y < minY {
-                minY = coord2.y
-                maxY = coord1.y
-            }
-            for y in Int(minY)...Int(maxY) {
-                let x = Int(standardLine.x(forY: Double(y)))
-
-                if closure(x, y) { return Coord(x: x, y: y) }
-            }
-        }
-        return nil
-    }
-    
     public func iterate(between coord1: DoubleCoord,
                         and coord2: DoubleCoord,
                         numberOfAdjecentPixels: Int = 0, // iterate in the parallel direction this many pixels

@@ -114,6 +114,8 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 private fun cleanMethodName(m: CleanMethod): String = localized(when (m) {
     CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.auto_selective"
     CleanMethod.CLEAN_AUTOMATIC -> "ui.automatic"
+    CleanMethod.CLEAN_DIRTY_SKY -> "ui.dirty_sky"
+    CleanMethod.CLEAN_DIRTY_EARTH -> "ui.dirty_earth"
     else -> "ui.selective"
 })
 

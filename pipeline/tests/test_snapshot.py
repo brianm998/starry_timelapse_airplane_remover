@@ -111,10 +111,29 @@ def test_the_snapshot_carries_develop_landing_and_interventions(rig: Rig) -> Non
     rig.db.put("stop_line", "pr-gate/linux")
     snap = d.snapshot()
     assert snap["develop"] == {"gate": {"linux": "success"}, "known_red": 1}
-    assert snap["landing"] == {"paused": False, "stop_line": "pr-gate/linux", "batch": None, "last_abandoned": None,
-                               "next_batch_in_s": None}
+    assert snap["landing"] == {"paused": False, "stop_line": "pr-gate/linux", "batch": None, "batches": [],
+                               "last_abandoned": None, "next_batch_in_s": None}
     assert snap["interventions_week"] == {"answer": 1}
     assert snap["events_cursor"] >= 1  # type: ignore[operator]
+
+
+def test_the_snapshot_batch_reports_its_ci(rig: Rig) -> None:
+    d = populate(rig)
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(bid, state="ci", pr_number=9)
+
+    def ci() -> object:
+        return d.snapshot()["landing"]["batch"]["ci"]  # type: ignore[index]
+
+    assert ci() == "running"  # no head yet
+    rig.db.batch_update(bid, head_sha="h" * 40)
+    assert ci() == "running"  # no verdict yet
+    rig.db.record_ci(0, "other", "fail", {})  # another sha's verdict is not this batch's
+    rig.db.record_ci(5, "h" * 40, "fail", {})  # nor is a ticket's
+    assert ci() == "running"
+    for verdict, shown in [("pending", "running"), ("rerun", "running"), ("fail", "failure"), ("pass", "success")]:
+        rig.db.record_ci(0, "h" * 40, verdict, {"batch": bid})
+        assert ci() == shown, verdict
 
 
 def test_the_snapshot_has_the_shape_the_monitors_fixture_records(rig: Rig) -> None:
@@ -122,7 +141,8 @@ def test_the_snapshot_has_the_shape_the_monitors_fixture_records(rig: Rig) -> No
     Swift models are updated together. Regenerate with STARPIPE_REGEN_FIXTURE=1."""
     d = populate(rig)
     assert d.snapshot()["usage_windows"] is None  # nothing reported yet
-    d.proposals = [{"number": 31, "title": "Show the retry budget", "by": "review agent"}]
+    d.proposals = [{"number": 31, "title": "Show the retry budget", "by": "review agent", "author": "brianm998",
+                    "created_at": "1970-01-01T00:00:00Z"}]
     rig.db.put("usage_windows", json.dumps({"five_hour": {"utilization": 0.1, "resetsAt": 3600.0},
                                             "seven_day": {"utilization": 0.24, "resetsAt": 90000.0}}))
     rig.db.batch_update(rig.db.batch_create("0" * 40), state="abandoned", ended=rig.now - 60, note="develop moved")
@@ -131,6 +151,7 @@ def test_the_snapshot_has_the_shape_the_monitors_fixture_records(rig: Rig) -> No
     rig.db.batch_add(live, 3, 0)
     snap = json.loads(json.dumps(d.snapshot()))
     snap["landing"]["batch"]["age_s"] = 90  # wall-clock parts are not part of the contract
+    snap["landing"]["batches"][0]["age_s"] = 90
     snap["landing"]["last_abandoned"].update(ended=1940.0, ago_s=60)
     snap["heavy"] = {"holders": [{"pid": 4242, "ticket": "2", "cmd": "swift test --package-path StarCore", "since": 1.0}],
                      "queue": [{"priority": 1, "enqueued_at": 2.0, "pid": 4343, "started": 2.0, "ticket": "3",
@@ -161,7 +182,7 @@ def test_the_snapshot_has_the_shape_the_monitors_fixture_records(rig: Rig) -> No
     assert ticket_keys == set(), f"ticket keys differ: {ticket_keys}"
     ours = next(t for t in snap["tickets"] if t["stages"])["stages"][0]
     assert set(ours) ^ set(next(t for t in recorded["tickets"] if t["stages"])["stages"][0]) == set()
-    assert shape(recorded["proposals"]) == shape(snap["proposals"]) == [{"by": "str", "number": "int", "title": "str"}]
+    assert shape(recorded["proposals"]) == shape(snap["proposals"]) == [{"author": "str", "by": "str", "created_at": "str", "number": "int", "title": "str"}]
     assert shape(recorded["heavy"]) == shape(snap["heavy"])
     assert shape(recorded["landing"]) == shape(snap["landing"])
 

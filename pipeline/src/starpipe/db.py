@@ -255,6 +255,11 @@ class Database:
         self._exec("INSERT INTO ci_runs(ticket,sha,verdict,detail,at) VALUES (?,?,?,?,?)",
                    (ticket, sha, verdict, json.dumps(detail), self.clock()))
 
+    def latest_ci_verdict(self, ticket: int, sha: str) -> str | None:
+        """The verdict of the newest `ci_runs` row for this ticket (0 is a batch) and sha, or None before the first one."""
+        rows = self._all("SELECT verdict FROM ci_runs WHERE ticket=? AND sha=? ORDER BY id DESC LIMIT 1", (ticket, sha))
+        return str(rows[0]["verdict"]) if rows else None
+
     # gherkin flakes -------------------------------------------------------------------------------------------------
     def add_flake(self, feature: str, leg: str, run_id: int | str, day: str) -> None:
         """A job that failed and then passed on the rerun (once per feature, leg and run)."""
@@ -282,9 +287,14 @@ class Database:
         rows = self._all("SELECT * FROM batches WHERE id=?", (batch,))
         return dict(rows[0]) if rows else None
 
+    def active_batches(self) -> list[dict[str, Any]]:
+        """Every batch still building, in CI or landing, oldest first."""
+        return [dict(r) for r in self._all("SELECT * FROM batches WHERE state IN ('building','ci','landing') ORDER BY id")]
+
     def active_batch(self) -> dict[str, Any] | None:
-        rows = self._all("SELECT * FROM batches WHERE state IN ('building','ci','landing') ORDER BY id DESC LIMIT 1")
-        return dict(rows[0]) if rows else None
+        """The oldest active batch (the only one when `batch_parallel` is 1)."""
+        rows = self.active_batches()
+        return rows[0] if rows else None
 
     def batch_add(self, batch: int, ticket: int, position: int) -> None:
         self._exec("INSERT OR REPLACE INTO batch_members(batch,ticket,position) VALUES (?,?,?)", (batch, ticket, position))

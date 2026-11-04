@@ -1239,5 +1239,16 @@
   "ui.menu_bar.tooltip.failed": "star — fehlgeschlagen",
   "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth behält nur den Boden unterhalb des Horizonts, braucht also die Horizonterkennung und kann nicht laufen, wenn sie ausgeschaltet ist (--no-horizon).",
   "view_mode.dirtySkyProcessed": "ungereinigter Himmel",
-  "view_mode.dirtyEarthProcessed": "ungereinigter Boden"
+  "view_mode.dirtyEarthProcessed": "ungereinigter Boden",
+  "ui.dirty_sky": "Ungereinigter Himmel",
+  "ui.dirty_earth": "Ungereinigter Boden",
+  "ui.clean_method_tip.dirty_sky": "Behält nur, was sich am Himmel bewegt hat: ruhende Sterne werden schwarz, Flugzeuge, Satelliten und Meteore behalten ihre Farbe. Der Boden ist schwarz.",
+  "ui.clean_method_tip.dirty_earth": "Behält nur, was sich am Boden bewegt hat: ruhender Boden wird schwarz. Der Himmel ist schwarz. Erfordert Horizonterkennung.",
+  "ui.clean_method_tip.dirty_earth_needs_horizon": "Ungereinigter Boden erfordert Horizonterkennung. Dazu muss der Szenentyp auf Himmel + Horizont stehen.",
+  "ui.mode_desc_dirty_sky": "Star läuft im Modus „Ungereinigter Himmel“, dem Gegenteil des Reinigens. Jedes Himmelspixel wird zum Original minus dem ausgerichteten Referenzbild: ruhende Sterne werden schwarz, und nur was sich dort bewegt hat, etwa Flugzeuge, Satelliten und Meteore, behält seine Farbe. Der Boden ist schwarz. Es werden keine Ausreißer erkannt, daher gibt es pro Bild nichts zu prüfen. Ohne Horizonterkennung zählt das ganze Bild als Himmel.",
+  "ui.mode_desc_dirty_earth": "Star läuft im Modus „Ungereinigter Boden“, dem Gegenteil des Reinigens. Jedes Bodenpixel wird zum Original minus dem ausgerichteten Referenzbild: ruhender Boden wird schwarz, und nur was sich dort bewegt hat, behält seine Farbe. Der Himmel ist schwarz. Es werden keine Ausreißer erkannt, daher gibt es pro Bild nichts zu prüfen. Dieser Modus erfordert Horizonterkennung.",
+  "ui.frame_mode_desc_dirty_sky": "Behält nur, was sich im Himmel dieses Bildes bewegt hat (das Original minus der ausgerichteten Referenz); der Boden ist schwarz. Bei diesem Bild gibt es nichts zu prüfen.",
+  "ui.frame_mode_desc_dirty_earth": "Behält nur, was sich am Boden dieses Bildes bewegt hat (das Original minus der ausgerichteten Referenz); der Himmel ist schwarz. Bei diesem Bild gibt es nichts zu prüfen.",
+  "ui.this_frame_uses_dirty_sky": "Dieses Bild verwendet den Modus „Ungereinigter Himmel“",
+  "ui.this_frame_uses_dirty_earth": "Dieses Bild verwendet den Modus „Ungereinigter Boden“"
 }

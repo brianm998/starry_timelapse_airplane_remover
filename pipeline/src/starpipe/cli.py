@@ -41,7 +41,8 @@ def heavy_cmd(priority: int | None, show_status: bool, command: tuple[str, ...])
     if show_status:
         st = heavy.status()
         for h in st.holders:
-            click.echo(f"holder  {h.ticket or 'interactive'}  {h.cmd}")
+            use = f"  [{h.job_class or '?'}, cpu {h.cpu_mean:.1f} mean / {h.cpu_peak:.1f} peak cores, rss peak {h.rss_peak_mb:.0f} MB]"
+            click.echo(f"holder  {h.ticket or 'interactive'}  {h.cmd}{use}")
         for i, w in enumerate(st.queue, 1):
             click.echo(f"queue {i}  p{w.priority}  {w.ticket or 'interactive'}  {w.cmd}")
         if not st.holders and not st.queue:
@@ -196,7 +197,8 @@ def proposals() -> None:
     except GitHubError as exc:
         raise click.ClickException(str(exc)) from exc
     for p in found:
-        click.echo(f"#{p.number:<5} {p.title[:70]:<70}  by {p.by}")
+        who = p.by or (f"@{p.author}" if p.author else "unknown")
+        click.echo(f"#{p.number:<5} {p.title[:70]:<70}  by {who}")
     if not found:
         click.echo("no proposals waiting")
 
@@ -255,12 +257,13 @@ def _span(seconds: float) -> str:
 
 
 def landing_lines(landing: dict[str, Any]) -> list[str]:
-    """The landing train's lines for `status`: the active batch, then the last abandoned one. The daemon computed all of it."""
+    """The landing train's lines for `status`: every active batch, then the last abandoned one. The daemon computed all of it."""
     lines: list[str] = []
-    if b := landing.get("batch"):
-        members = " ".join(f"#{n}" for n in b["members"])
-        lines.append(f"batch {b['number']}: {b['phase']} · age {_span(b['age_s'])}" + (f" · {members}" if members else "")
-                     + (" · SLOW" if b.get("slow") else ""))
+    if batches := landing.get("batches") or ([landing["batch"]] if landing.get("batch") else []):
+        for b in batches:
+            members = " ".join(f"#{n}" for n in b["members"])
+            lines.append(f"batch {b['number']}: {b['phase']}{' ' + b['ci'] if b.get('ci') else ''} · age {_span(b['age_s'])}" + (f" · {members}" if members else "")
+                         + (" · SLOW" if b.get("slow") else ""))
     elif landing.get("next_batch_in_s") is not None:
         lines.append(f"no batch yet: the next one starts in {landing['next_batch_in_s']}s")
     if a := landing.get("last_abandoned"):
@@ -598,8 +601,20 @@ def daemon_run() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     selfupdate.record_start()
+    cur = selfupdate.link("current")
+    logging.getLogger("starpipe.daemon").info("daemon start: runtime %s sha %s, %d start(s) since the last switch",
+                                              cur.name if cur else None, (selfupdate.runtime_sha(cur) or "?")[:12] if cur else None,
+                                              selfupdate.starts_since_switch())
     if selfupdate.crash_loop():  # the runtime we switched to does not stay up: go back, and say so
-        name = selfupdate.rollback(_plist_path())
+        marker = selfupdate.runtime_root() / "switched_at"
+        logging.getLogger("starpipe.daemon").warning(
+            "crash loop: %d starts since the switch at %s (window %.0fs); rolling back", selfupdate.starts_since_switch(),
+            marker.read_text() if marker.exists() else "?", selfupdate.CRASH_WINDOW_S)
+        try:
+            name = selfupdate.rollback(_plist_path())
+        except (RuntimeError, OSError) as exc:
+            logging.getLogger("starpipe.daemon").error("rollback failed: %s", exc)
+            sys.exit(1)
         from .db import Database
         from .notify import Notifier
 
@@ -666,7 +681,7 @@ def daemon_install() -> None:
     _plist_path().parent.mkdir(parents=True, exist_ok=True)
     _plist_path().write_text(out)
     if rt is not None:
-        selfupdate.switch(rt, _plist_path(), restart=False)
+        selfupdate.switch(rt, _plist_path(), restart=False, reason="install")
     selfupdate.real_launchctl(["bootstrap", f"gui/{os.getuid()}", str(_plist_path())])
     click.echo(f"installed {_plist_path()}")
 

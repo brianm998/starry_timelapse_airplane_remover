@@ -40,8 +40,17 @@ class Config(BaseModel):
     cpu_window_s: int = 60
     landing_mode: str = "batch"  # "batch": the landing train, one CI for many tickets; "single": a PR and a CI per ticket
     batch_window_s: int = 120  # wait this long for more tickets once one is ready and no batch is running; a batch takes everything ready
+    # Batches in CI at once. A second batch forms only from ready tickets whose files no in-flight batch touches; 1 is the old
+    # one-at-a-time train. GitHub has 5 macOS runners and one batch's CI wants about 8 macOS jobs, so more than 2 would just queue.
+    batch_parallel: int = 2
     max_in_ci: int = 3  # tickets in CI or landing at once; a finished ticket waits as `ready` for room (runners are shared)
     heavy_slots: int = 1
+    # Slots for light jobs (swift package builds/tests, gradle compile). 1 = no sharing. With 2, a light job takes the second slot only
+    # while the holder is light too, system free memory is at least heavy_free_mem_pct and the holder's peak RSS is under
+    # heavy_light_rss_gb. Star runs, UI and Gherkin runs always get the machine to themselves (adapter_star.job_class).
+    heavy_light_slots: int = 1
+    heavy_free_mem_pct: float = 50.0
+    heavy_light_rss_gb: float = 12.0
     # `swift test --parallel --num-workers N` for the big suites (StarCore, StarCpp, daemon): they used one core of 18 (sampled 2026-11-03)
     heavy_test_workers: int = 8
     auto_self_update: bool = True  # switch the daemon to a new pinned runtime when origin/develop has newer pipeline/ code; the kill switch
