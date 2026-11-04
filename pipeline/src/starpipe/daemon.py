@@ -289,7 +289,7 @@ class Daemon:
                          test: Callable[[Path], tuple[bool, str]] | None = None) -> str | None:
         """Notice newer pipeline/ code on origin/develop, stage and smoke-check it, then swap once nothing is running.
 
-        Returns None (nothing to do or not allowed now), "failed", "pending" (staged and good, waiting for stages to finish) or
+        Returns None (nothing to do or not allowed now, or the staged runtime vanished and will be rebuilt on the next poll), "failed", "pending" (staged and good, waiting for stages to finish) or
         "swapped" (the caller exits so launchd restarts the daemon on the new runtime). A staged version that fails its smoke check
         is recorded against its sha and never retried; the running version stays."""
         plist = plist or Path.home() / "Library" / "LaunchAgents" / f"{selfupdate.LABEL}.plist"
@@ -326,7 +326,13 @@ class Daemon:
             running = [s["ticket"] for s in self.db.running_stages()]
             if running and self.engine.update_hold():
                 return "pending"  # inside the drain window: let the running stages finish
-            selfupdate.switch(selfupdate.runtime_dir(target), plist, restart=False)
+            try:
+                selfupdate.switch(selfupdate.runtime_dir(target), plist, restart=False)
+            except RuntimeError as exc:
+                # pruned or damaged since it was staged: treat as a failed staging, not a bad version; the next poll rebuilds it
+                log.warning("self-update: the staged runtime for %s is unusable, restaging: %s", target[:12], exc)
+                self._clear_pending()
+                return None
             self.db.event("self-update", None, old=have, new=target, **({"interrupted": running} if running else {}))
             self._clear_pending()
             self.db.put("self_update_failed", None)

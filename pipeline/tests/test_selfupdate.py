@@ -212,6 +212,48 @@ def test_rollback_returns_to_the_previous_runtime_and_a_second_rollback_undoes_i
     assert selfupdate.link("current") == second.resolve()
 
 
+def test_switch_refuses_a_missing_or_incomplete_runtime(tmp_path: Path) -> None:
+    repo, sha = make_pipeline_repo(tmp_path)
+    plist, lc = fake_plist(tmp_path), Launchctl()
+    good = selfupdate.build(repo, sha, noop_sync)
+    selfupdate.switch(good, plist, lc, now=1.0)
+    root = selfupdate.runtime_root()
+    before = {name: (root / name).read_text() for name in ("switched_at", "starts.json")}
+    plist_before = plist.read_bytes()
+    lc.calls.clear()
+
+    incomplete = root / "deadbeef"
+    (incomplete / "pipeline").mkdir(parents=True)  # a half-built runtime: no .complete
+    for bad in (root / "gone", incomplete):
+        with pytest.raises(RuntimeError, match="not a complete runtime"):
+            selfupdate.switch(bad, plist, lc, now=2.0)
+        assert selfupdate.link("current") == good.resolve() and selfupdate.link("previous") is None
+        assert {name: (root / name).read_text() for name in before} == before
+        assert plist.read_bytes() == plist_before and lc.calls == []
+
+
+def test_rollback_refuses_an_incomplete_previous(tmp_path: Path) -> None:
+    repo, sha1 = make_pipeline_repo(tmp_path)
+    plist, lc = fake_plist(tmp_path), Launchctl()
+    first = selfupdate.build(repo, sha1, noop_sync)
+    selfupdate.switch(first, plist, lc, now=1.0)
+    (repo / "pipeline" / "v2").write_text("2")
+    sh(repo, "git", "add", "-A")
+    sh(repo, "git", "commit", "-q", "-m", "v2")
+    second = selfupdate.build(repo, sh(repo, "git", "rev-parse", "HEAD").strip(), noop_sync)
+    selfupdate.switch(second, plist, lc, now=2.0)
+    (first / ".complete").unlink()
+    lc.calls.clear()
+
+    with pytest.raises(RuntimeError, match="not a complete runtime"):
+        selfupdate.rollback(plist, lc, clock=lambda: 3.0)
+    assert selfupdate.link("current") == second.resolve() and selfupdate.link("previous") == first.resolve()
+    assert lc.calls == []
+    result = CliRunner().invoke(cli.main, ["self-update", "--rollback"])
+    assert result.exit_code != 0 and "not a complete runtime" in result.output
+    assert selfupdate.link("current") == second.resolve()
+
+
 def test_three_restarts_after_a_switch_are_a_crash_loop(tmp_path: Path) -> None:
     repo, sha = make_pipeline_repo(tmp_path)
     plist, lc = fake_plist(tmp_path), Launchctl()
