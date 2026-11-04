@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,7 @@ NAME = "fakestardwd-unique-token"
 
 
 @pytest.fixture
-def fake_stard(tmp_path: Path):
+def fake_stard(tmp_path: Path) -> Iterator[tuple[subprocess.Popen[bytes], Path]]:
     """A process (a script, since a copied system binary is killed on macOS) matched by NAME and whose command line carries `--scratch <tmp>`; its log is <tmp>/logs/stard.log."""
     exe = tmp_path / NAME
     exe.write_text("#!/bin/bash\nsleep 120\n")
@@ -39,7 +40,7 @@ def watch(seconds: float, limit: int = 2) -> str:
     return out
 
 
-def testWatchdogDumpsWhenStardLogGoesQuiet(fake_stard):
+def testWatchdogDumpsWhenStardLogGoesQuiet(fake_stard: tuple[subprocess.Popen[bytes], Path]) -> None:
     proc, _log = fake_stard
     out = watch(9)
     assert out.count(BANNER) >= 1, out
@@ -52,7 +53,7 @@ def testWatchdogDumpsWhenStardLogGoesQuiet(fake_stard):
     assert "::endgroup::" in out
 
 
-def testWatchdogStaysSilentWhileStardLogGrows(fake_stard):
+def testWatchdogStaysSilentWhileStardLogGrows(fake_stard: tuple[subprocess.Popen[bytes], Path]) -> None:
     _proc, log = fake_stard
     grower = subprocess.Popen(["bash", "-c", f"while :; do echo tick >> '{log}'; sleep 0.5; done"])
     try:
