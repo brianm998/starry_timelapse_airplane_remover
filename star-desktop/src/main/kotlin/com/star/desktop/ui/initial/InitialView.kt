@@ -54,7 +54,6 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.theme.StarColors
-import java.awt.datatransfer.DataFlavor
 import java.io.File
 import com.star.desktop.engine.EngineStatus
 import com.star.desktop.i18n.localized
@@ -135,7 +134,7 @@ private fun DropZone(vm: AppViewModel, onOpenSequence: () -> Unit) {
             override fun onEnded(event: DragAndDropEvent) { isHovering = false }
             override fun onDrop(event: DragAndDropEvent): Boolean {
                 isHovering = false
-                val files = event.droppedFiles()
+                val files = droppedFiles(event.awtTransferable)
                 if (files.isEmpty()) return false
                 handleDroppedFiles(vm, files)
                 return true
@@ -162,8 +161,8 @@ private fun DropZone(vm: AppViewModel, onOpenSequence: () -> Unit) {
                 )
             }
             .clickable(onClick = onOpenSequence)
-            // Accept every drag; the actual file extraction + validation happens in onDrop.
-            .dragAndDropTarget(shouldStartDragAndDrop = { true }, target = target),
+            // Only file drags (a Java file list or a text/uri-list) light the zone, as the gui's accepts only file URLs.
+            .dragAndDropTarget(shouldStartDragAndDrop = { runCatching { isFileDrag(it.awtTransferable) }.getOrDefault(false) }, target = target),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -184,27 +183,15 @@ private fun DropZoneIcon() {
     }
 }
 
-/** Pull the dropped file list out of the desktop AWT transferable, or empty if it isn't a file drag. */
-@OptIn(ExperimentalComposeUiApi::class)
-private fun DragAndDropEvent.droppedFiles(): List<File> = try {
-    val transferable = awtTransferable
-    if (transferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
-        @Suppress("UNCHECKED_CAST")
-        (transferable.getTransferData(DataFlavor.javaFileListFlavor) as? List<File>).orEmpty()
-    } else {
-        emptyList()
-    }
-} catch (t: Throwable) {
-    emptyList()
-}
-
 /** Open the dropped files, routing them via [resolveDrop] (mirrors macOS `InitialView.handleDrop`). */
 private fun handleDroppedFiles(vm: AppViewModel, files: List<File>) {
-    val action = resolveDrop(files) ?: return
-    when (action.kind) {
-        OpenKind.SEQUENCE -> vm.requestSequence(action.path)
-        OpenKind.VIDEO -> vm.openVideo(action.path)
-        OpenKind.CONFIG -> vm.openConfig(action.path)
+    when (val outcome = resolveDrop(files) ?: return) {
+        is MissingFile -> vm.report(localized("ui.file_does_not_exist", outcome.path))
+        is OpenAction -> when (outcome.kind) {
+            OpenKind.SEQUENCE -> vm.requestSequence(outcome.path)
+            OpenKind.VIDEO -> vm.openVideo(outcome.path)
+            OpenKind.CONFIG -> vm.openConfig(outcome.path)
+        }
     }
 }
 
