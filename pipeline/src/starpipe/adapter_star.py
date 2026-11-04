@@ -120,6 +120,13 @@ def _swift_build(pkg: str, *extra: str) -> CheckSpec:
     return CheckSpec(f"build:{pkg}", f"swift build {pkg}", ("swift", "build", "--package-path", pkg, *extra))
 
 
+# xctest prints "Test Case ... started" through buffered stdio, and the check log is a file, so the lines reached it only when the
+# process exited: a hung test (#209) left a log of build output and no name. `script` runs the command on a pty, which makes
+# xctest line-buffer, and passes the command's exit code through (`--verbose` does not unbuffer anything). The \r, ^D and
+# backspaces it adds are dropped or ignored by the parsers.
+LIVE_LOG = ("script", "-q", "/dev/null")
+
+
 # The swift test suites that run with `--parallel`, each with the test classes that must not share the machine with other
 # tests (they measure time, QoS or the whole machine's memory, or write fixed paths): those run in the second, serial pass of
 # the check. Found empirically (ticket #238, this iMac Pro, 8 workers, seconds inside the heavy lock):
@@ -139,17 +146,17 @@ SERIAL_CLASSES: dict[str, tuple[str, ...]] = {
 def swift_test(pkg: str, *extra: str, tid: str | None = None) -> CheckSpec:
     check_id = f"test:{tid or pkg}"
     if check_id not in SERIAL_CLASSES:
-        return CheckSpec(check_id, f"swift test {pkg}", ("swift", "test", "--package-path", pkg, *extra), parser="xctest")
+        return CheckSpec(check_id, f"swift test {pkg}", (*LIVE_LOG, "swift", "test", "--package-path", pkg, *extra), parser="xctest")
     # --parallel prints no per-bundle "Executed N tests" totals, so the verdict comes from the xunit files
     name = log_stem(check_id)
     serial = SERIAL_CLASSES[check_id]
     skips = tuple(arg for cls in serial for arg in ("--skip", cls))
     xml = "{log_dir}/" + name + ".xml"
-    parallel = ("swift", "test", "--package-path", pkg, *extra, "--parallel", "--num-workers", "{workers}",
+    parallel = (*LIVE_LOG, "swift", "test", "--package-path", pkg, *extra, "--parallel", "--num-workers", "{workers}",
                 "--xunit-output", xml, *skips)
     xml_serial = "{log_dir}/" + name + "-serial.xml"
     # one worker is still serial, and a non-parallel `swift test` writes no XCTest xunit file
-    serial_argv = ("swift", "test", "--package-path", pkg, "--parallel", "--num-workers", "1", "--xunit-output", xml_serial,
+    serial_argv = (*LIVE_LOG, "swift", "test", "--package-path", pkg, "--parallel", "--num-workers", "1", "--xunit-output", xml_serial,
                    *(arg for cls in serial for arg in ("--filter", cls))) if serial else ()
     files = (xml, xml.removesuffix(".xml") + "-swift-testing.xml")
     if serial:

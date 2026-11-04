@@ -255,9 +255,17 @@ class Daemon:
                                             lambda repo: ship.fetch(self.engine, repo))
         return gherkin_nightly.run_once(self.db, self.engine.gh, self.config, source, force)
 
+    def gherkin_follow(self) -> None:
+        """Act on the dispatched nightly's results (blocking: GitHub calls). Never fatal: the next tick tries again."""
+        try:
+            gherkin_nightly.follow_once(self.db, self.engine.gh, self.config, self.engine.notifier)
+        except Exception:
+            log.exception("gherkin nightly follow-up failed")
+
     async def gherkin_nightly_loop(self) -> None:
         retry_at = 0.0
         while True:
+            await asyncio.to_thread(self.gherkin_follow)
             now = datetime.now()
             if (self.config.gherkin_nightly_enabled and time.time() >= retry_at
                     and nightly.due(now, self.db.get("gherkin_nightly_last_day"), self.config.gherkin_nightly_start)):
@@ -522,7 +530,7 @@ class Daemon:
             running = [s["model"] for s in stages if s["ended"] is None]  # the open stage's model, else none
             tickets.append({"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
                             "group": group, "model": running[-1] if running else None, "activity": activity(self.db, t, now, self.config.landing_mode, self.config), "blocked_by": self.db.open_blockers(t.number),
-                            "pr_number": t.pr_number, "branch": t.branch, "worktree": t.worktree,
+                            "pr_number": t.pr_number, "branch": t.branch, "worktree": t.worktree, "body": t.body,
                             "park_reason": t.park_reason, "question": question["text"] if question else None,
                             "stages": [{k: s[k] for k in ("stage", "attempt", "model", "started", "ended", "lock_wait_s", "outcome")}
                                        for s in stages]})
