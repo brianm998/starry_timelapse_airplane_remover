@@ -54,7 +54,7 @@ def discover(package: str) -> tuple[list[str], Path]:
     """The test classes of the built package and its .xctest bundle."""
     listing = subprocess.run(["swift", "test", "--package-path", package, "--skip-build", "list"], capture_output=True, text=True,
                              check=False)
-    classes = list(dict.fromkeys(m.group(1) for m in re.finditer(r"^\w+\.(\w+)/\w+", listing.stdout, re.M)))
+    classes = list(dict.fromkeys(m.group(1) for m in re.finditer(r"^\w+\.(\w+)/\w+", listing.stdout, re.MULTILINE)))
     bin_path = subprocess.run(["swift", "build", "--package-path", package, "--show-bin-path"], capture_output=True, text=True,
                               check=False).stdout.strip().splitlines()
     bundles = sorted(Path(bin_path[-1]).glob("*.xctest")) if bin_path else []
