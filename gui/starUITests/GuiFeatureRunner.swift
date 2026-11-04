@@ -707,12 +707,26 @@ final class GuiFeatureRunner {
     static let galleryWindowSize = "1400x1100"
 
     /// `<dir>/<client>/<name>.png`, where dir is `STAR_GALLERY_DIR` (`TEST_RUNNER_STAR_GALLERY_DIR` under xcodebuild; the desktop's runner reads the
-    /// same), else `<repo>/.test-data/gallery/latest`.
-    private func galleryFile(_ name: String) -> URL {
-        let dir: URL
-        if let d = ProcessInfo.processInfo.environment["STAR_GALLERY_DIR"], !d.isEmpty { dir = URL(fileURLWithPath: d) }
-        else { dir = Self.repoRoot.appendingPathComponent(".test-data/gallery/latest") }
-        return dir.appendingPathComponent(Self.client).appendingPathComponent("\(name).png")
+    /// same), else `<repo>/.test-data/gallery/latest`. The runner is sandboxed and on CI cannot write into the workspace (Code=513), so when that
+    /// directory cannot be made the gallery goes to the runner container's tmp (`NSTemporaryDirectory()/gallery/latest`, as `saveArtifacts` does).
+    /// Returns the file, with its directory made.
+    private func galleryFile(_ name: String) throws -> URL {
+        let wanted: URL
+        if let d = ProcessInfo.processInfo.environment["STAR_GALLERY_DIR"], !d.isEmpty { wanted = URL(fileURLWithPath: d) }
+        else { wanted = Self.repoRoot.appendingPathComponent(".test-data/gallery/latest") }
+        let fallback = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("gallery/latest")
+        var firstError: Error?
+        for dir in [wanted, fallback] {
+            let folder = dir.appendingPathComponent(Self.client)
+            do {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                return folder.appendingPathComponent("\(name).png")
+            } catch {
+                firstError = firstError ?? error
+                print("GALLERY cannot use \(folder.path): \(error)")
+            }
+        }
+        throw firstError!
     }
 
     /// The window to photograph: the secondary window of that name, or the main window, which is the one that is none of the secondary ones.
@@ -749,8 +763,7 @@ final class GuiFeatureRunner {
             last = shot
             _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 0.4)
         }
-        let file = galleryFile(name)
-        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let file = try galleryFile(name)
         try shot.write(to: file)
         print("SCREENSHOT \(name) -> \(file.path) (window \(window.frame.size), \(shot.count) bytes)")
         guard shot.count > 1000 else { throw RunnerError("the screenshot \"\(name)\" is empty (\(shot.count) bytes)") }
