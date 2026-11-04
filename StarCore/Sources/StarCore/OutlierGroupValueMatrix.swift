@@ -20,10 +20,7 @@ public class OutlierGroupValueMatrix {
         let typesCSVFilename = "\(dir)/\(CondensedOutlierGroupValueMatrix.typesFilename)"
         if FileManager.default.fileExists(atPath: typesCSVFilename) {
 
-            let url = NSURL(fileURLWithPath: typesCSVFilename,
-                            isDirectory: false)
-
-            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url as URL))
+            let data = try Data(contentsOf: URL(fileURLWithPath: typesCSVFilename, isDirectory: false))
             let csv_string = String(decoding: data, as: UTF8.self)
             self.types = csv_string.components(separatedBy: ",").map { OutlierGroupFeature(rawValue: $0)! }
         } else {
@@ -33,10 +30,7 @@ public class OutlierGroupValueMatrix {
         let positive_filename = "\(dir)/\(OutlierGroupValueMatrix.positiveDataFilename)"
         if FileManager.default.fileExists(atPath: positive_filename) {
 
-            let url = NSURL(fileURLWithPath: positive_filename,
-                            isDirectory: false)
-
-            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url as URL))
+            let data = try Data(contentsOf: URL(fileURLWithPath: positive_filename, isDirectory: false))
             let positive_string = String(decoding: data, as: UTF8.self)
             var values = positive_string.components(separatedBy: "\n").map { line in
                 return line.components(separatedBy: ",").map { Double($0) ?? 0.0 }
@@ -53,10 +47,7 @@ public class OutlierGroupValueMatrix {
         let negative_filename = "\(dir)/\(OutlierGroupValueMatrix.negativeDataFilename)"
         if FileManager.default.fileExists(atPath: negative_filename) {
 
-            let url = NSURL(fileURLWithPath: negative_filename,
-                            isDirectory: false)
-
-            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url as URL))
+            let data = try Data(contentsOf: URL(fileURLWithPath: negative_filename, isDirectory: false))
             let negative_string = String(decoding: data, as: UTF8.self)
 
 
