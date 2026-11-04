@@ -264,6 +264,35 @@ async def test_a_red_batch_is_split_until_the_culprit_is_alone_and_the_rest_land
     assert any("CI red" in c for _, c in rig.gh.closed_prs), "each red batch's PR was closed with the reason"
 
 
+async def test_a_red_batchs_split_is_recorded_before_its_tickets_return_to_the_queue(rig: Rig) -> None:
+    for n in (1, 2, 3, 4):
+        ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
+    t = train_of(rig)
+    await t._start([1, 2, 3, 4])  # pyright: ignore[reportPrivateUsage]
+    bid = int(rig.db.active_batch()["id"])  # type: ignore[index]
+    seen: list[str | None] = []
+    real = t._abandon  # pyright: ignore[reportPrivateUsage]
+
+    def watched(b: int, why: str, final: str = "abandoned") -> None:
+        real(b, why, final)
+        seen.append(rig.db.get("train_groups"))  # the moment the tickets are back in the queue and a step() may look at them
+
+    t._abandon = watched  # type: ignore[method-assign]  # pyright: ignore[reportPrivateUsage]
+    await t._on_red(bid, ci_mod.Verdict("fail", "red"))  # pyright: ignore[reportPrivateUsage]
+    assert seen == [json.dumps([[1, 2], [3, 4]])], f"the halves were not recorded yet when the tickets went back: {seen}"
+
+
+async def test_a_split_group_waits_while_its_members_are_still_in_the_batch_in_flight(rig: Rig) -> None:
+    for n in (1, 2):
+        ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
+    t = train_of(rig)
+    await t._start([1, 2])  # pyright: ignore[reportPrivateUsage]
+    assert rig.db.active_batch() is not None
+    rig.db.put("train_groups", json.dumps([[1, 2]]))
+    assert t._pick() == []  # pyright: ignore[reportPrivateUsage]
+    assert json.loads(rig.db.get("train_groups") or "null") == [[1, 2]], "the group is kept, not popped and lost"
+
+
 async def test_a_ticket_cancelled_while_its_batch_is_in_ci_is_left_out_and_the_others_land(rig: Rig) -> None:
     for n in (1, 2, 3):
         ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
