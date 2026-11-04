@@ -272,9 +272,8 @@ jobs:
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
-      - name: Build the output validator
-        shell: bash
-        run: swift build -c release --package-path removal_tools
+      - name: Output validator (restored from cache, built only on a miss)
+        uses: ./.github/actions/output-validator
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
@@ -468,9 +467,8 @@ jobs:
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
-      - name: Build the output validator
-        shell: bash
-        run: swift build -c release --package-path removal_tools
+      - name: Output validator (restored from cache, built only on a miss)
+        uses: ./.github/actions/output-validator
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
@@ -1024,10 +1022,9 @@ jobs:
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
-      - name: Build the output validator
+      - name: Output validator (restored from cache, built only on a miss)
         if: ${{ matrix.shard.validator }}
-        shell: bash
-        run: swift build -c release --package-path removal_tools
+        uses: ./.github/actions/output-validator
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
@@ -1244,10 +1241,9 @@ jobs:
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
-      - name: Build the output validator
+      - name: Output validator (restored from cache, built only on a miss)
         if: ${{ matrix.shard.validator }}
-        shell: bash
-        run: swift build -c release --package-path removal_tools
+        uses: ./.github/actions/output-validator
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
