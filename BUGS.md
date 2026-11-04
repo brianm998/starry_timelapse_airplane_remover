@@ -93,6 +93,8 @@ locally. So it is not deterministic.
 paravirtual-GPU hypotheses (a 7 GB / 3-core VM) as the live ones, and a hosted-runner-only race that a 36-thread machine does not hit. Only the log above. No crash report or `star_temp` directory was captured (the runner deletes it). Hosted macos-15 VMs have little RAM
 (see the memory-gate comments in `.github/workflows/gherkin.yml` for the desktop leg) and expose a paravirtual GPU.
 
+2026-11-04: the same SIGSEGV signature (no stack) appeared on ubuntu-24.04 in nightly Gherkin run 41789260064: after 'saved median horizon as global reference' (08:48:28) and, in `uiStartDuringRun`, right after a stopped run's frame wrote its outliers (08:49:47, 08:55:39), each after 'all operations cancelled'. The Linux crash handler now also writes a glibc `backtrace_symbols_fd` of the crashing thread to stderr and star's log, so the next occurrence names the site; record it here.
+
 ### What it means (hypotheses, not yet separated)
 
 A race or use-after-free in the merged-horizon step (several frames' horizon tasks run concurrently); a memory-pressure failure on the 7 GB VM
