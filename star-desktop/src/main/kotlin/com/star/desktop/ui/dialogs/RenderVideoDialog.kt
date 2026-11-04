@@ -37,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -218,7 +220,7 @@ internal fun RenderOptions(app: AppViewModel, state: RenderOptionsState, frameCo
             if (problem) {
                 Text(
                     localized("ui.enter_a_number_from_a_to_b", RenderVideo.rateText(RenderVideo.CUSTOM_MIN), RenderVideo.rateText(RenderVideo.CUSTOM_MAX)),
-                    color = StarColors.red, fontSize = 10.sp, modifier = Modifier.weight(1f).testTag("render.custom_frame_rate.message"),
+                    color = StarColors.red, fontSize = 10.sp, modifier = Modifier.weight(1f).semantics(mergeDescendants = true) { testTag = "render.custom_frame_rate.message" },
                 )
             }
             BasicTextField(
@@ -296,7 +298,7 @@ private fun RenderingView(state: RenderState.Rendering, onCancel: () -> Unit) {
 private fun SucceededView(state: RenderState.Succeeded, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var problem by remember { mutableStateOf<String?>(null) }
-    Text(renderedStatus(state.path, state.fileName), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.testTag("render.done"))
+    Text(renderedStatus(state.path, state.fileName), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.semantics(mergeDescendants = true) { testTag = "render.done" })
     state.path?.let { Text(it, color = StarColors.textSecondary, fontSize = 11.sp) }
     problem?.let { Text(it, color = StarColors.red, fontSize = 12.sp) }
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
@@ -316,7 +318,7 @@ private fun SucceededView(state: RenderState.Succeeded, onDismiss: () -> Unit) {
 @Composable
 private fun FailedView(state: RenderState.Failed, onDismiss: () -> Unit) {
     androidx.compose.foundation.text.selection.SelectionContainer {
-        Text(localized("ui.rendering_error", state.message), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.testTag("render.error"))
+        Text(localized("ui.rendering_error", state.message), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.semantics(mergeDescendants = true) { testTag = "render.error" })
     }
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
         Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.dismiss")) }
