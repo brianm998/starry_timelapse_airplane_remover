@@ -96,6 +96,64 @@ async def test_a_job_develop_also_fails_does_not_block_and_is_listed(rig: Rig) -
     assert "known red on develop (not blocking): cli/windows" in rig.gh.prs[101]["body"]
 
 
+NO_RUNNER = "no runner, left to the post-merge watch and the nightly"
+
+
+async def test_a_ticket_lands_with_an_unscheduled_job_noted(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n")
+    t = rig.db.ticket(1)
+    assert t
+    rig.gh.ci[gitutil.head_sha(Path(t.worktree or ""))] = [("pr-gate", "linux", "completed", "success"),
+                                                          ("pr-gate", "macos", "completed", "cancelled")]
+    rig.gh.job_steps["macos"] = []  # GitHub never gave it a runner: no step ran
+    await rig.engine.drive(1)
+    assert rig.state(1) == "landed" and rig.gh.reruns == [], "not blocking and not rerun"
+    assert f"{NO_RUNNER}: pr-gate/macos" in rig.gh.prs[101]["body"]
+    events = [e for e in rig.db.events_since() if e["kind"] == "ci-no-runner"]
+    assert [(e["ticket"], e["data"]["workflow"], e["data"]["job"]) for e in events] == [(1, "pr-gate", "macos")]
+
+
+def test_an_unscheduled_gate_job_passes_with_a_warning() -> None:
+    unscheduled = ci.Job("pr-gate", "OpenCV (macOS)", "completed", "cancelled", 1, unscheduled=True)
+    v = judged([job("pr-gate", "l"), unscheduled])
+    assert v.kind == "pass" and v.warnings == [unscheduled] and v.rerun == [] and v.blocking == []
+    # it is not a gate failure however often it was rerun before, and a real red beside it still blocks
+    assert judged([job("pr-gate", "l"), unscheduled], reran={unscheduled.key}).kind == "pass"
+    assert judged([job("pr-gate", "l", conclusion="failure"), unscheduled]).kind == "fail"
+
+
+def test_an_unscheduled_job_outside_the_gate_passes_with_a_warning() -> None:
+    unscheduled = ci.Job("cli", "macos", "completed", "cancelled", 2, unscheduled=True)
+    base = {("cli", "macos"): "success"}  # green on develop: a plain red here would be rerun, then block
+    v = judged([job("pr-gate", "l"), unscheduled], base)
+    assert v.kind == "pass" and v.warnings == [unscheduled] and v.rerun == [] and v.known_red == []
+    assert judged([job("pr-gate", "l"), unscheduled], base, reran={unscheduled.key}).kind == "pass"
+
+
+def test_a_job_cancelled_after_running_steps_is_still_rerun_then_blocks() -> None:
+    ran = ci.Job("pr-gate", "OpenCV (macOS)", "completed", "cancelled", 1)  # steps ran: not unscheduled
+    v = judged([ran])
+    assert v.kind == "rerun" and v.rerun == [ran] and v.warnings == []
+    v = judged([ran], reran={ran.key})
+    assert v.kind == "fail" and v.blocking == [ran] and v.warnings == []
+
+
+def test_parse_jobs_marks_a_cancelled_job_with_no_steps_unscheduled_unless_its_run_was_cancelled() -> None:
+    ran = [{"name": "build", "conclusion": "success", "started_at": "2026-11-04T10:00:00Z"}]
+    cancelled = {"status": "completed", "conclusion": "cancelled"}
+
+    def parse(run_conclusion: str, job: dict[str, Any]) -> bool:
+        runs = [{"id": 5, "name": "pr-gate", "conclusion": run_conclusion}]
+        return ci.parse_jobs(runs, {5: [{"name": "m", **job}]})[0].unscheduled
+
+    assert parse("failure", {**cancelled, "steps": []})
+    assert parse("failure", {**cancelled, "steps": [{"name": "Set up job", "conclusion": None, "started_at": None}]})
+    assert not parse("failure", {**cancelled, "steps": ran}), "it ran steps"
+    assert not parse("cancelled", {**cancelled, "steps": []}), "a newer push cancelled the whole run"
+    assert not parse("failure", cancelled), "no steps key: unknown, so scheduled"
+    assert not parse("failure", {"status": "completed", "conclusion": "failure", "steps": []})
+
+
 async def test_a_new_failure_in_another_workflow_blocks(rig: Rig) -> None:
     ready_ticket(rig, 1, "one.md", "one\n")
     rig.db.set_baseline("cli", "windows", "abc", "success")
