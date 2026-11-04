@@ -2,7 +2,7 @@
 
 Pure: jobs and the develop baseline in, a verdict out. `pr-gate` always blocks; every other job blocks only when it is a
 new failure (green on develop, red here); slow jobs stop blocking after `blocking_wait_s`; infrastructure-looking reds
-get one rerun.
+get one rerun. A job that never got a runner (cancelled with no step run, in a run nobody cancelled) is only a warning.
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ class Job:
     completed_at: float | None = None
     run_done: bool = True  # GitHub refuses `rerun-failed-jobs` on a run that is still going
     labels: tuple[str, ...] = ()  # the runner labels the job asked for, e.g. ("macos-15",)
+    unscheduled: bool = False  # cancelled before any step ran, though its run was not cancelled: GitHub found it no runner
 
     @property
     def key(self) -> tuple[str, str]:
@@ -64,6 +65,7 @@ class Verdict:
     rerun: list[Job] = field(default_factory=lambda: list[Job]())
     known_red: list[Job] = field(default_factory=lambda: list[Job]())
     demoted: list[Job] = field(default_factory=lambda: list[Job]())
+    warnings: list[Job] = field(default_factory=lambda: list[Job]())  # never got a runner: neither blocks nor is rerun
 
 
 Baseline = Callable[[str, str], str | None]
@@ -98,6 +100,14 @@ def split_post_merge(runs: list[dict[str, Any]], names: tuple[str, ...]) -> tupl
     return kept, [r for r in runs if r not in kept]
 
 
+def _never_ran(job: dict[str, Any], run: dict[str, Any]) -> bool:
+    """A job cancelled with no step run, in a run that was not itself cancelled (a newer push cancels a whole run, queued jobs
+    included, and they look the same). A job dict with no `steps` at all is unknown, so counts as scheduled."""
+    if job.get("conclusion") != "cancelled" or run.get("conclusion") == "cancelled" or "steps" not in job:
+        return False
+    return not any(s.get("conclusion") or s.get("started_at") for s in job.get("steps") or [])
+
+
 def parse_jobs(runs: list[dict[str, Any]], jobs_by_run: dict[int, list[dict[str, Any]]]) -> list[Job]:
     """GitHub's workflow runs and their jobs as Job values (the latest attempt of each run)."""
     out: list[Job] = []
@@ -105,7 +115,7 @@ def parse_jobs(runs: list[dict[str, Any]], jobs_by_run: dict[int, list[dict[str,
         for j in jobs_by_run.get(int(run["id"]), []):
             out.append(Job(run.get("name") or "", j["name"], j["status"], j.get("conclusion"), int(run["id"]),
                            _ts(j.get("completed_at")), run.get("status", "completed") == "completed",
-                           tuple(j.get("labels") or ())))
+                           tuple(j.get("labels") or ()), _never_ran(j, run)))
     return out
 
 
@@ -117,6 +127,9 @@ def judge(jobs: list[Job], baseline: Baseline, *, now: float, head_pushed_at: fl
     if now - head_pushed_at < settle_s or not gate or not all(j.done for j in gate):
         return Verdict("pending", f"waiting for {GATE} to report")
     verdict = Verdict("pass")
+    verdict.warnings = [j for j in jobs if j.unscheduled and j.done]  # a rerun would only queue for a runner again
+    jobs = [j for j in jobs if j not in verdict.warnings]
+    gate = [j for j in gate if j not in verdict.warnings]
     for j in gate:
         if j.red:
             if infra(j) and j.key not in reran:

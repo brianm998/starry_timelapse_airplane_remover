@@ -435,9 +435,7 @@ class Train:
                 eng.db.put(f"reran:batch{bid}", json.dumps(sorted(reran)))
                 await eng.sleep(eng.config.ci_poll_s)
             elif verdict.kind == "pass":
-                notes = [f"known red on develop (not blocking): {j.workflow}/{j.job}" for j in verdict.known_red]
-                notes += [f"still running after {eng.config.ci_blocking_wait_s / 3600:g} h (demoted to the post-merge watch): "
-                          f"{j.workflow}/{j.job}" for j in verdict.demoted]
+                notes = ship.pass_notes(eng, verdict, batch=bid)
                 return ("pass", "\n".join(f"- {n}" for n in notes))
             else:
                 return ("red", verdict)

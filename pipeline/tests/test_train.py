@@ -604,6 +604,17 @@ def test_jobs_carry_their_runner_labels() -> None:
     assert [j.queued_for_macos for j in jobs] == [True, False]
 
 
+async def test_a_batch_lands_with_an_unscheduled_job_noted(rig: Rig) -> None:
+    ready_ticket(rig, 1, "b1.md", "1\n")
+    rig.gh.ci_hook = lambda _sha: [("pr-gate", "linux", "completed", "success"), ("pr-gate", "macos", "completed", "cancelled")]
+    rig.gh.job_steps["macos"] = []  # no runner ever took it; the run itself is mixed, not cancelled
+    await train_of(rig).run_until_idle()
+    assert rig.state(1) == "landed" and rig.gh.reruns == []
+    assert any("no runner, left to the post-merge watch and the nightly: pr-gate/macos" in pr["body"] for pr in rig.gh.prs.values())
+    events = [e for e in rig.db.events_since() if e["kind"] == "ci-no-runner"]
+    assert [(e["data"]["batch"], e["data"]["job"]) for e in events] == [(1, "macos")]
+
+
 async def test_feature_gates_wait_while_batch_macos_jobs_are_queued(rig: Rig) -> None:
     ready_ticket(rig, 1, "b1.md", "1\n")
     rig.gh.job_labels["macos"] = ["macos-15"]
