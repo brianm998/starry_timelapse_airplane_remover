@@ -256,6 +256,8 @@ class Train:
         while groups:  # halves of a batch that went red: exactly these tickets, nothing else
             if any(n in self._beside for n in groups[0]):
                 return []  # a member is still catching up: the group stays for the next pick, whole
+            if any(n in flying for n in groups[0]):
+                return []  # a member is still in the batch being given up (its tickets are going back to the queue one by one)
             group = [n for n in groups[0] if n in ids]
             if group and flying and not disjoint(group):
                 return []  # it shares files with the batch in flight: it goes when that one is done
@@ -596,13 +598,15 @@ class Train:
     async def _on_red(self, bid: int, verdict: ci.Verdict) -> None:
         eng = self.eng
         members = eng.db.batch_members(bid)
-        await asyncio.to_thread(self._abandon, bid, f"CI red: {verdict.reason}", "failed")
         if len(members) > 1:  # try the halves: the culprit is in one of them (log2 of the batch size more CIs, at worst)
+            # recorded before the abandon puts the tickets back: a step() that looks at the queue in between must find the split
             half = (len(members) + 1) // 2
             groups: list[list[int]] = [members[:half], members[half:], *json.loads(eng.db.get("train_groups") or "[]")]
             eng.db.put("train_groups", json.dumps(groups))
             eng.db.event("train-split", None, batch=bid, halves=[members[:half], members[half:]])
+            await asyncio.to_thread(self._abandon, bid, f"CI red: {verdict.reason}", "failed")
             return
+        await asyncio.to_thread(self._abandon, bid, f"CI red: {verdict.reason}", "failed")
         t = eng.db.ticket(members[0]) if members else None
         if t is not None:  # one ticket and still red: it is the culprit, so it gets the CI-FIX stage and rejoins the queue
             await ship.ci_fix(eng, t, verdict, rejoin=True)
