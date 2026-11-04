@@ -148,21 +148,21 @@ public enum ProposalText {
         return "just now"
     }
 
+    /// "3d ago", "5h ago", "12m ago" for the proposal rows; nil when unparseable.
+    public static func shortAge(iso: String?, now: Double) -> String? {
+        guard let iso, let then = parse(iso) else { return nil }
+        let seconds = Int(now - then.timeIntervalSince1970)
+        if seconds < 60 { return "just now" }
+        let units: [(String, Int)] = [("y", 365 * 86400), ("mo", 30 * 86400), ("d", 86400), ("h", 3600), ("m", 60)]
+        for (name, size) in units where seconds >= size { return "\(seconds / size)\(name) ago" }
+        return "just now"
+    }
+
     private static func parse(_ iso: String) -> Date? {
         let plain = ISO8601DateFormatter()
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return plain.date(from: iso) ?? fractional.date(from: iso)
-    }
-
-    /// "by octocat, opened 3 days ago", plus who filed it when the body names an agent.
-    public static func byLine(_ d: ProposalDetail, now: Double) -> String {
-        var parts: [String] = []
-        if let a = d.author { parts.append("by \(a)") }
-        if let age = age(iso: d.createdAt, now: now) { parts.append("opened \(age)") }
-        var line = parts.joined(separator: ", ")
-        if let by = d.by, !by.isEmpty { line += (line.isEmpty ? "" : " · ") + "proposed by \(by)" }
-        return line
     }
 
     /// "author · 2 hours ago" above a comment.

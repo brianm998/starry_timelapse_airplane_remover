@@ -552,7 +552,8 @@ class Daemon:
         return {"behind": behind, "latest": latest}
 
     def fetch_proposals(self) -> list[dict[str, object]]:
-        return [{"number": p.number, "title": p.title, "by": p.by} for p in tickets.proposals(self.engine.gh)]
+        return [{"number": p.number, "title": p.title, "by": p.by or None, "author": p.author or None,
+                 "created_at": p.created_at or None} for p in tickets.proposals(self.engine.gh)]
 
     def settle_proposal(self, n: int, action: str, priority: str | None = None, reason: str = "") -> str:
         """Approve or reject one proposal (blocking: GitHub calls). Only a live `pipe:proposed` issue qualifies, so an

@@ -266,11 +266,7 @@ struct ProposalDetailView: View {
                 Text(proposal.title).scaledFont(.title2, weight: .bold).textSelection(.enabled)
                 Spacer()
             }
-            if let d = loaded {
-                Text(ProposalText.byLine(d, now: now) + "; waiting for your go-ahead.").foregroundStyle(.secondary)
-            } else {
-                Text("Proposed by \(proposal.by); waiting for your go-ahead.").foregroundStyle(.secondary)
-            }
+            Text(proposal.headerSentence(now: now)).foregroundStyle(.secondary)
             HStack {
                 Menu("Approve") {
                     Button("Keep the issue's priority") { approve(nil) }
