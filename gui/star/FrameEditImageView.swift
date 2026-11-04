@@ -11,8 +11,6 @@ public struct FrameEditImageView: View {
 
     @Bindable var frameViewModel: FrameViewModel
     
-    @State private var localID = 0
-    
     private var fullResolutionImage: some View {
         @Bindable var viewModel = viewModel
         return Group {
