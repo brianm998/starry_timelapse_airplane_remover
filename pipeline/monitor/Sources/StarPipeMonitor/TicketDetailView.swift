@@ -80,16 +80,22 @@ struct TicketDetailView: View {
         }
     }
 
-    /// The open issues this ticket waits for, one link per line; absent when nothing blocks it.
+    /// The open issues this ticket waits for, one link per line, and the retry held for them; absent when there is neither.
     @ViewBuilder
     private var blockedBy: some View {
-        let rows = store.detail.map { $0.number == ticket.number ? BlockerLinks.detailRows(blockers: $0.blockers, repo: repo) : [] } ?? []
-        if !rows.isEmpty {
+        let current = store.detail.flatMap { $0.number == ticket.number ? $0 : nil }
+        let rows = current.map { BlockerLinks.detailRows(blockers: $0.blockers, repo: repo) } ?? []
+        let held = current?.heldRetry
+        if !rows.isEmpty || held != nil {
             GroupBox("Blocked by") {
                 VStack(alignment: .leading, spacing: 4) {
+                    if let held {
+                        Text(held).textSelection(.enabled)
+                    }
                     ForEach(rows) { row in
                         HStack(alignment: .firstTextBaseline) {
-                            Link(row.label, destination: row.url).monospacedDigit().help(row.url.absoluteString)
+                            Button(row.label) { store.selectIssue(row.number, title: row.title) }
+                                .buttonStyle(.link).monospacedDigit().help("Show \(row.label) here")
                             Text(row.title).foregroundStyle(.secondary).textSelection(.enabled)
                         }
                     }
@@ -195,5 +201,29 @@ struct StageTimeline: View {
         case "interrupted": .gray
         default: .orange
         }
+    }
+}
+
+/// The detail pane for an issue that is a blocker but not a pipeline ticket: what is known, and the way to GitHub.
+struct IssuePanelView: View {
+    let number: Int
+    let title: String
+    let repo: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("#\(number)").monospacedDigit().foregroundStyle(.secondary)
+                if !title.isEmpty { Text(title).scaledFont(.title2, weight: .bold).textSelection(.enabled) }
+                Spacer()
+                if let url = BlockerLinks.issueURL(repo: repo, number: number) {
+                    Button("Issue") { NSWorkspace.shared.open(url) }
+                }
+            }
+            Text("Not a pipeline ticket.").foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
