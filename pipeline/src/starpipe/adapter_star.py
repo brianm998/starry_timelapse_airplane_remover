@@ -212,8 +212,10 @@ def job_class(cmd: str) -> str:
         words = shlex.split(cmd)
     except ValueError:
         return "exclusive"
-    if words[:3] == list(LIVE_LOG):  # the pty wrapper around xctest
-        words = words[3:]
+    for wrapper in (LIVE_LOG, ("script", "-q", "/dev/null")):  # the pty wrapper around xctest, as built here or on macOS
+        if words[:3] == list(wrapper):
+            words = words[3:]
+            break
     if not words:
         return "exclusive"
     tool = words[0].rsplit("/", 1)[-1]
