@@ -270,6 +270,20 @@ every feature even after a failure, keeps each one's reports under `star-desktop
 it re-runs only the features that failed. `gherkin/summarize-desktop-features.sh` then turns its `PASSED` markers into the same
 per-feature summary rows and fails the job if a feature has none.
 
+### The stard hang watchdog (Linux desktop leg)
+
+stard intermittently wedges on the ubuntu desktop leg (autoHorizonVideo, ticket #54): no log line after frame 0's alignment, not even
+the governor's 30 s one. When `STAR_HANG_WATCHDOG_SECONDS` is set (the desktop-linux job sets 360), `run-desktop-features.sh` starts
+`gherkin/hang-watchdog.sh` beside the features. It watches `<scratch>/logs/stard.log` (the Kotlin client appends every stard stderr
+line to it; the scratch dir is read from stard's `--scratch` argument), and when that has not grown for that long it prints, once and
+then once more a further interval later, a `::group::stard hang watchdog: dump N ...` into the job log: `ps`, per-thread CPU, the file
+descriptors, each stard thread's kernel stack, a gdb backtrace of every thread, the tail of `stard.log` and a `jstack` of every JVM
+(the Gradle test worker). It lands before the runner's 10 minute ProgressStall and the 25 minute attempt cut, which kill everything.
+Read it in the job log of the hung run (artifacts do not survive a cancel). Threads parked in `DecodedFrameStore.load` or
+`FrameSource.waitUntilAvailableBlocking` mean pool starvation; stard blocked in `write` on fd 2 with the test JVM's stderr-reader thread
+stuck means the stderr pipe. It never kills or fails anything; a missing tool is a one-line note. Run it by hand with
+`gherkin/hang-watchdog.sh <quiet-seconds> [poll-seconds]`; `HANG_WATCHDOG_PGREP` changes the `pgrep` arguments that find stard (the tests use it).
+
 ## Checking airplane and satellite removal
 
 Features that must prove trails are actually gone use `trail_tools/` (a standalone SwiftPM package: `RemovalCore`,
