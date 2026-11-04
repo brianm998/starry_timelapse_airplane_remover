@@ -519,10 +519,94 @@ jobs:
           path: ${{ runner.temp }}/gherkin-artifacts
           if-no-files-found: warn
 
+  # ─── macOS: one build of the binaries the three macOS legs run ───────────────
+  # cli-macos, mac-gui and desktop-macos each used to build the same star / stard / output validator on the same runner image (the validator
+  # alone links all of StarCore: ~3 min per leg, stard another ~4 in desktop-macos).  They are built once here and shared as the artifact
+  # gherkin-bin-macos: one directory per package (removal_tools, trail_tools, cli, daemon) holding the executables and the SwiftPM resource
+  # bundles that sit beside them (StarResources looks there first, see StarCore/Sources/StarCore/StarResources.swift).  A leg downloads it
+  # into <package>/.build/release/, the place its runner already looks, and restores the executable bit (upload-artifact drops the mode).
+  # Only what some shard of some leg uses is built: the `"validator":true` / `"trail":true` / `"name":"ui"` tests read the matrix JSON above.
+  build-macos:
+    name: build star, stard and the validators (macos-15)
+    runs-on: macos-15
+    needs: [features, opencv-macos]
+    if: (needs.features.outputs.cli != '[]' || needs.features.outputs.macgui != '[]' || needs.features.outputs.desktop != '[]') && inputs.windows != 'only'
+    timeout-minutes: 60
+    env:
+      NEED_VALIDATOR: ${{ contains(needs.features.outputs.cli, '"validator":true') || contains(needs.features.outputs.macgui, '"validator":true') || contains(needs.features.outputs.desktop, '"validator":true') }}
+      NEED_TRAIL: ${{ contains(needs.features.outputs.cli, '"trail":true') || contains(needs.features.outputs.macgui, '"trail":true') || contains(needs.features.outputs.desktop, '"trail":true') }}
+      NEED_CLI: ${{ contains(needs.features.outputs.macgui, '"name":"ui"') }}
+      NEED_STARD: ${{ needs.features.outputs.desktop != '[]' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # The StarDecisionTrees .swiftmodule only imports under the compiler that built it, and cli.yml's macos-14 jobs share the plain
+      # dt-macos key with a different Swift: key this one on the toolchain.
+      - name: Toolchain id for the cache key
+        id: toolchain
+        run: echo "id=$(xcodebuild -version | tr -c 'A-Za-z0-9.\n' _ | tr '\n' - | sed 's/-$//')" >> "$GITHUB_OUTPUT"
+
+      - name: Install Eigen3 via Homebrew
+        run: brew install eigen
+
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
+        with:
+          name: opencv-macos
+          path: opencv
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/macos
+            StarDecisionTrees/include/release/macos
+          key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build StarDecisionTrees (if not cached)
+        run: |
+          if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
+
+      # Each product is built, then copied with its resource bundles into $RUNNER_TEMP/gherkin-bin/<package>/ (cp fails, and so does the
+      # job, if a product is missing).  The bin path comes from `swift build --show-bin-path`, not a guessed .build/release.
+      - name: Build and stage the binaries
+        shell: bash
+        run: |
+          stage() {   # stage <package dir> <product>
+            pkg="$1"; exe="$2"
+            swift build -c release --package-path "$pkg"
+            bin="$(swift build -c release --package-path "$pkg" --show-bin-path)"
+            mkdir -p "$RUNNER_TEMP/gherkin-bin/$pkg"
+            cp "$bin/$exe" "$RUNNER_TEMP/gherkin-bin/$pkg/"
+            for r in "$bin"/*.bundle "$bin"/*.resources; do if [ -e "$r" ]; then cp -R "$r" "$RUNNER_TEMP/gherkin-bin/$pkg/"; fi; done
+            ls -l "$RUNNER_TEMP/gherkin-bin/$pkg"
+          }
+          # removal_tools/star-output-verify: every client's runner calls it for the validation steps (the @ui features have none)
+          if [ "$NEED_VALIDATOR" = true ]; then stage removal_tools star-output-verify; fi
+          # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator is unrelated)
+          if [ "$NEED_TRAIL" = true ]; then stage trail_tools star-removal-verify; fi
+          # the cli: mac-gui makes the processed fixture of its @ui features with it
+          if [ "$NEED_CLI" = true ]; then stage cli star; fi
+          # stard: the desktop client's daemon
+          if [ "$NEED_STARD" = true ]; then stage daemon stard; fi
+
+      - name: Upload the binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-bin-macos
+          path: ${{ runner.temp }}/gherkin-bin
+          if-no-files-found: error
+          retention-days: 3
+
   cli-macos:
     name: cli (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
-    needs: [features, ffmpeg-macos, opencv-macos]
+    needs: [features, ffmpeg-macos, opencv-macos, build-macos]
     if: needs.features.outputs.cli != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
@@ -587,18 +671,28 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
-      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
-      - name: Build the output validator
-        shell: bash
-        run: swift build -c release --package-path removal_tools
+      # removal_tools/star-output-verify (every client's runner calls it for the validation steps) and trail_tools/star-removal-verify (the
+      # trail-removal features' Then steps run it as a subprocess) come from build-macos, into the .build/release the runner looks in.
+      # The star under test is still the one `swift test` below builds: it is a -enable-testing build of the same package.
+      - name: Fetch the shared binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: gherkin-bin-macos
+          path: ${{ runner.temp }}/gherkin-bin
 
-      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
-      - name: Build the trail verifier (release)
-        if: ${{ matrix.shard.trail }}
+      - name: Put the binaries in place and make them executable
         shell: bash
         run: |
-          swift build -c release --package-path trail_tools
-          echo "STAR_REMOVAL_REPORTS=${{ runner.temp }}/gherkin-artifacts/removal" >> "$GITHUB_ENV"
+          for d in removal_tools trail_tools; do
+            src="$RUNNER_TEMP/gherkin-bin/$d"
+            [ -d "$src" ] || continue
+            mkdir -p "$d/.build/release"
+            cp -R "$src/." "$d/.build/release/"
+            find "$d/.build/release" -maxdepth 1 -type f -exec chmod +x {} +
+          done
+          if [ "${{ matrix.shard.trail }}" = true ]; then
+            echo "STAR_REMOVAL_REPORTS=${{ runner.temp }}/gherkin-artifacts/removal" >> "$GITHUB_ENV"
+          fi
 
       - name: Run the Gherkin features against the built star
         # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target
@@ -684,7 +778,7 @@ jobs:
   mac-gui:
     name: mac gui (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
-    needs: [features, ffmpeg-macos, opencv-macos]
+    needs: [features, ffmpeg-macos, opencv-macos, build-macos]
     if: needs.features.outputs.macgui != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
@@ -771,31 +865,37 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
-      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
-      # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
-      - name: Build the output validator
-        if: ${{ matrix.shard.validator }}
-        shell: bash
-        run: swift build -c release --package-path removal_tools
+      # removal_tools/star-output-verify (every client's runner calls it for the validation steps; the @ui features have none), trail_tools/
+      # star-removal-verify (the trail-removal features' Then steps run it as a subprocess) and, for the @ui shard, the cli, all come from
+      # build-macos, into the .build/release the runners look in: no `swift build` here.
+      - name: Fetch the shared binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: gherkin-bin-macos
+          path: ${{ runner.temp }}/gherkin-bin
 
-      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
-      - name: Build the trail verifier (release)
-        if: ${{ matrix.shard.trail }}
+      - name: Put the binaries in place and make them executable
         shell: bash
         run: |
-          swift build -c release --package-path trail_tools
+          for d in removal_tools trail_tools cli; do
+            src="$RUNNER_TEMP/gherkin-bin/$d"
+            [ -d "$src" ] || continue
+            mkdir -p "$d/.build/release"
+            cp -R "$src/." "$d/.build/release/"
+            find "$d/.build/release" -maxdepth 1 -type f -exec chmod +x {} +
+          done
 
       # The @ui features that start from a processed sequence ask for one made by the cli (gherkin/ui/make-processed-fixture.sh). The UI-test
-      # runner is sandboxed: `swift build` there dies with "xcrun: error: cannot be used within an App Sandbox", and it cannot write the fixture
-      # into the workspace. So build the cli and make the fixture here; the runner finds it ready (same cli binary, same fixture directory).
+      # runner is sandboxed (`swift build` there dies with "xcrun: error: cannot be used within an App Sandbox") and it cannot write the
+      # fixture into the workspace, so the fixture is made here with the shared cli; the runner finds it ready (same cli binary, same fixture
+      # directory).
       - name: Make the processed fixture for the @ui features
         if: ${{ matrix.shard.name == 'ui' }}
         shell: bash
         run: |
-          swift build -c release --package-path cli
-          BIN="$(swift build -c release --package-path cli --show-bin-path)"
-          echo "STAR_CLI_PATH=$BIN/star" >> "$GITHUB_ENV"
-          STAR_CLI_PATH="$BIN/star" gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
+          STAR_CLI_PATH="$GITHUB_WORKSPACE/cli/.build/release/star"
+          echo "STAR_CLI_PATH=$STAR_CLI_PATH" >> "$GITHUB_ENV"
+          STAR_CLI_PATH="$STAR_CLI_PATH" gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
 
       # Release, but ENABLE_TESTABILITY=YES: the scheme's other test target (starTests) is `@testable import Star`, and Release
       # builds every test target even under -only-testing.
@@ -1203,7 +1303,7 @@ jobs:
   desktop-macos:
     name: desktop (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
-    needs: [features, ffmpeg-macos, opencv-macos]
+    needs: [features, ffmpeg-macos, build-macos]
     if: needs.features.outputs.desktop != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
@@ -1225,42 +1325,6 @@ jobs:
           names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-desktop.json; done | sort -u)
           if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "$FEATURES needs no test data"; fi
 
-      - name: Select latest Xcode (Swift 6)
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      # The StarDecisionTrees .swiftmodule only imports under the compiler that built it, and cli.yml's macos-14 jobs share the plain
-      # dt-macos key with a different Swift: key this one on the toolchain.
-      - name: Toolchain id for the cache key
-        id: toolchain
-        run: echo "id=$(xcodebuild -version | tr -c 'A-Za-z0-9.\n' _ | tr '\n' - | sed 's/-$//')" >> "$GITHUB_OUTPUT"
-
-      - name: Install Eigen3 via Homebrew
-        run: brew install eigen
-
-      - name: Download OpenCV
-        uses: actions/download-artifact@v4
-        with:
-          name: opencv-macos
-          path: opencv
-
-      - name: Cache StarDecisionTrees
-        uses: actions/cache@v4
-        with:
-          path: |
-            StarDecisionTrees/lib/release/macos
-            StarDecisionTrees/include/release/macos
-          key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build StarDecisionTrees (if not cached)
-        run: |
-          if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
-
-      - name: Build stard (release)
-        working-directory: daemon
-        run: swift build -c release
-
       # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
       - name: Fetch ffmpeg/ffprobe
         uses: actions/download-artifact@v4
@@ -1274,19 +1338,25 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
-      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
-      # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
-      - name: Build the output validator
-        if: ${{ matrix.shard.validator }}
-        shell: bash
-        run: swift build -c release --package-path removal_tools
+      # stard, removal_tools/star-output-verify (every client's runner calls it for the validation steps; the @ui features have none) and
+      # trail_tools/star-removal-verify (the trail-removal features' Then steps run it as a subprocess) come from build-macos, into the
+      # .build/release the runner and run-desktop-features.sh look in: no `swift build`, and so no Xcode, Eigen, OpenCV or StarDecisionTrees here.
+      - name: Fetch the shared binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: gherkin-bin-macos
+          path: ${{ runner.temp }}/gherkin-bin
 
-      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
-      - name: Build the trail verifier (release)
-        if: ${{ matrix.shard.trail }}
+      - name: Put the binaries in place and make them executable
         shell: bash
         run: |
-          swift build -c release --package-path trail_tools
+          for d in removal_tools trail_tools daemon; do
+            src="$RUNNER_TEMP/gherkin-bin/$d"
+            [ -d "$src" ] || continue
+            mkdir -p "$d/.build/release"
+            cp -R "$src/." "$d/.build/release/"
+            find "$d/.build/release" -maxdepth 1 -type f -exec chmod +x {} +
+          done
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
