@@ -166,6 +166,30 @@ async def test_nothing_new_is_claimed_while_a_landing_stage_waits_for_a_session(
     assert rig.engine.claimable() is None
 
 
+async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
+    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    rig.db.begin_stage(5, "develop", 1, "sonnet")
+    rig.db.put("self_update_pending", "e3c559f6aabb")
+    rig.db.put("self_update_pending_since", str(rig.now))
+    drain = rig.engine.config.self_update_drain_s
+    assert drain == 600
+
+    assert rig.engine.claimable() is None, "nothing new is claimed inside the window"
+    hold = rig.engine.update_hold()
+    assert hold == {"sha": "e3c559f6aabb", "left_s": drain, "waiting_on": [5]}
+
+    rig.now += drain - 60
+    assert rig.engine.claimable() is None and rig.engine.update_hold()["left_s"] == 60  # type: ignore[index]
+    rig.now += 61
+    assert rig.engine.update_hold() is None and rig.engine.claimable() is not None, "the window has passed: the daemon swaps, no hold"
+
+    rig.now -= 100  # back inside the window
+    assert rig.engine.claimable() is None
+    rig.db.put("self_update_pending", None)
+    assert rig.engine.claimable() is not None, "no pending update, no hold"
+
+
 async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Rig) -> None:
     assert rig.engine.max_active() == rig.engine.config.max_llm_sessions
     rig.db.put("max_active", "2")
@@ -833,15 +857,55 @@ async def test_a_retried_branch_with_conflicts_goes_through_the_conflict_stage(r
     assert behind_at_develop == [False], "the resumed stage continues on the merged branch"
 
 
+def still_dropped(req: StageRequest) -> StageOutcome:
+    """A conflict stage that, asked to restore a dropped line, changes nothing and submits what is already there."""
+    req.contract.run_checks({})
+    req.contract.submit_change({"summary": "left as it was"})
+    return accepted(req, "S-conflict-2")
+
+
 async def test_a_dropped_develop_line_parks_a_retried_branch(rig: Rig) -> None:
     stopped_ticket(rig, "shared.md", "mine\n")
     develop_moves(rig, "shared.md", "develop's line\n")
     rig.db.put("catch_up:7", "1")
-    rig.agent.on("conflict", resolver("mine\n"))
+    rig.agent.on("conflict", resolver("mine\n"), still_dropped)  # the second round restores nothing
     await rig.engine.drive(7)
     t = rig.db.ticket(7)
     assert t and t.state == "failed" and "dropped 1 landed line" in (t.park_reason or "")
-    assert [s["stage"] for s in rig.db.stages(7)] == ["conflict"]
+    assert [s["stage"] for s in rig.db.stages(7)] == ["conflict", "conflict"], "one more round with the lines, then parked"
+
+
+async def test_restart_catch_up_retries_dropped_lines_once(rig: Rig) -> None:
+    stopped_ticket(rig, "shared.md", "mine\n")
+    develop_moves(rig, "shared.md", "develop's line\n")
+    rig.db.put("catch_up:7", "1")
+    prompts: list[str] = []
+    waiting: list[set[int]] = []
+    first = resolver("mine\n")  # drops develop's line
+
+    def conflict(req: StageRequest) -> StageOutcome:
+        prompts.append(req.prompt)
+        waiting.append(set(rig.engine.landing_waiting))
+        if len(prompts) == 1:
+            return first(req)
+        wt = req.contract.worktree  # the second round restores it on top of the first resolution
+        (wt / "docs" / "shared.md").write_text("develop's line\nmine\n")
+        sh(wt, "git", "add", "-A")
+        sh(wt, *GIT_AS_T, "commit", "-q", "-m", "restore develop's line")
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "restored"})
+        return accepted(req, "S-conflict-2")
+
+    rig.agent.on("conflict", conflict, conflict)
+    rig.agent.on("develop", develop_ok)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    t = rig.db.ticket(7)
+    assert t and t.state != "failed", t.park_reason if t else None
+    stages = [s["stage"] for s in rig.db.stages(7)]
+    assert stages[:2] == ["conflict", "conflict"] and "develop" in stages
+    assert "docs/shared.md: develop's line" in prompts[1] and "Conflicts merging" not in prompts[1]
+    assert waiting == [set(), set()], "neither round takes landing priority"
 
 
 async def test_a_dirty_worktree_is_not_caught_up(rig: Rig) -> None:

@@ -78,6 +78,9 @@ def ready_activity(db: Database, t: Ticket, config: Config, now: float) -> str:
     if (member := db.batch_of(t.number)) is not None:
         row = db.batch(member)
         return f"ready · in batch {member} ({row['state'] if row else 'building'})"
+    if (features := tickets.gherkin_features(t.body, t.plan)) and not db.get(f"gherkin_ok:{t.number}"):
+        err = json.loads(db.get(f"gherkin_err:{t.number}") or "null")
+        return f"ready · proving Gherkin features ({', '.join(features)})" + (f" · last poll failed: {err['error']}" if err else "")
     if (active := db.active_batch()) is not None:
         return f"ready · waiting for the next batch (batch {active['id']} is {active['state']})"
     left = train.window_left(db, config, now)
@@ -170,7 +173,7 @@ class Daemon:
             self.db.end_stage(s["id"], "interrupted", detail="daemon restarted")
         self.engine.parked.clear()
         self.engine.escalate_orphaned_questions()  # a restart between "asked" and "owner told" must not lose the question
-        self.db.put("self_update_pending", None)  # a restart is how an update completes; whatever is still wanted is re-staged
+        self._clear_pending()  # a restart is how an update completes; whatever is still wanted is re-staged
 
     async def supervise(self, name: str, body: Callable[[], Awaitable[None]], delay: float = 5.0) -> None:
         while True:
@@ -298,26 +301,33 @@ class Daemon:
                 return None
             failed = json.loads(self.db.get("self_update_failed") or "{}")
             if selfupdate.pipeline_commits_behind(self.engine.repo, have, target) == 0:
-                self.db.put("self_update_pending", None)
+                self._clear_pending()
                 self.db.put("self_update_failed", None)
                 return None
             if failed.get("sha") == target:
-                self.db.put("self_update_pending", None)
+                self._clear_pending()
                 return None
             if self.db.get("self_update_pending") != target:
                 self.db.put("self_update_failed", None)  # a newer sha than the one that failed: it gets its own try
                 if not self._stage_update(target, sync or selfupdate.real_sync, test or selfupdate.smoke_check):
                     return "failed"
-            if self.db.running_stages():
-                return "pending"
+            elif not self.db.get("self_update_pending_since"):
+                self.db.put("self_update_pending_since", str(self.engine.clock()))  # a pending set by an older daemon
+            running = [s["ticket"] for s in self.db.running_stages()]
+            if running and self.engine.update_hold():
+                return "pending"  # inside the drain window: let the running stages finish
             selfupdate.switch(selfupdate.runtime_dir(target), plist, restart=False)
-            self.db.event("self-update", None, old=have, new=target)
-            self.db.put("self_update_pending", None)
+            self.db.event("self-update", None, old=have, new=target, **({"interrupted": running} if running else {}))
+            self._clear_pending()
             self.db.put("self_update_failed", None)
             selfupdate.prune()
             return "swapped"
         finally:
             self._update_lock.release()
+
+    def _clear_pending(self) -> None:
+        self.db.put("self_update_pending", None)
+        self.db.put("self_update_pending_since", None)
 
     def _stage_update(self, target: str, sync: selfupdate.Sync, test: Callable[[Path], tuple[bool, str]]) -> bool:
         """Build `target` beside the running runtime and smoke-check it. On success mark the update pending (which holds new work)."""
@@ -328,11 +338,12 @@ class Daemon:
             ok, output = False, getattr(exc, "stderr", None) or str(exc)
         if ok:
             self.db.put("self_update_pending", target)
+            self.db.put("self_update_pending_since", str(self.engine.clock()))
             return True
         shutil.rmtree(selfupdate.runtime_dir(target), ignore_errors=True)
         output = str(output)[-800:]
         self.db.put("self_update_failed", json.dumps({"sha": target, "output": output, "at": time.time()}))
-        self.db.put("self_update_pending", None)
+        self._clear_pending()
         self.db.event("self-update-failed", None, sha=target, output=output)
         self.engine.notifier.alert("self-update-failed", None, f"self-update to {target[:10]} failed: {output}")
         return False
@@ -434,7 +445,8 @@ class Daemon:
                    for t in self.db.tickets() if t.state not in ("landed", "closed", "cancelled")]
         return {"daemon": {"pid": os.getpid(), "since": self.started, "last_poll": self.last_poll,
                            "error": self.last_error or self.update_error()},
-                "self_update": {"pending": self.db.get("self_update_pending"), "failed": self.update_failure()},
+                "self_update": {"pending": self.db.get("self_update_pending"), "hold": self.engine.update_hold(),
+                                "failed": self.update_failure()},
                 "resources": self.resources(), "pause": self.db.get("pause"), "muted": self.db.get("muted") == "1", "usage_pause_until": self.db.get("usage_pause_until"),
                 "usage_windows": self.usage_windows(),
                 "alerts": self.db.open_alerts(),

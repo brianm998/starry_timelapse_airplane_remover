@@ -61,14 +61,13 @@ object KeypointDivisor {
     fun isRecommended(advice: KeypointDivisorAdvice?, divisor: Double): Boolean =
         advice != null && advice.available && advice.reduceRecommended && matches(advice.recommendedDivisor, divisor)
 
-    /** Whether the section opens by itself: when a reduction is advised, or when it holds something worth seeing (a value somebody already set). */
-    fun initiallyExpanded(advice: KeypointDivisorAdvice?, divisor: Double): Boolean =
-        (advice != null && advice.available && advice.reduceRecommended) || divisor > 1.0
-
-    /** What the collapsed title says is in effect: a preset's name, or for a custom value the number. */
-    fun currentChoiceName(divisor: Double): String {
-        val preset = presets.firstOrNull { matches(divisor, it.divisor) }
-        return if (preset != null) localized(preset.nameKey) else localized("ui.divide_by", format(divisor))
+    /**
+     * What the cleanup dialog's one-line summary says is in effect: "1 — Best quality", "1.5 — Best balance" or "2 — Fastest" for a
+     * preset, and for any other value the bare number (no "divide by", no name: none of the three is what will run).
+     */
+    fun summaryLabel(divisor: Double): String {
+        val preset = presets.firstOrNull { matches(divisor, it.divisor) } ?: return format(divisor)
+        return format(preset.divisor) + " \u2014 " + localized(preset.nameKey)
     }
 
     /**
@@ -89,4 +88,25 @@ object KeypointDivisor {
             intro + "\n\n" + localized("ui.keypoint_no_change_needed", frames, ram)
         }
     }
+}
+
+/**
+ * The value the Speed vs. Sharpness modal edits: a draft of [original], the value the modal opened with. Nothing reaches the session until
+ * [committed] is applied (Update); [cancelled] is what Cancel leaves in place.
+ */
+class KeypointDivisorDraft(val original: Double) {
+    var current: Double = original
+        private set
+
+    /** A preset picked (or any other value chosen outright). */
+    fun choose(value: Double) { current = value }
+
+    /** The custom field's text, applied on every keystroke like the field always was: text that is not (yet) a number leaves the draft alone. */
+    fun typed(text: String) { KeypointDivisor.parse(text)?.let { current = it } }
+
+    /** The value Update keeps: the draft, including a typed custom one. */
+    fun committed(): Double = current
+
+    /** The value Cancel keeps: the one the modal opened with. */
+    fun cancelled(): Double = original
 }

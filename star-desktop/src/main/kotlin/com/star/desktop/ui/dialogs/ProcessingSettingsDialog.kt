@@ -604,6 +604,23 @@ private fun InfoRow(id: String, open: SnapshotStateMap<String, Boolean>, help: S
     }
 }
 
+/** A yes/no setting shown as a two-choice row, as the macOS client does: [choices] in display order, each with its own label and hover text. */
+@Composable
+private fun ChoiceRow(label: String, choices: List<BoolChoice>, value: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+        // As in ToggleRow, the label wraps rather than pushing the choices out of the row.
+        Text(label, color = if (enabled) StarColors.textPrimary else StarColors.textDisabled, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        StarPicker(
+            options = choices,
+            selected = choices.firstOrNull { it.value == value } ?: choices.first(),
+            label = { localized(it.labelKey) },
+            onSelect = { onChange(it.value) },
+            enabled = enabled,
+            tip = { localized(it.helpKey) },
+        )
+    }
+}
+
 @Composable
 private fun ToggleRow(label: String, value: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -725,6 +742,9 @@ internal class DoubleField(
     override fun isValid(text: String, frameCount: Int) = FieldInput.double(text, min, max) != null
 }
 
+/** One option of a two-choice row: the value it sets, its label and its hover text (catalogue keys). */
+internal class BoolChoice(val value: Boolean, val labelKey: String, val helpKey: String)
+
 internal class BoolField(
     override val label: String,
     override val labelKey: String,
@@ -732,6 +752,8 @@ internal class BoolField(
     val set: (Config.Builder, Boolean) -> Config.Builder,
     override val has: (Config) -> Boolean,
     override val enabled: (SettingsEdit) -> Boolean = ALWAYS,
+    /** When set, the row offers these two choices (in this order) instead of a switch. */
+    val choices: List<BoolChoice>? = null,
 ) : ExpertField
 
 // The ids the rules refer to.
@@ -777,13 +799,15 @@ internal val ALIGNMENT_FIELDS: List<ExpertField> = listOf(
 
 internal val HORIZON_FIELDS: List<ExpertField> = listOf(
     BoolField(CANNY, "ui.canny_edge_detection", { it.useCannyForHorizonDetection }, { b, v -> b.setUseCannyForHorizonDetection(v) }, { it.hasUseCannyForHorizonDetection() },
-        enabled = NEEDS_HORIZON),
+        enabled = NEEDS_HORIZON,
+        choices = listOf(BoolChoice(true, "ui.yes", "ui.canny_yes_help"), BoolChoice(false, "ui.no", "ui.canny_no_help"))),
     DoubleField("Canny min threshold", "ui.canny_min_threshold", { it.cannyMinThreshold }, { b, v -> b.setCannyMinThreshold(v) }, { it.hasCannyMinThreshold() },
         min = 1.0, max = 300.0, enabled = { !it.skyOnly && it.isOn(CANNY) }),
     DoubleField("Canny max threshold", "ui.canny_max_threshold", { it.cannyMaxThreshold }, { b, v -> b.setCannyMaxThreshold(v) }, { it.hasCannyMaxThreshold() },
         min = 1.0, max = 300.0, enabled = { !it.skyOnly && it.isOn(CANNY) }),
     BoolField("Canny L2 gradient", "ui.canny_gradient_method", { it.cannyUseL2Gradient }, { b, v -> b.setCannyUseL2Gradient(v) }, { it.hasCannyUseL2Gradient() },
-        enabled = { !it.skyOnly && it.isOn(CANNY) }),
+        enabled = { !it.skyOnly && it.isOn(CANNY) },
+        choices = listOf(BoolChoice(false, "ui.l1_norm", "ui.l1_norm_help"), BoolChoice(true, "ui.l2_norm", "ui.l2_norm_help"))),
     BoolField(SMOOTHING, "ui.reference_horizon_smoothing", { it.useReferenceHorizonSmoothing }, { b, v -> b.setUseReferenceHorizonSmoothing(v) }, { it.hasUseReferenceHorizonSmoothing() },
         enabled = NEEDS_MOVING_HORIZON),
     IntField("Smoothing max distance", "ui.reference_smoothing_distance", { it.referenceHorizonSmoothingMaxDistance }, { b, v -> b.setReferenceHorizonSmoothingMaxDistance(v) }, 1, 10000, { it.hasReferenceHorizonSmoothingMaxDistance() },
@@ -905,7 +929,11 @@ private fun ExpertGroup(
             val revert = { drafts.remove(f.label); Unit }
             InfoRow(f.label, info, f.helpText()) {
                 when (f) {
-                    is BoolField -> ToggleRow(label, boolEdits[f.label] ?: f.get(cfg), enabled = enabled) { boolEdits[f.label] = it }
+                    is BoolField -> {
+                        val value = boolEdits[f.label] ?: f.get(cfg)
+                        if (f.choices != null) ChoiceRow(label, f.choices, value, enabled = enabled) { boolEdits[f.label] = it }
+                        else ToggleRow(label, value, enabled = enabled) { boolEdits[f.label] = it }
+                    }
                     is IntField -> NumberRow(
                         label, shown.orEmpty(), enabled,
                         tag = NUMBER_FIELD_TAGS[f.label]?.first, messageTag = NUMBER_FIELD_TAGS[f.label]?.second,
