@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import importlib.metadata
+import json
 import os
 import plistlib
 import subprocess
@@ -15,7 +17,7 @@ from starpipe.cli import landing_lines, main, update_hold_line
 from starpipe.config import home
 
 from .fakes import sh
-from .test_selfupdate import Launchctl, make_pipeline_repo, noop_sync
+from .test_selfupdate import Launchctl, fake_plist, make_pipeline_repo, noop_sync
 
 
 def make_repo(tmp: Path) -> Path:
@@ -199,3 +201,76 @@ def test_retry_without_the_flag_is_unchanged(monkeypatch: pytest.MonkeyPatch) ->
     out = CliRunner().invoke(main, ["retry", "7", "ci", "--when-unblocked"])
     assert out.exit_code == 0 and out.output.strip() == "ok"
     assert daemon.calls[-1] == ("POST", "/v1/tickets/7/retry", {"stage": "ci", "when_unblocked": True})
+
+
+def _run_daemon(monkeypatch: pytest.MonkeyPatch) -> Any:
+    from starpipe import cli
+    from starpipe import daemon as daemon_mod
+
+    class Stub:
+        def run(self) -> object:
+            return None
+    monkeypatch.setattr(cli, "_hold_off_idle_sleep", lambda: None)
+    def build(_cfg: object) -> Stub:
+        return Stub()
+
+    def load(*_a: object, **_k: object) -> None:
+        return None
+
+    def run(_coro: object) -> None:
+        return None
+    monkeypatch.setattr(daemon_mod, "build", build)
+    monkeypatch.setattr(cli.config_mod, "load", load)
+    monkeypatch.setattr(asyncio, "run", run)
+    return CliRunner().invoke(main, ["daemon", "run"])
+
+
+def test_daemon_run_logs_its_runtime_and_start_count(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                      caplog: pytest.LogCaptureFixture) -> None:
+    repo, sha = make_pipeline_repo(tmp_path)
+    rt = selfupdate.build(repo, sha, noop_sync)
+    selfupdate.switch(rt, fake_plist(tmp_path), Launchctl(), now=1.0, restart=False)
+    caplog.set_level("INFO")
+    result = _run_daemon(monkeypatch)
+    assert result.exit_code == 0, result.output
+    text = caplog.text
+    assert f"runtime {rt.name} sha {sha[:12]}" in text and "1 start(s) since the last switch" in text
+
+
+def test_crash_loop_rollback_logs_why(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    import time
+
+    repo, sha = make_pipeline_repo(tmp_path)
+    first = selfupdate.build(repo, sha, noop_sync)
+    (repo / "pipeline" / "n.txt").write_text("2")
+    sh(repo, "git", "add", "-A")
+    sh(repo, "git", "commit", "-q", "-m", "2")
+    second = selfupdate.build(repo, sh(repo, "git", "rev-parse", "HEAD").strip(), noop_sync)
+    plist = fake_plist(tmp_path)
+    selfupdate.switch(first, plist, Launchctl(), now=1.0, restart=False)
+    selfupdate.switch(second, plist, Launchctl(), now=time.time(), restart=False)
+    monkeypatch.setattr(cli_mod(), "_plist_path", lambda: plist)
+    monkeypatch.setattr(selfupdate, "real_launchctl", Launchctl())
+    monkeypatch.setattr(selfupdate, "restart_agent", _noop)
+    (selfupdate.runtime_root() / "starts.json").write_text(json.dumps([time.time()] * 3))
+    caplog.set_level("INFO")
+    result = _run_daemon(monkeypatch)
+    assert result.exit_code == 1
+    assert "crash loop: 4 starts since the switch at" in caplog.text and "window 300s" in caplog.text
+
+    def boom(*_a: Any, **_k: Any) -> str:
+        raise RuntimeError("no previous runtime")
+    monkeypatch.setattr(selfupdate, "rollback", boom)
+    (selfupdate.runtime_root() / "starts.json").write_text(json.dumps([time.time()] * 5))
+    caplog.clear()
+    result = _run_daemon(monkeypatch)
+    assert result.exit_code == 1 and "rollback failed: no previous runtime" in caplog.text
+
+
+def _noop(*_a: object, **_k: object) -> None:
+    return None
+
+
+def cli_mod() -> Any:
+    from starpipe import cli
+    return cli
