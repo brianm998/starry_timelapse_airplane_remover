@@ -54,6 +54,18 @@
       "pr_number": 12,
       "slow": false
     },
+    "batches": [
+      {
+        "age_s": 90,
+        "members": [
+          3
+        ],
+        "number": 2,
+        "phase": "ci",
+        "pr_number": 12,
+        "slow": false
+      }
+    ],
     "last_abandoned": {
       "ago_s": 60,
       "ended": 1940.0,

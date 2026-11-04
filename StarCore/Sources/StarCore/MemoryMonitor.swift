@@ -488,6 +488,7 @@ public actor MemoryMonitor {
                                  available.humanReadableBytes),
               suggestion: localized("warning.low_system_memory.suggestion")
             ))
+            logSystemMemoryBreakdownIfDue()
         }
 
         let startTime = Date()
@@ -660,6 +661,7 @@ public actor MemoryMonitor {
               message: localized("warning.low_system_memory.message", available.humanReadableBytes),
               suggestion: localized("warning.low_system_memory.suggestion")
             ))
+            logSystemMemoryBreakdownIfDue()
             return "only \(available / (1024*1024))MB available system-wide, floor is " +
                    "\(systemFloorBytes / (1024*1024))MB"
         }
@@ -822,6 +824,29 @@ public actor MemoryMonitor {
     /// matters here: `realityBlock()` is evaluated on every drain pass.
     private func postWarning(_ warning: StarWarning) {
         Task { await StarWarnings.shared.post(warning) }
+    }
+
+    /// When the breakdown below was last logged.
+    private var lastBreakdownLog: Date?
+
+    /// Log what `systemAvailable()` is made of, at most once a minute, while the gate is
+    /// blocked on low system memory.  The one figure in the warning cannot say whether
+    /// memory is really short or merely not counted as reclaimable (compressor, inactive
+    /// pages), which is the question a long stall on a small CI runner leaves open.
+    private func logSystemMemoryBreakdownIfDue() {
+        let now = Date()
+        if let last = lastBreakdownLog, now.timeIntervalSince(last) < 60 { return }
+        var b = StarMemoryBreakdown()
+        guard star_system_memory_breakdown(&b) == 0 else { return }
+        lastBreakdownLog = now
+        func mb(_ v: UInt64) -> String { "\(v / (1024*1024))MB" }
+        Log.i("MemoryMonitor: system memory low — total=\(mb(b.total)), " +
+              "counted as available=\(mb(b.available)) " +
+              "(free \(mb(b.free_bytes)) + purgeable \(mb(b.purgeable)) + " +
+              "file cache \(mb(b.file_backed))); not counted: " +
+              "inactive \(mb(b.inactive)), active \(mb(b.active)), wired \(mb(b.wired)), " +
+              "anonymous \(mb(b.anonymous)), compressed \(mb(b.compressed)); " +
+              "floor=\(mb(UInt64(systemFloorBytes)))")
     }
 
     // MARK: - Internal

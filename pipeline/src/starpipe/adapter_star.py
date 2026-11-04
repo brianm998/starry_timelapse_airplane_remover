@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import shlex
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -93,9 +94,9 @@ def nightly_local_checks() -> list[str]:
 # Top-level directories that hold no source the impact map needs to know about.
 IGNORED_TOP_LEVEL = {
     ".claude", ".git", ".github", "docs", "plans", "demo_videos", "test_data", "ffmpeg", "opencv",
-    "wgpu", "external_binaries", "logging-objc", "StarDecisionTrees", "removal_tools", "blobber",
-    "c++_test", "horizon_test_bench", "horizon_tester", "outlier_feature_data_classifier",
-    "tile_classifier_tester", "tile_extractor", "tools", "emacs_load_swift.sh", "packaging",
+    "wgpu", "external_binaries", "logging-objc", "StarDecisionTrees", "removal_tools",
+    "horizon_test_bench", "horizon_tester", "outlier_feature_data_classifier",
+    "tile_extractor", "tools", "emacs_load_swift.sh", "packaging",
 }
 
 
@@ -115,6 +116,9 @@ class CheckSpec:
     xunit: tuple[str, ...] = ()
     # The test classes skipped from the parallel run, run here as a second, serial `swift test --filter` pass (its own heavy job)
     serial_argv: tuple[str, ...] = ()
+    # parser="xctest" run as concurrent shards (starpipe.shards): one log per shard ({log_dir} allowed), each parsed on its own and
+    # the counts summed, since parse_xctest takes the largest banner of one log. A missing log or one without a banner is red.
+    shard_logs: tuple[str, ...] = ()
 
 
 def _swift_build(pkg: str, *extra: str) -> CheckSpec:
@@ -125,23 +129,76 @@ def _swift_build(pkg: str, *extra: str) -> CheckSpec:
 # process exited: a hung test (#209) left a log of build output and no name. `script` runs the command on a pty, which makes
 # xctest line-buffer, and passes the command's exit code through (`--verbose` does not unbuffer anything). The \r, ^D and
 # backspaces it adds are dropped or ignored by the parsers.
-LIVE_LOG = ("script", "-q", "/dev/null")
+# That is BSD `script`. util-linux's reads `-q /dev/null cmd…` as a typescript file and an extra argument, so on Linux (CI's
+# static checks) the command never ran: there Python's own pty does the same job and keeps the command's argv apart.
+_PTY_RUN = "import os,pty,sys;sys.exit(os.waitstatus_to_exitcode(pty.spawn(sys.argv[1:])))"
+LIVE_LOG = ("script", "-q", "/dev/null") if sys.platform == "darwin" else (sys.executable, "-c", _PTY_RUN)
 
 
 # The swift test suites that run with `--parallel`, each with the test classes that must not share the machine with other
 # tests (they measure time, QoS or the whole machine's memory, or write fixed paths): those run in the second, serial pass of
 # the check. Found empirically (ticket #238, this iMac Pro, 8 workers, seconds inside the heavy lock):
 #   StarCpp   803 -> 367, 254 tests, 0 failed: a few huge classes (CloudAwareMergeTests) and few tests, so it wins.
-#   StarCore  not parallel: SwiftPM runs XCTest `--parallel` as one `xctest` process per test, and a launch costs ~1 s on this
+#   StarCore  not `--parallel`: SwiftPM runs XCTest `--parallel` as one `xctest` process per test, and a launch costs ~1 s on this
 #             machine whatever the worker count (MappingTests, 46 trivial tests: 9 s serial, 41-47 s with 2, 8 or 16 workers),
-#             so 1,619 tests cannot beat the 380 s serial run; its heavy tests are multi-threaded already and ran 10x slower
-#             beside each other (HorizonConsensusTests: 97 s serial, 88 s parallel).
-#   daemon    not parallel, same launch floor (313 tests, 132 s serial), and BackgroundExtractionSessionTests hangs beside others.
+#             so 1,619 tests cannot beat the 380 s serial run. It runs as class shards instead (SHARDS below, #250).
+#   daemon    not `--parallel`, same launch floor (313 tests, 132 s serial); class shards too, and
+#             BackgroundExtractionSessionTests, which hangs beside others, runs alone in a serial shard.
 # `--parallel --xunit-output` records no `<skipped>`: an XCTSkip reads as a pass (StarCpp's serial banner says 7 skipped, its
 # xunit file 0), so an unexpected skip in a parallel suite goes unseen. A suite is added here only when it wins by that much.
 SERIAL_CLASSES: dict[str, tuple[str, ...]] = {
     "test:StarCpp": ("OpenCVQoSTests",),  # measures QoS-dependent worker counts; skipped here, but never beside other tests
 }
+
+
+@dataclass(frozen=True)
+class ShardPlan:
+    """How a swift test suite is cut into concurrent `xcrun xctest` processes (starpipe.shards).
+
+    `concurrent` groups of XCTest classes run side by side; every class named nowhere runs in one more, catch-all shard, so a
+    new class is never lost. `serial` classes run alone afterwards, one process each."""
+
+    concurrent: tuple[tuple[str, ...], ...] = ()
+    serial: tuple[str, ...] = ()
+
+
+# Test suites run as class shards instead of `--parallel` (ticket #250): the tests are built once and one `xcrun xctest`
+# process runs per shard, so a launch (~1 s) is paid per shard, not per test, and each shard's XCTest banner keeps its skip
+# counts. Shards use `xctest` on the built bundle, not `swift test --skip-build --filter`: every `swift test` holds SwiftPM's
+# lock on .build for its whole run, so those ran back to back (seen in the log: "Another instance of SwiftPM ... waiting").
+# Class names must be real XCTestCase classes (a test checks); shard 0 of the log is the catch-all (every unnamed class).
+# Measured here, 8 shard processes allowed, test phase only (iMac Pro, busy with other work: load average 12-20), 3 green runs
+# each, same test and skip counts as the serial run:
+#   StarCore  399 s serial -> 171, 173, 174 s (1,625 tests, 8 skipped). Longest shards: HorizonConsensusTests 124 s serial
+#             (118 beside others), VideoFrameSourceTests 102 s; MemoryMonitorTests (44 s) alone afterwards.
+#   daemon    132 s serial -> ~105 s (314 tests, 3 skipped): ExportSequenceTests and ExportVideoAudioTests ran 47 -> 71 s beside
+#             each other, and BackgroundExtractionSessionTests (34-50 s) cannot overlap, so the gain is small.
+SHARDS: dict[str, ShardPlan] = {
+    "test:StarCore": ShardPlan(
+        concurrent=(
+            ("HorizonConsensusTests",),  # 124 s serial: the longest pole, multi-threaded
+            ("VideoFrameSourceTests",),  # 102 s serial, ffmpeg-bound
+            ("TemporalHorizonDetectorTests", "FullFrameBlobberIdentityTests", "VideoConvertTests"),
+        ),
+        serial=("MemoryMonitorTests",),  # reads the whole machine's memory
+    ),
+    "test:daemon": ShardPlan(
+        concurrent=(("ExportSequenceTests",), ("ExportVideoAudioTests", "SessionConfigPersistenceTests")),  # 47 s and 43 s serial
+        serial=("BackgroundExtractionSessionTests",),  # hangs beside other tests
+    ),
+}
+
+
+def _sharded(check_id: str, pkg: str, plan: ShardPlan) -> CheckSpec:
+    stem = log_stem(check_id)
+    argv: list[str] = [sys.executable, "-m", "starpipe.shards", "--package-path", pkg, "--log-dir", "{log_dir}", "--stem", stem,
+                       "--concurrency", "{workers}"]
+    for group in plan.concurrent:
+        argv += ["--shard", "|".join(group)]
+    for cls in plan.serial:
+        argv += ["--serial-shard", cls]
+    logs = tuple("{log_dir}/" + f"{stem}.shard{k}.log" for k in range(1 + len(plan.concurrent) + len(plan.serial)))
+    return CheckSpec(check_id, f"swift test {pkg} (sharded)", tuple(argv), parser="xctest", shard_logs=logs)
 
 
 # Test classes and features that need the machine to themselves, so a `swift test` naming one is never a light job.
@@ -171,6 +228,8 @@ def job_class(cmd: str) -> str:
 
 def swift_test(pkg: str, *extra: str, tid: str | None = None) -> CheckSpec:
     check_id = f"test:{tid or pkg}"
+    if check_id in SHARDS and not extra:
+        return _sharded(check_id, pkg, SHARDS[check_id])
     if check_id not in SERIAL_CLASSES:
         return CheckSpec(check_id, f"swift test {pkg}", (*LIVE_LOG, "swift", "test", "--package-path", pkg, *extra), parser="xctest")
     # --parallel prints no per-bundle "Executed N tests" totals, so the verdict comes from the xunit files

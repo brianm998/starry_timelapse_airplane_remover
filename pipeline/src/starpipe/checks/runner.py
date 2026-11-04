@@ -61,6 +61,8 @@ def _combine(a: heavy.RunResult, b: heavy.RunResult) -> heavy.RunResult:
 def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: str,
                  allow_skips: bool, say: Callable[[str], None], priority: int | None = None) -> ledger.Result:
     started = time.monotonic()
+    for shard in spec.shard_logs:
+        Path(_format((shard,), root, base, log.parent)[0]).unlink(missing_ok=True)
     for xml in spec.xunit:  # a file left by an earlier run of this commit must not stand in for this run's
         Path(_format((xml,), root, base, log.parent)[0]).unlink(missing_ok=True)
     job = _run_argv(spec, _argv(spec, root, base, log.parent), root, log, say, priority)
@@ -84,6 +86,9 @@ def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: st
             path = Path(_format((xml,), root, base, log.parent)[0])
             if path.exists() or not path.name.endswith("-swift-testing.xml"):  # that one is written only when swift-testing ran
                 counts += parsers.parse_xunit(path)
+    elif spec.parser == "xctest" and spec.shard_logs:
+        for shard in spec.shard_logs:
+            counts += _shard_counts(Path(_format((shard,), root, base, log.parent)[0]))
     elif spec.parser == "xctest":
         counts = parsers.parse_xctest(text)
     elif spec.parser == "pytest":
@@ -106,6 +111,15 @@ def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: st
     return ledger.Result(spec.id, status, sha, time.monotonic() - started - wait, wait, counts.executed,
                          counts.failed, counts.skipped, str(log), detail, failures=counts.failures,
                          cpu_mean=job.cpu_mean, cpu_peak=job.cpu_peak, rss_peak_mb=job.rss_peak_mb)
+
+
+def _shard_counts(path: Path) -> parsers.Counts:
+    """One shard's XCTest result. A shard that never wrote its banner (it crashed, or the build failed first) is a failure, never
+    zero tests, as `parse_xunit` treats a missing file."""
+    counts = parsers.parse_xctest(path.read_text(errors="replace")) if path.exists() else parsers.Counts()
+    if counts.vacuous and not counts.failed:
+        return parsers.Counts(failed=1, failures=[f"no XCTest result in {path.name}"])
+    return counts
 
 
 def log_name(check_id: str) -> str:

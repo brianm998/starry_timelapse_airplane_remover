@@ -209,7 +209,12 @@ def switch(rt: Path, plist: Path, launchctl: Launchctl = real_launchctl, now: fl
     """Make `rt` current (the old one becomes previous) and restart the agent on it.
 
     The first time, the plist is repointed at the `current` symlink and the agent re-bootstrapped (from the CLI, which survives it).
-    Afterwards a switch is only the symlink and `kickstart -k`, which is safe to run from inside the daemon itself."""
+    Afterwards a switch is only the symlink and `kickstart -k`, which is safe to run from inside the daemon itself.
+
+    Refuses (before touching anything) a runtime that is missing or was never fully built: `.complete` is written by `build` only
+    after the environment is synced, and a `current` that launchd cannot run leaves the daemon down."""
+    if not (rt / ".complete").is_file():
+        raise RuntimeError(f"{rt} is not a complete runtime (missing, or no .complete marker); not switching to it")
     root = runtime_root()
     root.mkdir(parents=True, exist_ok=True)
     old = link("current")
@@ -250,6 +255,17 @@ def crash_loop(now: float | None = None) -> bool:
         return False
     starts: list[float] = json.loads(starts_file.read_text())
     return len([s for s in starts if s >= switched]) > CRASH_LIMIT
+
+
+def settled(now: float | None = None) -> bool:
+    """The current runtime has outlived the crash-loop window (or no switch was ever recorded), so `previous` is no longer needed as a fallback.
+
+    False exactly when `crash_loop` would still be watching the runtime."""
+    marker = runtime_root() / "switched_at"
+    if not marker.exists():
+        return True
+    now = now if now is not None else time.time()
+    return now - float(marker.read_text()) > CRASH_WINDOW_S
 
 
 def prune() -> list[str]:
@@ -294,8 +310,7 @@ def update(repo: Path, ref: str, plist: Path, *, sessions: Callable[[], int], wa
             return Report(sha, True, True, False, f"{busy} stage session(s) still running after the wait; use --now to switch anyway")
         sleep(10)
     switch(rt, plist, launchctl, clock(), sleep=sleep)
-    gone = prune()
-    return Report(sha, True, True, True, f"switched to {sha[:12]}" + (f"; removed old runtime(s) {', '.join(gone)}" if gone else ""))
+    return Report(sha, True, True, True, f"switched to {sha[:12]}")  # old runtimes are pruned by the daemon once this one has settled
 
 
 def rollback(plist: Path, launchctl: Launchctl = real_launchctl, clock: Callable[[], float] = time.time) -> str:
