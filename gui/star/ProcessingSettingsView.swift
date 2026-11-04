@@ -455,6 +455,9 @@ struct ProcessingSettingsView: View {
             cleanMethod = .automatic
         case .selective:
             cleanMethod = .selective
+        case .dirtySky, .dirtyEarth:
+            // T3: the sheet has no dirty choice yet
+            cleanMethod = .automatic
         }
     }
 

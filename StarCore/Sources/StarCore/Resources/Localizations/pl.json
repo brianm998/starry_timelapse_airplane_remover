@@ -19,7 +19,7 @@
   "cli.errors.resume_header": "star: katalog tymczasowy został zachowany — wznów poleceniem:",
   "cli.errors.video_path_needs_render_video": "--video-path wymaga --render-video.",
   "cli.frame_state_change": "klatka {0} zmienia stan na {1}",
-  "cli.help.clean_method": "Tryb czyszczenia używany dla tej sekwencji obrazów.\nDomyślnie automatic dla nowej sekwencji, a przy wznawianiu wartość zapisana\nw konfiguracji.",
+  "cli.help.clean_method": "Tryb czyszczenia używany dla tej sekwencji obrazów.\nDomyślnie automatic dla nowej sekwencji, a przy wznawianiu wartość zapisana\nw konfiguracji.\ndirtySky i dirtyEarth robią odwrotność czyszczenia: zostawiają tylko to, co się\nporuszyło na niebie lub na ziemi, a resztę klatki zapisują na czarno.",
   "cli.help.cloud_aware_merge": "Zachowuje szybko poruszające się chmury nienaruszone w scalaniu wyrównanym do gwiazd.\nChmury przesuwają się względem gwiazd, więc scalanie sąsiednich klatek wyrównanych do gwiazd bierze\nkażdy piksel chmury z innej chwili i zostawia prążkowane, powtórzone kopie\nkrawędzi chmur.  Po włączeniu drugie scalanie, wyrównane do ruchu chmur, jest domieszane\nwszędzie tam, gdzie lepiej wyjaśnia klatkę, z przywróconymi gwiazdami, dzięki czemu chmury zachowują\nswój kształt, a smugi samolotów i satelitów nadal są usuwane.  Czyste niebo\npozostaje bez zmian.\nWymaga dodatkowego CPU i pamięci przy klatkach z chmurami.  Domyślnie wyłączone.\nZmiana powoduje ponowne scalenie już przetworzonych klatek; ich wyrównanie zostaje zachowane.\n--no-cloud-aware-merge wyłącza tę opcję.  Zapisywane w konfiguracji jak każda inna flaga tutaj,\nwięc wznowienie, które jej nie powtarza, zachowuje ten sam wybór.",
   "cli.help.detection_type": "Rodzaje wykrywania",
   "cli.help.extract_in_background": "Zacznij przetwarzanie, gdy klatki wideo są jeszcze wyodrębniane. Domyślnie włączone dla ProRes i formatów, które szybko podają dowolną klatkę, wyłączone dla H.264, H.265 i podobnych.",
@@ -1236,5 +1236,8 @@
   "ui.menu_bar.tooltip.processing": "star — przetwarzanie {0}%",
   "ui.menu_bar.tooltip.rendering": "star — renderowanie wideo {0}%",
   "ui.menu_bar.tooltip.finished": "star — zakończono",
-  "ui.menu_bar.tooltip.failed": "star — niepowodzenie"
+  "ui.menu_bar.tooltip.failed": "star — niepowodzenie",
+  "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth zostawia tylko ziemię poniżej horyzontu, więc wymaga wykrywania horyzontu i nie może działać, gdy jest ono wyłączone (--no-horizon).",
+  "view_mode.dirtySkyProcessed": "nieoczyszczone niebo",
+  "view_mode.dirtyEarthProcessed": "nieoczyszczona ziemia"
 }

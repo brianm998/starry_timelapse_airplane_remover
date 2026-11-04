@@ -182,6 +182,9 @@ struct GridRightPanel: View {
                 infoRow(localized("ui.mode"), value: useOutliers ? localized("ui.auto_selective") : localized("ui.automatic"))
             case .selective:
                 infoRow(localized("ui.mode"), value: localized("ui.selective"))
+            case .dirtySky, .dirtyEarth:
+                // T3: no label of their own yet
+                infoRow(localized("ui.mode"), value: localized("ui.automatic"))
             }
 
             if !frame.horizonOverlays.isEmpty {
@@ -201,13 +204,21 @@ struct GridRightPanel: View {
 
     private func infoRow(_ label: String, value: String) -> some View {
         HStack(alignment: .top) {
+            // One line at least 62 wide, as wide as its own text when that is more: a long translation never breaks inside a word
+            // (a fixed 62 did). The value takes the rest, on one line; a file name has no space to wrap at, so it is truncated, with the
+            // whole of it in the help tag.
             Text(label)
                 .font(.caption)
                 .foregroundColor(.white.opacity(0.6))
-                .frame(width: 62, alignment: .leading)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(minWidth: 62, alignment: .leading)
             Text(value)
                 .font(.caption)
                 .foregroundColor(.white)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .help(value)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
     }

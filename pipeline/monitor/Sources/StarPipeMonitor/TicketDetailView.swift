@@ -227,3 +227,64 @@ struct IssuePanelView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
+
+/// The detail pane for a proposed issue: approve it (optionally with a priority), reject it (optionally with a reason),
+/// or open it on GitHub. The daemon's refusal (a full queue, an issue that is no longer proposed) shows in the error line.
+struct ProposalDetailView: View {
+    @Bindable var store: MonitorStore
+    let proposal: ProposalSnap
+    @State private var rejecting = false
+    @State private var reason = ""
+    @State private var busy = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("#\(proposal.number)").monospacedDigit().foregroundStyle(.secondary)
+                Text(proposal.title).scaledFont(.title2, weight: .bold).textSelection(.enabled)
+                Spacer()
+            }
+            Text("Proposed by \(proposal.by); waiting for your go-ahead.").foregroundStyle(.secondary)
+            HStack {
+                Menu("Approve") {
+                    Button("Keep the issue's priority") { approve(nil) }
+                    Divider()
+                    ForEach(["p0", "p1", "p2", "p3"], id: \.self) { p in Button(p) { approve(p) } }
+                }
+                .fixedSize()
+                Button("Reject…") { reason = ""; rejecting = true }
+                if let url = BlockerLinks.issueURL(repo: store.snapshot?.repo ?? "", number: proposal.number) {
+                    Button("Issue") { NSWorkspace.shared.open(url) }
+                }
+            }
+            .disabled(busy)
+            if let error = store.lastError { Text(error).scaledFont(.caption).foregroundStyle(.red) }
+            Spacer()
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .alert("Reject #\(proposal.number)?", isPresented: $rejecting) {
+            TextField("Reason (optional)", text: $reason)
+            Button("Reject", role: .destructive) { reject() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The issue gets a comment with the reason and is closed as not planned.")
+        }
+    }
+
+    private func approve(_ priority: String?) {
+        busy = true
+        Task {
+            await store.approve(proposal.number, priority: priority)
+            busy = false
+        }
+    }
+
+    private func reject() {
+        busy = true
+        Task {
+            await store.reject(proposal.number, reason: reason.trimmingCharacters(in: .whitespacesAndNewlines))
+            busy = false
+        }
+    }
+}

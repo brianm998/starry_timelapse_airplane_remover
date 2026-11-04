@@ -19,7 +19,7 @@
   "cli.errors.resume_header": "star: das temporäre Verzeichnis wurde behalten — so geht es weiter:",
   "cli.errors.video_path_needs_render_video": "--video-path erfordert --render-video.",
   "cli.frame_state_change": "Bild {0} wechselt in den Zustand {1}",
-  "cli.help.clean_method": "Der Bereinigungsmodus für diese Bildsequenz.\nStandard ist automatic bei einer neuen Sequenz, beim Fortsetzen der Wert\naus der gespeicherten Konfiguration.",
+  "cli.help.clean_method": "Der Bereinigungsmodus für diese Bildsequenz.\nStandard ist automatic bei einer neuen Sequenz, beim Fortsetzen der Wert\naus der gespeicherten Konfiguration.\ndirtySky und dirtyEarth bewirken das Gegenteil der Bereinigung: Sie behalten nur,\nwas sich am Himmel bzw. am Boden bewegt hat, und schreiben den Rest des Bildes schwarz.",
   "cli.help.cloud_aware_merge": "Hält schnell ziehende Wolken im auf die Sterne ausgerichteten Merge intakt.\nWolken verschieben sich gegenüber den Sternen, daher entnimmt ein Merge von auf die Sterne ausgerichteten Nachbarbildern\njedes Wolkenpixel aus einem anderen Moment und hinterlässt gebänderte, wiederholte Kopien der\nWolkenränder.  Ist die Option aktiv, wird ein zweiter, an die Wolkenbewegung ausgerichteter Merge\nüberall dort eingeblendet, wo er das Bild besser erklärt, mit wieder eingesetzten Sternen, sodass Wolken\nihre Form behalten, während Flugzeug- und Satellitenspuren weiterhin entfernt werden.  Klarer Himmel bleibt\nunverändert.\nKostet zusätzliche CPU und zusätzlichen Speicher bei Bildern mit Wolken.  Standardmäßig aus.\nEine Änderung führt die Zusammenführung bereits verarbeiteter Bilder erneut durch; ihre Ausrichtung bleibt erhalten.\n--no-cloud-aware-merge schaltet es aus.  Wird wie jedes andere Flag hier in der Konfiguration gespeichert,\nsodass eine Fortsetzung, die es nicht wiederholt, dieselbe Wahl beibehält.",
   "cli.help.detection_type": "Erkennungstypen",
   "cli.help.extract_in_background": "Mit der Verarbeitung beginnen, während die Bilder des Videos noch extrahiert werden. Standard: an für ProRes und andere Formate, die jedes Bild schnell liefern können, aus für H.264, H.265 und ähnliche.",
@@ -1236,5 +1236,8 @@
   "ui.menu_bar.tooltip.processing": "star — Verarbeitung {0} %",
   "ui.menu_bar.tooltip.rendering": "star — Video wird gerendert {0} %",
   "ui.menu_bar.tooltip.finished": "star — fertig",
-  "ui.menu_bar.tooltip.failed": "star — fehlgeschlagen"
+  "ui.menu_bar.tooltip.failed": "star — fehlgeschlagen",
+  "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth behält nur den Boden unterhalb des Horizonts, braucht also die Horizonterkennung und kann nicht laufen, wenn sie ausgeschaltet ist (--no-horizon).",
+  "view_mode.dirtySkyProcessed": "ungereinigter Himmel",
+  "view_mode.dirtyEarthProcessed": "ungereinigter Boden"
 }

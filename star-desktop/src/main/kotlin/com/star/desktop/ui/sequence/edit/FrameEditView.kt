@@ -227,6 +227,11 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                     val pos = up.position
                     val img = transform.canvasToImage(pos, canvasSize)
                     val gid = if (usesOutliers) fvm.hitAt(img.x, img.y, vm.info.imageWidth.toFloat(), vm.info.imageHeight.toFloat()) else 0
+                    // Under the UI-test probes, say what the click found: a feature that clicks a group and sees no change (the Windows
+                    // `uiOutlierClicks` leg) shows here whether the click arrived, on which group, and with which tool.
+                    if (System.getProperty(PROBES_PROPERTY) != null) {
+                        System.err.println("[probe] click at image (${img.x.roundToInt()}, ${img.y.roundToInt()}) found group $gid, tool $tool, outliers=$usesOutliers")
+                    }
                     if (gid > 0) {
                         lastEmptyClick = null
                         val decided = com.star.desktop.domain.OutlierDecisions.willRemove(fvm.decisionFor(gid)) != null
