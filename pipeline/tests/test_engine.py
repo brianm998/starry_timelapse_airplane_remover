@@ -289,7 +289,7 @@ async def test_an_interrupted_stage_resumes_with_a_resume_note(rig: Rig) -> None
     rig.agent.on("explore", explore_ok)
     rig.agent.on("develop", lambda r: StageOutcome("no-result"))
     await rig.engine.drive(7)
-    first = [r for r in rig.agent.requests if r.stage == "explore"][0]
+    first = next(r for r in rig.agent.requests if r.stage == "explore")
     assert first.resume == "S-old"
     assert "daemon restarted" in first.prompt and "submit_plan" in first.prompt and "not kept" in first.prompt
     assert "Ticket #7" not in first.prompt  # the ticket prompt is not sent a second time
