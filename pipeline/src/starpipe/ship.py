@@ -401,6 +401,8 @@ async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: la
         result, _ = await eng.model_stage(t, "conflict", prompt, fresh=True)
         if not result.ok:
             return False
+    if rejoin and ((cur := eng.db.ticket(t.number)) is None or cur.state != "ready"):
+        return False  # it left the queue meanwhile (landed, cancelled, parked): its worktree may be gone, so no further round
     if not await eng.audit_conflict(t, wt, mb, base, head):
         return False
     failure = None if land_now(eng, t.number) else await asyncio.to_thread(eng._run_verification, t, wt)  # pyright: ignore[reportPrivateUsage]
@@ -482,7 +484,8 @@ def watch_develop(eng: Engine) -> None:
                     _new_red(eng, job, sha)
             elif not job.red:
                 eng.db.put(pending, None)  # green again: that was a flake
-            if job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line"):
+            if job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line") == f"{job.workflow}/{job.job}":
+                # only the job that set the line clears it: a green sibling says nothing about the red one
                 eng.db.put("stop_line", None)
                 eng.notifier.clear("develop-red", None)
                 eng.db.event("stop-line-cleared", None, job=job.job)

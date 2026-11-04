@@ -616,6 +616,31 @@ def test_a_cancelled_newest_develop_run_leaves_baseline_and_stop_line_alone(rig:
     assert {k: rig.db.baseline(*k) for k in before} == before == {("pr-gate", "linux"): "success", ("cli", "macos"): "success"}
 
 
+def test_a_green_sibling_gate_job_keeps_the_stop_line(rig: Rig) -> None:
+    rig.gh.develop_ci = [("pr-gate", "static checks", "completed", "success"), ("pr-gate", "OpenCV", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    rig.gh.develop_sha = "d2"
+    rig.gh.develop_ci = [("pr-gate", "static checks", "completed", "failure"), ("pr-gate", "OpenCV", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    assert rig.db.get("stop_line") == "pr-gate/static checks", "the green OpenCV job must not clear the line static checks set"
+    assert not [e for e in rig.db.events_since() if e["kind"] == "stop-line-cleared"]
+
+
+def test_the_red_gate_job_going_green_clears_the_stop_line(rig: Rig) -> None:
+    rig.gh.develop_ci = [("pr-gate", "static checks", "completed", "success"), ("pr-gate", "OpenCV", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    rig.gh.develop_sha = "d2"
+    rig.gh.develop_ci = [("pr-gate", "static checks", "completed", "failure"), ("pr-gate", "OpenCV", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    assert rig.db.get("stop_line") == "pr-gate/static checks"
+    rig.gh.develop_sha = "d3"
+    rig.gh.develop_ci = [("pr-gate", "static checks", "completed", "success"), ("pr-gate", "OpenCV", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    assert rig.db.get("stop_line") is None
+    assert not [a for a in rig.db.open_alerts() if a["key"] == "develop-red"]
+    assert [e["data"] for e in rig.db.events_since() if e["kind"] == "stop-line-cleared"] == [{"job": "static checks"}]
+
+
 def test_a_cancelled_newest_run_keeps_the_older_successful_runs_baseline(rig: Rig) -> None:
     rig.gh.develop_ci = [("cli", "macos", "completed", "success")]
     ship.watch_develop(rig.engine)  # seeds
