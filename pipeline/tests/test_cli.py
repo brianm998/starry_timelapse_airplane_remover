@@ -211,9 +211,17 @@ def _run_daemon(monkeypatch: pytest.MonkeyPatch) -> Any:
         def run(self) -> object:
             return None
     monkeypatch.setattr(cli, "_hold_off_idle_sleep", lambda: None)
-    monkeypatch.setattr(daemon_mod, "build", lambda _cfg: Stub())
-    monkeypatch.setattr(cli.config_mod, "load", lambda *a, **k: None)
-    monkeypatch.setattr(asyncio, "run", lambda _c: None)
+    def build(_cfg: object) -> Stub:
+        return Stub()
+
+    def load(*_a: object, **_k: object) -> None:
+        return None
+
+    def run(_coro: object) -> None:
+        return None
+    monkeypatch.setattr(daemon_mod, "build", build)
+    monkeypatch.setattr(cli.config_mod, "load", load)
+    monkeypatch.setattr(asyncio, "run", run)
     return CliRunner().invoke(main, ["daemon", "run"])
 
 
@@ -243,7 +251,7 @@ def test_crash_loop_rollback_logs_why(tmp_path: Path, monkeypatch: pytest.Monkey
     selfupdate.switch(second, plist, Launchctl(), now=time.time(), restart=False)
     monkeypatch.setattr(cli_mod(), "_plist_path", lambda: plist)
     monkeypatch.setattr(selfupdate, "real_launchctl", Launchctl())
-    monkeypatch.setattr(selfupdate, "restart_agent", lambda *a, **k: None)
+    monkeypatch.setattr(selfupdate, "restart_agent", _noop)
     (selfupdate.runtime_root() / "starts.json").write_text(json.dumps([time.time()] * 3))
     caplog.set_level("INFO")
     result = _run_daemon(monkeypatch)
@@ -257,6 +265,10 @@ def test_crash_loop_rollback_logs_why(tmp_path: Path, monkeypatch: pytest.Monkey
     caplog.clear()
     result = _run_daemon(monkeypatch)
     assert result.exit_code == 1 and "rollback failed: no previous runtime" in caplog.text
+
+
+def _noop(*_a: object, **_k: object) -> None:
+    return None
 
 
 def cli_mod() -> Any:
