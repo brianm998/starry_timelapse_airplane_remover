@@ -12,9 +12,26 @@ on:
   workflow_dispatch:
 
 jobs:
+  opencv-linux:
+    name: OpenCV (linux)
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: linux
+
+  opencv-macos:
+    name: OpenCV (macos)
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: macos
+
   measure-linux:
     name: removal measurements (ubuntu-24.04)
     runs-on: ubuntu-24.04
+    needs: opencv-linux
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
@@ -41,18 +58,11 @@ jobs:
         with:
           swift-version: '6.0'
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/linux
-            opencv/include
-          key: opencv-linux-${{ steps.opencv-key.outputs.key }}
+          name: opencv-linux
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -61,10 +71,6 @@ jobs:
             StarDecisionTrees/lib/release/linux
             StarDecisionTrees/include/release/linux
           key: dt-linux-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/linux/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -103,6 +109,7 @@ jobs:
   measure-macos:
     name: removal measurements (macos-15)
     runs-on: macos-15
+    needs: opencv-macos
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
@@ -128,18 +135,11 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
-      - name: OpenCV cache key
-        id: opencv-key
-        shell: bash
-        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/macos
-            opencv/include
-          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
+          name: opencv-macos
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -148,10 +148,6 @@ jobs:
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
           key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/macos/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |

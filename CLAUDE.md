@@ -33,6 +33,12 @@ colours, buttons, estimates, dialogs — is made to the other in the same change
 behaviour and the same catalogue keys, and each side's tests updated. Don't ship one and leave
 the other "for later"; if a platform genuinely cannot do something, say so in the change.
 
+## No pull requests for internal work
+
+We don't use PRs for our own changes. PRs are only for work coming in from other people. Normal work is
+merged straight into `develop`, and the automated testing (the pipeline's checks and CI) is what makes sure
+nothing broke: don't open a PR to get a change reviewed or checked first, and don't wait for one.
+
 ## The development pipeline
 
 `pipeline/` is developer tooling (`starpipe`, plans/PIPELINE.md), not part of star. The localization

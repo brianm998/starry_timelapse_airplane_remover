@@ -303,6 +303,13 @@ struct StarApp: App {
               .background(MainWindowAccessor { window in
                   appDelegate.viewModel = viewModel
                   window.delegate = appDelegate
+                  if let size = ViewModel.uiTestWindowSize {
+                      // the parity gallery's window: placed on the screen's top left, so the whole of it is on screen
+                      window.setContentSize(size)
+                      if let screen = window.screen ?? NSScreen.main {
+                          window.setFrameTopLeftPoint(NSPoint(x: screen.visibleFrame.minX + 20, y: screen.visibleFrame.maxY - 20))
+                      }
+                  }
               })
               .onAppear {
                   enableGUILogs()
@@ -311,6 +318,7 @@ struct StarApp: App {
                   viewModel.openSequenceFromUITestArgument()
                   viewModel.openConfigFromUITestArgument()
                   viewModel.openVideoFromUITestArgument()
+                  viewModel.openSequenceLocationFromUITestArgument()
               }
               // the windows about the sequence go with it (D11)
               .onChange(of: viewModel.imageSequence == nil) { _, unloaded in

@@ -835,6 +835,43 @@ class InteropIntegrationTest {
         }
     }
 
+    /** The dirty sky method set on one frame is read back as that frame's own, and survives closing and reopening the sequence. */
+    @Test
+    fun perFrameDirtySkySurvivesReopen() {
+        val seq = seqPath
+        if (!runProcess || seq == null) {
+            println("[skip] perFrameDirtySkySurvivesReopen — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            return
+        }
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-dirtysky").toFile()
+        val seqCopy = File(tmp, File(seq).name)
+        File(seq).copyRecursively(seqCopy)
+        val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
+            .setCleanMethod(CleanMethod.CLEAN_SELECTIVE).setOutputPath(seqCopy.parent!!).build()
+        try {
+            val configJson = withEngine { client ->
+                val info = client.openSequence(seqCopy.absolutePath, cfg)
+                assertTrue(!client.getFrame(info.sessionId, 1).cleanMethodOverridden)
+                val set = client.setFrameCleanMethod(info.sessionId, 1, CleanMethod.CLEAN_DIRTY_SKY)
+                assertTrue(set.cleanMethodOverridden)
+                assertEquals(CleanMethod.CLEAN_DIRTY_SKY, set.cleanMethod)
+                client.closeSession(info.sessionId)
+                info.configJsonPath
+            }
+            withEngine { client ->
+                val info = client.openConfig(configJson)
+                val frame = client.getFrame(info.sessionId, 1)
+                assertTrue(frame.cleanMethodOverridden, "the frame's dirty sky method was lost on reopen")
+                assertEquals(CleanMethod.CLEAN_DIRTY_SKY, frame.cleanMethod)
+                val other = client.getFrame(info.sessionId, 0)
+                assertTrue(!other.cleanMethodOverridden, "another frame must keep the sequence's method")
+                client.closeSession(info.sessionId)
+            }
+        } finally {
+            tmp.deleteRecursively()
+        }
+    }
+
     /**
      * E4: a frame's own clean method and neighbour counts are the frame's alone, say so in its info, and are still there when the session
      * is opened again from its config in another daemon.

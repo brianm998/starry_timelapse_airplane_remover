@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Self
 
 
 @dataclass
@@ -13,27 +15,45 @@ class Counts:
     executed: int = 0
     failed: int = 0
     skipped: int = 0
+    failures: list[str] = field(default_factory=list[str])  # names of the failing cases, where the parser has them
+
+    def __iadd__(self, other: Counts) -> Self:
+        self.executed += other.executed
+        self.failed += other.failed
+        self.skipped += other.skipped
+        self.failures += other.failures
+        return self
 
     @property
     def vacuous(self) -> bool:
         return self.executed < 1
 
 
-_XCTEST_TOTAL = re.compile(r"Executed (\d+) tests?, with (\d+) failures?(?: \((\d+) unexpected\))?")
+_XCTEST_TOTAL = re.compile(r"Executed (\d+) tests?, with (?:\d+ tests? skipped and )?(\d+) failures?(?: \((\d+) unexpected\))?")
+# a banner with skips reads "Executed 1625 tests, with 8 tests skipped and 0 failures"; the skipped part is optional
+_XCTEST_FAILED = re.compile(r"Test Case '-\[(\S+) (\S+)\]' failed \(")
 _XCTEST_SKIPPED = re.compile(r"Test Case '.*' skipped \(")
 # A test that skips itself because its data is not in the repo or it is an opt-in measurement skips on every machine and every
 # develop run: that is not a test the change silently lost. So does one that measures behaviour only some hardware has (the GCD
 # width test skips on x86_64; the unified-memory test skips on a discrete GPU), and so does one that only runs in a release build
-# or behind an env var (`set STAR_KP_MEASURE=1`). Only these reasons are expected; any other skip is still red.
-_XCTEST_EXPECTED_SKIP = re.compile(
-    r"Test skipped - (?:opt-in|no horizon (?:reference fixtures|test sequence)|set STAR_\w+(?: to\b|=)"
-    r"|run with 'swift test -c release'|a discrete GPU always copies|GCD's width narrowing)")
+# or behind an env var (`set STAR_KP_MEASURE=1`), and so does one that needs the machine to let it redirect $HOME (the Intel Mac's
+# NSHomeDirectory ignores it). Only these reasons are expected; any other skip is still red.
+_EXPECTED_SKIP_REASON = (
+    r"(?:opt-in|no horizon (?:reference fixtures|test sequence)|set STAR_\w+(?: to\b|=)|STAR_\w+ is not set to\b"
+    r"|NSHomeDirectory\(\) ignores \$HOME|run with 'swift test -c release'|a discrete GPU always copies|GCD's width narrowing)")
+_XCTEST_EXPECTED_SKIP = re.compile(r"Test skipped - " + _EXPECTED_SKIP_REASON)
+_XUNIT_EXPECTED_SKIP = re.compile(r"(?:Test skipped - )?" + _EXPECTED_SKIP_REASON)
 # swift-testing: "✔ Test run with 12 tests in 3 suites passed after 0.1 seconds."
+_PYTEST_FAILED = re.compile(r"(?:FAILED|ERROR) (\S+::\S+?)(?: - .*)?$")
 _SWIFT_TESTING = re.compile(r"Test run with (\d+) tests?.* (passed|failed)")
 
 
 def _clean(text: str) -> str:
     return text.replace("\r", "")
+
+
+def _unique(names: Iterable[str]) -> list[str]:
+    return list(dict.fromkeys(names))
 
 
 def parse_xctest(text: str) -> Counts:
@@ -52,7 +72,30 @@ def parse_xctest(text: str) -> Counts:
         counts.executed += int(match.group(1))
         if match.group(2) == "failed":
             counts.failed += 1
+    counts.failures = _unique(f"{m.group(1)}.{m.group(2)}" for m in _XCTEST_FAILED.finditer(text))
     counts.skipped = max(0, len(_XCTEST_SKIPPED.findall(text)) - len(_XCTEST_EXPECTED_SKIP.findall(text)))
+    return counts
+
+
+def parse_xunit(path: Path) -> Counts:
+    """The JUnit XML `swift test --xunit-output` writes. `--parallel` prints no `Executed N tests` totals, so this file is the
+    verdict. A missing or unreadable file counts as one failure, never as zero tests, so a crashed run cannot read as green."""
+    counts = Counts()
+    try:
+        root = ET.parse(path).getroot()
+    except (OSError, ET.ParseError):
+        return Counts(failed=1, failures=[f"no readable xunit file at {path.name}"])
+    for case in root.iter("testcase"):
+        name = f"{case.get('classname', '')}.{case.get('name', '')}".strip(".")
+        counts.executed += 1
+        if case.find("failure") is not None or case.find("error") is not None:
+            counts.failed += 1
+            counts.failures.append(name)
+        skipped = case.find("skipped")
+        if skipped is not None:
+            reason = f"{skipped.get('message', '')} {skipped.text or ''}"
+            if not _XUNIT_EXPECTED_SKIP.search(reason):
+                counts.skipped += 1
     return counts
 
 
@@ -68,6 +111,9 @@ def parse_gradle(results_dir: Path) -> Counts:
         counts.executed += int(suite.get("tests", 0))
         counts.failed += int(suite.get("failures", 0)) + int(suite.get("errors", 0))
         counts.skipped += int(suite.get("skipped", 0))
+        counts.failures += [f"{case.get('classname', '')}.{case.get('name', '')}" for case in suite.iter("testcase")
+                            if case.find("failure") is not None or case.find("error") is not None]
+    counts.failures = _unique(counts.failures)
     return counts
 
 
@@ -80,4 +126,5 @@ def parse_pytest(text: str) -> Counts:
             skipped = re.search(r"(\d+) skipped", line)
             p, f, s = (int(m.group(1)) if m else 0 for m in (passed, failed, skipped))
             counts = Counts(executed=p + f + s, failed=f, skipped=s)
+    counts.failures = _unique(m.group(1) for line in _clean(text).splitlines() if (m := _PYTEST_FAILED.match(line)))
     return counts

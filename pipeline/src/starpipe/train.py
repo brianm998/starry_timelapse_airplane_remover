@@ -1,10 +1,12 @@
 """The landing train: one CI for many tickets (plan §10, revised 2026-10-31).
 
-Tickets that finish REVIEW wait in `ready`. When no batch is running, the train takes what is ready (up to `batch_max`), builds
+Tickets that finish REVIEW wait in `ready`. When fewer than `batch_parallel` batches are running, the train takes what is ready (all of it:
+a batch has no size cap; with another batch in flight, only tickets whose files that batch does not touch), builds
 one integration branch (develop plus each ticket's branch, merged in order), opens ONE pull request and runs ONE CI. Green: merge it
 and land every member. Red: rerun what looks like a flake, otherwise split the batch in half and try the halves, down to one
 ticket, which goes through CI-FIX and rejoins the queue. CI taking an hour is the collection window: whatever becomes ready meanwhile
-is the next batch.
+is the next batch, and when its files are disjoint from the batch in CI it goes into CI beside it (each batch has its own worktree,
+branch and driver task; merges stay one at a time, and a batch that lands after develop moved takes the overlap/catch-up path below).
 
 Why: a PR and a full CI per ticket queued six matrices for the same few GitHub runners, and every landing made the others catch up
 and run again. A ticket that conflicts with an earlier member waits for the next batch; one that conflicts with develop itself goes
@@ -17,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -45,8 +48,8 @@ def overlap_note(ov: landing.Overlap) -> str:
     return ", ".join(ov.files[:MAX_NOTED]) + (f" and {more} more" if more > 0 else "")
 
 
-def batch_worktree(repo: Path) -> Path:
-    return repo / ".claude" / "worktrees" / WORKTREE
+def batch_worktree(repo: Path, batch: int) -> Path:
+    return repo / ".claude" / "worktrees" / f"{WORKTREE}-{batch}"
 
 
 def batch_branch(batch: int) -> str:
@@ -54,15 +57,16 @@ def batch_branch(batch: int) -> str:
 
 
 def window_left(db: Database, config: Config, now: float) -> float | None:
-    """Seconds until the train forms its next batch (0: it is about to), or None when a batch is active or nothing is ready.
+    """Seconds until the train forms its next batch (0: it is about to), or None when `batch_parallel` batches are active or nothing
+    is ready.
 
-    The same arithmetic as `Train._pick`: a batch forms once `batch_max` tickets are ready or the oldest has waited `batch_window_s`."""
-    if db.active_batch() is not None:
+    The same arithmetic as `Train._pick`: a batch forms once the oldest ready ticket has waited `batch_window_s`."""
+    if len(db.active_batches()) >= config.batch_parallel:
         return None
     ready = [t for t in db.tickets(("ready",)) if db.batch_of(t.number) is None]
     if not ready:
         return None
-    if len(ready) >= config.batch_max:
+    if any(ship.land_now_mark(db, t.number) for t in ready):
         return 0.0
     oldest = min(db.state_since(t.number, "ready") or t.updated_at for t in ready)
     return max(0.0, config.batch_window_s - (now - oldest))
@@ -79,47 +83,122 @@ class Built:
 class Train:
     def __init__(self, eng: Engine) -> None:
         self.eng = eng
-        self._catch_ups: set[asyncio.Task[None]] = set()
+        self._beside: dict[int, asyncio.Task[None]] = {}  # a conflicted ticket's catch-up, beside the train: it is not batched until done
         self._gates: dict[int, asyncio.Task[None]] = {}  # a ticket's Gherkin feature run, beside the train, before it may be batched
+        self._drivers: dict[int, asyncio.Task[None]] = {}  # one task per active batch, driving it through CI and landing
+        self._wake = asyncio.Event()  # set when a driver ends, so the loop forms the next batch at once
+        self._git_lock = threading.Lock()  # fetches and worktree add/remove from two batches' threads must not race on the shared repo
+        self._macos_queued: dict[int, int] = {}  # per active batch: CI jobs still waiting for a macOS runner, as of its last poll
+        self._deferred: set[tuple[int, int]] = set()  # (ticket, batch) pairs whose feature-run deferral was already reported
 
     # the loop ------------------------------------------------------------------------------------------------------
     async def run_forever(self) -> None:
-        while True:
-            did = await self.step()
-            await asyncio.sleep(2 if did else 15)
+        try:
+            while True:
+                self._wake.clear()
+                did = await self.step()
+                try:
+                    await asyncio.wait_for(self._wake.wait(), 2 if did else 15)
+                except TimeoutError:
+                    pass
+        finally:
+            for task in self._drivers.values():
+                task.cancel()
 
     async def run_until_idle(self, limit: int = 50) -> int:
         steps = 0
         while steps < limit:
             if await self.step():
                 steps += 1
-            elif self._catch_ups or self._gates:  # nothing to do but wait for a conflicted ticket to rejoin, or a feature run to end
-                await asyncio.wait([*self._catch_ups, *self._gates.values()])
+            elif drivers := [t for t in self._drivers.values() if not t.done()]:  # a batch is running: its end may free the train
+                await asyncio.wait(drivers, return_when=asyncio.FIRST_COMPLETED)
+            elif others := [t for t in (*self._beside.values(), *self._gates.values()) if not t.done()]:
+                await asyncio.wait(others)  # a conflicted ticket's rejoin, or the feature runs of everything now ready
             else:
                 break
         return steps
 
-    def _held(self) -> bool:
+    async def drain(self) -> None:
+        """Wait until every batch driver now running has ended (the batches may still be active: a catch-up sends one back to CI)."""
+        while drivers := [t for t in self._drivers.values() if not t.done()]:
+            await asyncio.wait(drivers)
+
+    def _held(self, bypass_stop_line: bool = False) -> bool:
         db = self.eng.db
-        return db.get("pause") in ("all", "landing") or bool(db.get("stop_line"))
+        return db.get("pause") in ("all", "landing") or (bool(db.get("stop_line")) and not bypass_stop_line)
+
+    def _owner_landed(self, members: list[int]) -> bool:
+        """True when every ticket in the batch carries the owner's land-now mark (so CI and the stop line are skipped)."""
+        return bool(members) and all(ship.land_now(self.eng, n) for n in members)
 
     async def step(self) -> bool:
-        """Advance the train by one thing. True when something happened (so the caller need not wait)."""
+        """Advance the train by one thing: start a driver for each active batch that has none, and form a new batch when there is room
+        for one. Never waits for a batch to finish. True when something happened (so the caller need not wait)."""
         eng = self.eng
         if eng.config.landing_mode != "batch":
             return False
         self._start_gates()  # feature runs cost no landing slot, so they go ahead even while the train is held or busy
-        batch = eng.db.active_batch()
-        if batch is not None:
-            await self._drive(int(batch["id"]))
-            return True
-        if self._held():
-            return False
-        members = self._pick()
+        did = self._start_drivers()
+        active = eng.db.active_batches()
+        if len(active) >= max(1, eng.config.batch_parallel):
+            return did
+        flagged = [t.number for t in eng.db.tickets(("ready",))
+                   if eng.db.batch_of(t.number) is None and ship.land_now(eng, t.number) and not self._gated(t)]
+        if self._held(bypass_stop_line=bool(flagged)):
+            return did
+        paths = None
+        if active:  # a batch is in flight: only tickets that share no file with it may go beside it
+            numbers = {n for b in active for n in eng.db.batch_members(int(b["id"]))}
+            numbers |= {t.number for t in eng.db.tickets(("ready",)) if eng.db.batch_of(t.number) is None}
+            paths = await asyncio.to_thread(self._paths_of, sorted(numbers))
+        members = self._pick(paths)
         if not members:
-            return False
+            return did
         await self._start(members)
+        self._start_drivers()
         return True
+
+    def _start_drivers(self) -> bool:
+        started = False
+        for b in self.eng.db.active_batches():
+            bid = int(b["id"])
+            if bid in self._drivers and not self._drivers[bid].done():
+                continue
+            task = asyncio.create_task(self._driven(bid))
+            self._drivers[bid] = task
+            task.add_done_callback(lambda t, bid=bid: self._driver_ended(bid, t))
+            started = True
+        return started
+
+    def _driver_ended(self, bid: int, task: asyncio.Task[None]) -> None:
+        if self._drivers.get(bid) is task:
+            del self._drivers[bid]
+        self._wake.set()
+
+    async def _driven(self, bid: int) -> None:
+        try:
+            await self._drive(bid)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - one batch's failure must not take the train, or the other batch, down
+            self.eng.db.event("train-driver-failed", None, batch=bid, error=str(exc)[:200])
+            await self.eng.sleep(BACKOFF_S)
+
+    def _paths_of(self, numbers: list[int]) -> dict[int, frozenset[str] | None]:
+        """The files each ticket's branch changes against develop; None when that cannot be told (it then overlaps everything)."""
+        eng = self.eng
+        base = f"origin/{eng.config.base_branch}"
+        out: dict[int, frozenset[str] | None] = {}
+        for n in numbers:
+            t = eng.db.ticket(n)
+            try:
+                if t is None or not t.branch:
+                    raise RuntimeError("no branch")
+                mb = gitutil.git(eng.repo, "merge-base", base, t.branch).strip()
+                out[n] = frozenset(p for p in gitutil.git(eng.repo, "diff", "--name-only", mb, t.branch).splitlines() if p)
+            except RuntimeError:
+                out[n] = None
+        return out
 
     # forming a batch -----------------------------------------------------------------------------------------------
     def _gated(self, t: Ticket) -> bool:
@@ -130,10 +209,21 @@ class Train:
 
     def _start_gates(self) -> None:
         """Start the feature run of each ready ticket that needs one. It runs on the ticket's own branch, once per ticket: the batch
-        branch is a new merge commit, so the batch's CI never carries a feature run."""
+        branch is a new merge commit, so the batch's CI never carries a feature run.
+
+        While an active batch still has macOS jobs queued, no new run starts: it would take a macOS runner ahead of them. A run already
+        going is left alone."""
         eng = self.eng
+        active = {int(b["id"]) for b in eng.db.active_batches()}
+        waiting = sorted((bid, n) for bid, n in self._macos_queued.items() if bid in active and n > 0)
         for t in eng.db.tickets(("ready",)):
             if eng.db.batch_of(t.number) is None and self._gated(t) and t.number not in self._gates:
+                if waiting:
+                    bid, queued = waiting[0]
+                    if (t.number, bid) not in self._deferred:
+                        self._deferred.add((t.number, bid))
+                        eng.db.event("gate-deferred", t.number, batch=bid, queued_macos=queued)
+                    continue
                 task = asyncio.create_task(self._gate_beside(t))
                 self._gates[t.number] = task
                 task.add_done_callback(lambda _t, n=t.number: self._gates.pop(n, None))
@@ -144,27 +234,54 @@ class Train:
         except Exception as exc:  # noqa: BLE001 - one ticket's feature run must not take the train down
             self.eng.db.event("train-gate-failed", t.number, error=str(exc)[:200])
 
-    def _pick(self) -> list[int]:
+    def _pick(self, paths: dict[int, frozenset[str] | None] | None = None) -> list[int]:
+        """The tickets for the next batch. With another batch in flight, only those sharing no file with any of its members:
+        `paths` (from `_paths_of`, computed off the event loop) says which files each ticket changes."""
         eng = self.eng
-        ready = [t for t in eng.db.tickets(("ready",)) if eng.db.batch_of(t.number) is None and not self._gated(t)]
+        # a ticket whose catch-up is still running stays out: landing it would delete the worktree the catch-up is working in
+        ready = [t for t in eng.db.tickets(("ready",))
+                 if eng.db.batch_of(t.number) is None and not self._gated(t) and t.number not in self._beside]
         ids = [t.number for t in ready]
+        flying = [n for b in eng.db.active_batches() for n in eng.db.batch_members(int(b["id"]))]
+        if flying and paths is None:
+            paths = self._paths_of([*flying, *ids])
+        taken = [paths.get(n) for n in flying] if paths is not None else []
+
+        def disjoint(numbers: list[int]) -> bool:
+            assert paths is not None
+            mine = [paths.get(n) for n in numbers]
+            return all(a is not None and b is not None and not (a & b) for a in mine for b in taken)
+
         groups: list[list[int]] = json.loads(eng.db.get("train_groups") or "[]")
         while groups:  # halves of a batch that went red: exactly these tickets, nothing else
-            group = [n for n in groups.pop(0) if n in ids]
+            if any(n in self._beside for n in groups[0]):
+                return []  # a member is still catching up: the group stays for the next pick, whole
+            if any(n in flying for n in groups[0]):
+                return []  # a member is still in the batch being given up (its tickets are going back to the queue one by one)
+            group = [n for n in groups[0] if n in ids]
+            if group and flying and not disjoint(group):
+                return []  # it shares files with the batch in flight: it goes when that one is done
+            groups.pop(0)
             eng.db.put("train_groups", json.dumps(groups) if groups else None)
             if group:
                 return group
+        if flying:
+            ready = [t for t in ready if disjoint([t.number])]
+            ids = [t.number for t in ready]
         if not ready:
             return []
+        flagged = [t.number for t in ready if ship.land_now(eng, t.number)]
+        if flagged:  # the owner's land-now: a batch of just these, now, without waiting out the window
+            return flagged
         oldest = min(eng.db.state_since(t.number, "ready") or t.updated_at for t in ready)
-        if len(ready) >= eng.config.batch_max or eng.clock() - oldest >= eng.config.batch_window_s:
-            return ids[: eng.config.batch_max]
+        if eng.clock() - oldest >= eng.config.batch_window_s:
+            return ids
         return []
 
     async def _start(self, members: list[int]) -> None:
         eng = self.eng
         try:
-            await asyncio.to_thread(ship.fetch, eng, eng.repo)
+            await asyncio.to_thread(self._fetch, eng.repo)
             base = (await asyncio.to_thread(gitutil.git, eng.repo, "rev-parse", f"origin/{eng.config.base_branch}")).strip()
         except (RuntimeError, GitHubError) as exc:
             eng.db.event("train-fetch-failed", None, error=str(exc)[:200])
@@ -194,8 +311,12 @@ class Train:
             return
         for n in built.catch_up:  # conflicts with develop itself: the CONFLICT stage runs beside the batch, then back in the queue
             task = asyncio.create_task(self._catch_up_beside(n))
-            self._catch_ups.add(task)
-            task.add_done_callback(self._catch_ups.discard)
+            self._beside[n] = task
+            task.add_done_callback(lambda _t, n=n: self._beside.pop(n, None))
+
+    def _fetch(self, root: Path) -> None:
+        with self._git_lock:
+            ship.fetch(self.eng, root)
 
     async def _catch_up_beside(self, n: int) -> None:
         """A conflicted ticket's catch-up, off the train's own path: the clean members publish and go through CI without waiting for it."""
@@ -206,9 +327,10 @@ class Train:
 
     def _build(self, bid: int, tickets: list[Ticket], base: str) -> Built:
         repo = self.eng.repo
-        wt = batch_worktree(repo)
-        self._remove_worktree()
-        gitutil.git(repo, "worktree", "add", "--detach", str(wt), base)
+        wt = batch_worktree(repo, bid)
+        self._remove_worktree(bid)
+        with self._git_lock:
+            gitutil.git(repo, "worktree", "add", "--detach", str(wt), base)
         gitutil.git(wt, "checkout", "-q", "-b", batch_branch(bid))
         built = Built()
         for t in tickets:
@@ -223,7 +345,7 @@ class Train:
 
     def _publish(self, bid: int, built: Built, base: str) -> None:
         eng = self.eng
-        wt, branch = batch_worktree(eng.repo), batch_branch(bid)
+        wt, branch = batch_worktree(eng.repo, bid), batch_branch(bid)
         if eng.config.remote == "https":
             gitutil.remote_push(wt, eng.config.owner, eng.config.repo, branch)
         else:
@@ -271,7 +393,10 @@ class Train:
         if batch["state"] == "landing":  # died between the merge and the bookkeeping
             await asyncio.to_thread(self._resume_landing, bid)
             return
-        outcome = await self._ci(bid)
+        try:
+            outcome = await self._ci(bid)
+        finally:
+            self._macos_queued.pop(bid, None)
         if outcome[0] == "abandon":
             await asyncio.to_thread(self._abandon, bid, str(outcome[1]))
         elif outcome[0] == "red" and isinstance(outcome[1], ci.Verdict):
@@ -290,13 +415,18 @@ class Train:
             gone = [n for n in members if (t := eng.db.ticket(n)) is None or t.state != "ci"]
             if gone:  # cancelled or parked while in the batch: its changes are in the integration branch, so rebuild without it
                 return ("abandon", f"#{gone[0]} left the batch")
+            if self._owner_landed(members):
+                return ("pass", "- tests bypassed by the owner (land-now)")
+            if any(ship.land_now(eng, n) for n in members):  # a flagged ticket must not wait on its unflagged batch-mates' CI
+                return ("abandon", "a land-now ticket is in a batch with tickets that still need CI: rebuilding without the wait")
             reran = {tuple(k) for k in json.loads(eng.db.get(f"reran:batch{bid}") or "[]")}
             try:
-                verdict = await asyncio.to_thread(ship._judge, eng, f"batch{bid}", batch["head_sha"], reran)  # pyright: ignore[reportPrivateUsage]
+                jobs, verdict = await asyncio.to_thread(ship._judge_jobs, eng, f"batch{bid}", batch["head_sha"], reran)  # pyright: ignore[reportPrivateUsage]
             except GitHubError as exc:
                 eng.db.event("ci-poll-failed", None, batch=bid, error=str(exc)[:200])
                 await eng.sleep(eng.config.ci_poll_s)
                 continue
+            self._macos_queued[bid] = sum(1 for j in jobs if j.queued_for_macos)
             eng.db.record_ci(0, batch["head_sha"], verdict.kind, {"batch": bid, "reason": verdict.reason})
             if verdict.kind == "pending":
                 age = eng.clock() - float(eng.db.get(f"pushed_at:batch{bid}") or eng.clock())
@@ -317,7 +447,7 @@ class Train:
     async def _land(self, bid: int, notes: str) -> None:
         eng = self.eng
         async with eng.land_lock:
-            while self._held():
+            while self._held(bypass_stop_line=self._owner_landed(eng.db.batch_members(bid))):
                 await eng.sleep(eng.config.ci_poll_s)
             members = eng.db.batch_members(bid)
             if any((t := eng.db.ticket(n)) is None or t.state != "ci" for n in members):
@@ -336,9 +466,10 @@ class Train:
         eng = self.eng
         batch = eng.db.batch(bid)
         assert batch is not None
-        wt = batch_worktree(eng.repo)
+        wt = batch_worktree(eng.repo, bid)
         try:
-            base = ship._remote(eng, wt)  # pyright: ignore[reportPrivateUsage]
+            self._fetch(wt)
+            base = f"origin/{eng.config.base_branch}"
             pr = eng.gh.pr(int(batch["pr_number"]))
             head = pr["head"]["sha"]
             mb = gitutil.git(wt, "merge-base", base, head).strip()
@@ -358,7 +489,7 @@ class Train:
             eng.gh.merge_pr(int(batch["pr_number"]), head)
         except (GitHubError, RuntimeError) as exc:
             return f"refused: {exc}"
-        ship.fetch(eng, wt)
+        self._fetch(wt)
         merged = eng.gh.pr(int(batch["pr_number"]))
         sha = merged.get("merge_commit_sha") or ""
         base = f"origin/{eng.config.base_branch}"
@@ -412,7 +543,7 @@ class Train:
     def _finish(self, bid: int, sha: str) -> None:
         """Bookkeeping after the merge, safe to run twice: issues closed, branches and worktrees gone, tickets landed."""
         eng = self.eng
-        wt = batch_worktree(eng.repo)
+        wt = batch_worktree(eng.repo, bid)
         changed = gitutil.git(wt, "diff", "--name-only", f"{sha}^1", sha, check=False).split() if wt.exists() else []
         if any(p.startswith("pipeline/") and not p.startswith("pipeline/monitor/") for p in changed):
             eng.db.put("self_update_wanted", sha)
@@ -438,7 +569,7 @@ class Train:
         batch = eng.db.batch(bid)
         if batch and batch["branch"]:
             eng.gh.delete_branch(str(batch["branch"]))
-        self._remove_worktree()
+        self._remove_worktree(bid)
         eng.db.batch_update(bid, state="landed", ended=eng.clock())
 
     def _seed_baseline(self, bid: int, sha: str, wt: Path) -> None:
@@ -467,13 +598,15 @@ class Train:
     async def _on_red(self, bid: int, verdict: ci.Verdict) -> None:
         eng = self.eng
         members = eng.db.batch_members(bid)
-        await asyncio.to_thread(self._abandon, bid, f"CI red: {verdict.reason}", "failed")
         if len(members) > 1:  # try the halves: the culprit is in one of them (log2 of the batch size more CIs, at worst)
+            # recorded before the abandon puts the tickets back: a step() that looks at the queue in between must find the split
             half = (len(members) + 1) // 2
             groups: list[list[int]] = [members[:half], members[half:], *json.loads(eng.db.get("train_groups") or "[]")]
             eng.db.put("train_groups", json.dumps(groups))
             eng.db.event("train-split", None, batch=bid, halves=[members[:half], members[half:]])
+            await asyncio.to_thread(self._abandon, bid, f"CI red: {verdict.reason}", "failed")
             return
+        await asyncio.to_thread(self._abandon, bid, f"CI red: {verdict.reason}", "failed")
         t = eng.db.ticket(members[0]) if members else None
         if t is not None:  # one ticket and still red: it is the culprit, so it gets the CI-FIX stage and rejoins the queue
             await ship.ci_fix(eng, t, verdict, rejoin=True)
@@ -492,7 +625,7 @@ class Train:
                 eng.gh.delete_branch(str(batch["branch"]))
         except GitHubError as exc:
             eng.db.event("batch-cleanup-failed", None, batch=bid, error=str(exc)[:200])
-        self._remove_worktree()
+        self._remove_worktree(bid)
         for n in eng.db.batch_members(bid):
             t = eng.db.ticket(n)
             if t is not None and t.state == "ci":
@@ -500,13 +633,14 @@ class Train:
                 eng._to_state(n, "ready")  # pyright: ignore[reportPrivateUsage]
         eng.db.batch_update(bid, state=final, ended=eng.clock(), note=why[:300])
 
-    def _remove_worktree(self) -> None:
+    def _remove_worktree(self, bid: int) -> None:
         repo = self.eng.repo
-        wt = batch_worktree(repo)
+        wt = batch_worktree(repo, bid)
         if wt.exists():
-            gitutil.run(repo, "worktree", "remove", "--force", str(wt))
-            if wt.exists():
-                import shutil
+            with self._git_lock:
+                gitutil.run(repo, "worktree", "remove", "--force", str(wt))
+                if wt.exists():
+                    import shutil
 
-                shutil.rmtree(wt, ignore_errors=True)
-                gitutil.run(repo, "worktree", "prune")
+                    shutil.rmtree(wt, ignore_errors=True)
+                    gitutil.run(repo, "worktree", "prune")

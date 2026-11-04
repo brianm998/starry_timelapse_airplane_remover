@@ -39,11 +39,22 @@ class Config(BaseModel):
     cpu_limit_pct: float = 85.0  # rolling average over cpu_window_s; only a reason to wait while another session is running
     cpu_window_s: int = 60
     landing_mode: str = "batch"  # "batch": the landing train, one CI for many tickets; "single": a PR and a CI per ticket
-    batch_max: int = 5  # tickets in one batch
-    batch_window_s: int = 120  # wait this long for more tickets once one is ready and no batch is running
+    batch_window_s: int = 120  # wait this long for more tickets once one is ready and no batch is running; a batch takes everything ready
+    # Batches in CI at once. A second batch forms only from ready tickets whose files no in-flight batch touches; 1 is the old
+    # one-at-a-time train. GitHub has 5 macOS runners and one batch's CI wants about 8 macOS jobs, so more than 2 would just queue.
+    batch_parallel: int = 2
     max_in_ci: int = 3  # tickets in CI or landing at once; a finished ticket waits as `ready` for room (runners are shared)
     heavy_slots: int = 1
+    # Slots for light jobs (swift package builds/tests, gradle compile). 1 = no sharing. With 2, a light job takes the second slot only
+    # while the holder is light too, system free memory is at least heavy_free_mem_pct and the holder's peak RSS is under
+    # heavy_light_rss_gb. Star runs, UI and Gherkin runs always get the machine to themselves (adapter_star.job_class).
+    heavy_light_slots: int = 1
+    heavy_free_mem_pct: float = 50.0
+    heavy_light_rss_gb: float = 12.0
+    # `swift test --parallel --num-workers N` for the big suites (StarCore, StarCpp, daemon): they used one core of 18 (sampled 2026-11-03)
+    heavy_test_workers: int = 8
     auto_self_update: bool = True  # switch the daemon to a new pinned runtime when origin/develop has newer pipeline/ code; the kill switch
+    self_update_drain_s: int = 600  # a pending self-update holds new claims at most this long; then it swaps, interrupting running stages (they resume by session id)
     nightly_start: str = "03:00"
     digest_weekday: int = 6  # Monday is 0
     digest_hour: int = 8
@@ -61,19 +72,25 @@ class Config(BaseModel):
     ci_blocking_wait_s: int = 4 * 3600
     # Workflows whose result a PR does not wait for. Gherkin's full matrix takes ~3 h and is mostly queueing for GitHub's few macOS runners,
     # so waiting for it capped landings at a few a day (2026-10-31). Any run of it on the PR is cancelled at once, to free those runners;
-    # the push to develop runs it, and the post-merge watch files a regression ticket if it goes red. What a PR runs instead is
+    # the nightly full run (gherkin_nightly.py) runs it, reruns its failures once and files the tickets. What a PR runs instead is
     # "Gherkin smoke" (gherkin-smoke.yml, the features of gherkin/smoke.json): it is deliberately NOT listed here (names match exactly),
     # so the judge waits for it and blocks on it like any other workflow. A ticket that names Gherkin features (`gherkin:` in its
     # Pipeline section, or the plan's gherkin_features_to_run) additionally has ship.feature_gate dispatch gherkin.yml on its own branch
     # with just those features, recognise the run by its display_title, and wait for it.
     ci_post_merge_workflows: tuple[str, ...] = ("Gherkin",)
     heavy_wait_report_s: float = 60.0
+    # A heavy job whose process group used under 1% of a core and wrote nothing to its log for this long is killed and reported
+    # as hung (0 turns it off). A wedged xctest sat 1h35m at 0% CPU on the only slot (2026-11-03).
+    heavy_idle_kill_s: float = 900.0
+    heavy_idle_grace_s: float = 10.0  # SIGTERM, then SIGKILL after this
+    heavy_idle_poll_s: float = 5.0
     api_port: int = 47231
     java_home: str = ""  # JDK 21 for star-desktop builds; empty: $JAVA_HOME, else the adapter's candidates
     remote: str = "https"  # "https" (the daemon, token from github.env or gh) or "origin" (tests, a local bare repo)
     ci_poll_s: float = 60.0
     ci_settle_s: float = 90.0
     max_auto_tickets: int = 2
+    gherkin_nightly_max_tickets: int = 6  # new tickets one Gherkin nightly may file (red before flaky); the rest wait for the next night
     max_open_tickets: int = 30  # open issues labelled `pipeline`: `ticket new` and `approve` refuse past this
     max_proposed: int = 10  # open issues labelled `pipe:proposed`: waiting on the owner
     poll_s: float = 60.0

@@ -1,0 +1,87 @@
+name: Already tested
+
+# Called as the first job (`tested`) of cli.yml, gherkin-smoke.yml, wgpu.yml and kotlin-client.yml. Its output `tested` is `true`
+# only on a push to develop that is the merge of a batch PR whose head commit has the same tree as the pushed commit and already
+# passed the calling workflow as a pull_request run. The caller then skips its heavy jobs: the same code was just tested, and
+# GitHub's free plan runs only 5 macOS jobs at once, which the next batch's PR run needs more than a repeat of this one.
+#
+# Everything else prints `false` (a pull request, a tag, workflow_dispatch, a direct push, a batch whose head tree differs because
+# develop moved before the merge, a PR run that is missing or not green, any API error), so the caller runs as it always did.
+#
+# pr-gate.yml does not call this: it keeps running on develop, it is the stop-the-line signal.
+
+on:
+  workflow_call:
+    outputs:
+      tested:
+        description: "'true' when a green pull_request run of the calling workflow already tested this exact tree"
+        value: ${{ jobs.check.outputs.tested }}
+
+jobs:
+  check:
+    name: Already tested?
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      tested: ${{ steps.check.outputs.tested }}
+    steps:
+      - name: Was this tree already tested by the batch PR?
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          # inside a reusable workflow `github.workflow` is the caller's name, which is the name of its pull_request runs
+          CALLER: ${{ github.workflow }}
+        run: |
+          set -uo pipefail
+
+          # one exit: print the reason, write the answer, stop. Any failure below ends here with `false`.
+          finish() {
+            echo "already-tested: $2 -> tested=$1"
+            echo "tested=$1" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          no() { finish false "$1"; }
+
+          [ "$EVENT" = push ] && [ "$REF" = refs/heads/develop ] || no "not a push to develop ($EVENT $REF)"
+
+          # the merged batch PR whose merge commit is the pushed commit
+          pulls=$(gh api "repos/$REPO/commits/$SHA/pulls" --paginate) || no "API error listing the PRs of $SHA"
+          pr=$(jq -c --arg sha "$SHA" '
+                [.[] | select(.merged_at != null
+                              and .merge_commit_sha == $sha
+                              and (.head.ref | startswith("pipe/batch-")))] | first // empty' <<<"$pulls") \
+            || no "could not read the PRs of $SHA"
+          [ -n "$pr" ] || no "$SHA is not the merge commit of a merged pipe/batch-* PR"
+          number=$(jq -r .number <<<"$pr")
+          branch=$(jq -r .head.ref <<<"$pr")
+          head=$(jq -r .head.sha <<<"$pr")
+          [ -n "$head" ] && [ "$head" != null ] || no "PR #$number has no head sha"
+
+          # same tree: nothing was merged in since the PR's last CI
+          tree=$(gh api "repos/$REPO/commits/$SHA" --jq .commit.tree.sha) || no "API error reading commit $SHA"
+          head_tree=$(gh api "repos/$REPO/commits/$head" --jq .commit.tree.sha) || no "API error reading commit $head"
+          [ -n "$tree" ] && [ "$tree" = "$head_tree" ] \
+            || no "PR #$number ($branch): pushed tree ${tree:-?} differs from head $head tree ${head_tree:-?}, develop moved before the merge"
+
+          # the newest pull_request run of the calling workflow on the PR's head commit must have succeeded
+          runs=$(gh api "repos/$REPO/actions/runs?head_sha=$head&event=pull_request&per_page=100" --paginate) \
+            || no "API error listing the runs of $head"
+          run=$(jq -rs --arg name "$CALLER" '
+                  [.[].workflow_runs[] | select(.name == $name)] | sort_by(.created_at) | reverse | first // empty
+                  | "\(.id) \(.conclusion)"' <<<"$runs") \
+            || no "could not read the runs of $head"
+          [ -n "$run" ] || no "PR #$number ($branch): no pull_request run of '$CALLER' on $head"
+          run_id=${run% *}
+          conclusion=${run#* }
+          [ "$conclusion" = success ] \
+            || no "PR #$number ($branch): the pull_request run $run_id of '$CALLER' on $head concluded '$conclusion'"
+
+          finish true "PR #$number ($branch) merged as $SHA: tree $tree equals head $head tree $head_tree, and '$CALLER' pull_request run $run_id succeeded"

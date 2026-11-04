@@ -11,11 +11,15 @@ class CleanMethodsTest {
         assertFalse(CleanMethod.CLEAN_AUTOMATIC.usesOutliers)
         assertTrue(CleanMethod.CLEAN_AUTOMATIC_TRUE.usesOutliers)
         assertTrue(CleanMethod.CLEAN_SELECTIVE.usesOutliers)
+        assertFalse(CleanMethod.CLEAN_DIRTY_SKY.usesOutliers)
+        assertFalse(CleanMethod.CLEAN_DIRTY_EARTH.usesOutliers)
     }
 
     /** Switching to a method with no outlier review leaves no tool selected, as macOS does. */
     @Test fun theToolIsResetWhenTheNewMethodHasNoUseForOne() {
         assertEquals(ToolType.NONE, toolAfterCleanMethodChange(ToolType.KEEP, CleanMethod.CLEAN_AUTOMATIC))
+        assertEquals(ToolType.NONE, toolAfterCleanMethodChange(ToolType.KEEP, CleanMethod.CLEAN_DIRTY_SKY))
+        assertEquals(ToolType.NONE, toolAfterCleanMethodChange(ToolType.KEEP, CleanMethod.CLEAN_DIRTY_EARTH))
     }
 
     @Test fun theToolSurvivesAChangeBetweenMethodsThatReviewOutliers() {

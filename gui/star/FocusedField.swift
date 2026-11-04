@@ -12,19 +12,11 @@ enum FocusedField: Hashable {
     case maxZoomLevel
     case cannyMinThreshold
     case cannyMaxThreshold
-    case maxConcurrentHorizons
-    case maxConcurrentKeypoints
-    case maxConcurrentHomographys
-    case maxConcurrentMerges
     case numberStaticNeighborFrames
     case frameStaticNeighborFrames
-    case frameAlignedNeighborFrames
-    case minAlignmentFrames
     case alignmentMaxKeypoints
     case alignmentBaseImageDilateSize
     case alignmentBaseImageThresholdValue
-    case alignmentNeighborDilateSize
-    case alignmentNeighborThresholdValue
     case alignmentGroundHorizonExtension
     case alignmentSkyHorizonExtension
     case homographySmothingEpsilon

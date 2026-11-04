@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import shutil
+import time
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +14,7 @@ from starpipe import selfupdate
 from starpipe.agent import StageOutcome, StageRequest
 from starpipe.config import Config
 from starpipe.daemon import Daemon, activity
+from starpipe.github import GitHubError
 from starpipe.tickets import lint, parse_pipeline
 
 from .fakes import GOOD_BODY, accepted, plan_args, sh
@@ -70,6 +74,36 @@ async def test_retry_and_answer_ask_for_a_catch_up(rig: Rig) -> None:
         rig.db.put("catch_up:7", None)
         assert (await client.post("/v1/tickets/7/retry", json={"stage": "review"}, headers=AUTH)).status == 200
         assert rig.db.get("catch_up:7") == "1", "retry: the same"
+    finally:
+        await client.close()
+
+
+async def test_retry_when_unblocked_records_instead_of_retrying(rig: Rig) -> None:
+    rig.gh.add_issue(7, "failed one")
+    rig.gh.add_issue(174, "first blocker")
+    rig.gh.add_issue(199, "second blocker")
+    rig.gh.deps[7] = [174, 199]
+    rig.engine.sync_issues()
+    rig.db.set_state(7, "failed", "CI still red after 2 fix cycles")
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/tickets/7/retry", json={"stage": "ci", "when_unblocked": True}, headers=AUTH)
+        assert r.status == 200 and "waiting for #174, #199" in (await r.json())["result"]
+        assert rig.state(7) == "failed" and rig.db.get("held_retry:7") == "ci"
+        shown = await (await client.get("/v1/tickets/7", headers=AUTH)).json()
+        assert shown["held_retry"] == "retry from ci when unblocked"
+        assert shown["activity"] == "failed · waiting for #174, #199 → retry from ci"
+        assert [r["kind"] for r in rig.db._all("SELECT kind FROM interventions")] == ["hold-retry"]  # pyright: ignore[reportPrivateUsage]
+
+        rig.db.set_state(174, "landed")  # a blocker landing is reflected at once
+        assert activity(rig.db, rig.db.ticket(7)) == "failed · waiting for #199 → retry from ci"  # type: ignore[arg-type]
+
+        rig.db.set_state(7, "developing")  # only a failed or cancelled ticket can hold a retry
+        r = await client.post("/v1/tickets/7/retry", json={"stage": "ci", "when_unblocked": True}, headers=AUTH)
+        assert r.status == 409
+        rig.db.set_state(7, "failed")
+        await client.post("/v1/tickets/7/cancel", json={}, headers=AUTH)
+        assert rig.db.get("held_retry:7") is None, "cancelling drops the hold"
     finally:
         await client.close()
 
@@ -592,6 +626,75 @@ async def test_a_passing_smoke_check_holds_new_work_and_swaps_only_when_idle(rig
     assert rig.db.get("self_update_pending") is None and rig.engine.claimable() is not None
 
 
+async def test_the_swap_does_not_prune(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    stray = selfupdate.runtime_root() / "runtime-stray"
+    stray.mkdir()
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    await pin.daemon.update_step(pin.plist, pin.sync, pin.check)
+    assert pin.exits == [0] and pin.current_sha() == target
+    assert selfupdate.link("previous") == selfupdate.runtime_dir(pin.base).resolve() and selfupdate.runtime_dir(pin.base).is_dir()
+    assert stray.is_dir(), "nothing is pruned in the swap, so a rollback still has its runtime"
+
+
+async def test_prune_runs_once_the_runtime_has_settled(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    assert pin.once() == "swapped"
+    stray = selfupdate.runtime_root() / "runtime-stray"
+    stray.mkdir()
+    await pin.daemon.update_step(pin.plist, pin.sync, pin.check)
+    assert stray.is_dir(), "inside the crash-loop window nothing is pruned"
+    (selfupdate.runtime_root() / "switched_at").write_text(str(time.time() - selfupdate.CRASH_WINDOW_S - 1))
+    await pin.daemon.update_step(pin.plist, pin.sync, pin.check)
+    assert not stray.exists(), "an unlinked runtime goes once the current one has settled"
+    assert pin.current_sha() == target and selfupdate.link("previous") == selfupdate.runtime_dir(pin.base).resolve()
+    assert selfupdate.runtime_dir(pin.base).is_dir() and pin.exits == []
+
+
+async def test_pending_update_swaps_after_the_drain_window_with_stages_running(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    rig.gh.add_issue(1, "running")
+    rig.gh.add_issue(2, "waiting")
+    rig.engine.sync_issues()
+    rig.db.begin_stage(1, "develop", 1, "sonnet")
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    drain = rig.engine.config.self_update_drain_s
+
+    assert pin.once() == "pending" and rig.db.get("self_update_pending_since") == str(rig.now)
+    rig.now += drain - 1
+    assert pin.once() == "pending" and pin.current_sha() == pin.base and rig.engine.claimable() is None, "inside the window"
+
+    rig.now += 2
+    assert pin.once() == "swapped", "past the window it swaps with the stage still running"
+    assert pin.current_sha() == target and len(rig.db.running_stages()) == 1
+    events = [e for e in rig.db.events_since() if e["kind"] == "self-update"]
+    assert events[0]["data"] == {"old": pin.base, "new": target, "interrupted": [1]}
+    assert rig.db.get("self_update_pending") is None and rig.db.get("self_update_pending_since") is None
+
+    pin.daemon.reconcile()  # the restarted process marks the stage interrupted; drive() resumes it by session id
+    assert rig.db.running_stages() == [] and rig.db.stages(1)[0]["outcome"] == "interrupted"
+
+
+async def test_self_update_still_waits_for_the_nightly(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    rig.db.begin_stage(1, "develop", 1, "sonnet")
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    assert pin.once() == "pending"
+    rig.now += rig.engine.config.self_update_drain_s + 1  # past the window, with a stage running
+    gate = asyncio.Event()
+
+    async def nightly() -> int:
+        await gate.wait()
+        return 0
+
+    pin.daemon.nightly_task = asyncio.create_task(nightly())
+    assert pin.once() is None and pin.current_sha() == pin.base, "a nightly is running: no swap even past the window"
+    gate.set()
+    await pin.daemon.nightly_task
+    assert pin.once() == "swapped" and pin.current_sha() == target
+
+
 async def test_a_pending_update_holds_the_next_model_stage(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
@@ -608,6 +711,24 @@ async def test_a_pending_update_holds_the_next_model_stage(rig: Rig) -> None:
     await rig.engine.drive(7)
     assert requests_when_released == [0], "no stage began while the update was pending"
     assert rig.db.stages(7)[0]["stage"] == "explore", "and it began once the hold cleared"
+
+
+async def test_swap_to_a_vanished_runtime_restages_instead_of_exiting(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    rig.db.begin_stage(1, "develop", 1, "sonnet")
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    assert pin.once() == "pending" and rig.db.get("self_update_pending") == target
+    shutil.rmtree(selfupdate.runtime_dir(target))  # pruned (or damaged) after it was staged
+    rig.db.end_stage(rig.db.running_stages()[0]["id"], "accepted")
+
+    await pin.daemon.update_step(pin.plist, pin.sync, pin.check)
+    assert pin.exits == [] and pin.current_sha() == pin.base, "no exit, and current still points at a runtime that runs"
+    assert rig.db.get("self_update_pending") is None and rig.db.get("self_update_failed") is None
+    assert len(pin.built) == 1, "nothing rebuilt yet"
+
+    await pin.daemon.update_step(pin.plist, pin.sync, pin.check)  # the next poll rebuilds it and swaps
+    assert len(pin.built) == 2 and pin.exits == [0] and pin.current_sha() == target
+    assert (selfupdate.runtime_dir(target) / ".complete").is_file()
 
 
 async def test_a_failing_smoke_check_keeps_the_running_version_and_is_not_retried(rig: Rig, tmp_path: Path) -> None:
@@ -733,7 +854,7 @@ def test_hard_exit_is_the_default_exit_and_ends_the_process_without_unwinding(mo
 
 
 def landing_daemon(rig: Rig, window: int = 120) -> Daemon:
-    return Daemon(rig.engine, Config(landing_mode="batch", batch_window_s=window, batch_max=5), token="tok")
+    return Daemon(rig.engine, Config(landing_mode="batch", batch_window_s=window), token="tok")
 
 
 def ready_tickets(rig: Rig, *numbers: int) -> None:
@@ -760,7 +881,7 @@ def test_snapshot_shows_the_active_batch_in_each_phase(rig: Rig) -> None:
         rig.db.batch_update(bid, state=phase)
         landing = d.snapshot()["landing"]
         assert landing["batch"] == {"number": bid, "phase": phase, "age_s": 90, "members": [1, 2],  # type: ignore[index]
-                                    "pr_number": None, "slow": False}
+                                    "pr_number": None, "ci": "running", "slow": False}
         assert d.status()["landing"]["batch"]["phase"] == phase  # type: ignore[index]
 
 
@@ -784,6 +905,23 @@ def test_ready_ticket_reads_waiting_for_the_next_batch_with_the_countdown(rig: R
     rig.now += 100
     assert activity_of(d, 1) == "ready · waiting for the next batch (starting)"
     assert d.snapshot()["landing"]["next_batch_in_s"] == 0  # type: ignore[index]
+
+
+def test_ready_activity_names_the_feature_gate(rig: Rig) -> None:
+    rig.gh.add_issue(1, "t1", f"{GOOD_BODY}\n## Pipeline\ngherkin: autoMovingTiff16, uiX\n")
+    ready_tickets(rig, 2)
+    rig.engine.sync_issues()
+    rig.engine._to_state(1, "ready")  # pyright: ignore[reportPrivateUsage]
+    d = landing_daemon(rig)
+    bid = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(bid, state="ci")  # a batch is in CI, but #1 is owed its feature run first
+    assert activity_of(d, 1) == "ready · proving Gherkin features (autoMovingTiff16, uiX)"
+    assert activity_of(d, 2) == f"ready · waiting for the next batch (batch {bid} is ci)", "no features: nothing to prove"
+    rig.db.put("gherkin_err:1", json.dumps({"sha": "abc", "error": "gh: Bad Gateway (HTTP 502)", "count": 2}))
+    assert activity_of(d, 1) == ("ready · proving Gherkin features (autoMovingTiff16, uiX) · "
+                                 "last poll failed: gh: Bad Gateway (HTTP 502)")
+    rig.db.put("gherkin_ok:1", "abc")
+    assert activity_of(d, 1) == f"ready · waiting for the next batch (batch {bid} is ci)", "proven: it waits on the train"
 
 
 def test_snapshot_remembers_the_last_abandoned_batch_for_an_hour(rig: Rig) -> None:
@@ -825,3 +963,259 @@ async def test_restart_finishes_an_escalation_it_cut_short(rig: Rig) -> None:
     Daemon(rig.engine, Config(), token="tok").reconcile()
     assert rig.state(7) == "needs-input"
     assert rig.db.open_question(7)["comment_id"] is not None  # type: ignore[index]
+
+
+async def test_hung_heavy_job_raises_an_alert(rig: Rig) -> None:
+    from starpipe.checks import ledger
+
+    def hung_runner(worktree: Path, base: str) -> list[ledger.Result]:
+        return [ledger.Result("test:daemon", "hung", "abc", 1.0,
+                              detail="hung: `swift test --package-path daemon` made no progress for 900s and was killed")]
+
+    rig.engine.check_runner = hung_runner
+    rig.gh.add_issue(7, "Tidy the docs")
+    rig.engine.sync_issues()
+    rig.agent.on("explore", explore_ok)
+
+    def develop(req: StageRequest) -> StageOutcome:
+        req.contract.run_checks({})
+        return StageOutcome("no-result")
+
+    rig.agent.on("develop", develop)
+    await rig.engine.drive(7)
+
+    assert "heavy-hung:7" in [a["key"] for a in rig.db.open_alerts()]
+    client, _ = await api(rig)
+    try:
+        status = await (await client.get("/v1/status", headers=AUTH)).json()
+    finally:
+        await client.close()
+    alert = next(a for a in status["alerts"] if a["key"] == "heavy-hung:7")
+    assert "#7" in alert["text"] and "swift test --package-path daemon" in alert["text"]
+    assert [t for t, _ in rig.pages].count("star pipeline: heavy-hung") == 1
+
+
+def propose(rig: Rig, n: int, title: str, by: str = "review agent", labels: tuple[str, ...] = ("pipe:proposed",)) -> None:
+    rig.gh.add_issue(n, title, body=f"{GOOD_BODY}\n<!-- starpipe:filed-by:{by} -->", labels=labels)
+
+
+def labels_of(rig: Rig, n: int) -> set[str]:
+    return {lab["name"] for lab in rig.gh.issues[n]["labels"]}
+
+
+async def test_snapshot_proposal_without_a_marker_has_author_and_no_by(rig: Rig) -> None:
+    rig.gh.add_issue(30, "By hand", body=GOOD_BODY, author="someone", labels=("pipe:proposed",))
+    d = Daemon(rig.engine, Config(), token="tok")
+    await d.poll_once()
+    assert d.snapshot()["proposals"] == [{"number": 30, "title": "By hand", "by": None, "author": "someone",
+                                          "created_at": "2026-11-01T10:00:00Z"}]
+
+
+async def test_snapshot_lists_proposals_from_the_last_poll(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    propose(rig, 22, "Rename a key", by="interactive")
+    rig.gh.add_issue(23, "Ordinary ticket")
+    d = Daemon(rig.engine, Config(), token="tok")
+    assert d.snapshot()["proposals"] == []  # nothing polled yet
+    await d.poll_once()
+    expected = [{"number": 21, "title": "Show the retry budget", "by": "review agent",
+                 "author": "brianm998", "created_at": "2026-11-01T10:00:00Z"},
+                {"number": 22, "title": "Rename a key", "by": "interactive",
+                 "author": "brianm998", "created_at": "2026-11-01T10:00:00Z"}]
+    assert d.snapshot()["proposals"] == expected
+
+    def boom(path: str) -> list[dict[str, Any]]:
+        raise AssertionError(f"snapshot asked GitHub for {path}")
+    rig.gh.paged = boom  # type: ignore[method-assign]
+    assert d.snapshot()["proposals"] == expected  # served from the cache
+    del rig.gh.paged  # type: ignore[attr-defined]
+    real = rig.gh.paged
+
+    def down(path: str) -> list[dict[str, Any]]:
+        raise GitHubError("HTTP 502")
+    rig.gh.paged = down  # type: ignore[method-assign]
+    await d.poll_once()  # a failing refresh keeps the last list
+    assert d.last_error.startswith("github:") and d.snapshot()["proposals"] == expected
+    rig.gh.paged = real  # type: ignore[method-assign]
+
+
+async def test_approve_endpoint_labels_the_issue_and_drops_it_from_the_list(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    propose(rig, 22, "Rename a key")
+    client, d = await api(rig)
+    try:
+        await d.poll_once()
+        r = await client.post("/v1/proposals/21/approve", json={"priority": "p1"}, headers=AUTH)
+        assert r.status == 200 and (await r.json()) == {"result": "approved"}
+        assert labels_of(rig, 21) == {"pipeline", "p1"}
+        assert [p["number"] for p in d.snapshot()["proposals"]] == [22]  # type: ignore[union-attr, index]
+        r = await client.post("/v1/proposals/22/approve", headers=AUTH)  # priority is optional
+        assert r.status == 200 and labels_of(rig, 22) == {"pipeline"}
+        assert d.snapshot()["proposals"] == []
+        bad = await client.post("/v1/proposals/21/approve", json={"priority": "p9"}, headers=AUTH)
+        assert bad.status == 400
+    finally:
+        await client.close()
+
+
+async def test_approve_endpoint_refuses_a_full_queue_and_a_non_proposal(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    rig.gh.add_issue(23, "Ordinary ticket", labels=("pipeline",))
+    rig.gh.add_issue(24, "Unlabelled", labels=())
+    client = TestClient(TestServer(Daemon(rig.engine, Config(max_open_tickets=1), token="tok").app()))
+    await client.start_server()
+    try:
+        full = await client.post("/v1/proposals/21/approve", headers=AUTH)
+        assert full.status == 409 and "already open" in await full.text()
+        assert labels_of(rig, 21) == {"pipe:proposed"}  # untouched
+        for n in (23, 24, 999):
+            r = await client.post(f"/v1/proposals/{n}/approve", headers=AUTH)
+            assert 400 <= r.status < 500 and "not a proposal" in await r.text(), n
+        assert labels_of(rig, 24) == set()  # an arbitrary issue is never labelled `pipeline`
+    finally:
+        await client.close()
+
+
+async def test_reject_endpoint_comments_closes_and_drops_it(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    propose(rig, 22, "Rename a key")
+    rig.gh.add_issue(23, "Ordinary ticket")
+    client, d = await api(rig)
+    try:
+        await d.poll_once()
+        r = await client.post("/v1/proposals/21/reject", json={"reason": "not now"}, headers=AUTH)
+        assert r.status == 200 and (await r.json()) == {"result": "rejected"}
+        assert rig.gh.issues[21]["state"] == "closed" and "pipe:proposed" not in labels_of(rig, 21)
+        assert [c["body"] for c in rig.gh.comment_list[21]] == ["Not taking this up: not now"]
+        assert [p["number"] for p in d.snapshot()["proposals"]] == [22]  # type: ignore[union-attr, index]
+        r = await client.post("/v1/proposals/22/reject", headers=AUTH)  # the reason is optional
+        assert r.status == 200 and [c["body"] for c in rig.gh.comment_list[22]] == ["Not taking this up."]
+        assert (await client.post("/v1/proposals/23/reject", headers=AUTH)).status == 409
+        assert rig.gh.issues[23]["state"] == "open"
+        assert (await client.post("/v1/proposals/22/reject", json={"reason": 5}, headers=AUTH)).status == 400
+    finally:
+        await client.close()
+
+
+async def test_land_all_marks_every_ticket_in_the_landing_queue(rig: Rig) -> None:
+    for n, state in ((7, "ready"), (8, "ci"), (9, "developing")):
+        rig.gh.add_issue(n, "t")
+        rig.engine.sync_issues()
+        rig.db.set_state(n, state)
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/land-all", headers=AUTH)
+        assert r.status == 200 and (await r.json())["tickets"] == [7, 8]
+        assert rig.db.get("land_now:7") == "1" and rig.db.get("land_now:8") == "1" and rig.db.get("land_now:9") is None
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_returns_the_issue(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget", labels=("pipe:proposed", "bug"))
+    rig.gh.add_issue(22, "By hand", body=GOOD_BODY, author="someone", labels=("pipe:proposed",))
+    client, _ = await api(rig)
+    try:
+        r = await client.get("/v1/proposals/21", headers=AUTH)
+        assert r.status == 200
+        d = await r.json()
+        assert (d["number"], d["title"], d["author"]) == (21, "Show the retry budget", "brianm998")
+        assert (d["created_at"], d["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-02T10:00:00Z")
+        assert d["labels"] == ["bug"] and d["by"] == "review agent"
+        assert d["body"] == rig.gh.issues[21]["body"]
+        by_hand = await (await client.get("/v1/proposals/22", headers=AUTH)).json()
+        assert by_hand["by"] is None and by_hand["author"] == "someone"
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_includes_the_latest_comments(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    for i in range(25):
+        rig.gh.say(21, f"u{i}", "x" * 5000 if i == 24 else f"c{i}", created_at=f"2026-11-02T12:{i:02d}:00Z")
+    client, _ = await api(rig)
+    try:
+        d = await (await client.get("/v1/proposals/21", headers=AUTH)).json()
+        assert d["comment_count"] == 25 and len(d["comments"]) == 20
+        assert d["comments"][0] == {"author": "u5", "created_at": "2026-11-02T12:05:00Z", "body": "c5"}
+        last = d["comments"][-1]["body"]
+        assert last.startswith("x" * 4000) and len(last) < 4100 and last != "x" * 4000 and "truncated" in last
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_lists_open_blockers(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    rig.gh.add_issue(30, "Still open")
+    rig.gh.add_issue(31, "Done already")
+    rig.gh.close_issue(31)
+    rig.gh.block(21, 30)
+    rig.gh.block(21, 31)
+    client, _ = await api(rig)
+    try:
+        d = await (await client.get("/v1/proposals/21", headers=AUTH)).json()
+        assert d["blockers"] == [{"number": 30, "title": "Still open"}]
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_says_how_ready_the_body_is(rig: Rig) -> None:
+    planned = GOOD_BODY + "\n## Pipeline\neffort_develop: medium · gherkin: no\n\n## Plan\nsummary: do the whole thing\nparity: neither\nlocalization: no\n- approach: edit it\n"
+    rig.gh.add_issue(21, "Planned", body=planned, labels=("pipe:proposed",))
+    rig.gh.add_issue(22, "Bad", body="just words", labels=("pipe:proposed",))
+    rig.gh.add_issue(23, "Queued", labels=("pipeline",))
+    d = Daemon(rig.engine, Config(max_open_tickets=7), token="tok")
+    client = TestClient(TestServer(d.app()))
+    await client.start_server()
+    try:
+        good = (await (await client.get("/v1/proposals/21", headers=AUTH)).json())["readiness"]
+        assert good["lint_ok"] is True and good["errors"] == [] and good["has_plan"] is True
+        assert good["pipeline"] == {"effort_develop": "medium", "gherkin": "no"}
+        assert good["queue"] == {"open": 1, "max": 7}
+        bad = (await (await client.get("/v1/proposals/22", headers=AUTH)).json())["readiness"]
+        assert bad["lint_ok"] is False and bad["errors"] and bad["has_plan"] is False and bad["pipeline"] == {}
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_refuses_non_proposals_and_reports_github_errors(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    rig.gh.add_issue(23, "Ordinary ticket", labels=("pipeline",))
+    rig.gh.add_issue(24, "Unlabelled", labels=())
+    client, _ = await api(rig)
+    try:
+        for n in (23, 24, 999):
+            r = await client.get(f"/v1/proposals/{n}", headers=AUTH)
+            assert r.status == 404 and "not a proposal" in await r.text(), n
+        assert (await client.get("/v1/proposals/abc", headers=AUTH)).status == 400
+
+        def down(path: str) -> list[dict[str, Any]]:
+            raise GitHubError("HTTP 502 from GitHub")
+        rig.gh.paged = down  # type: ignore[method-assign]
+        r = await client.get("/v1/proposals/21", headers=AUTH)
+        assert r.status == 502 and "HTTP 502 from GitHub" in await r.text()
+    finally:
+        await client.close()
+
+
+def test_train_info_lists_every_active_batch(rig: Rig) -> None:
+    from starpipe.cli import landing_lines
+
+    ready_tickets(rig, 1, 2, 3)
+    d = landing_daemon(rig)
+    first = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(first, state="ci", pr_number=11)
+    rig.db.batch_add(first, 1, 0)
+    rig.now += 60
+    second = rig.db.batch_create("0" * 40)
+    rig.db.batch_add(second, 2, 0)  # still building
+    rig.now += 30
+    expected = [{"number": first, "phase": "ci", "age_s": 90, "members": [1], "pr_number": 11, "ci": "running", "slow": False},
+                {"number": second, "phase": "building", "age_s": 30, "members": [2], "pr_number": None, "ci": "running", "slow": False}]
+    for landing in (d.snapshot()["landing"], d.status()["landing"]):
+        assert landing["batches"] == expected  # type: ignore[index]
+        assert landing["batch"] == expected[0], "`batch` stays the oldest, so a client that shows one keeps working"  # type: ignore[index]
+        lines = landing_lines(landing)  # type: ignore[arg-type]
+        assert [line.split(":")[0] for line in lines] == [f"batch {first}", f"batch {second}"]
+    assert activity_of(d, 3) == f"ready · waiting for the next batch (batch {first} is ci, batch {second} is building)"
+    assert activity_of(d, 2) == f"ready · in batch {second} (building)"

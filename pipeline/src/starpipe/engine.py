@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any, cast
 
 from . import gitutil, guards, landing, load, negctl, ship, tickets, trust, worktrees
-from .agent import READ_ONLY_STAGES, AgentRunner, StageOutcome, StageRequest
+from .agent import READ_ONLY_STAGES, STAGE_TOOLS, AgentRunner, StageOutcome, StageRequest
 from .announce import Announcer, Kind, SilentAnnouncer
-from .checks import impact, ledger
+from .checks import baseline, impact, ledger
 from .config import Config, home
 from .contracts import CheckRunner, Contract
 from .db import ACTIVE_STATES, Database, Ticket
@@ -33,6 +33,7 @@ STAGE_STATE = {"explore": "exploring", "develop": "developing", "fix": "verifyin
                "ci-fix": "ci", "conflict": "landing"}
 CATCH_UP_STATES = frozenset({"exploring", "developing", "verifying", "review"})  # where a restarted ticket takes in develop first
 RETRY_STATE = {**STAGE_STATE, "publish": "ready", "ci": "ci", "land": "landing"}  # what `starpipe retry <n> <stage>` re-enters
+HOLDABLE_STATES = ("failed", "cancelled")  # where `retry --when-unblocked` may park a retry
 LANDING_STAGES = frozenset({"conflict", "ci-fix"})  # stages a ticket in the landing train waits on: they outrank new work for an LLM slot
 MAX_FIX_CYCLES, MAX_REVIEW_ROUNDS, MAX_CRASH_RESUMES = 2, 2, 3
 PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
@@ -43,6 +44,24 @@ Sleep = Callable[[float], Awaitable[None]]
 
 def prompt_text(name: str) -> str:
     return (PROMPTS / f"{name}.md").read_text()
+
+
+def contract_tool(stage: str) -> str:
+    """The tool a stage must finish by calling: its `submit_*` one."""
+    return next(name for name in STAGE_TOOLS[stage] if name.startswith("submit_"))
+
+
+def resume_note(stage: str) -> str:
+    return (f"The daemon restarted and this session was resumed. Your last tool call may have been cut off, and any "
+            f"acceptance you had earlier was not kept. Do not start over and do not treat the ticket as already done: "
+            f"re-check the tree (git status, git log, the diff against the base), redo whatever is missing, and finish "
+            f"by calling `{contract_tool(stage)}`.")
+
+
+def nudge_note(stage: str) -> str:
+    return (f"Your last turn ended without an accepted `{contract_tool(stage)}` call, so the stage has not finished. "
+            f"Check what is left and finish by calling `{contract_tool(stage)}`. If it reports a problem, fix that and "
+            f"call it again.")
 
 
 @dataclass
@@ -67,6 +86,7 @@ class Engine:
     sleep: Sleep = asyncio.sleep
     negative_control: Callable[[Path, str, list[str]], list[negctl.Control]] = negctl.run
     shim: str = ""
+    baseline_runner: baseline.BaselineRunner = baseline.result_at_base
     parked: set[int] = field(default_factory=lambda: set[int]())
     cpu: Callable[[], float] = lambda: 0.0  # the rolling CPU average; the daemon injects its meter
     llm_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-start is one step
@@ -106,6 +126,39 @@ class Engine:
                 self.db.intervention(t.number, "cancel", t.state)
         for t in self.db.tickets(("needs-input",)):
             self._collect_answer(t)
+
+    def refresh_blockers(self, n: int) -> None:
+        """Re-read a ticket's blocked-by links from GitHub now (sync_issues skips an issue whose updated_at did not move)."""
+        self.issue_memo.pop(n, None)
+        try:
+            self.db.set_blocked_by(n, self.gh.blocked_by(n))
+        except GitHubError:
+            pass  # the stored blockers stand
+
+    def retry_ticket(self, n: int, stage: str) -> None:
+        """What `starpipe retry <n> <stage>` does, for the owner's request and for a held one alike."""
+        self.db.put(f"held_retry:{n}", None)
+        self.db.intervention(n, "retry", stage)
+        self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
+        self.parked.discard(n)
+        if RETRY_STATE[stage] in CATCH_UP_STATES:
+            self.db.put(f"catch_up:{n}", "1")  # drive merges develop in before the stage resumes
+        self._to_state(n, RETRY_STATE[stage])
+
+    def release_held_retries(self) -> None:
+        """Retry the failed tickets whose `retry --when-unblocked` has nothing left to wait for. Each fires once."""
+        for n, stage in self.db.held_retries():
+            t = self.db.ticket(n)
+            if t is None or t.state not in HOLDABLE_STATES or stage not in RETRY_STATE:
+                self.db.put(f"held_retry:{n}", None)  # the owner retried or cancelled it meanwhile: the record is stale
+                continue
+            if self.db.open_blockers(n):
+                continue
+            self.refresh_blockers(n)  # a link added since the last sync must count before this fires
+            if self.db.open_blockers(n):
+                continue
+            self.retry_ticket(n, stage)  # drops the record first
+            log.info("#%d: blockers landed, retrying from %s", n, stage)
 
     def _collect_answer(self, t: Ticket) -> None:
         q = self.db.open_question(t.number)
@@ -171,9 +224,23 @@ class Engine:
         sessions, cpu_limit = self.limits()
         return load.room(self.llm_active(), self.cpu(), sessions + extra, cpu_limit)
 
+    def update_hold(self) -> dict[str, Any] | None:
+        """The self-update holding new work, while its drain window is open: {sha, left_s, waiting_on}; None otherwise.
+
+        The window runs from `self_update_pending_since` (missing counts as just started). Once it has passed the daemon swaps
+        regardless of running stages, so the hold ends here too."""
+        sha = self.db.get("self_update_pending")
+        if not sha:
+            return None
+        since = self.db.get("self_update_pending_since")
+        left = self.config.self_update_drain_s - (self.clock() - float(since)) if since else float(self.config.self_update_drain_s)
+        if left <= 0:
+            return None
+        return {"sha": sha, "left_s": left, "waiting_on": [s["ticket"] for s in self.db.running_stages()]}
+
     def claimable(self) -> Ticket | None:
-        if self.db.get("pause") in ("all", "claims") or self.db.get("self_update_pending"):
-            return None  # the second is the daemon waiting to swap to new code: nothing new starts, running stages finish
+        if self.db.get("pause") in ("all", "claims") or self.update_hold():
+            return None  # the second is the daemon waiting to swap to new code: nothing new starts for at most the drain window
         if self.landing_waiting:
             return None  # a ticket in the landing train needs the next LLM slot
         if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
@@ -236,7 +303,7 @@ class Engine:
         self.db.put("usage_pause_until", None)
 
     async def _wait_for_update_hold(self) -> None:
-        while self.db.get("self_update_pending"):
+        while self.update_hold():
             await self.sleep(5)
 
     def _fence(self, t: Ticket, stage: str) -> guards.Fence:
@@ -306,7 +373,7 @@ class Engine:
                           allow_resolve: bool = True, as_landing: bool | None = None) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
         contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db, self.gh, self.check_runner,
-                            owner_filed=self._owner_filed(t))
+                            self.notifier, owner_filed=self._owner_filed(t), baseline_runner=self.baseline_runner)
         resume = None if fresh else self._last_session(t, stage)
         note = self.db.get(f"catch_up_note:{t.number}")
         if note:  # develop was merged into the branch while the ticket was stopped: the resumed session did not make those commits
@@ -316,14 +383,28 @@ class Engine:
         if pending:
             prompt = f"The owner's answer to your question:\n\n{pending['answer']}\n\nContinue the stage.\n\n{prompt}"
             self.db.put(f"delivered:{pending['id']}", "1")
+        restarted = bool(resume) and (self.db.stages(t.number, stage) or [{}])[-1].get("outcome") == "interrupted"
+        opening = ""  # what the first request says when it resumes after a restart, in place of the ticket prompt
+        if restarted:
+            opening = resume_note(stage)
+            if note:
+                opening = f"{note}\n\n{opening}"
+            if pending:
+                opening = f"The owner's answer to your question:\n\n{pending['answer']}\n\nContinue the stage.\n\n{opening}"
         attempt, crashes = 1, 0
         summary = ""
+        nudge: str | None = None  # set to send the nudge in place of the prompt
+        nudged = False
         while attempt <= 3:
             await self._wait_for_usage()
             await self._wait_for_update_hold()
             model, effort = self._stage_choice(t, stage, attempt)
             stage_id = await self._begin_when_room(t, stage, attempt, model, landing=as_landing)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
+            if nudge:
+                body, nudge = nudge, None
+            elif restarted:
+                body, restarted = opening, False
             req = StageRequest(t.number, stage, attempt, body,
                                prompt_text("_preamble") + "\n\n" + prompt_text(stage.replace("-", "_")), model,
                                effort, BUDGET_S[stage], contract, self._fence(t, stage), resume,
@@ -353,7 +434,11 @@ class Engine:
                 resume = known or resume
                 continue
             crashes = 0
+            if out.status == "no-result" and out.session_id and not nudged:
+                resume, nudge, nudged = out.session_id, nudge_note(stage), True
+                continue  # one nudge in the same session before the attempt counts
             resume = known if out.status == "timeout" else None
+            nudged = False
             attempt += 1
         return self.park(t, f"{stage}: no accepted result after 3 attempts. {summary}"), contract
 
@@ -514,15 +599,32 @@ class Engine:
             result, _ = await self.model_stage(t, "conflict", prompt, fresh=True, as_landing=False)  # the ticket is not landing: no priority
             if not result.ok:
                 return False
-        dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
-        if dropped:
-            shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
-            self.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
+        if not await self.audit_conflict(t, wt, mb, base, head, as_landing=False):
             return False
         self.db.put(f"gherkin_ok:{t.number}", None)  # the head changed: an old feature run proves nothing about it
         self.db.put(f"catch_up_note:{t.number}", f"{base} was merged into this branch while the ticket was stopped: {count} commit(s) "
                                                 "you did not make are now in the tree. Re-read what you rely on before continuing.")
         self.db.event("caught-up", t.number, commits=count, conflicts=len(conflicted))
+        return True
+
+    async def audit_conflict(self, t: Ticket, wt: Path, mb: str, base: str, head: str, *, as_landing: bool | None = None) -> bool:
+        """The dropped-lines audit after a merge of develop. Lines found missing go back to the conflict stage once, listed, in a fresh
+        session; the audit then runs again. Parks (naming what is still missing) and returns False only if lines are still dropped."""
+        dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
+        if dropped:
+            listing = "\n".join(f"- {d.file}: {d.line.strip()[:200]}" for d in dropped[:30])
+            prompt = (f"{self._ticket_text(t)}\n\nThe merge of {base} into this branch is already committed, but the audit found "
+                      f"{len(dropped)} line(s) that {base} added and the branch no longer has:\n{listing}\n\n"
+                      "Do not redo the merge: commit on top of the current HEAD. Restore each of these lines, or remove it only where this "
+                      "ticket's own change replaces it. A line merely reworded or moved is fine only if its content is still there.")
+            result, _ = await self.model_stage(t, "conflict", prompt, fresh=True, as_landing=as_landing)
+            if not result.ok:
+                return False
+            dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
+        if dropped:
+            shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
+            self.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
+            return False
         return True
 
     def _prepare_catch_up(self, number: int, wt: Path, base: str) -> tuple[str, str, list[str], int] | None:
@@ -634,6 +736,13 @@ class Engine:
         self._to_state(t.number, "review")
         return True
 
+    def _known_red(self, t: Ticket, sha: str, wt: Path, r: ledger.Result) -> bool:
+        """A red test check whose failing tests develop shares is not this change's (checks/baseline.py)."""
+        found = baseline.known_red(wt, self.base_ref, r, self.baseline_runner, self.notifier)
+        if found:
+            baseline.note(self.db, t.number, sha, found)
+        return found is not None
+
     def _run_verification(self, t: Ticket, wt: Path) -> str:
         """The daemon's own run of T0+T1 at HEAD and the negative control. Empty string means green."""
         sha = gitutil.head_sha(wt)
@@ -643,7 +752,8 @@ class Engine:
         for r in results:
             self.db.record_check(t.number, sha, r.check, r.status,
                                  {"executed": r.executed, "failed": r.failed, "skipped": r.skipped}, r.log)
-        red = [r for r in results if not r.green]
+        self.notifier.hung_checks(t.number, results)
+        red = [r for r in results if not r.green and not self._known_red(t, sha, wt, r)]
         if red:
             return "\n".join(f"{r.status.upper()} {r.check}: {r.detail} (log {r.log})" for r in red)
         plan = t.plan or {}
