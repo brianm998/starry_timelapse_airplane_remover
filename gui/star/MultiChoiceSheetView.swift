@@ -56,7 +56,7 @@ struct MultiChoiceSheetView: View {
                         }
 
                     case .allAfter:
-                        let numFrames = frames.count - currentIndex + 1
+                        let numFrames = frames.count - currentIndex
                         switch multiChoicePaintType {
                         case .remove:
                             Text(localized("ui.overlap.paint.after", numFrames, currentIndex))
