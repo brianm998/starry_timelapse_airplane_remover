@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -685,6 +686,24 @@ async def test_a_pending_update_holds_the_next_model_stage(rig: Rig) -> None:
     assert rig.db.stages(7)[0]["stage"] == "explore", "and it began once the hold cleared"
 
 
+async def test_swap_to_a_vanished_runtime_restages_instead_of_exiting(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    rig.db.begin_stage(1, "develop", 1, "sonnet")
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    assert pin.once() == "pending" and rig.db.get("self_update_pending") == target
+    shutil.rmtree(selfupdate.runtime_dir(target))  # pruned (or damaged) after it was staged
+    rig.db.end_stage(rig.db.running_stages()[0]["id"], "accepted")
+
+    await pin.daemon.update_step(pin.plist, pin.sync, pin.check)
+    assert pin.exits == [] and pin.current_sha() == pin.base, "no exit, and current still points at a runtime that runs"
+    assert rig.db.get("self_update_pending") is None and rig.db.get("self_update_failed") is None
+    assert len(pin.built) == 1, "nothing rebuilt yet"
+
+    await pin.daemon.update_step(pin.plist, pin.sync, pin.check)  # the next poll rebuilds it and swaps
+    assert len(pin.built) == 2 and pin.exits == [0] and pin.current_sha() == target
+    assert (selfupdate.runtime_dir(target) / ".complete").is_file()
+
+
 async def test_a_failing_smoke_check_keeps_the_running_version_and_is_not_retried(rig: Rig, tmp_path: Path) -> None:
     pin = Pinned(rig, tmp_path)
     target = commit_to_origin(pin.repo, "pipeline/src/new.py", "import nope\n")
@@ -1053,3 +1072,26 @@ async def test_land_all_marks_every_ticket_in_the_landing_queue(rig: Rig) -> Non
         assert rig.db.get("land_now:7") == "1" and rig.db.get("land_now:8") == "1" and rig.db.get("land_now:9") is None
     finally:
         await client.close()
+
+
+def test_train_info_lists_every_active_batch(rig: Rig) -> None:
+    from starpipe.cli import landing_lines
+
+    ready_tickets(rig, 1, 2, 3)
+    d = landing_daemon(rig)
+    first = rig.db.batch_create("0" * 40)
+    rig.db.batch_update(first, state="ci", pr_number=11)
+    rig.db.batch_add(first, 1, 0)
+    rig.now += 60
+    second = rig.db.batch_create("0" * 40)
+    rig.db.batch_add(second, 2, 0)  # still building
+    rig.now += 30
+    expected = [{"number": first, "phase": "ci", "age_s": 90, "members": [1], "pr_number": 11, "slow": False},
+                {"number": second, "phase": "building", "age_s": 30, "members": [2], "pr_number": None, "slow": False}]
+    for landing in (d.snapshot()["landing"], d.status()["landing"]):
+        assert landing["batches"] == expected  # type: ignore[index]
+        assert landing["batch"] == expected[0], "`batch` stays the oldest, so a client that shows one keeps working"  # type: ignore[index]
+        lines = landing_lines(landing)  # type: ignore[arg-type]
+        assert [line.split(":")[0] for line in lines] == [f"batch {first}", f"batch {second}"]
+    assert activity_of(d, 3) == f"ready · waiting for the next batch (batch {first} is ci, batch {second} is building)"
+    assert activity_of(d, 2) == f"ready · in batch {second} (building)"
