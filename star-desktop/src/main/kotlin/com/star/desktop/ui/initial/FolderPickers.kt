@@ -53,7 +53,7 @@ internal fun kdialogCommand(title: String, start: File?): List<String> =
 /** The PowerShell invocation of `folder-picker.ps1`; the script travels as `-EncodedCommand` (base64 of UTF-16LE). */
 internal fun powershellCommand(script: String): List<String> =
     listOf(
-        "powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-ExecutionPolicy", "Bypass",
+        "powershell.exe", "-NoProfile", "-NonInteractive", "-STA",
         "-EncodedCommand", Base64.getEncoder().encodeToString(script.toByteArray(Charsets.UTF_16LE)),
     )
 
