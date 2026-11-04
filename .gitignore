@@ -51,3 +51,4 @@ small_horizon_test_data
 
 # wgpu-native release artifacts: fetched by wgpu/fetch.sh, never committed
 /wgpu/*/
+.heap-hunt-scratch/
