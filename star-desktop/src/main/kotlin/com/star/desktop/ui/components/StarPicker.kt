@@ -91,6 +91,8 @@ fun <T> VerticalStarPicker(
     label: (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
+    /** Whether one option can be chosen (a switched-off one is greyed and does nothing). */
+    optionEnabled: (T) -> Boolean = { true },
 ) {
     Column(
         modifier.clip(StarShapes.picker).background(StarColors.pickerTrack).padding(2.dp),
@@ -98,12 +100,14 @@ fun <T> VerticalStarPicker(
     ) {
         options.forEach { opt ->
             val sel = opt == selected
+            val usable = optionEnabled(opt)
             Box(
                 Modifier
                     .fillMaxWidth()
                     .clip(StarShapes.picker)
                     .background(if (sel) StarColors.white else Color.Transparent)
-                    .clickable { onSelect(opt) }
+                    .clickable(enabled = usable) { onSelect(opt) }
+                    .alpha(if (usable) 1f else 0.4f)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
                 Text(label(opt), color = if (sel) Color.Black else STAR_PICKER_DEFAULT_UNSELECTED_TEXT, style = StarType.body)
