@@ -179,6 +179,7 @@ struct UserPreferencesEditingView: View {
                         .foregroundColor(.gray)
                 }
                 .buttonStyle(PlainButtonStyle())
+                .accessibilityIdentifier("preferences.close")
             }
             .padding()
             .background(Color(red: 0.15, green: 0.15, blue: 0.15))
