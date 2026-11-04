@@ -784,7 +784,7 @@ async def test_restart_resumes_both_batches(rig: Rig) -> None:
     ready_ticket(rig, 1, "f1.md", "1\n")
     rig.gh.ci_hook = lambda sha: PENDING
     real_sleep = rig.engine.sleep
-    gate = hold_polls(rig)
+    hold_polls(rig)
     first = train_of(rig)
     await first.step()
     ready_ticket(rig, 2, "f2.md", "2\n")
