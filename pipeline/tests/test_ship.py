@@ -519,9 +519,9 @@ def test_auto_run_tickets_are_capped(rig: Rig) -> None:
 
 def test_one_red_run_of_a_non_gate_job_on_develop_files_nothing_until_a_second_run_agrees(rig: Rig) -> None:
     rig.gh.develop_sha = "d1"
-    rig.gh.develop_ci = [("gherkin", "desktop", "completed", "success")]
+    rig.gh.develop_ci = [("cli", "desktop", "completed", "success")]
     ship.watch_develop(rig.engine)
-    rig.gh.develop_ci = [("gherkin", "desktop", "completed", "failure")]
+    rig.gh.develop_ci = [("cli", "desktop", "completed", "failure")]
     for sha in ("d2", "d2", "d2"):  # the same red run, polled again and again
         rig.gh.develop_sha = sha
         ship.watch_develop(rig.engine)
@@ -529,7 +529,7 @@ def test_one_red_run_of_a_non_gate_job_on_develop_files_nothing_until_a_second_r
     rig.gh.develop_sha = "d3"
     ship.watch_develop(rig.engine)
     (issue,) = rig.gh.issues.values()
-    assert issue["title"] == "regression on develop: gherkin/desktop"
+    assert issue["title"] == "regression on develop: cli/desktop"
     rig.gh.develop_sha = "d4"
     ship.watch_develop(rig.engine)
     assert len(rig.gh.issues) == 1, "it is filed once, not on every red run"
@@ -537,13 +537,26 @@ def test_one_red_run_of_a_non_gate_job_on_develop_files_nothing_until_a_second_r
 
 def test_a_job_that_goes_green_again_was_a_flake_and_resets_the_wait(rig: Rig) -> None:
     rig.gh.develop_sha = "d1"
-    rig.gh.develop_ci = [("gherkin", "desktop", "completed", "success")]
+    rig.gh.develop_ci = [("cli", "desktop", "completed", "success")]
     ship.watch_develop(rig.engine)
     for sha, result in (("d2", "failure"), ("d3", "success"), ("d4", "failure")):
         rig.gh.develop_sha = sha
-        rig.gh.develop_ci = [("gherkin", "desktop", "completed", result)]
+        rig.gh.develop_ci = [("cli", "desktop", "completed", result)]
         ship.watch_develop(rig.engine)
     assert rig.gh.issues == {}, "red, green, red: never two reds in a row"
+
+
+def test_a_gherkin_job_going_red_files_no_regression_ticket_but_updates_the_baseline(rig: Rig) -> None:
+    rig.gh.develop_sha = "d1"
+    rig.gh.develop_ci = [("Gherkin", "desktop (ubuntu-24.04) · a", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    rig.gh.develop_ci = [("Gherkin", "desktop (ubuntu-24.04) · a", "completed", "failure")]
+    for sha in ("d2", "d3", "d4"):  # red at several different shas: the nightly files Gherkin's tickets, not this
+        rig.gh.develop_sha = sha
+        ship.watch_develop(rig.engine)
+    assert rig.gh.issues == {}
+    assert rig.db.baseline("Gherkin", "desktop (ubuntu-24.04) · a") == "failure"
+    assert rig.db.get("red_pending:Gherkin/desktop (ubuntu-24.04) · a") is None
 
 
 def test_a_red_gate_still_stops_the_line_on_the_first_red_run(rig: Rig) -> None:
