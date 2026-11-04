@@ -157,6 +157,25 @@ def group_of(t: Ticket, waiting_for_lock: bool, now: float, updated: float) -> s
     return None
 
 
+def question_view(row: dict[str, Any] | None) -> dict[str, object] | None:
+    """The open question as the monitor shows it: its text, and the why/options/recommendation parsed out of the stored payload.
+
+    The payload comes from the model, so anything missing or malformed gives empty fields; each option is made a string and blanks are dropped."""
+    if row is None:
+        return None
+    try:
+        payload = json.loads(row.get("payload") or "{}")
+    except (TypeError, ValueError):
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    raw = payload.get("options")
+    options = [o for o in (str(x).strip() for x in raw if x is not None) if o] if isinstance(raw, list) else []
+    why, recommendation = payload.get("why"), payload.get("recommendation")
+    return {"text": row["text"], "why": str(why).strip() if why else "", "options": options,
+            "recommendation": str(recommendation).strip() if recommendation else ""}
+
+
 class Daemon:
     def __init__(self, engine: Engine, config: Config, token: str | None = None) -> None:
         self.engine, self.config, self.db = engine, config, engine.db
@@ -681,7 +700,7 @@ class Daemon:
         return {"number": t.number, "title": t.title, "state": t.state, "priority": t.priority, "branch": t.branch,
                 "park_reason": t.park_reason, "plan": t.plan,
                 "activity": activity(self.db, t, self.engine.clock(), self.config.landing_mode, self.config),
-                "stages": self.db.stages(n), "checks": self.db.checks(n), "question": self.db.open_question(n),
+                "stages": self.db.stages(n), "checks": self.db.checks(n), "question": question_view(self.db.open_question(n)),
                 "blockers": [{"number": b, "title": self.blocker_title(b)} for b in self.db.open_blockers(n)],
                 "held_retry": f"retry from {held} when unblocked" if (held := self.db.get(f"held_retry:{n}")) else None}
 
