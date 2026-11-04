@@ -1,6 +1,7 @@
 import XCTest
 import StarCore
 import StarDaemonMessages
+@testable import stard
 
 // §12.1 — assert each proto enum's case count/values match the Swift enum.
 // If a case is added to either side without updating the other, these tests fail.
@@ -28,15 +29,23 @@ final class EnumParityTests: XCTestCase {
     // MARK: - CleanMethod (associated values; check each variant explicitly)
 
     func testCleanMethodVariants() {
-        // Proto has 3 cases: cleanAutomatic, cleanAutomaticTrue, cleanSelective.
-        let variants: [CleanMethod] = [.automatic(false), .automatic(true), .selective]
+        // Proto has 5 cases: cleanAutomatic, cleanAutomaticTrue, cleanSelective, cleanDirtySky, cleanDirtyEarth.
+        // Goes through the real Mapping functions, not copies of them.
+        let variants: [CleanMethod] = [.automatic(false), .automatic(true), .selective, .dirtySky, .dirtyEarth]
+        var seen = Set<Star_V1_CleanMethod>()
         for cm in variants {
-            let proto = protoCleanMethod(cm)
-            let back  = cleanMethodFrom(proto: proto)
+            let proto = Mapping.protoCleanMethod(cm)
+            XCTAssertTrue(seen.insert(proto).inserted, "\(cm) shares a proto case with another variant")
+            let back  = Mapping.cleanMethod(fromProto: proto)
             XCTAssertEqual(back, cm, "round-trip failed for \(cm)")
         }
         let protoCases = Star_V1_CleanMethod.allCases.filter { $0 != .UNRECOGNIZED(-1) }
-        XCTAssertEqual(protoCases.count, 3)
+        XCTAssertEqual(protoCases.count, 5)
+        // Every proto case maps back to a distinct Swift variant and returns to itself.
+        for proto in protoCases {
+            XCTAssertEqual(Mapping.protoCleanMethod(Mapping.cleanMethod(fromProto: proto)), proto,
+                           "reverse round-trip failed for \(proto)")
+        }
     }
 
     // MARK: - RemoveReason
@@ -111,22 +120,6 @@ private func detectionType(from proto: Star_V1_DetectionType) -> DetectionType {
     case .detectionExcessive: return .excessive
     case .detectionCustom:    return .custom
     default:                  return .strong
-    }
-}
-
-private func protoCleanMethod(_ cm: CleanMethod) -> Star_V1_CleanMethod {
-    switch cm {
-    case .selective:        return .cleanSelective
-    case .automatic(true):  return .cleanAutomaticTrue
-    case .automatic(false): return .cleanAutomatic
-    }
-}
-
-private func cleanMethodFrom(proto: Star_V1_CleanMethod) -> CleanMethod {
-    switch proto {
-    case .cleanSelective:     return .selective
-    case .cleanAutomaticTrue: return .automatic(true)
-    default:                  return .automatic(false)
     }
 }
 

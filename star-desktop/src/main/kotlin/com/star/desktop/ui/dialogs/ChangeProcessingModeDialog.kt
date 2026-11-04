@@ -34,18 +34,25 @@ import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.components.VerticalStarPicker
 import com.star.desktop.ui.theme.StarColors
+import com.star.desktop.domain.CleanMethodChoice
+import com.star.desktop.domain.CleanMethodTexts
+import com.star.desktop.domain.HighLevelClean
 import com.star.proto.CleanMethod
 
 /** Catalogue key of a frame mode's name, as the macOS panel and change-mode dialog show it. */
 internal fun frameModeNameKey(m: CleanMethod) = when (m) {
     CleanMethod.CLEAN_AUTOMATIC -> "ui.frame_mode_automatic"
     CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.frame_mode_auto_selective"
+    CleanMethod.CLEAN_DIRTY_SKY -> "ui.dirty_sky"
+    CleanMethod.CLEAN_DIRTY_EARTH -> "ui.dirty_earth"
     else -> "ui.frame_mode_selective"
 }
 
 private fun descriptionKey(m: CleanMethod) = when (m) {
     CleanMethod.CLEAN_AUTOMATIC -> "ui.frame_mode_desc_automatic"
     CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.frame_mode_desc_auto_selective"
+    CleanMethod.CLEAN_DIRTY_SKY -> "ui.frame_mode_desc_dirty_sky"
+    CleanMethod.CLEAN_DIRTY_EARTH -> "ui.frame_mode_desc_dirty_earth"
     else -> "ui.frame_mode_desc_selective"
 }
 
@@ -54,14 +61,17 @@ private fun descriptionKey(m: CleanMethod) = when (m) {
  * reach the frame through [onConfirm] when OK is pressed; [onCancel] leaves it as it was.
  */
 @Composable
-fun ChangeProcessingModeDialog(current: CleanMethod, onCancel: () -> Unit, onConfirm: (CleanMethod) -> Unit) {
-    var automatic by remember { mutableStateOf(current != CleanMethod.CLEAN_SELECTIVE) }
+fun ChangeProcessingModeDialog(
+    current: CleanMethod,
+    /** The sequence has a horizon; Dirty earth needs one, so it is switched off (with its tip) when this is false. */
+    horizonDetection: Boolean,
+    onCancel: () -> Unit,
+    onConfirm: (CleanMethod) -> Unit,
+) {
+    var clean by remember { mutableStateOf(CleanMethodChoice.highLevel(current)) }
     var autoSelect by remember { mutableStateOf(current == CleanMethod.CLEAN_AUTOMATIC_TRUE) }
-    val chosen = when {
-        !automatic -> CleanMethod.CLEAN_SELECTIVE
-        autoSelect -> CleanMethod.CLEAN_AUTOMATIC_TRUE
-        else -> CleanMethod.CLEAN_AUTOMATIC
-    }
+    val chosen = CleanMethodChoice.method(clean, autoSelect)
+    val automatic = clean.usesAutoPreservation
     val changed = chosen != current
 
     Box(
@@ -91,12 +101,16 @@ fun ChangeProcessingModeDialog(current: CleanMethod, onCancel: () -> Unit, onCon
 
             Text(localized("ui.clean"), color = StarColors.white, fontSize = 12.sp)
             VerticalStarPicker(
-                options = listOf(true, false),
-                selected = automatic,
-                label = { localized(if (it) "ui.automatic" else "ui.selective") },
-                onSelect = { automatic = it },
+                options = HighLevelClean.values().toList(),
+                selected = clean,
+                label = { localized(CleanMethodTexts.titleKey(it)) },
+                onSelect = { clean = it },
                 modifier = Modifier.fillMaxWidth(),
+                optionEnabled = { it.isAvailable(horizonDetection) },
             )
+            CleanMethodTexts.unavailableTipKey(HighLevelClean.DIRTY_EARTH, horizonDetection)?.let {
+                Text(localized(it), color = StarColors.textSecondary, fontSize = 11.sp)
+            }
 
             Column(Modifier.alpha(if (automatic) 1f else 0.4f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(localized("ui.auto_select"), color = StarColors.white, fontSize = 12.sp)

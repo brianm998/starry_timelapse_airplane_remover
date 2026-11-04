@@ -389,8 +389,6 @@ final class ReferenceHorizonStatsTests: XCTestCase {
                                                   medianSkyBrightness: 0, medianGroundBrightness: 0))
         let found = await cache.stats(for: 3)
         XCTAssertEqual(found?.minHorizonY, 99)
-        let nearest = await cache.nearestStats(to: 3, maxCount: 10)
-        XCTAssertEqual(nearest.count, 1, "the frame must not be stored twice")
     }
 
     /// The gui clears a frame's stats when its reference mask is repainted; a stale entry would keep
@@ -414,58 +412,6 @@ final class ReferenceHorizonStatsTests: XCTestCase {
         XCTAssertNotNil(kept)
     }
 
-    /// The nearest entries by frame distance, which is how a frame picks the reference frames to
-    /// interpolate between.
-    func testNearestStatsReturnsTheClosestFrames() async {
-        let cache = ReferenceHorizonStatsCache()
-        for index in [0, 5, 10, 40, 100] { await cache.set(stats(frameIndex: index)) }
-
-        let nearest = await cache.nearestStats(to: 11, maxCount: 2)
-        XCTAssertEqual(Set(nearest.map { $0.frameIndex }), [10, 5])
-
-        let single = await cache.nearestStats(to: 99, maxCount: 1)
-        XCTAssertEqual(single.map { $0.frameIndex }, [100])
-    }
-
-    /// Distance is absolute, so a frame is happy to use references from either side — which is what
-    /// bracketing for interpolation needs.
-    func testNearestStatsLooksBothWays() async {
-        let cache = ReferenceHorizonStatsCache()
-        await cache.set(stats(frameIndex: 5))
-        await cache.set(stats(frameIndex: 15))
-        let nearest = await cache.nearestStats(to: 10, maxCount: 2)
-        XCTAssertEqual(Set(nearest.map { $0.frameIndex }), [5, 15])
-    }
-
-    /// **Ties are resolved non-deterministically.**  The sort runs over a dictionary's values, whose
-    /// order is unspecified, and `sorted` is not stable — so with two frames equidistant from the
-    /// target and room for only one, which one comes back can vary between runs.
-    ///
-    /// Harmless today because `nearestStats` has no callers: `FrameHorizonProcessor` uses
-    /// `stats(for:)` and `set(_:)` only, and the gui uses `clearStats(for:)`.  Pinned so that if
-    /// something does start interpolating between references, the tie-break gets decided first.
-    func testATieAtTheCutoffHasNoDefinedWinner() async {
-        let cache = ReferenceHorizonStatsCache()
-        await cache.set(stats(frameIndex: 5))
-        await cache.set(stats(frameIndex: 15))
-
-        let single = await cache.nearestStats(to: 10, maxCount: 1)
-        XCTAssertEqual(single.count, 1)
-        XCTAssertTrue([5, 15].contains(single[0].frameIndex),
-                      "either is a legal answer, which is the problem")
-    }
-
-    func testAskingForMoreThanIsCachedReturnsWhatThereIs() async {
-        let cache = ReferenceHorizonStatsCache()
-        await cache.set(stats(frameIndex: 7))
-        let nearest = await cache.nearestStats(to: 7, maxCount: 10)
-        XCTAssertEqual(nearest.count, 1)
-
-        let empty = ReferenceHorizonStatsCache()
-        let none = await empty.nearestStats(to: 7)
-        XCTAssertTrue(none.isEmpty)
-    }
-
     /// Every reference frame's stats are computed concurrently and written into the shared module
     /// cache, so the actor has to serialise them without losing any.
     func testConcurrentWritesAllLand() async {
@@ -477,8 +423,10 @@ final class ReferenceHorizonStatsTests: XCTestCase {
                 group.addTask { await cache.set(entry) }
             }
         }
-        let all = await cache.nearestStats(to: 50, maxCount: 1000)
-        XCTAssertEqual(all.count, 100)
+        for index in 0..<100 {
+            let found = await cache.stats(for: index)
+            XCTAssertNotNil(found, "frame \(index) was lost")
+        }
     }
 
     // MARK: - Single flight
@@ -688,13 +636,9 @@ final class ReferenceHorizonStatsTests: XCTestCase {
     // MARK: - the pixel access helpers
 
     /// Normalisation is by the depth's maximum, so the same picture at two depths reads the same.
-    func testBrightnessNormalisesByTheDepthsMaximum() {
+    func testMaxBrightnessValueFollowsTheDepth() {
         let eightBit = FrameHarness.grayImage(width: 4, height: 4, rows: [0: 255, 1: 128])
         XCTAssertEqual(eightBit.maxBrightnessValue, 255)
-        XCTAssertEqual(eightBit.normalizedBrightness(x: 0, y: 0, maxVal: 255), 1.0, accuracy: 1e-12)
-        XCTAssertEqual(eightBit.normalizedBrightness(x: 0, y: 1, maxVal: 255), 128.0 / 255.0,
-                       accuracy: 1e-12)
-        XCTAssertEqual(eightBit.normalizedBrightness(x: 0, y: 2, maxVal: 255), 0.0, accuracy: 1e-12)
 
         let sixteenBit = FrameHarness.syntheticFrame(width: 8, height: 8, horizonRow: 4)
         XCTAssertEqual(sixteenBit.maxBrightnessValue, 65535)

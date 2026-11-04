@@ -131,6 +131,12 @@ struct UserPreferences: Codable, Sendable {
         didSet { self.save() }
     }
 
+    // the outlier window's optional columns that are showing, as the keys in `gherkin/ui/vectors/outlierColumns.json`, in table order.
+    // nil means the vector's defaults; an empty list is "none".  Shared with the Kotlin client, which reads and writes the same key.
+    var outlierTableColumns: [String]? {
+        didSet { self.save() }
+    }
+
     // whether to show the startup instructions overlay in the horizon painter
     var showHorizonPainterInstructions: Bool? {
         didSet { self.save() }

@@ -231,10 +231,8 @@ public actor OutlierGroups {
 
             // look for OutlierGroupPaintData.json
 
-            let paintfileurl = NSURL(fileURLWithPath: filename,
-                                     isDirectory: false)
-
-            let (paintData, _) = try await URLSession.shared.data(for: URLRequest(url: paintfileurl as URL))
+            // a local file: read it directly, URLSession fails these loads on Linux (NSURLErrorUnsupportedURL)
+            let paintData = try Data(contentsOf: URL(fileURLWithPath: filename, isDirectory: false))
 
             return try decoder.decode([UInt16:RemoveReason].self, from: paintData)
         }

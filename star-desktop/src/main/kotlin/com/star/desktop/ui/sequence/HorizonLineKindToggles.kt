@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -21,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.components.HorizonLineKinds
@@ -47,16 +50,24 @@ fun HorizonLineKindToggles(vm: SequenceViewModel) {
     Column(verticalArrangement = Arrangement.spacedBy(0.dp), modifier = Modifier.padding(start = 16.dp)) {
         for (kind in HorizonLineKinds.all) {
             val enabled = showHorizon && kind in available
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.alpha(if (enabled) 1f else 0.4f)) {
-                Checkbox(
-                    checked = kind in visible,
-                    onCheckedChange = { vm.setHorizonLineKindVisible(kind, it) },
-                    enabled = enabled,
-                )
-                Spacer(Modifier.size(8.dp).background(horizonLineColor(kind, pending = false), CircleShape))
-                Spacer(Modifier.width(6.dp))
-                Text(HorizonLineKinds.label(kind), color = StarColors.white, fontSize = 11.sp)
-            }
+            HorizonKindRow(kind, kind in visible, enabled) { vm.setHorizonLineKindVisible(kind, it) }
         }
+    }
+}
+
+/**
+ * One kind's check box, its colour dot and its name; the name takes what is left of the row and wraps at its spaces.
+ * The check box is not padded out to Material's 48dp touch target: in the 160dp grid panel that left 98dp for the name, and a wider system
+ * font (the Linux default) broke "Zusammengeführt" inside the word. The row is as tall as its text anyway, so nothing is lost on a desktop.
+ */
+@Composable
+internal fun HorizonKindRow(kind: HorizonOverlayKind, checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.alpha(if (enabled) 1f else 0.4f)) {
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
+            Checkbox(checked = checked, onCheckedChange = onChange, enabled = enabled)
+        }
+        Spacer(Modifier.size(8.dp).background(horizonLineColor(kind, pending = false), CircleShape))
+        Spacer(Modifier.width(6.dp))
+        Text(HorizonLineKinds.label(kind), color = StarColors.white, fontSize = 11.sp, modifier = Modifier.weight(1f))
     }
 }

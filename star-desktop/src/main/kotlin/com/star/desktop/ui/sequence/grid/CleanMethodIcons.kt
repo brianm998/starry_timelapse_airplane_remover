@@ -25,7 +25,8 @@ import com.star.proto.CleanMethod
 fun CleanMethodIcon(method: CleanMethod, color: Color, sizeDp: Dp = 8.dp) {
     when (method) {
         CleanMethod.CLEAN_AUTOMATIC_TRUE -> AutoSelectiveIcon(color, sizeDp)
-        CleanMethod.CLEAN_AUTOMATIC -> AutoIcon(color, sizeDp)
+        // the dirty methods have no glyph of their own: they reuse the automatic one, as the gui does
+        CleanMethod.CLEAN_AUTOMATIC, CleanMethod.CLEAN_DIRTY_SKY, CleanMethod.CLEAN_DIRTY_EARTH -> AutoIcon(color, sizeDp)
         else -> SelectiveIcon(color, sizeDp)
     }
 }

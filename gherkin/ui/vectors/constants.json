@@ -104,6 +104,26 @@
         "highLevel": "selective",
         "autoPreservation": true,
         "expected": "selective"
+      },
+      {
+        "highLevel": "dirtySky",
+        "autoPreservation": false,
+        "expected": "dirtySky"
+      },
+      {
+        "highLevel": "dirtySky",
+        "autoPreservation": true,
+        "expected": "dirtySky"
+      },
+      {
+        "highLevel": "dirtyEarth",
+        "autoPreservation": false,
+        "expected": "dirtyEarth"
+      },
+      {
+        "highLevel": "dirtyEarth",
+        "autoPreservation": true,
+        "expected": "dirtyEarth"
       }
     ],
     "autoPreservationStart": [
@@ -118,10 +138,18 @@
       {
         "method": "selective",
         "expected": true
+      },
+      {
+        "method": "dirtySky",
+        "expected": false
+      },
+      {
+        "method": "dirtyEarth",
+        "expected": false
       }
     ],
     "texts": {
-      "comment": "The catalogue keys under the two rows: the choice's title, its hover text, and the paragraph under the row's (i). Both clients read these.",
+      "comment": "The catalogue keys under the two rows: the choice's title, its hover text, and the paragraph under the row's (i). Both clients read these. dirtyEarthNeedsHorizon is the tip a switched-off Dirty earth shows instead of its own.",
       "cleanMethod": {
         "automatic": {
           "title": "ui.automatic",
@@ -132,6 +160,16 @@
           "title": "ui.selective",
           "tip": "ui.clean_method_tip.selective",
           "description": "ui.mode_desc_selective"
+        },
+        "dirtySky": {
+          "title": "ui.dirty_sky",
+          "tip": "ui.clean_method_tip.dirty_sky",
+          "description": "ui.mode_desc_dirty_sky"
+        },
+        "dirtyEarth": {
+          "title": "ui.dirty_earth",
+          "tip": "ui.clean_method_tip.dirty_earth",
+          "description": "ui.mode_desc_dirty_earth"
         }
       },
       "selectiveAutoClean": {
@@ -145,8 +183,79 @@
           "tip": "ui.selective_auto_clean_tip.no",
           "description": "ui.mode_desc_automatic"
         }
+      },
+      "dirtyEarthNeedsHorizon": "ui.clean_method_tip.dirty_earth_needs_horizon"
+    },
+    "usesAutoPreservation": [
+      {
+        "highLevel": "automatic",
+        "expected": true
+      },
+      {
+        "highLevel": "selective",
+        "expected": false
+      },
+      {
+        "highLevel": "dirtySky",
+        "expected": false
+      },
+      {
+        "highLevel": "dirtyEarth",
+        "expected": false
       }
-    }
+    ],
+    "usesAutoPreservationComment": "The Selective Auto Clean row only means something for Automatic: Selective always reviews outliers and the dirty methods never do, so both clients switch the row off for them.",
+    "availability": [
+      {
+        "highLevel": "automatic",
+        "horizonDetection": true,
+        "available": true,
+        "coerced": "automatic"
+      },
+      {
+        "highLevel": "automatic",
+        "horizonDetection": false,
+        "available": true,
+        "coerced": "automatic"
+      },
+      {
+        "highLevel": "selective",
+        "horizonDetection": true,
+        "available": true,
+        "coerced": "selective"
+      },
+      {
+        "highLevel": "selective",
+        "horizonDetection": false,
+        "available": true,
+        "coerced": "selective"
+      },
+      {
+        "highLevel": "dirtySky",
+        "horizonDetection": true,
+        "available": true,
+        "coerced": "dirtySky"
+      },
+      {
+        "highLevel": "dirtySky",
+        "horizonDetection": false,
+        "available": true,
+        "coerced": "dirtySky"
+      },
+      {
+        "highLevel": "dirtyEarth",
+        "horizonDetection": true,
+        "available": true,
+        "coerced": "dirtyEarth"
+      },
+      {
+        "highLevel": "dirtyEarth",
+        "horizonDetection": false,
+        "available": false,
+        "coerced": "automatic"
+      }
+    ],
+    "availabilityComment": "Dirty earth keeps only the ground, so it needs horizon detection (Config.cleanMethodConflict refuses it otherwise): with the horizon off the choice is switched off with the needs-horizon tip, and switching the horizon off while it is chosen falls back to Automatic."
   },
   "settingsTabs": {
     "comment": "The tabs of the processing settings sheet, in the order both clients show them, and the one it opens on. An id is the end of the catalogue key `settings_tab.<id>` that names the tab and of the UI id `settings.tab.<id>` (gherkin/ui/ids.json) that a test finds it by.",

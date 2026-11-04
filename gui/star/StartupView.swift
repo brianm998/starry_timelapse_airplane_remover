@@ -407,9 +407,10 @@ struct RemovalView: View {
     @State private var autoSelective: Bool = false
     @State private var groundAlignment: Bool = true
 
-    /// Owned here rather than inside `KeypointDivisorStartupView` so that view can set the
-    /// initial state from the machine's advice and still be collapsed by the user.
-    @State private var showKeypointDivisor: Bool = false
+    /// The Speed vs. Sharpness sheet. Attached to this view, not to `BottomRightView`'s
+    /// edit-mode branch: this view is itself that branch's sheet, and a sheet hung off the
+    /// wrong mode silently does not show.
+    @State private var showSpeedSheet: Bool = false
 
     private var cleanMethod: CleanMethod {
         if selectiveMode { return .selective }
@@ -426,6 +427,13 @@ struct RemovalView: View {
 
     var body: some View {
         VStack {
+            // Back is the first row, not beside Start: on a 768pt screen this sheet runs past the bottom,
+            // where the Dock's zone swallows clicks, and Back sat in it.
+            HStack {
+                StartupBackButton { self.state = self.previousStartupState }
+                Spacer()
+            }
+              .padding(.bottom, -6)
             Text(localized("ui.startup_mode_title"))
               .font(.largeTitle)
               .foregroundColor(.white)
@@ -469,16 +477,19 @@ struct RemovalView: View {
             }
               .frame(maxWidth: .infinity, alignment: .leading)
 
-            Space(height: 14)
-            Divider()
-            Space(height: 10)
-            KeypointDivisorStartupView(isExpanded: $showKeypointDivisor)
-            Space(height: 10)
-            Divider()
+            // One group with no spacing of its own: this VStack puts 8pt between every child, and
+            // the Space()s that used to pad the row on top of that left Back (and Start) below
+            // y 725 of a 768pt screen, in the Dock's zone, where a click is lost.
+            VStack(spacing: 0) {
+                Divider()
+                KeypointDivisorSummaryRow(divisor: viewModel.alignmentKeypointDetectionDivisor) {
+                    showSpeedSheet = true
+                }
+                  .padding(.vertical, 4)
+                Divider()
+            }
 
-            Space(height: 10)
             HStack {
-                StartupBackButton { self.state = self.previousStartupState }
                 Spacer()
                 Button {
                     withAnimation {
@@ -544,6 +555,14 @@ struct RemovalView: View {
                   .accessibilityIdentifier("startup.advanced")
             }
         }
+          .sheet(isPresented: $showSpeedSheet) {
+              KeypointDivisorStartupView(initial: viewModel.alignmentKeypointDetectionDivisor,
+                                         onCancel: { showSpeedSheet = false },
+                                         onUpdate: { value in
+                                             viewModel.alignmentKeypointDetectionDivisor = value
+                                             showSpeedSheet = false
+                                         })
+          }
     }
 }
 

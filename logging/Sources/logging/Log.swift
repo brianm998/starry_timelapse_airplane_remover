@@ -1161,33 +1161,6 @@ public func LOG_ABORT() {
     }
 }
 
-fileprivate struct LogTest: Codable {
-    let foo: String
-    let bar: Int?
-}
-    
 #else
 public func LOG_ABORT() {}
 #endif
-
-extension Thread {
-    var threadName: String {
-        if isMainThread {
-            return "Main Thread"
-        } else {
-            let desc = description
-            if let start_idx = desc.firstIndex(of: "="),
-               let end_idx = desc.firstIndex(of: ",")
-            {
-                // parsing a string like this for this VV number
-                // <NSThread: 0x600001668900>{number = 11, name = (null)}
-                let number = String(desc[start_idx..<end_idx]).dropFirst(2)
-                return "Thread \(number)"
-            } else {
-                return description
-            }
-        }
-    }
-}
-
-

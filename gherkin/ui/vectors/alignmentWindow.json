@@ -1,0 +1,24 @@
+{
+  "comment": "The alignment window says the same in both clients (the gui is the reference). `emptyStates`: what the window shows instead of charts, as catalogue keys in order, for each state: hasSequence (a sequence is open), fetched (the alignment data has been asked for and answered; the gui reads it from the view model, so it is always true there), hasData (some frame has a star or earth alignment reading), processing (a run is in progress). `chartLabels`: the keys both charts name their marks and axes with (the gui as `.value(...)` names, the desktop as the chart's accessibility text and its drawn axis titles). `help`: the line over the charts about zoom, pan and click, shown in both because both charts can do all three (Ctrl+scroll, or ⌘+scroll on a Mac, zooms).",
+  "emptyStates": [
+    { "id": "noSequence", "hasSequence": false, "fetched": false, "hasData": false, "processing": false, "lines": ["ui.no_image_sequence_loaded", "ui.load_an_image_sequence_in_the_main_star"] },
+    { "id": "noSequenceEvenIfFetched", "hasSequence": false, "fetched": true, "hasData": false, "processing": true, "lines": ["ui.no_image_sequence_loaded", "ui.load_an_image_sequence_in_the_main_star"] },
+    { "id": "notFetchedYet", "hasSequence": true, "fetched": false, "hasData": false, "processing": false, "lines": ["ui.waiting_for_alignment_data"] },
+    { "id": "runningNoDataYet", "hasSequence": true, "fetched": true, "hasData": false, "processing": true, "lines": ["ui.waiting_for_alignment_data"] },
+    { "id": "processedButNoData", "hasSequence": true, "fetched": true, "hasData": false, "processing": false, "lines": ["ui.no_alignment_data_process_the_sequence_first"] },
+    { "id": "hasData", "hasSequence": true, "fetched": true, "hasData": true, "processing": false, "lines": [] },
+    { "id": "hasDataMidRun", "hasSequence": true, "fetched": true, "hasData": true, "processing": true, "lines": [] }
+  ],
+  "chartLabels": {
+    "currentFrame": "ui.current_frame",
+    "hoverFrame": "ui.hover_frame",
+    "keypointSeries": "ui.keypoints_title",
+    "keypointValue": "ui.key_points",
+    "frame": "ui.frame_capitalised",
+    "xAxis": "ui.frame_index",
+    "keypointYAxis": "ui.number_of_key_points",
+    "starKeypointsTitle": "ui.star_keypoints",
+    "earthKeypointsTitle": "ui.earth_keypoints"
+  },
+  "help": "ui.alignment_chart_help"
+}

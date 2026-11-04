@@ -107,9 +107,7 @@ typedef bool (*GPUAlignedMergeFunc)(MatWrapperRef base,
                                     MatWrapperRef dst);
 
 // Register the GPU backend. Any pointer may be NULL, meaning that operation
-// has no GPU implementation; gpu_ops_warp_available() /
-// gpu_ops_median_merge_available() / gpu_ops_aligned_merge_available() report
-// false for it and every caller uses the CPU path. Intended to be called once,
+// has no GPU implementation, and every caller uses the CPU path for it. Intended to be called once,
 // at process startup — mirrors image_cache_set_loader's pattern in
 // ImageCache_C.h.
 //
@@ -121,15 +119,12 @@ typedef bool (*GPUAlignedMergeFunc)(MatWrapperRef base,
 void gpu_ops_set_handlers(GPUWarpFunc warp, GPUMedianMergeFunc medianMerge,
                           GPUAlignedMergeFunc alignedMerge);
 
-// Whether a warp/median-merge/aligned-merge GPU handler is currently
-// registered. This is NOT the same question as "does Config.useGPU say yes" —
-// that decision is made in Swift, inside the registered handler itself (see
-// GPUOps.swift), which returns false immediately without doing any GPU work
-// when the user has turned GPU acceleration off. These functions only answer
-// "is there anywhere to even ask."
+// Whether a warp GPU handler is currently registered. This is NOT the same
+// question as "does Config.useGPU say yes" — that decision is made in Swift,
+// inside the registered handler itself (see GPUOps.swift), which returns false
+// immediately without doing any GPU work when the user has turned GPU
+// acceleration off. This function only answers "is there anywhere to even ask."
 bool gpu_ops_warp_available(void);
-bool gpu_ops_median_merge_available(void);
-bool gpu_ops_aligned_merge_available(void);
 
 // Builds the Gaussian scale-space pyramid a from-scratch reimplementation of
 // SIFT needs — see siftDetectAndCompute in ImageAligner.cpp, which exists

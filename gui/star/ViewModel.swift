@@ -111,6 +111,15 @@ public final class ViewModel {
         UserDefaults.standard.bool(forKey: "StarUITestSkipStartupQuestions")
     }
 
+    /// `-StarUITestWindowSize 1400x1100`: the main window's content size in points, for the parity gallery (XCUITest cannot size a window, and the
+    /// desktop client's test window is always 1400 by 1100). nil in every other launch.
+    static var uiTestWindowSize: CGSize? {
+        guard let text = UserDefaults.standard.string(forKey: "StarUITestWindowSize") else { return nil }
+        let parts = text.split(separator: "x").compactMap { Double($0) }
+        guard parts.count == 2, parts[0] > 0, parts[1] > 0 else { return nil }
+        return CGSize(width: parts[0], height: parts[1])
+    }
+
     /// `-StarUITestOpenConfig <config.json>`: a processed sequence to open at launch, as Load Config does (nil in every other launch).
     static var uiTestOpenConfigPath: String? {
         UserDefaults.standard.string(forKey: "StarUITestOpenConfig").flatMap { $0.isEmpty ? nil : $0 }
@@ -171,6 +180,14 @@ public final class ViewModel {
     /// The video to open at launch, when run by the UI tests; nil in every other launch.
     static var uiTestOpenVideoPath: String? {
         UserDefaults.standard.string(forKey: "StarUITestOpenVideo").flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// Test seam: `-StarUITestSequenceLocation <dir>` does what picking the directory in "Load Image Sequence"'s open panel does
+    /// (`InitialView.loadImageSequence`): raises the sheet that asks where the output and working files go.
+    func openSequenceLocationFromUITestArgument() {
+        guard let path = UserDefaults.standard.string(forKey: "StarUITestSequenceLocation"), !path.isEmpty,
+              imageSequence == nil, !isLoadingImageSequence else { return }
+        pendingSequenceOpen = PendingSequenceOpen(path: path)
     }
 
     /// Test seam: `-StarUITestOpenVideo <file>` does what picking the file in "Load Video"'s open panel does
@@ -440,8 +457,6 @@ public final class ViewModel {
     var showInfoDialog = false
     var currentInfoType: InfoType = .about
 
-    var labelText: String = localized("ui.started")
-
     var isLoadingImageSequence = false
 
     /// Which load is the current one. Every load takes the next number and Cancel takes one too, so
@@ -546,16 +561,6 @@ public final class ViewModel {
         }
     }
 
-    // better to push a method if possible, this assumes
-    // that no other view has changed cursor state 
-    func replaceCursor(_ cursor: NSCursor) {
-        if cursorStack.count > 0 {
-            cursorStack.removeLast()
-        }
-        cursorStack.append(.literal(cursor))
-        self.cursor = cursor
-    }
-    
     func popCursor() {
         if cursorStack.count > 0 {
             cursorStack.removeLast()

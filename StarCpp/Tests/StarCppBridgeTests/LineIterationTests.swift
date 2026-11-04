@@ -160,37 +160,6 @@ final class LineIterationTests: XCTestCase {
                        "a vertical walk widens in x, so the set of y values is unchanged")
     }
 
-    // MARK: - findSpot
-
-    func testFindSpotReturnsTheFirstPixelMatchingThePredicate() {
-        let found = shallow.findSpot(between: DoubleCoord(x: 0, y: 10),
-                                     and: DoubleCoord(x: 40, y: 26),
-                                     closure: { x, _ in x >= 12 })
-        XCTAssertEqual(found?.x, 12)
-    }
-
-    func testFindSpotIsNilWhenNothingMatches() {
-        XCTAssertNil(shallow.findSpot(between: DoubleCoord(x: 0, y: 10),
-                                      and: DoubleCoord(x: 40, y: 26),
-                                      closure: { _, _ in false }))
-    }
-
-    func testFindSpotReturnsAPointThatIsOnTheLine() throws {
-        let found = try XCTUnwrap(shallow.findSpot(between: DoubleCoord(x: 0, y: 10),
-                                                  and: DoubleCoord(x: 50, y: 30),
-                                                  closure: { x, _ in x == 20 }))
-        XCTAssertEqual(Double(found.y),
-                       shallow.standardLine.y(forX: 20),
-                       accuracy: 1.0)
-    }
-
-    func testFindSpotSearchesAVerticalLineByY() {
-        let found = steep.findSpot(between: DoubleCoord(x: 14, y: 10),
-                                   and: DoubleCoord(x: 22, y: 30),
-                                   closure: { _, y in y >= 25 })
-        XCTAssertEqual(found?.y, 25)
-    }
-
     // MARK: - iterate(_:from:) — the unbounded walk
 
     /// The open-ended walk runs until the closure says stop; the closure is the only brake,

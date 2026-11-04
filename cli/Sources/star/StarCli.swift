@@ -374,6 +374,12 @@ struct StarCli: AsyncParsableCommand {
         if let extractionLongGOPJumpWorkers, extractionLongGOPJumpWorkers < 0 {
             throw ValidationError("--extraction-long-gop-jump-workers must be 0 or more, not \(extractionLongGOPJumpWorkers)")
         }
+        // Dirty earth keeps the ground, and with no horizon there is no ground.  This catches
+        // the flag pair; run() asks the effective config again, so a saved config that
+        // already holds one of them is caught too.
+        if cleanMethod == .dirtyEarth, noHorizon {
+            throw ValidationError(Config.dirtyEarthNeedsHorizonMessage)
+        }
         // A negative last frame selects nothing at all.  FrameGraphBuilder reports that
         // and exits cleanly, but by then it has loaded the whole sequence, so say it
         // here as the usage error it is.
@@ -586,6 +592,11 @@ struct StarCli: AsyncParsableCommand {
 
                 Log.nameSuffix = inputImageSequenceName
                 // no name suffix on json config path
+            }
+
+            // after the overrides, for a resumed sequence and a new one alike
+            if let conflict = await configManager.config().cleanMethodConflict {
+                throw ValidationError(conflict)
             }
 
             Log.name = "star-log"
@@ -974,6 +985,12 @@ extension CleanMethod: ExpressibleByArgument {
              "automatic:0":
             self = .automatic(false)
 
+        case "dirtysky":
+            self = .dirtySky
+
+        case "dirtyearth":
+            self = .dirtyEarth
+
         default:
             return nil
         }
@@ -984,7 +1001,9 @@ extension CleanMethod: ExpressibleByArgument {
             "selective",
             "automatic",
             "automatic:true",
-            "automatic:false"
+            "automatic:false",
+            "dirtySky",
+            "dirtyEarth"
         ]
     }
 }

@@ -56,6 +56,8 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    // Headless Compose tests of stateless dialogs (SpeedSharpnessDialogTest); the gherkinTest source set already uses it.
+    testImplementation(compose.desktop.uiTestJUnit4)
 }
 
 // Generate protobuf-java-lite + protobuf-kotlin-lite extensions. No gRPC.
@@ -468,6 +470,12 @@ tasks.named<ProcessResources>("processResources") {
 
 tasks.test {
     useJUnitPlatform()
+    // Print the failure message: the layout and no-hard-coded-strings tests list the offending labels and `file:line: "text"`s in it, and
+    // without this the CI log shows only the assertion line.
+    testLogging {
+        events("failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+    }
     // Forward integration-test opt-ins to the test JVM (InteropIntegrationTest no-ops without them).
     for (k in listOf("star.it.config", "star.it.seq", "star.it.process", "star.stard.path", "star.render.dump")) {
         System.getProperty(k)?.let { systemProperty(k, it) }

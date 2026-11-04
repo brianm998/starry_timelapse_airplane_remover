@@ -204,6 +204,7 @@ struct RenderVideoSheetView: View {
                         startRender()
                     }
                       .disabled(draft.hasRateProblem)
+                      .accessibilityIdentifier("render.start")
                 }
                 Spacer()
             }

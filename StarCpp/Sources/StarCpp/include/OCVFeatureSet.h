@@ -8,7 +8,6 @@ extern "C" {
 #endif
 
 // --- Create / Destroy ---
-OCVFeatureSetRef ocv_feature_set_create_empty(void);
 OCVFeatureSetRef ocv_feature_set_load(const char *filename, const char **errorMsg);
 void             ocv_feature_set_release(OCVFeatureSetRef ref);
 

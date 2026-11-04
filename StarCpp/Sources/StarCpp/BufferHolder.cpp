@@ -39,7 +39,6 @@ uint64_t buffer_holder_bits_per_component(BufferHolderRef ref) { return ref ? re
 
 uint8_t  *buffer_holder_as_uint8(BufferHolderRef ref) { return ref ? (uint8_t*)ref->buffer : nullptr; }
 uint16_t *buffer_holder_as_uint16(BufferHolderRef ref) { return ref ? (uint16_t*)ref->buffer : nullptr; }
-uint32_t *buffer_holder_as_uint32(BufferHolderRef ref) { return ref ? (uint32_t*)ref->buffer : nullptr; }
 
 MatWrapperRef buffer_holder_to_mat(BufferHolderRef ref) {
     if (!ref || !ref->buffer) return nullptr;

@@ -627,6 +627,8 @@ public struct ImageAccessor: Sendable {
                     return (dir, baseFileName)
                 case .autoSelectiveProcessed:
                     return (dir, baseFileName)
+                case .dirtySkyProcessed, .dirtyEarthProcessed:
+                    return (dir, baseFileName)
                 case .validation:
                     return (dir, baseFileName)
                 case .removeMask:

@@ -36,6 +36,7 @@ class Job:
     run_id: int
     completed_at: float | None = None
     run_done: bool = True  # GitHub refuses `rerun-failed-jobs` on a run that is still going
+    labels: tuple[str, ...] = ()  # the runner labels the job asked for, e.g. ("macos-15",)
 
     @property
     def key(self) -> tuple[str, str]:
@@ -44,6 +45,11 @@ class Job:
     @property
     def done(self) -> bool:
         return self.status == "completed"
+
+    @property
+    def queued_for_macos(self) -> bool:
+        """Waiting for a macOS runner, the scarce kind."""
+        return self.status == "queued" and any(label.startswith("macos") for label in self.labels)
 
     @property
     def red(self) -> bool:
@@ -98,7 +104,8 @@ def parse_jobs(runs: list[dict[str, Any]], jobs_by_run: dict[int, list[dict[str,
     for run in runs:
         for j in jobs_by_run.get(int(run["id"]), []):
             out.append(Job(run.get("name") or "", j["name"], j["status"], j.get("conclusion"), int(run["id"]),
-                           _ts(j.get("completed_at")), run.get("status", "completed") == "completed"))
+                           _ts(j.get("completed_at")), run.get("status", "completed") == "completed",
+                           tuple(j.get("labels") or ())))
     return out
 
 

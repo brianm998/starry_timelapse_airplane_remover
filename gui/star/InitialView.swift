@@ -514,21 +514,6 @@ struct SplitRevealVideoView: View {
             )
     }
 
-    /// Fit the video inside 'container' while preserving aspect ratio.
-    private func fitSize(container: CGSize, aspectRatio: CGFloat) -> CGSize {
-        guard container.width > 0 && container.height > 0 else { return .zero }
-        let containerAspect = container.width / container.height
-        if containerAspect > aspectRatio {
-            // container wider -> fit by height
-            let h = container.height
-            return CGSize(width: h * aspectRatio, height: h)
-        } else {
-            // container taller -> fit by width
-            let w = container.width
-            return CGSize(width: w, height: w / aspectRatio)
-        }
-    }
-
     // MARK: - ViewModel
     /// Main-thread-only ObservableObject that manages players and aspect ratio.
     @MainActor

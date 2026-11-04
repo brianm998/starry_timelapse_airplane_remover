@@ -24,14 +24,6 @@ bool gpu_ops_warp_available(void) {
     return g_gpuWarp.load(std::memory_order_acquire) != nullptr;
 }
 
-bool gpu_ops_median_merge_available(void) {
-    return g_gpuMedianMerge.load(std::memory_order_acquire) != nullptr;
-}
-
-bool gpu_ops_aligned_merge_available(void) {
-    return g_gpuAlignedMerge.load(std::memory_order_acquire) != nullptr;
-}
-
 void gpu_ops_set_sift_pyramid_handler(GPUSiftPyramidFunc handler) {
     g_gpuSiftPyramid.store(handler, std::memory_order_release);
 }

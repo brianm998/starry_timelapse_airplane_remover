@@ -104,8 +104,6 @@ public actor KeypointCache {
               "evictions: \(evictions)")
     }
 
-    public func hitCount() -> UInt { cacheHits }
-
     public func stats() -> String {
         "KeypointCache — entries: \(cache.count)  " +
         "\(totalBytes / (1024*1024))MB" +

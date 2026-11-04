@@ -48,6 +48,8 @@ fun <T> StarPicker(
     tag: (T) -> String? = { null },
     /** The text colour of the options that are not selected (the selected one is always black on its white pill). */
     unselectedText: Color = STAR_PICKER_DEFAULT_UNSELECTED_TEXT,
+    /** Hover text of one option (macOS `.help` on a choice), for those that have one. */
+    tip: (T) -> String? = { null },
 ) {
     Row(
         modifier.alpha(if (enabled) 1f else 0.5f).clip(StarShapes.picker).background(StarColors.pickerTrack).padding(2.dp),
@@ -56,20 +58,24 @@ fun <T> StarPicker(
         options.forEach { opt ->
             val sel = opt == selected
             val usable = enabled && isEnabled(opt)
-            Box(
-                Modifier
-                    .clip(StarShapes.picker)
-                    .background(if (sel) StarColors.white else Color.Transparent)
-                    .selectable(selected = sel, enabled = usable, role = Role.RadioButton) { onSelect(opt) }
-                    .then(tag(opt)?.let { Modifier.testTag(it) } ?: Modifier)
-                    .padding(horizontal = 10.dp, vertical = 4.dp),
-            ) {
-                Text(
-                    label(opt),
-                    color = starPickerTextColor(selected = sel, usable = isEnabled(opt), unselectedText = unselectedText),
-                    style = StarType.body,
-                )
+            val option: @Composable () -> Unit = {
+                Box(
+                    Modifier
+                        .clip(StarShapes.picker)
+                        .background(if (sel) StarColors.white else Color.Transparent)
+                        .selectable(selected = sel, enabled = usable, role = Role.RadioButton) { onSelect(opt) }
+                        .then(tag(opt)?.let { Modifier.testTag(it) } ?: Modifier)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        label(opt),
+                        color = starPickerTextColor(selected = sel, usable = isEnabled(opt), unselectedText = unselectedText),
+                        style = StarType.body,
+                    )
+                }
             }
+            val text = tip(opt)
+            if (text == null) option() else HoverTip(text, option)
         }
     }
 }
@@ -85,6 +91,8 @@ fun <T> VerticalStarPicker(
     label: (T) -> String,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
+    /** Whether one option can be chosen (a switched-off one is greyed and does nothing). */
+    optionEnabled: (T) -> Boolean = { true },
 ) {
     Column(
         modifier.clip(StarShapes.picker).background(StarColors.pickerTrack).padding(2.dp),
@@ -92,12 +100,14 @@ fun <T> VerticalStarPicker(
     ) {
         options.forEach { opt ->
             val sel = opt == selected
+            val usable = optionEnabled(opt)
             Box(
                 Modifier
                     .fillMaxWidth()
                     .clip(StarShapes.picker)
                     .background(if (sel) StarColors.white else Color.Transparent)
-                    .clickable { onSelect(opt) }
+                    .clickable(enabled = usable) { onSelect(opt) }
+                    .alpha(if (usable) 1f else 0.4f)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
                 Text(label(opt), color = if (sel) Color.Black else STAR_PICKER_DEFAULT_UNSELECTED_TEXT, style = StarType.body)

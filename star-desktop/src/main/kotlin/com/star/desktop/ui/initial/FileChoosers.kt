@@ -4,6 +4,7 @@ import com.star.desktop.i18n.localized
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
+import java.io.IOException
 import javax.swing.JFileChooser
 
 /** How a chosen path should be opened. */
@@ -51,22 +52,35 @@ private const val DIRECTORIES_PROPERTY = "apple.awt.fileDialogForDirectories"
 
 /**
  * Folder chooser (image sequence by default, or a folder for [title]). Opens at [startAt] when that is a folder. Blocks on the EDT.
- * On a Mac it is the native Finder panel, as the gui's `NSOpenPanel` is; elsewhere Swing's `JFileChooser`.
+ * It is the platform's own: the Finder panel on a Mac, Explorer's folder picker on Windows, the desktop's chooser (zenity or kdialog) on
+ * Linux, as the gui's `NSOpenPanel` is on a Mac. Swing's `JFileChooser` is the fallback where no native one is available.
  */
 fun chooseDirectory(title: String = localized("ui.open_image_sequence").trimEnd('…', '.'), startAt: String? = null): String? =
-    chooseDirectory(System.getProperty("os.name").orEmpty(), title, startAt, ::nativeFolderDialog, ::swingFolderDialog)
+    chooseDirectory(
+        System.getProperty("os.name").orEmpty(), title, startAt,
+        FolderDialogs(::nativeFolderDialog, ::windowsFolderDialog, ::linuxFolderDialog, ::swingFolderDialog),
+    )
 
-/** The platform choice behind [chooseDirectory], with the two dialogs passed in so it can be tested without showing one. */
-internal fun chooseDirectory(
-    osName: String,
-    title: String,
-    startAt: String?,
-    native: (String, File?) -> File?,
-    swing: (String, File?) -> File?,
-): String? {
+/** The platform choice behind [chooseDirectory], with the dialogs passed in so it can be tested without showing one. */
+internal fun chooseDirectory(osName: String, title: String, startAt: String?, dialogs: FolderDialogs): String? {
     val start = startAt?.let { File(it) }?.takeIf { it.isDirectory }
-    val chosen = if (osName.lowercase().contains("mac")) withFolderDialogProperty { native(title, start) } else swing(title, start)
+    val chosen = when (folderPickerFor(osName)) {
+        FolderPicker.MAC_PANEL -> withFolderDialogProperty { dialogs.mac(title, start) }
+        FolderPicker.WINDOWS_EXPLORER -> orSwing(dialogs.windows, dialogs.swing, title, start)
+        FolderPicker.LINUX_NATIVE -> orSwing(dialogs.linux, dialogs.swing, title, start)
+        FolderPicker.SWING -> dialogs.swing(title, start)
+    }
     return chosen?.absolutePath
+}
+
+/** Shows [native]; Swing's chooser takes over only when the native one is unavailable (not when the user cancelled it). */
+private fun orSwing(native: (String, File?) -> FolderResult, swing: (String, File?) -> File?, title: String, start: File?): File? {
+    val result = try { native(title, start) } catch (_: IOException) { FolderResult.Unavailable }
+    return when (result) {
+        is FolderResult.Chosen -> result.folder
+        FolderResult.Cancelled -> null
+        FolderResult.Unavailable -> swing(title, start)
+    }
 }
 
 /**
