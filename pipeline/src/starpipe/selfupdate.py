@@ -11,11 +11,14 @@ from __future__ import annotations
 
 import importlib
 import json
+import logging
 import os
 import pkgutil
 import plistlib
 import shutil
+import sqlite3
 import subprocess
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -23,6 +26,8 @@ from pathlib import Path
 
 from . import gitutil
 from .config import Config, home
+
+log = logging.getLogger(__name__)
 
 LABEL = "com.brianm998.starpiped"
 CRASH_WINDOW_S = 300.0
@@ -205,7 +210,7 @@ def restart_agent(plist: Path, changed: bool, launchctl: Launchctl, sleep: Calla
 
 
 def switch(rt: Path, plist: Path, launchctl: Launchctl = real_launchctl, now: float | None = None, restart: bool = True,
-           sleep: Callable[[float], None] = time.sleep) -> None:
+           sleep: Callable[[float], None] = time.sleep, reason: str = "update") -> None:
     """Make `rt` current (the old one becomes previous) and restart the agent on it.
 
     The first time, the plist is repointed at the `current` symlink and the agent re-bootstrapped (from the CLI, which survives it).
@@ -223,9 +228,40 @@ def switch(rt: Path, plist: Path, launchctl: Launchctl = real_launchctl, now: fl
     _relink(root / "current", rt)
     (root / "switched_at").write_text(str(now if now is not None else time.time()))
     (root / "starts.json").write_text("[]")
+    # recorded before the restart: `kickstart -k` can kill this very process
+    prev = link("previous")
+    log.warning("runtime switch (%s): current %s -> %s, previous %s, pid %d, argv %s", reason, old.name if old else None, rt.name,
+                prev.name if prev else None, os.getpid(), sys.argv[0:3])
+    _record_switch(old.name if old else None, rt.name, reason)
     changed = repoint(plist)
     if restart:
         restart_agent(plist, changed, launchctl, sleep)
+
+
+def _record_switch(old: str | None, new: str, reason: str) -> None:
+    """A `runtime-switch` event, when the database already exists; never fails the switch."""
+    from .db import Database, db_path
+
+    try:
+        if not db_path().exists():
+            return
+        db = Database()
+        try:
+            db.event("runtime-switch", None, old=old, new=new, reason=reason)
+        finally:
+            db.close()
+    except (OSError, sqlite3.Error) as exc:
+        log.warning("could not record the runtime-switch event: %s", exc)
+
+
+def starts_since_switch() -> int:
+    """Starts recorded since the last switch (0 when there is no marker)."""
+    root = runtime_root()
+    marker, starts_file = root / "switched_at", root / "starts.json"
+    if not marker.exists() or not starts_file.exists():
+        return 0
+    switched = float(marker.read_text())
+    return len([s for s in json.loads(starts_file.read_text()) if s >= switched])
 
 
 def _relink(path: Path, target: Path) -> None:
@@ -308,5 +344,5 @@ def rollback(plist: Path, launchctl: Launchctl = real_launchctl, clock: Callable
     previous = link("previous")
     if previous is None:
         raise RuntimeError("there is no previous runtime to go back to")
-    switch(previous, plist, launchctl, clock())
+    switch(previous, plist, launchctl, clock(), reason="rollback")
     return previous.name
