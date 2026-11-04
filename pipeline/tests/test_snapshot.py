@@ -141,7 +141,8 @@ def test_the_snapshot_has_the_shape_the_monitors_fixture_records(rig: Rig) -> No
     Swift models are updated together. Regenerate with STARPIPE_REGEN_FIXTURE=1."""
     d = populate(rig)
     assert d.snapshot()["usage_windows"] is None  # nothing reported yet
-    d.proposals = [{"number": 31, "title": "Show the retry budget", "by": "review agent"}]
+    d.proposals = [{"number": 31, "title": "Show the retry budget", "by": "review agent", "author": "brianm998",
+                    "created_at": "1970-01-01T00:00:00Z"}]
     rig.db.put("usage_windows", json.dumps({"five_hour": {"utilization": 0.1, "resetsAt": 3600.0},
                                             "seven_day": {"utilization": 0.24, "resetsAt": 90000.0}}))
     rig.db.batch_update(rig.db.batch_create("0" * 40), state="abandoned", ended=rig.now - 60, note="develop moved")
@@ -181,7 +182,7 @@ def test_the_snapshot_has_the_shape_the_monitors_fixture_records(rig: Rig) -> No
     assert ticket_keys == set(), f"ticket keys differ: {ticket_keys}"
     ours = next(t for t in snap["tickets"] if t["stages"])["stages"][0]
     assert set(ours) ^ set(next(t for t in recorded["tickets"] if t["stages"])["stages"][0]) == set()
-    assert shape(recorded["proposals"]) == shape(snap["proposals"]) == [{"by": "str", "number": "int", "title": "str"}]
+    assert shape(recorded["proposals"]) == shape(snap["proposals"]) == [{"author": "str", "by": "str", "created_at": "str", "number": "int", "title": "str"}]
     assert shape(recorded["heavy"]) == shape(snap["heavy"])
     assert shape(recorded["landing"]) == shape(snap["landing"])
 

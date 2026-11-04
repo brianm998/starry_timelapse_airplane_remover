@@ -216,7 +216,7 @@ struct Sidebar: View {
                 }
                 if !store.proposals.isEmpty {
                     Section {
-                        ForEach(store.proposals) { ProposalRow(proposal: $0).tag($0.number) }
+                        ForEach(store.proposals) { ProposalRow(proposal: $0, now: store.snapshot?.now ?? Date().timeIntervalSince1970).tag($0.number) }
                     } header: {
                         Text("Proposed").scaledFont(.body, weight: .semibold)
                     }
@@ -258,6 +258,7 @@ struct Sidebar: View {
 
 struct ProposalRow: View {
     let proposal: ProposalSnap
+    let now: Double
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -265,7 +266,7 @@ struct ProposalRow: View {
                 Text("#\(proposal.number)").monospacedDigit().foregroundStyle(.secondary)
                 Text(proposal.title).lineLimit(1)
             }
-            Text("by \(proposal.by)").scaledFont(.caption).foregroundStyle(.secondary).lineLimit(1)
+            Text(proposal.byline(now: now)).scaledFont(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
         .padding(.vertical, 2)
     }
