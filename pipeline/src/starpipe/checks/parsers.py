@@ -29,7 +29,7 @@ class Counts:
         return self.executed < 1
 
 
-_XCTEST_TOTAL = re.compile(r"Executed (\d+) tests?, with (\d+) failures?(?: \((\d+) unexpected\))?")
+_XCTEST_TOTAL = re.compile(r"Executed (\d+) tests?, with (?:\d+ tests? skipped and )?(\d+) failures?(?: \((\d+) unexpected\))?")
 _XCTEST_FAILED = re.compile(r"Test Case '-\[(\S+) (\S+)\]' failed \(")
 _XCTEST_SKIPPED = re.compile(r"Test Case '.*' skipped \(")
 # A test that skips itself because its data is not in the repo or it is an opt-in measurement skips on every machine and every
