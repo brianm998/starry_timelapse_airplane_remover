@@ -691,6 +691,28 @@ extension PixelatedImage {
         }
     }
 
+    /// The colour counterpart of `subtract`, for the dirty clean methods: `self - otherFrame`
+    /// per channel, clipped at 0, in this image's own bit depth and channel count.  With a
+    /// `mask`, only the pixels on the kept side survive (white is above 128, the split `apply`
+    /// makes) and every other pixel is exactly 0.  Done in c++ like `subtract`, which stays the
+    /// grayscale one outlier detection reads.
+    public func subtractColor(
+      _ otherFrame: PixelatedImage,
+      mask: PixelatedImage? = nil,
+      keepingMaskWhite: Bool = true
+    ) throws -> PixelatedImage {
+        guard let resultMat = PixelatedImageBridge.subtractImageColor(
+                otherFrame.mat,
+                fromImage: self.mat,
+                mask: mask?.mat,
+                keepMaskWhite: keepingMaskWhite)
+        else {
+            throw "subtractImageColor returned nil"
+        }
+        if let ret = PixelatedImage(mat: resultMat) { return ret }
+        throw "cannot create PixelatedImage from resulting mat during colour subtraction"
+    }
+
     public var isEmpty: Bool { self.mat.isEmpty }
     
     public var clone: PixelatedImage {

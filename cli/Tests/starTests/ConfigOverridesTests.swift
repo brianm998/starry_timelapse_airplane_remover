@@ -44,6 +44,7 @@ final class ConfigOverridesTests: XCTestCase {
         c.horizonReservationFloorMB = 1200
         c.numberOfFramesToProcessConcurrently = 5
         c.ignoreLowerPixels = 700
+        c.resourceProfile = .light
         return c
     }
 
@@ -70,6 +71,7 @@ final class ConfigOverridesTests: XCTestCase {
       "--max-keypoint-ops", "7",
       "--horizon-reservation-floor-mb", "450",
       "--num-concurrent-renders", "1",
+      "--use", "balanced",
       "--ignore-lower-pixels", "42",
       "/some/star_temp_seq/config.json",
       "/some/final/out",                 // the finalOutputDirname positional
@@ -100,6 +102,15 @@ final class ConfigOverridesTests: XCTestCase {
         XCTAssertEqual(c.horizonReservationFloorMB, 450)
         XCTAssertEqual(c.numberOfFramesToProcessConcurrently, 1)
         XCTAssertEqual(c.ignoreLowerPixels, 42)
+        // -n opens Custom after --use has chosen a profile (ConfigOverrides.apply), so with both
+        // on the command line the profile that results is custom
+        XCTAssertEqual(c.resourceProfile, .custom, "--use balanced, then -n 1 makes it custom")
+    }
+
+    func testUseAloneChoosesTheResourceProfile() throws {
+        var c = savedConfig()
+        try StarCli.parse(["--use", "balanced", "/some/star_temp_seq/config.json"]).configOverrides.apply(to: &c)
+        XCTAssertEqual(c.resourceProfile, .balanced)
     }
 
     /// The reported bug, on a config whose values are all StarCore defaults: the flags
@@ -382,6 +393,31 @@ final class ConfigOverridesTests: XCTestCase {
                       "still untouched by a command line that did not mention it")
     }
 
+    /// The dirty methods override a saved config like any other, and survive the config.json
+    /// a resume reads back (synthesized Codable: `{"dirtySky":{}}`).
+    func testDirtyCleanMethodsApplyAndRoundTripThroughConfigJSON() throws {
+        for (spelling, method, key) in [("dirtySky", CleanMethod.dirtySky, "dirtySky"),
+                                        ("dirtyEarth", CleanMethod.dirtyEarth, "dirtyEarth")] {
+            var config = savedConfig()
+            config.horizonDetectionEnabled = true
+            try StarCli.parse(["--clean-method", spelling, "/some/seq"]).configOverrides.apply(to: &config)
+            XCTAssertEqual(config.cleanMethod, method)
+
+            let methodJSON = String(decoding: try JSONEncoder().encode(method), as: UTF8.self)
+            XCTAssertEqual(methodJSON, "{\"\(key)\":{}}")
+
+            let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("star-config-dirty-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let file = dir.appendingPathComponent("config.json")
+            try JSONEncoder().encode(config).write(to: file)
+            let decoded = try Config.read(fromJsonFilename: file.path)
+            XCTAssertEqual(decoded.cleanMethod, method)
+            XCTAssertEqual(decoded.horizonDetectionEnabled, true)
+        }
+    }
+
     // MARK: - nothing falls out of the wiring
 
     /// Catches the next version of this bug at its source: a field added to
@@ -484,7 +520,7 @@ final class ConfigOverridesTests: XCTestCase {
     func testBothInputPathsApplyTheOverrides() throws {
         let source = try starCliSource()
 
-        let configFileBranch = try offset(of: #"hasSuffix("config.json")"#, in: source)
+        let configFileBranch = try offset(of: #"if inputImageSequenceDirname.hasSuffix("config.json") {"#, in: source)
         let sequenceBranch = try offset(of: "here we are processing a new image sequence",
                                         in: source)
         XCTAssertLessThan(configFileBranch, sequenceBranch)

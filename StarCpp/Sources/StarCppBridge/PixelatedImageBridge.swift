@@ -39,6 +39,14 @@ public enum PixelatedImageBridge {
         return MatWrapper(ref: r)
     }
 
+    /// `img1 - img2` per channel, clipped at 0, keeping img1's depth and channel count.  With a
+    /// mask, only the pixels on the kept side (white is above 128) survive; the rest are 0.
+    public static func subtractImageColor(_ img2: MatWrapper, fromImage img1: MatWrapper,
+                                          mask: MatWrapper? = nil, keepMaskWhite: Bool = true) -> MatWrapper? {
+        guard let r = pib_subtract_image_color(img2.ref, img1.ref, mask?.ref, keepMaskWhite) else { return nil }
+        return MatWrapper(ref: r)
+    }
+
     public static func combineImage(_ image1: MatWrapper, mask: MatWrapper,
                                      background image2: MatWrapper) -> MatWrapper? {
         guard let r = pib_combine_image(image1.ref, mask.ref, image2.ref) else { return nil }

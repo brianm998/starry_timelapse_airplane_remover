@@ -9,6 +9,16 @@ public enum CleanMethod: Identifiable,
 {
     case automatic(Bool)
     case selective
+    /// The opposite of cleaning, for the sky: keeps only what moved there.  Each sky pixel is
+    /// `original − aligned reference` per channel, clipped at 0, so static stars go to black and
+    /// airplanes, satellites and meteors keep their colour; the ground is black.  With horizon
+    /// detection off there is no ground, so this covers the whole frame.
+    case dirtySky
+    /// The same for the ground: moved ground pixels keep their colour, static ground goes to
+    /// black, the sky is black.  Needs horizon detection (`Config.cleanMethodConflict`).  On a
+    /// moving camera, a frame whose ground neighbours cannot be tracked has the original as its
+    /// earth reference, so its dirty earth output is (correctly) near-black.
+    case dirtyEarth
 
     public var id: Self { self }
     
@@ -18,6 +28,17 @@ public enum CleanMethod: Identifiable,
             selective
         case .selective:
             true
+        case .dirtySky, .dirtyEarth:
+            // keep every bad signal: no outlier or blob detection at all
+            false
+        }
+    }
+
+    /// True for the dirty methods, which write a subtraction rather than a cleaned frame.
+    public var isDirty: Bool {
+        switch self {
+        case .dirtySky, .dirtyEarth: true
+        case .automatic, .selective: false
         }
     }
 
@@ -138,5 +159,22 @@ public enum AutoPreservationMode: String, InstructionOption, Identifiable {
         case .no:
             localized("ui.mode_desc_automatic")
         }
+    }
+}
+
+extension Config {
+    /// What `.dirtyEarth` without horizon detection is refused with: with no horizon there is
+    /// no ground portion to keep.
+    public static var dirtyEarthNeedsHorizonMessage: String {
+        localized("cli.errors.dirty_earth_needs_horizon")
+    }
+
+    /// Why this config's clean method cannot run, in the user's language, or nil when it can.
+    /// The cli asks after its overrides are applied, for a new sequence and a resumed one alike.
+    public var cleanMethodConflict: String? {
+        if cleanMethod == .dirtyEarth, !horizonDetectionEnabled {
+            return Config.dirtyEarthNeedsHorizonMessage
+        }
+        return nil
     }
 }
