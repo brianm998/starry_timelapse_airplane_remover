@@ -1104,7 +1104,7 @@ async def test_proposal_detail_lists_open_blockers(rig: Rig) -> None:
 
 
 async def test_proposal_detail_says_how_ready_the_body_is(rig: Rig) -> None:
-    planned = GOOD_BODY + "\n## Pipeline\neffort_develop: medium · gherkin: no\n\n## Plan\nsummary: do it\nparity: neither\nlocalization: no\n- approach: edit it\n"
+    planned = GOOD_BODY + "\n## Pipeline\neffort_develop: medium · gherkin: no\n\n## Plan\nsummary: do the whole thing\nparity: neither\nlocalization: no\n- approach: edit it\n"
     rig.gh.add_issue(21, "Planned", body=planned, labels=("pipe:proposed",))
     rig.gh.add_issue(22, "Bad", body="just words", labels=("pipe:proposed",))
     rig.gh.add_issue(23, "Queued", labels=("pipeline",))
