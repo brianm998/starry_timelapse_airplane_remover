@@ -315,7 +315,6 @@ public actor Blob: CustomStringConvertible,
         _bunchCalculator = nil
     }
 
-    
     public func remove(pixels: Set<SortablePixel>) {
         self.pixels.subtract(pixels)
     }
