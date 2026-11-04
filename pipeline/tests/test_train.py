@@ -88,13 +88,12 @@ async def test_tickets_that_become_ready_during_ci_make_the_next_batch(rig: Rig)
     assert len(rig.gh.prs) == 2 and rig.db.batch_members(1) == [1] and rig.db.batch_members(2) == [2]
 
 
-async def test_no_more_than_batch_max_tickets_in_one_batch(rig: Rig) -> None:
-    rig.engine.config.batch_max = 2
-    for n in (1, 2, 3):
+async def test_every_ready_ticket_joins_one_batch(rig: Rig) -> None:
+    for n in range(1, 9):
         ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
     await train_of(rig).run_until_idle()
-    assert [rig.state(n) for n in (1, 2, 3)] == ["landed"] * 3
-    assert rig.db.batch_members(1) == [1, 2] and rig.db.batch_members(2) == [3]
+    assert [rig.state(n) for n in range(1, 9)] == ["landed"] * 8
+    assert rig.db.batch_members(1) == list(range(1, 9))
 
 
 async def test_one_ticket_waits_for_the_window_for_company(rig: Rig) -> None:
