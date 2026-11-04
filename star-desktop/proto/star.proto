@@ -428,6 +428,8 @@ enum CleanMethod {
   CLEAN_AUTOMATIC      = 0;
   CLEAN_AUTOMATIC_TRUE = 1;
   CLEAN_SELECTIVE      = 2;
+  CLEAN_DIRTY_SKY      = 3;
+  CLEAN_DIRTY_EARTH    = 4;
 }
 
 enum DetectionType {

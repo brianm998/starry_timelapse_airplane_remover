@@ -88,6 +88,16 @@ func stateColor(_ state: String) -> Color {
     }
 }
 
+/// Blue while a batch's CI runs, green once it passed, red once it failed; nil (no colour of its own) for anything else.
+func ciColor(_ ci: String?) -> Color? {
+    switch ci {
+    case "running": .blue
+    case "success": .green
+    case "failure": .red
+    default: nil
+    }
+}
+
 struct HeaderStrip: View {
     let store: MonitorStore
     @State private var enqueueing = false

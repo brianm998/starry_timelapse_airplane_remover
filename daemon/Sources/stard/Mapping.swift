@@ -245,9 +245,15 @@ enum Mapping {
     // MARK: - CleanMethod
 
     static func cleanMethod(from proto: Star_V1_Config) -> CleanMethod {
-        switch proto.cleanMethod {
+        cleanMethod(fromProto: proto.cleanMethod)
+    }
+
+    static func cleanMethod(fromProto proto: Star_V1_CleanMethod) -> CleanMethod {
+        switch proto {
         case .cleanSelective:     return .selective
         case .cleanAutomaticTrue: return .automatic(true)
+        case .cleanDirtySky:      return .dirtySky
+        case .cleanDirtyEarth:    return .dirtyEarth
         default:                  return .automatic(false)
         }
     }
@@ -257,8 +263,8 @@ enum Mapping {
         case .selective:        return .cleanSelective
         case .automatic(true):  return .cleanAutomaticTrue
         case .automatic(false): return .cleanAutomatic
-        // T2: no proto cases for the dirty methods yet; the nearest existing one until T2 adds them
-        case .dirtySky, .dirtyEarth: return .cleanAutomatic
+        case .dirtySky:         return .cleanDirtySky
+        case .dirtyEarth:       return .cleanDirtyEarth
         }
     }
 
