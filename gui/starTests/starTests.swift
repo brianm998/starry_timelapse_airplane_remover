@@ -3888,6 +3888,8 @@ final class SharedConstantsTests: XCTestCase {
         case .automatic(false): "automatic"
         case .automatic(true): "autoSelective"
         case .selective: "selective"
+        case .dirtySky: "dirtySky"     // T3
+        case .dirtyEarth: "dirtyEarth" // T3
         }
     }
 
@@ -3952,6 +3954,39 @@ final class SharedConstantsTests: XCTestCase {
         XCTAssertEqual(k["presets"] as? [Double], KeypointDivisorStartupView.presets.map(\.divisor))
         XCTAssertEqual(k["tooHigh"] as? Double, KeypointDivisorStartupView.tooHighDivisor)
         XCTAssertEqual(k["max"] as? Double, KeypointDivisorStartupView.maxDivisor)
+    }
+
+    /// A2: the cleanup dialog's summary names only the presets; any other value is the bare number.
+    func testKeypointDivisorSummaryLabel() {
+        StarLocalization.shared.languageOverride = "en"
+        defer { StarLocalization.shared.languageOverride = nil }
+        XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(1.0), "1 \u{2014} Best quality")
+        XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(1.5), "1.5 \u{2014} Best balance")
+        XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(2.0), "2 \u{2014} Fastest")
+        XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(1.5004), "1.5 \u{2014} Best balance",
+                       "a value that round-tripped through the config still names its preset")
+        XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(3.0), "3")
+        XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(1.25), "1.25")
+    }
+
+    /// A5: Cancel keeps the value the sheet opened with; Update keeps the draft, a typed custom value included.
+    func testKeypointDivisorDraftCancelAndUpdate() {
+        var picked = KeypointDivisorDraft(original: 1.0)
+        picked.choose(2.0)
+        XCTAssertEqual(picked.committed, 2.0)
+        XCTAssertEqual(picked.cancelled, 1.0)
+
+        var typed = KeypointDivisorDraft(original: 1.5)
+        typed.typed("3")
+        typed.typed("3.")
+        typed.typed("3.7")
+        XCTAssertEqual(typed.committed, 3.7, "a typed custom value survives Update")
+        XCTAssertEqual(typed.cancelled, 1.5)
+
+        var junk = KeypointDivisorDraft(original: 2.0)
+        junk.typed("")
+        junk.typed("9")
+        XCTAssertEqual(junk.committed, 2.0, "text that is not a value leaves the draft alone")
     }
 
     /// The settings sheet is tabs, and the desktop's are the same tabs in the same order, opening on the same one.

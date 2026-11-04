@@ -163,12 +163,12 @@ struct HeaderStrip: View {
             if let snapshot = store.snapshot {
                 ForEach(Overview.topBarCounts(snapshot.tickets)) { c in
                     CounterTile(value: "\(c.count)", label: c.label, color: stateColor(c.states[0]), emphasis: c.emphasis)
-                        .help("Counts tickets in: \(c.states.joined(separator: ", "))")
+                        .help(c.tooltip)
                 }
             } else {
                 ForEach(Overview.topBarBuckets, id: \.label) { b in
                     CounterTile(value: "—", label: b.label, color: .secondary, emphasis: .idle)
-                        .help("Counts tickets in: \(b.states.joined(separator: ", "))")
+                        .help(b.tooltip)
                 }
             }
         }
@@ -188,9 +188,11 @@ struct Sidebar: View {
                 .contentShape(Rectangle())
                 .onTapGesture { store.showOverview() }
             Divider()
+            searchBar
+            Divider()
             List(selection: $store.selected) {
                 ForEach(store.snapshot?.groups ?? [], id: \.self) { group in
-                    let rows = store.tickets(in: group)
+                    let rows = store.visibleTickets(in: group)
                     if !rows.isEmpty {
                         Section {
                             ForEach(rows) { TicketRow(ticket: $0, repo: store.snapshot?.repo ?? "", onSelect: { store.selectIssue($0) }).tag($0.number) }
@@ -205,9 +207,32 @@ struct Sidebar: View {
                     ContentUnavailableView {
                         Label("No tickets in flight", systemImage: "tray").scaledFont(.title2, weight: .bold)
                     }
+                } else if store.searchHidesEverything {
+                    ContentUnavailableView {
+                        Label("No matching tickets", systemImage: "magnifyingglass").scaledFont(.title2, weight: .bold)
+                    }
                 }
             }
         }
+    }
+
+    private var searchBar: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                TextField("Search tickets", text: $store.search.query)
+                    .textFieldStyle(.roundedBorder)
+                Button("Clear") { store.search.clear() }
+                    .disabled(!store.search.isActive)
+            }
+            HStack(spacing: 12) {
+                Toggle("Name", isOn: $store.search.matchName)
+                Toggle("Title", isOn: $store.search.matchTitle)
+                Toggle("Body", isOn: $store.search.matchBody)
+                Spacer(minLength: 0)
+            }
+            .toggleStyle(.checkbox)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
     }
 }
 
