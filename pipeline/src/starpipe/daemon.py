@@ -336,8 +336,26 @@ class Daemon:
             self.db.event("self-update", None, old=have, new=target, **({"interrupted": running} if running else {}))
             self._clear_pending()
             self.db.put("self_update_failed", None)
-            selfupdate.prune()
             return "swapped"
+        finally:
+            self._update_lock.release()
+
+    def prune_settled(self) -> list[str]:
+        """Delete the runtimes nothing points at, but only once the current one has stayed up past the crash-loop window.
+
+        Pruning in the swap itself would remove the very runtime a rollback needs. Does nothing when updates are off, when running from a
+        checkout (no links: prune would delete every runtime), when an update is staged but not swapped in (it is neither link), or
+        while staging holds the update lock."""
+        if not self.config.auto_self_update or selfupdate.link("current") is None:
+            return []
+        if not selfupdate.settled():
+            return []
+        if not self._update_lock.acquire(blocking=False):
+            return []
+        try:
+            if self.db.get("self_update_pending"):
+                return []
+            return selfupdate.prune()
         finally:
             self._update_lock.release()
 
@@ -369,6 +387,9 @@ class Daemon:
         if await asyncio.to_thread(self.self_update_once, plist, sync, test) == "swapped":
             log.info("self-update: swapped the runtime; exiting for launchd to restart on it")
             self.exit(0)
+            return
+        if removed := await asyncio.to_thread(self.prune_settled):
+            log.info("self-update: the runtime has settled; pruned old runtime(s) %s", ", ".join(removed))
 
     async def update_loop(self) -> None:
         while True:

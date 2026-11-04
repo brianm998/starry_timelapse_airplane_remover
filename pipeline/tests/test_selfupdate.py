@@ -375,6 +375,39 @@ def test_only_the_current_and_previous_runtimes_are_kept(tmp_path: Path) -> None
     assert selfupdate.prune() == []
 
 
+def test_a_swap_keeps_the_runtime_it_replaced(tmp_path: Path) -> None:
+    """Pruning in the swap itself once deleted the runtime a rollback needs; the daemon prunes later, once the new one has settled."""
+    repo, _ = make_pipeline_repo(tmp_path)
+    plist, lc = fake_plist(tmp_path), Launchctl()
+    shas: list[str] = []
+    for i in range(2):
+        (repo / "pipeline" / f"v{i}").write_text(str(i))
+        sh(repo, "git", "add", "-A")
+        sh(repo, "git", "commit", "-q", "-m", f"v{i}")
+        shas.append(sh(repo, "git", "rev-parse", "HEAD").strip())
+    first = selfupdate.build(repo, shas[0], noop_sync)
+    selfupdate.switch(first, plist, lc, now=1.0, sleep=lambda _s: None)
+    stray = selfupdate.runtime_root() / "runtime-stray"
+    stray.mkdir()
+    report = selfupdate.update(repo, shas[1], plist, sessions=lambda: 0, sync=noop_sync, test=ok_test, launchctl=lc, sleep=lambda _s: None)
+    second = selfupdate.runtime_dir(shas[1])
+    assert report.switched and "removed" not in report.detail
+    assert selfupdate.link("current") == second.resolve() and selfupdate.link("previous") == first.resolve()
+    assert first.is_dir() and second.is_dir() and stray.is_dir(), "nothing is deleted in the swap"
+
+
+def test_settled_after_the_crash_window(tmp_path: Path) -> None:
+    root = selfupdate.runtime_root()
+    root.mkdir(parents=True, exist_ok=True)
+    assert selfupdate.settled(5.0), "no switch ever recorded"
+    (root / "switched_at").write_text("2000.0")
+    assert not selfupdate.settled(2000.0)
+    assert not selfupdate.settled(2000.0 + selfupdate.CRASH_WINDOW_S), "the window is inclusive, as in crash_loop"
+    assert selfupdate.settled(2000.0 + selfupdate.CRASH_WINDOW_S + 1)
+    for t in (2000.0, 2000.0 + selfupdate.CRASH_WINDOW_S, 2000.0 + selfupdate.CRASH_WINDOW_S + 1):
+        assert selfupdate.settled(t) == (t - 2000.0 > selfupdate.CRASH_WINDOW_S)
+
+
 def test_a_target_that_lacks_the_running_commit_is_not_an_update(tmp_path: Path) -> None:
     """Found live: the daemon ran the owner's unpushed pipeline commits, origin/develop moved on without them (tickets landing), and
     the auto-update 'updated' the daemon to origin's tip: a downgrade that took the landing train away."""
