@@ -27,8 +27,18 @@ public final class MonitorStore {
     /// The view showing in the detail pane: a ticket number, or nil for the Overview. Every change the owner makes
     /// (sidebar, Overview rows, home button) lands here and is recorded in the navigation history.
     public var selected: Int? {
-        didSet { if !navigating { record(selected, was: oldValue) } }
+        didSet {
+            if selected != oldValue { dropProposalDetail() }
+            if !navigating { record(selected, was: oldValue) }
+        }
     }
+    /// The selected proposal's body, comments, blockers and readiness; nil until fetched, and dropped when the selection moves.
+    public private(set) var proposalDetail: ProposalDetail?
+    /// Why the proposal detail could not be loaded (an older daemon answers 404); kept apart from `lastError`, which
+    /// approve and reject own.
+    public private(set) var proposalDetailError: String?
+    /// Blockers of the loaded proposal: not snapshot `blocked_by` entries, so they are remembered to stay selectable.
+    private var proposalBlockers: Set<Int> = []
     public var lastError: String?
     /// The sidebar's ticket search. Only the sidebar rows read it; counts, badges and the Overview use every ticket.
     public var search = TicketSearch()
@@ -112,6 +122,7 @@ public final class MonitorStore {
     private func isShowable(_ n: Int, in snap: Snapshot?) -> Bool {
         guard let snap else { return false }
         return snap.tickets.contains { $0.number == n || $0.blockedBy.contains(n) } || snap.proposals.contains { $0.number == n }
+            || proposalBlockers.contains(n)
     }
 
     /// The selected issue when it is a blocker but not a pipeline ticket or a proposal; the title is empty when unknown.
@@ -162,8 +173,40 @@ public final class MonitorStore {
         onUpdate?(alert)
     }
 
+    private func dropProposalDetail() {
+        proposalDetail = nil
+        proposalDetailError = nil
+    }
+
+    /// Fetch the selected proposal's detail once per selection: each call costs the daemon several GitHub requests, so the
+    /// poll loop does not repeat it, but a failure is retried on the next tick. A reply for a selection that has moved on is dropped.
+    private func refreshProposal(_ n: Int, client: APIClient) async {
+        guard proposalDetail?.number != n else { return }
+        do {
+            let fresh = try await client.proposalDetail(n)
+            guard selected == n else { return }
+            proposalDetail = fresh
+            proposalDetailError = nil
+            for b in fresh.blockers {
+                proposalBlockers.insert(b.number)
+                if !b.title.isEmpty { issueTitles[b.number] = b.title }
+            }
+        } catch {
+            guard selected == n else { return }
+            proposalDetail = nil
+            proposalDetailError = error.localizedDescription
+        }
+    }
+
     public func refreshSelected() async {
-        guard let client, let n = selected else { detail = nil; logLines = []; return }
+        guard let client, let n = selected else { detail = nil; logLines = []; dropProposalDetail(); return }
+        if selectedProposal != nil {
+            // a proposal has no ticket detail or log: those endpoints would 404
+            detail = nil
+            logLines = []
+            await refreshProposal(n, client: client)
+            return
+        }
         let fresh = try? await client.detail(n)
         guard selected == n else { return }
         detail = fresh
@@ -178,6 +221,7 @@ public final class MonitorStore {
         selected = nil
         detail = nil
         logLines = []
+        dropProposalDetail()
     }
 
     // navigation history -------------------------------------------------------------------------------------------
@@ -218,6 +262,7 @@ public final class MonitorStore {
         navigating = false
         detail = nil
         logLines = []
+        dropProposalDetail()
     }
 
     /// Poll the snapshot, follow the event stream, and reconnect with backoff. Safe to call once at launch.
