@@ -578,3 +578,30 @@ async def test_a_red_pr_job_seeded_on_landing_files_no_regression(rig: Rig) -> N
     ship.watch_develop(rig.engine)
     assert rig.db.get("red_pending:cli/macos") is None and rig.db.get("stop_line") is None
     assert list(rig.gh.issues) == [1], "only the ticket itself: no regression ticket was filed"
+
+
+async def test_land_now_skips_the_window_ci_and_the_stop_line(rig: Rig) -> None:
+    rig.engine.config.batch_window_s = 10_000  # nothing would batch for hours
+    rig.gh.ci_hook = lambda sha: RED  # and CI would fail
+    rig.db.put("stop_line", "pr-gate/linux")
+    ready_ticket(rig, 1, "f1.md", "1\n")
+    t = train_of(rig)
+    assert await t.step() is False and rig.state(1) == "ready", "without the mark the ticket waits"
+    rig.db.put("land_now:1", "1")
+    await t.run_until_idle()
+    assert rig.state(1) == "landed" and develop_has(rig, "docs/f1.md")
+
+
+async def test_a_land_now_ticket_does_not_wait_for_the_ci_of_unflagged_batch_mates(rig: Rig) -> None:
+    rig.engine.config.batch_window_s = 10_000
+    rig.gh.ci_hook = lambda sha: RED
+    for n in (1, 2):
+        ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
+    t = train_of(rig)
+    await t._start([1, 2])  # pyright: ignore[reportPrivateUsage]
+    rig.db.put("land_now:2", "1")
+    await t.step()  # the mixed batch is given up
+    assert rig.state(1) == "ready" and rig.state(2) == "ready"
+    await t.step()  # and the flagged ticket goes alone
+    await t.run_until_idle()
+    assert rig.state(2) == "landed" and rig.state(1) != "landed"

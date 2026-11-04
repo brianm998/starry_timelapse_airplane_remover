@@ -946,3 +946,17 @@ async def test_hung_heavy_job_raises_an_alert(rig: Rig) -> None:
     alert = next(a for a in status["alerts"] if a["key"] == "heavy-hung:7")
     assert "#7" in alert["text"] and "swift test --package-path daemon" in alert["text"]
     assert [t for t, _ in rig.pages].count("star pipeline: heavy-hung") == 1
+
+
+async def test_land_all_marks_every_ticket_in_the_landing_queue(rig: Rig) -> None:
+    for n, state in ((7, "ready"), (8, "ci"), (9, "developing")):
+        rig.gh.add_issue(n, "t")
+        rig.engine.sync_issues()
+        rig.db.set_state(n, state)
+    client, _ = await api(rig)
+    try:
+        r = await client.post("/v1/land-all", headers=AUTH)
+        assert r.status == 200 and (await r.json())["tickets"] == [7, 8]
+        assert rig.db.get("land_now:7") == "1" and rig.db.get("land_now:8") == "1" and rig.db.get("land_now:9") is None
+    finally:
+        await client.close()
