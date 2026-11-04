@@ -209,7 +209,12 @@ def switch(rt: Path, plist: Path, launchctl: Launchctl = real_launchctl, now: fl
     """Make `rt` current (the old one becomes previous) and restart the agent on it.
 
     The first time, the plist is repointed at the `current` symlink and the agent re-bootstrapped (from the CLI, which survives it).
-    Afterwards a switch is only the symlink and `kickstart -k`, which is safe to run from inside the daemon itself."""
+    Afterwards a switch is only the symlink and `kickstart -k`, which is safe to run from inside the daemon itself.
+
+    Refuses (before touching anything) a runtime that is missing or was never fully built: `.complete` is written by `build` only
+    after the environment is synced, and a `current` that launchd cannot run leaves the daemon down."""
+    if not (rt / ".complete").is_file():
+        raise RuntimeError(f"{rt} is not a complete runtime (missing, or no .complete marker); not switching to it")
     root = runtime_root()
     root.mkdir(parents=True, exist_ok=True)
     old = link("current")
