@@ -300,8 +300,12 @@ def filed_by(by: str) -> str:
     return f"\n\n<!-- starpipe:filed-by:{by} -->\nFiled by: {by}\n"
 
 
-def _open_with(gh: GitHub, label: str) -> list[dict[str, Any]]:
+def open_issues(gh: GitHub, label: str) -> list[dict[str, Any]]:
+    """Open issues (not pull requests) carrying `label`, as full GitHub issue dicts."""
     return [i for i in gh.paged(f"issues?state=open&labels={label}&per_page=100") if "pull_request" not in i]
+
+
+_open_with = open_issues
 
 
 def duplicate_of(gh: GitHub, title: str) -> dict[str, Any] | None:

@@ -6,8 +6,6 @@
 //  ntar_guiTests.swift on disk without updating the project, leaving the reference
 //  dangling and the target unbuildable (which is why nothing here has ever run).
 //  Keeping this file at the expected name repairs that without touching project.pbxproj.
-//  ntar_guiTests.swift is orphaned: the project does not reference it, so it is not
-//  compiled.
 //
 //  For the same reason, `HorizonPaintStateTests` below lives in this file rather than one
 //  of its own: a new file would need a project.pbxproj edit to be compiled at all, and
