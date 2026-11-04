@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.ClickRules
 import com.star.desktop.domain.StreakLine
 import com.star.desktop.i18n.localized
+import com.star.desktop.util.Log
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -230,7 +231,7 @@ fun FrameEditView(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                     // Under the UI-test probes, say what the click found: a feature that clicks a group and sees no change (the Windows
                     // `uiOutlierClicks` leg) shows here whether the click arrived, on which group, and with which tool.
                     if (System.getProperty(PROBES_PROPERTY) != null) {
-                        System.err.println("[probe] click at image (${img.x.roundToInt()}, ${img.y.roundToInt()}) found group $gid, tool $tool, outliers=$usesOutliers")
+                        Log.i("FrameEdit") { "click at image (${img.x.roundToInt()}, ${img.y.roundToInt()}) found group $gid, tool $tool, outliers=$usesOutliers" }
                     }
                     if (gid > 0) {
                         lastEmptyClick = null
