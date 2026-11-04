@@ -83,6 +83,7 @@ final class GuiFeatureRunner {
         .pressKey: { try $0.press($0.args[0]) },
         .idShown: { try $0.expectShown($0.args[0], shown: true) },
         .idNotShown: { try $0.expectShown($0.args[0], shown: false) },
+        .idAbove: { try $0.expectAbove($0.args[0], above: $0.args[1]) },
         .idSelected: { try $0.expectSelected($0.args[0], selected: true) },
         .idNotSelected: { try $0.expectSelected($0.args[0], selected: false) },
         .idOn: { try $0.expectOn($0.args[0], on: true) },
@@ -469,6 +470,14 @@ final class GuiFeatureRunner {
                 throw RunnerError("\(identifier) is still shown\n\(app.debugDescription)")
             }
         }
+    }
+
+    /// The element is higher on the screen than [other]: its top edge is above the other's (screen coordinates, y grows down), for the order of a list.
+    private func expectAbove(_ identifier: String, above other: String) throws {
+        try expectShown(identifier, shown: true)
+        try expectShown(other, shown: true)
+        let a = element(identifier), b = element(other)
+        try waitFor("\(identifier) above \(other)", timeout: 20, detail: { "(tops \(a.frame.minY) and \(b.frame.minY))" }) { a.frame.minY < b.frame.minY }
     }
 
     private func expectSelected(_ identifier: String, selected: Bool) throws {

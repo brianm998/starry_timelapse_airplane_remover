@@ -128,6 +128,7 @@ class DesktopFeatureRunner {
         StepAction.ID_STOPS_SAYING to { t -> expectStopsSaying(t, args[0], args[1]) },
         StepAction.ID_SHOWN to { t -> expectShown(t, args[0], shown = true) },
         StepAction.ID_NOT_SHOWN to { t -> expectShown(t, args[0], shown = false) },
+        StepAction.ID_ABOVE to { t -> expectAbove(t, args[0], args[1]) },
         StepAction.ID_SELECTED to { t -> expectSelected(t, args[0], selected = true) },
         StepAction.ID_NOT_SELECTED to { t -> expectSelected(t, args[0], selected = false) },
         StepAction.ID_ON to { t -> expectOn(t, args[0], on = true) },
@@ -497,6 +498,18 @@ class DesktopFeatureRunner {
 
     private fun semanticsOf(t: ComposeUiTest, id: String) =
         t.onAllNodes(hasTestTag(id)).fetchSemanticsNodes().firstOrNull()?.config
+
+    /** The element is higher in the window than [other]: its top edge is above the other's (y grows down), for the order of a list. */
+    private fun expectAbove(t: ComposeUiTest, id: String, other: String) {
+        expectShown(t, id, shown = true)
+        expectShown(t, other, shown = true)
+        fun top(tag: String) = t.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.top
+        waitFor(t, "\"$id\" above \"$other\"", 20_000, { "(tops ${top(id)} and ${top(other)})" }) {
+            val a = top(id)
+            val b = top(other)
+            a != null && b != null && a < b
+        }
+    }
 
     private fun expectSelected(t: ComposeUiTest, id: String, selected: Boolean) {
         expectShown(t, id, shown = true)

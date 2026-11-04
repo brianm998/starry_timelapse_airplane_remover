@@ -206,7 +206,7 @@ private fun GridCell(
             if (state != null && state != com.star.proto.FrameProcessingState.FPS_COMPLETE) {
                 val s = FrameState.shortString(state)
                 if (s.isNotEmpty()) {
-                    Text(s, color = StarColors.stateColor(state), fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp))
+                    Text(s, color = StarColors.stateColor(state), fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp).testTag("grid.badge.${index}"))
                 }
             }
         }
