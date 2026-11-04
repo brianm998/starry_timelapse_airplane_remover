@@ -203,10 +203,12 @@ private fun GridCell(
             }
             // What the frame is doing, in the state's own colour, and nothing on a finished one (macOS: a complete frame has no badge). It
             // used to say "complete" on every finished cell, and turned orange while a horizon refinement was pending, which the gui does not.
-            if (state != null && state != com.star.proto.FrameProcessingState.FPS_COMPLETE) {
-                val s = FrameState.shortString(state)
+            // The live state while a run reports it, else the frame's own (a sequence opened already processed has had no progress event).
+            val badgeState = state ?: info?.state
+            if (badgeState != null && badgeState != com.star.proto.FrameProcessingState.FPS_COMPLETE) {
+                val s = FrameState.shortString(badgeState)
                 if (s.isNotEmpty()) {
-                    Text(s, color = StarColors.stateColor(state), fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp).testTag("grid.badge.${index}"))
+                    Text(s, color = StarColors.stateColor(badgeState), fontSize = 10.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(start = 4.dp, bottom = 2.dp).testTag("grid.badge.${index}"))
                 }
             }
         }

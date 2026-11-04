@@ -16,7 +16,11 @@ Feature: The grid's Show list, its finished-frame badges and its right panel's c
     Then  "grid.cell.0" is shown
       And "grid.show.original" is shown
       And "grid.show.final" is shown
-      And "grid.show.original" is above "grid.show.final"
+      And "grid.show.starAligned" is shown
+      And "grid.show.selectiveProcessed" is shown
+      And "grid.show.original" is above "grid.show.starAligned"
+      And "grid.show.starAligned" is above "grid.show.selectiveProcessed"
+      And "grid.show.selectiveProcessed" is above "grid.show.final"
       And "grid.show.dirtyEarthProcessed" is not shown
       And "grid.badge.0" is not shown
     When  I click "grid.cell.0"
