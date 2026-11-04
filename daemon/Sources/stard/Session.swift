@@ -655,7 +655,7 @@ actor Session {
     }
 
     /// Give `frame` its own neighbour count of `kind`, or with a nil `count` take its own away; and do what the change calls for
-    /// (macOS `set(alignedNeighborFrames:forFrame:)` and the others).  A new aligned count invalidates the frame's star alignment, and if
+    /// (as the macOS client does).  A new aligned count invalidates the frame's star alignment, and if
     /// it had one the frame is processed again: true when that is under way.  A new static count builds the merged horizon again if
     /// there was one.
     func setNeighborOverride(of frame: FrameAirplaneRemover, kind: NeighborKind, count: Int?) async -> Bool {

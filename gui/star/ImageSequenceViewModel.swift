@@ -263,8 +263,6 @@ public final class ImageSequenceViewModel {
     
     var numberOfFramesWithOutliersLoaded = 0
     
-    var numberOfFramesLoaded = 0
-
     var outlierGroupTableRows: [OutlierGroupTableRow] = []
     var outlierGroupWindowFrame: FrameAirplaneRemover?
 
@@ -1039,38 +1037,6 @@ public final class ImageSequenceViewModel {
             }
         }
     }
-
-    // per-frame overrides for numberAlignedNeighborFrames
-    var alignedNeighborFrameOverrides: [Int:Int] {
-        didSet {
-            var realConfig = config.config()
-            realConfig.alignedNeighborFrameOverrides = alignedNeighborFrameOverrides
-            config.update(realConfig)
-        }
-    }
-
-    /// Set a per-frame override for numberAlignedNeighborFrames on `frameIndex`.
-    /// If star-alignment images already exist for that frame, they are invalidated
-    /// and reprocessing is triggered immediately using the new neighbor count.
-    func set(alignedNeighborFrames count: Int, forFrame frameIndex: Int) {
-        alignedNeighborFrameOverrides[frameIndex] = count
-        var realConfig = config.config()
-        realConfig.alignedNeighborFrameOverrides = alignedNeighborFrameOverrides
-        config.update(realConfig)
-
-        Task {
-            if frameIndex < frames.count,
-               let frame = frames[frameIndex].frame
-            {
-                await frame.setNumberOfAlignedFrames()
-                let wasInvalidated = (try? await frame.invalidateStarAlignmentIfExists()) ?? false
-                if wasInvalidated {
-                    processFrames(from: frameIndex, to: frameIndex, performClean: false)
-                }
-            }
-        }
-    }
-
 
     var cameraMotion: CameraMotion {
         didSet {
@@ -2161,7 +2127,6 @@ public final class ImageSequenceViewModel {
         self.detectionType = config.detectionType
         self.pixelReplacementOverrides = config.pixelReplacementOverrides
         self.staticNeighborFrameOverrides = config.staticNeighborFrameOverrides
-        self.alignedNeighborFrameOverrides = config.alignedNeighborFrameOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.numberOfFramesToProcessConcurrently = config.numberOfFramesToProcessConcurrently
         self.resourceProfile = config.resourceProfile
@@ -3079,7 +3044,6 @@ public final class ImageSequenceViewModel {
         
         self.frames[frame.frameIndex].frame = frame
 
-        numberOfFramesLoaded += 1
         if self.initialLoadInProgress {
             var haveAll = true
             for frame in self.frames {
