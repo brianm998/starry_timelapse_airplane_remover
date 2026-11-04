@@ -40,6 +40,13 @@ class ProcessingStepsInfoTest {
         assertNotEquals(make(moving = true, method = CleanMethod.CLEAN_AUTOMATIC, steps = listOf("merge")).intro, info.intro)
     }
 
+    @Test fun introNamesTheDirtyModes() {
+        assertEquals(localized("ui.steps_info_intro_static", localized("ui.dirty_sky")),
+            make(moving = false, method = CleanMethod.CLEAN_DIRTY_SKY, steps = listOf("merge")).intro)
+        assertEquals(localized("ui.steps_info_intro_static", localized("ui.dirty_earth")),
+            make(moving = false, method = CleanMethod.CLEAN_DIRTY_EARTH, steps = listOf("merge")).intro)
+    }
+
     // A3: exactly the steps the panel shows
 
     @Test fun entriesAreExactlyTheGivenStepsInOrder() {

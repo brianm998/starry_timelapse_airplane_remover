@@ -48,11 +48,13 @@ data class ProcessingStepsInfo(val intro: String, val subtitle: String, val entr
             )
         }
 
-        /** The same three names the grid's right panel gives the modes. */
+        /** The same names the grid's right panel gives the modes. */
         fun modeName(cleanMethod: CleanMethod?): String = localized(
             when (cleanMethod) {
                 CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.auto_selective"
                 CleanMethod.CLEAN_AUTOMATIC -> "ui.automatic"
+                CleanMethod.CLEAN_DIRTY_SKY -> "ui.dirty_sky"
+                CleanMethod.CLEAN_DIRTY_EARTH -> "ui.dirty_earth"
                 else -> "ui.selective"
             },
         )

@@ -58,11 +58,13 @@ public struct ProcessingStepsInfo: Equatable, Sendable {
           entries: entries)
     }
 
-    /// The same three names the grid's right panel gives the modes.
+    /// The same names the grid's right panel gives the modes.
     static func modeName(_ cleanMethod: CleanMethod) -> String {
         switch cleanMethod {
         case .automatic(let useOutliers): localized(useOutliers ? "ui.auto_selective" : "ui.automatic")
         case .selective:                  localized("ui.selective")
+        case .dirtySky:                   localized("ui.dirty_sky")
+        case .dirtyEarth:                 localized("ui.dirty_earth")
         }
     }
 }
