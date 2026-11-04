@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from . import ci, gherkin_nightly, gitutil, landing, tickets, trust, worktrees
 from .checks import baseline
-from .db import Ticket
+from .db import Database, Ticket
 from .github import GitHubError
 
 if TYPE_CHECKING:
@@ -29,9 +29,13 @@ LANDING_STATES = ("ci", "landing")
 BYPASS_NOTE = "The owner landed this with land-now: CI, the overlap re-test and the stop-line wait were bypassed."
 
 
+def land_now_mark(db: Database, n: int) -> bool:
+    return bool(db.get(f"land_now:{n}"))
+
+
 def land_now(eng: Engine, n: int) -> bool:
     """The owner's land-now mark (db kv, set by the monitor): stop waiting for tests and land."""
-    return bool(eng.db.get(f"land_now:{n}"))
+    return land_now_mark(eng.db, n)
 
 
 def pr_body(eng: Engine, t: Ticket) -> str:
