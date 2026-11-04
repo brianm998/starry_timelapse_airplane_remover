@@ -40,7 +40,8 @@ import com.star.desktop.ui.theme.StarColors
  * Alignment diagnostics window (macOS `AlignmentWindowView`): how far each frame's alignment to its neighbors moved the picture (one line per
  * neighbor offset, with the warps the heuristics distrust in red) and how many keypoints each frame had, for the sky and, when earth alignment
  * is on, the ground. It keeps up with a run as it goes; the checkboxes pick which of the charts show, and the legend names the lines that do.
- * See [com.star.desktop.ui.components.DeviationChart] for what the pointer does on a chart.
+ * What it says in place of charts is [AlignmentWindowTexts.emptyState]; the "no sequence" state of it is the gui's, and cannot arise here because the
+ * window is only shown with a sequence open (M11). See [com.star.desktop.ui.components.DeviationChart] for what the pointer does on a chart.
  */
 @Composable
 fun AlignmentWindowView(app: AppViewModel, svm: SequenceViewModel) {
@@ -57,6 +58,7 @@ private fun AlignmentWindowContent(svm: SequenceViewModel, showInfo: () -> Unit)
     val data by svm.alignment.collectAsState()
     val current by svm.currentIndex.collectAsState()
     val count = svm.frameCount
+    val processing by svm.isProcessing.collectAsState()
 
     var showStarDeviation by remember { mutableStateOf(true) }
     var showStarKeypoints by remember { mutableStateOf(true) }
@@ -65,26 +67,24 @@ private fun AlignmentWindowContent(svm: SequenceViewModel, showInfo: () -> Unit)
 
     val alignment = data
     Row(Modifier.fillMaxSize().background(StarColors.appBackground).padding(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (alignment == null || !(alignment.hasStar || alignment.hasEarth)) {
-            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                Text(
-                    localized(if (alignment == null) "ui.waiting_for_alignment_data" else "ui.no_alignment_data_process_the_sequence_first"),
-                    color = StarColors.textDisabled, fontSize = 12.sp,
-                )
-            }
+        val empty = AlignmentWindowTexts.emptyState(
+            hasSequence = true, fetched = alignment != null, hasData = alignment != null && (alignment.hasStar || alignment.hasEarth), processing = processing,
+        )
+        if (alignment == null || empty.isNotEmpty()) {
+            EmptyState(empty)
             return@Row
         }
         val earthShowing = alignment.allowEarth && alignment.hasEarth
 
         Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(localized("ui.alignment_chart_help"), color = StarColors.textDisabled, fontSize = 11.sp)
+            Text(localized(AlignmentWindowTexts.HELP), color = StarColors.textDisabled, fontSize = 11.sp)
             if (alignment.hasStar) {
                 if (showStarDeviation) {
                     ChartTitle(localized("ui.deviation_in_star_alignment"))
                     DeviationChart(alignment.starPoints, count, current, svm::setCurrentIndex)
                 }
                 if (showStarKeypoints) {
-                    ChartTitle(localized("ui.star_keypoints"))
+                    ChartTitle(localized(AlignmentWindowTexts.STAR_KEYPOINTS_TITLE))
                     KeypointChart(alignment.skyKeypoints, count, current, svm::setCurrentIndex)
                 }
             }
@@ -94,7 +94,7 @@ private fun AlignmentWindowContent(svm: SequenceViewModel, showInfo: () -> Unit)
                     DeviationChart(alignment.earthPoints, count, current, svm::setCurrentIndex)
                 }
                 if (showEarthKeypoints) {
-                    ChartTitle(localized("ui.earth_keypoints"))
+                    ChartTitle(localized(AlignmentWindowTexts.EARTH_KEYPOINTS_TITLE))
                     KeypointChart(alignment.earthKeypoints, count, current, svm::setCurrentIndex)
                 }
             }
@@ -120,6 +120,16 @@ private fun AlignmentWindowContent(svm: SequenceViewModel, showInfo: () -> Unit)
                 if (alignment.allowEarth && (showEarthDeviation || showEarthKeypoints)) alignment.earthPoints else emptyList(),
             )
             Column(Modifier.verticalScroll(rememberScrollState())) { OffsetLegend(offsets) }
+        }
+    }
+}
+
+/** What the window says in place of its charts, centred, one line each (the gui's layout). */
+@Composable
+private fun EmptyState(lines: List<String>) {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            for (key in lines) Text(localized(key), color = StarColors.textDisabled, fontSize = 12.sp)
         }
     }
 }

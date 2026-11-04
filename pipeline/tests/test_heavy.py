@@ -143,3 +143,31 @@ def test_a_child_is_killed_if_the_wait_is_interrupted() -> None:
 
     assert pids and not psutil.pid_exists(pids[0])
     assert heavy.status().holders == []
+
+
+FAST = Config(heavy_slots=1, heavy_idle_kill_s=1.5, heavy_idle_grace_s=1.0, heavy_idle_poll_s=0.2)
+
+
+def test_idle_job_is_killed_and_lock_released() -> None:
+    start = time.monotonic()
+    result = heavy.run_job([sys.executable, "-c", "import time;time.sleep(60)"], config=FAST)
+    assert time.monotonic() - start < 20
+    assert result.code != 0
+    assert result.hung is not None and "time.sleep(60)" in result.hung.cmd and result.hung.idle_s >= FAST.heavy_idle_kill_s
+    assert heavy.status().holders == []
+    heavy.release(heavy.acquire("probe", config=FAST, poll=0.05))  # the slot is free again
+
+
+def test_busy_job_is_not_killed(tmp_path: Path) -> None:
+    spin = "import time;t=time.time()\nwhile time.time()-t<4: pass"
+    writer = "import time,sys\nfor _ in range(14):\n  print('x',flush=True);time.sleep(0.3)"
+    # a shell parent that does nothing itself, with the CPU burnt in children, and a quiet child that only writes to the log
+    script = f"import subprocess,sys;ps=[subprocess.Popen([sys.executable,'-c',{spin!r}]),subprocess.Popen([sys.executable,'-c',{writer!r}])];[p.wait() for p in ps]"
+    with (tmp_path / "log").open("wb") as out:
+        busy = heavy.run_job([sys.executable, "-c", script], config=FAST, stdout=out.fileno())
+        assert busy.hung is None and busy.code == 0
+        # the writer alone, with no CPU to speak of
+        quiet = heavy.run_job([sys.executable, "-c", writer], config=FAST, stdout=out.fileno())
+        assert quiet.hung is None and quiet.code == 0
+    spinner = heavy.run_job([sys.executable, "-c", spin], config=FAST)
+    assert spinner.hung is None and spinner.code == 0

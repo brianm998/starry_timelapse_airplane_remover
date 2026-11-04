@@ -15,6 +15,9 @@ struct MonitorWindow: View {
                 if let ticket = store.selectedTicket {
                     TicketDetailView(store: store, ticket: ticket)
                         .id(ticket.number)
+                } else if let issue = store.selectedIssue {
+                    IssuePanelView(number: issue.number, title: issue.title, repo: store.snapshot?.repo ?? "")
+                        .id(issue.number)
                 } else {
                     OverviewView(store: store)
                 }
@@ -38,6 +41,40 @@ struct Chip: View {
     }
 }
 
+/// One top-bar stage counter: a big bold count over a one-line label on a rounded tinted tile.
+/// Fixed-size, so a narrow window squeezes the header's text items instead of breaking the label inside a word.
+struct CounterTile: View {
+    let value: String
+    let label: String
+    let color: Color
+    let emphasis: Overview.TileEmphasis
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(value)
+                .scaledFont(.counter, weight: .bold)
+                .foregroundStyle(emphasis == .idle ? Color.secondary : color)
+                .lineLimit(1)
+            Text(label)
+                .scaledFont(.callout)
+                .foregroundStyle(emphasis == .attention ? color : Color.secondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .frame(minWidth: 56)
+        .background {
+            let shape = RoundedRectangle(cornerRadius: 8)
+            if emphasis == .attention {
+                shape.fill(color.opacity(0.15))
+                shape.strokeBorder(color.opacity(0.6), lineWidth: 1)
+            } else {
+                shape.fill(Color.secondary.opacity(0.1))
+            }
+        }
+        .fixedSize()
+    }
+}
+
 func stateColor(_ state: String) -> Color {
     switch state {
     case "needs-input": .orange
@@ -53,7 +90,7 @@ struct HeaderStrip: View {
     @State private var enqueueing = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 22) {
+        HStack(alignment: .center, spacing: 22) {
             Button { store.goBack() } label: { Image(systemName: "chevron.left") }
                 .help("Back")
                 .disabled(!store.canGoBack)
@@ -65,24 +102,9 @@ struct HeaderStrip: View {
             Button { store.showOverview() } label: { Image(systemName: "house") }
                 .help("Back to the Overview")
                 .disabled(store.selected == nil)
-            item("Daemon", daemonText, color: store.daemonDown ? .red : .green)
-            item("Heavy lock", lockText, color: .secondary)
-            item("Landing", landingText, color: store.snapshot?.landing.paused == true || store.developRed ? .orange : .secondary)
-            item("develop", developText, color: store.developRed ? .red : .secondary)
-            if let until = store.snapshot?.usagePauseUntil, let t = Double(until) {
-                item("Usage limit", "model stages wait until \(Date(timeIntervalSince1970: t).formatted(date: .omitted, time: .shortened))", color: .orange)
-            }
-            if store.updateAvailable {
-                item("Monitor", "Update available — \(MonitorUpdates.rebuildCommand)", color: .orange)
-            }
-            if let pause = store.snapshot?.pause { item("Paused", pause, color: .orange) }
-            item("Last nightly", store.snapshot?.nightly?.line ?? "none yet",
-                 color: (store.snapshot?.nightly?.reds ?? 0) > 0 || store.snapshot?.nightly?.status == "error" ? .orange : .secondary)
+            attentionIndicator
             Spacer()
             usageLines
-            if let week = store.snapshot?.interventionsWeek, !week.isEmpty {
-                item("Interventions (7 d)", week.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", "), color: .secondary)
-            }
             counters
             Button { enqueueing = true } label: { Image(systemName: "plus") }
                 .help("Enqueue GitHub issues from links")
@@ -93,6 +115,22 @@ struct HeaderStrip: View {
         .sheet(isPresented: $enqueueing) { EnqueueSheet(store: store) }
         .padding(.horizontal, 14).padding(.vertical, 8)
         .scaledFont(.caption)
+    }
+
+    /// Shown only while something needs a look; the details are in the Overview's "Pipeline status" section.
+    @ViewBuilder private var attentionIndicator: some View {
+        let words = Overview.attentionWords(store.statusRows)
+        if !words.isEmpty {
+            let color: Color = store.needsAttention ? .red : .orange
+            Button { store.showOverview() } label: {
+                HStack(spacing: 5) {
+                    Circle().fill(color).frame(width: 8, height: 8)
+                    Text(words.joined(separator: " · ")).foregroundStyle(color).lineLimit(1)
+                }
+            }
+            .buttonStyle(.plain)
+            .help("Open the Overview for the pipeline status")
+        }
     }
 
     /// The account's 5-hour and weekly usage limits, stacked; always shown ("—" until a stage reports) so the bar does not jump.
@@ -121,53 +159,19 @@ struct HeaderStrip: View {
 
     /// The pipeline's load by stage; a dash for each while there is no snapshot (never stale or zero).
     private var counters: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 6) {
             if let snapshot = store.snapshot {
                 ForEach(Overview.topBarCounts(snapshot.tickets)) { c in
-                    item(c.label, "\(c.count)", color: stateColor(c.states[0]))
+                    CounterTile(value: "\(c.count)", label: c.label, color: stateColor(c.states[0]), emphasis: c.emphasis)
                         .help("Counts tickets in: \(c.states.joined(separator: ", "))")
                 }
             } else {
                 ForEach(Overview.topBarBuckets, id: \.label) { b in
-                    item(b.label, "—", color: .secondary)
+                    CounterTile(value: "—", label: b.label, color: .secondary, emphasis: .idle)
                         .help("Counts tickets in: \(b.states.joined(separator: ", "))")
                 }
             }
         }
-    }
-
-    private func item(_ label: String, _ value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(label).foregroundStyle(.secondary)
-            Text(value).foregroundStyle(color).lineLimit(2)
-        }
-    }
-
-    private var daemonText: String {
-        if case .down(let why) = store.connection { return "down: \(why)" }
-        guard let s = store.snapshot else { return "connecting…" }
-        let behind = s.runtime.behindDevelop > 0 ? ", behind develop by \(s.runtime.behindDevelop)" : ""
-        return "up, \(s.runtime.sha)\(behind)"
-    }
-
-    private var lockText: String {
-        guard let heavy = store.snapshot?.heavy else { return "—" }
-        guard let h = heavy.holders.first else { return heavy.queue.isEmpty ? "idle" : "\(heavy.queue.count) waiting" }
-        let elapsed = Int((store.snapshot?.now ?? h.since) - h.since)
-        let who = h.ticket.isEmpty ? "interactive" : "#\(h.ticket)"
-        return "\(who) \(h.cmd.prefix(36)) \(elapsed / 60)m" + (heavy.queue.isEmpty ? "" : " · \(heavy.queue.count) queued")
-    }
-
-    private var landingText: String {
-        guard let l = store.snapshot?.landing else { return "—" }
-        if let stop = l.stopLine { return "stopped: \(stop)" }
-        return l.paused ? "paused" : "running"
-    }
-
-    private var developText: String {
-        guard let d = store.snapshot?.develop else { return "—" }
-        let gate = d.gate.isEmpty ? "pr-gate: no data" : "pr-gate " + (d.gate.values.allSatisfy { $0 == "success" } ? "green" : "red")
-        return "\(gate), \(d.knownRed) known red"
     }
 }
 
@@ -189,7 +193,7 @@ struct Sidebar: View {
                     let rows = store.tickets(in: group)
                     if !rows.isEmpty {
                         Section {
-                            ForEach(rows) { TicketRow(ticket: $0, repo: store.snapshot?.repo ?? "").tag($0.number) }
+                            ForEach(rows) { TicketRow(ticket: $0, repo: store.snapshot?.repo ?? "", onSelect: { store.selectIssue($0) }).tag($0.number) }
                         } header: {
                             Text(GroupTitle.title(group)).scaledFont(.body, weight: .semibold)
                         }
@@ -210,6 +214,7 @@ struct Sidebar: View {
 struct TicketRow: View {
     let ticket: TicketSnap
     let repo: String
+    var onSelect: (Int) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -230,7 +235,7 @@ struct TicketRow: View {
         .padding(.vertical, 2)
     }
 
-    /// `queued: #84, #85` with each blocker a Link, so a click opens the issue rather than only selecting the row.
+    /// `queued: #84, #85` with each blocker a button that shows that issue in the detail pane.
     @ViewBuilder
     private var activityLine: some View {
         if let row = BlockerLinks.row(activity: ticket.activity, blockedBy: ticket.blockedBy, repo: repo) {
@@ -238,7 +243,7 @@ struct TicketRow: View {
                 Text(row.prefix + " ").foregroundStyle(.secondary)
                 ForEach(Array(row.links.enumerated()), id: \.element.id) { i, link in
                     if i > 0 { Text(", ").foregroundStyle(.secondary) }
-                    Link(link.label, destination: link.url).help(link.url.absoluteString)
+                    Button(link.label) { onSelect(link.number) }.buttonStyle(.link).help("Show \(link.label) here")
                 }
             }
             .scaledFont(.caption).lineLimit(1)

@@ -38,13 +38,21 @@ def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: st
     cwd = str(root / spec.cwd)
     env = {**os.environ, **{k: v.format(root=root, build=build_dir(root)) for k, v in spec.env}} if spec.env else None
     started = time.monotonic()
+    hung: heavy.Hung | None
     with log.open("wb") as out:
         if spec.heavy:
-            code, wait = heavy.run(argv, report=say, keep_display_awake=spec.ui, cwd=cwd, stdout=out.fileno(),
-                                   priority=priority, env=env)
+            job = heavy.run_job(argv, report=say, keep_display_awake=spec.ui, cwd=cwd, stdout=out.fileno(),
+                                priority=priority, env=env)
+            code, wait = job.code, job.waited
+            hung = job.hung
         else:
             code = subprocess.run(argv, cwd=cwd, stdout=out, stderr=subprocess.STDOUT, check=False, env=env).returncode
             wait = 0.0
+            hung = None
+    if hung:
+        return ledger.Result(spec.id, "hung", sha, time.monotonic() - started - wait, wait, log=str(log),
+                             detail=f"hung: `{hung.cmd}` made no progress for {hung.idle_s:.0f}s and was killed; the lock is "
+                                    "free. This is not a failure of your change: rerun run_checks")
     text = log.read_text(errors="replace")
     counts = parsers.Counts()
     if spec.parser == "xctest":
@@ -63,7 +71,7 @@ def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: st
     elif counts.skipped and not allow_skips:
         status = "skipped-tests"
     return ledger.Result(spec.id, status, sha, time.monotonic() - started - wait, wait, counts.executed,
-                         counts.failed, counts.skipped, str(log), f"exit {code}")
+                         counts.failed, counts.skipped, str(log), f"exit {code}", failures=counts.failures)
 
 
 def log_name(check_id: str) -> str:
@@ -108,8 +116,8 @@ def run_plan(plan: impact.Plan, root: Path, base: str, tiers: set[str], *, allow
         result = run_check(check_id, root, base, log_dir, allow_skips=allow_skips, say=say)
         results.append(result)
         say(_line(result))
-        if not result.green:
-            break  # a red stops the rest: later checks would only bury it
+        if not result.green and check_id.startswith(("build:", "t0:")):
+            break  # a red build's tests could not run and a red t0 is cheap to fix first; a red test check does not hide the others
     return results
 
 

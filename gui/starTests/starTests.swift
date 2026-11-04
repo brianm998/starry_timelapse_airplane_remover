@@ -17,6 +17,7 @@ import XCTest
 import SwiftUI
 import Observation
 import StarCore
+import StarCppBridge
 // The app target is named `Star`, not `star` — the lowercase name belongs to the .xcodeproj
 // and to this test target.  TEST_HOST points at Star.app, so this is what links.
 @testable import Star
@@ -3953,6 +3954,39 @@ final class SharedConstantsTests: XCTestCase {
         XCTAssertEqual(k["max"] as? Double, KeypointDivisorStartupView.maxDivisor)
     }
 
+    /// A2: the cleanup dialog's summary names only the presets; any other value is the bare number.
+    func testKeypointDivisorSummaryLabel() {
+        StarLocalization.shared.languageOverride = "en"
+        defer { StarLocalization.shared.languageOverride = nil }
+        XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(1.0), "1 \u{2014} Best quality")
+        XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(1.5), "1.5 \u{2014} Best balance")
+        XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(2.0), "2 \u{2014} Fastest")
+        XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(1.5004), "1.5 \u{2014} Best balance",
+                       "a value that round-tripped through the config still names its preset")
+        XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(3.0), "3")
+        XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(1.25), "1.25")
+    }
+
+    /// A5: Cancel keeps the value the sheet opened with; Update keeps the draft, a typed custom value included.
+    func testKeypointDivisorDraftCancelAndUpdate() {
+        var picked = KeypointDivisorDraft(original: 1.0)
+        picked.choose(2.0)
+        XCTAssertEqual(picked.committed, 2.0)
+        XCTAssertEqual(picked.cancelled, 1.0)
+
+        var typed = KeypointDivisorDraft(original: 1.5)
+        typed.typed("3")
+        typed.typed("3.")
+        typed.typed("3.7")
+        XCTAssertEqual(typed.committed, 3.7, "a typed custom value survives Update")
+        XCTAssertEqual(typed.cancelled, 1.5)
+
+        var junk = KeypointDivisorDraft(original: 2.0)
+        junk.typed("")
+        junk.typed("9")
+        XCTAssertEqual(junk.committed, 2.0, "text that is not a value leaves the draft alone")
+    }
+
     /// The settings sheet is tabs, and the desktop's are the same tabs in the same order, opening on the same one.
     func testTheSettingsTabsAreTheDesktops() throws {
         let rule = try XCTUnwrap(try doc()["settingsTabs"] as? [String: Any])
@@ -4193,6 +4227,106 @@ final class StartScreenTests: XCTestCase {
         StarLocalization.shared.languageOverride = "de"
         XCTAssertNotEqual(localized(key), english, "\(key) is English in German")
     }
+
+    private func zoneSource() throws -> String {
+        try String(contentsOf: Self.root.appendingPathComponent("gui/star/FinderStyleDropZone.swift"), encoding: .utf8)
+    }
+
+    /// The drop zone is the reference for the desktop's: this key, a document icon and a dashed border that turns accent while a drag is over it.
+    func testTheDropZoneSaysItsKey() throws {
+        let source = try zoneSource()
+        XCTAssertTrue(source.contains("localized(\"ui.drop_a_video_an_image_sequence_or_an\")"))
+        XCTAssertTrue(source.contains("doc.on.doc"))
+        XCTAssertTrue(source.contains("dash: [5]"))
+        XCTAssertTrue(source.contains("isTargeted ? Color.accentColor"))
+    }
+
+    /// Clicking the zone opens the image sequence chooser (as the desktop's does), and hovering says so.
+    func testTheDropZoneIsClickable() throws {
+        let source = try zoneSource()
+        XCTAssertTrue(source.contains(".onTapGesture(perform: onTap)"), "the zone has no click handler")
+        XCTAssertTrue(source.contains(".help(localized(\"ui.load_an_image_sequence_yet_to_be_processed\"))"), "the zone has no hover text")
+        XCTAssertTrue(source.contains("accessibilityIdentifier(\"startup.dropzone\")"))
+        let view = try String(contentsOf: Self.root.appendingPathComponent("gui/star/InitialView.swift"), encoding: .utf8)
+        XCTAssertTrue(view.contains("onTap: loadImageSequence"), "the zone's click does not load an image sequence")
+    }
+}
+
+/// The alignment window says what the desktop's does (`gherkin/ui/vectors/alignmentWindow.json`; the desktop's
+/// `AlignmentWindowTextsTest` reads its own view against the same file): the same empty-state texts in the same states, the same
+/// chart labels and the same zoom/pan/click help line.
+final class AlignmentWindowTextsTests: XCTestCase {
+    private static var root: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private func vector() throws -> [String: Any] {
+        try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(contentsOf: Self.root.appendingPathComponent("gherkin/ui/vectors/alignmentWindow.json"))) as? [String: Any])
+    }
+
+    private func source() throws -> String {
+        try String(contentsOf: Self.root.appendingPathComponent("gui/star/AlignmentWindowView.swift"), encoding: .utf8)
+    }
+
+    /// The gui always has its alignment data in the view model, so the states the vector has for data not yet fetched do not arise here.
+    func testTheEmptyStatesAreTheVectors() throws {
+        let states = try XCTUnwrap(try vector()["emptyStates"] as? [[String: Any]])
+        XCTAssertGreaterThanOrEqual(states.count, 6, "the vector lost states")
+        var checked = 0
+        for state in states {
+            let hasSequence = try XCTUnwrap(state["hasSequence"] as? Bool)
+            let fetched = try XCTUnwrap(state["fetched"] as? Bool)
+            if hasSequence && !fetched { continue }
+            let got = AlignmentWindowView.emptyState(
+              hasSequence: hasSequence,
+              hasData: try XCTUnwrap(state["hasData"] as? Bool),
+              processing: try XCTUnwrap(state["processing"] as? Bool))
+            XCTAssertEqual(got, state["lines"] as? [String], "state \(state["id"] ?? "")")
+            checked += 1
+        }
+        XCTAssertGreaterThanOrEqual(checked, 5)
+        let view = try source()
+        XCTAssertTrue(view.contains("Self.emptyState("), "the window does not pick its text from the shared states")
+        defer { StarLocalization.shared.languageOverride = nil }
+        StarLocalization.shared.languageOverride = "en"
+        for state in states {
+            for key in try XCTUnwrap(state["lines"] as? [String]) {
+                XCTAssertNotEqual(localized(key), key, "\(key) is missing from the catalogue")
+            }
+        }
+    }
+
+    func testTheChartLabelsAreTheVectors() throws {
+        let doc = try vector()
+        let labels = try XCTUnwrap(doc["chartLabels"] as? [String: String])
+        let help = try XCTUnwrap(doc["help"] as? String)
+        let view = try source()
+        func label(_ id: String) throws -> String { try XCTUnwrap(labels[id], id) }
+
+        for id in ["currentFrame", "hoverFrame", "keypointSeries", "keypointValue", "frame"] {
+            let key = try label(id)
+            XCTAssertTrue(view.contains("localized(\"\(key)\")"), "\(id) (\(key)) does not name a chart mark")
+        }
+        XCTAssertTrue(view.contains(".chartXAxisLabel(localized(\"\(try label("xAxis"))\"))"))
+        XCTAssertTrue(view.contains(".chartYAxisLabel(localized(\"\(try label("keypointYAxis"))\"))"))
+        XCTAssertTrue(view.contains("Text(localized(\"\(try label("starKeypointsTitle"))\"))"), "no title over the star keypoints")
+        XCTAssertTrue(view.contains("Text(localized(\"\(try label("earthKeypointsTitle"))\"))"), "no title over the earth keypoints")
+
+        // The help line is shown, and both charts can do what it says: zoom (pinch and Ctrl/Cmd+scroll), pan (drag) and click.
+        XCTAssertTrue(view.contains("Text(localized(\"\(help)\"))"), "the help line is not shown")
+        XCTAssertEqual(view.components(separatedBy: ".scrollWheelZoom {").count - 1, 2, "both charts zoom with the scroll wheel")
+        XCTAssertEqual(view.components(separatedBy: "pan(by: value.translation.width)").count - 1, 2, "both charts pan")
+        XCTAssertEqual(view.components(separatedBy: "viewModel.currentIndex = hoveredFrame").count - 1, 2, "both charts go to the clicked frame")
+
+        defer { StarLocalization.shared.languageOverride = nil }
+        StarLocalization.shared.languageOverride = "en"
+        for (id, key) in labels { XCTAssertNotEqual(localized(key), key, "\(id): \(key) is missing from the catalogue") }
+        let english = localized(help)
+        XCTAssertNotEqual(english, help)
+        StarLocalization.shared.languageOverride = "de"
+        XCTAssertNotEqual(localized(help), english, "the help line is English in German")
+    }
 }
 
 /// Layer 0 of the parity plan (§6.2.4): the outlier table's columns are the ones `gherkin/ui/vectors/outlierColumns.json` lists, in the
@@ -4259,6 +4393,112 @@ final class OutlierColumnsTests: XCTestCase {
         for literal in ["TableColumn(\"id\"", "TableColumn(\"size\"", "TableColumn(\"remove\""] {
             XCTAssertFalse(source.contains(literal), "\(literal) is a header in English")
         }
+    }
+}
+
+/// D12 of the parity plan: the outlier table's decision cell toggles its group, and the columns the user chose are remembered in
+/// `outlierTableColumns` (the desktop's key and column keys).
+final class OutlierTableTests: XCTestCase {
+    private static var root: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private func vectorColumns() throws -> [(key: String, isDefault: Bool)] {
+        let url = Self.root.appendingPathComponent("gherkin/ui/vectors/outlierColumns.json")
+        let doc = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let optional = try XCTUnwrap(doc["optional"] as? [[String: Any]])
+        return optional.map { ($0["key"] as! String, $0["default"] as! Bool) }
+    }
+
+    private func group() -> OutlierGroup {
+        let bounds = BoundingBox(min: Coord(x: 10, y: 10), max: Coord(x: 13, y: 13))
+        var pixels = [UInt16](repeating: 0, count: 16)
+        var pixelSet: Set<SortablePixel> = []
+        for y in 0..<4 {
+            for x in 0..<4 {
+                pixels[y * 4 + x] = 1000
+                pixelSet.insert(SortablePixel(x: 10 + x, y: 10 + y, value: .sixteenBit(1000)))
+            }
+        }
+        return OutlierGroup(id: 7, size: 16, brightness: 1000, bounds: bounds, frameIndex: 0,
+                            imageWidth: 1000, imageHeight: 500, pixels: pixels, pixelSet: pixelSet)
+    }
+
+    /// A click on the decision cell is the click on the group with the Remove tool: undecided is removed, then it flips each time.
+    func testTheDecisionCellTogglesTheGroup() async throws {
+        let group = group()
+        let before = await group.shouldRemove()
+        XCTAssertNil(before)
+
+        let first = await OutlierGroupTable.toggleDecision(of: group, tool: .remove)
+        XCTAssertEqual(first.willRemove, true)
+        let afterFirst = await group.shouldRemove()
+        XCTAssertEqual(afterFirst?.willRemove, true)
+
+        let second = await OutlierGroupTable.toggleDecision(of: group, tool: .remove)
+        XCTAssertEqual(second.willRemove, false)
+        let afterSecond = await group.shouldRemove()
+        XCTAssertEqual(afterSecond?.willRemove, false)
+
+        // the same rule the click on the group follows
+        XCTAssertEqual(OutlierGroupView.decisionAfterClick(nil, tool: .remove).willRemove, true)
+        XCTAssertEqual(OutlierGroupView.decisionAfterClick(first, tool: .remove).willRemove, false)
+
+        // and the cell is a button that calls it, not a picture
+        let source = try String(contentsOf: Self.root.appendingPathComponent("gui/star/OutlierGroupTable.swift"), encoding: .utf8)
+        let column = try XCTUnwrap(source.range(of: "var willRemoveColumn"))
+        let body = source[column.lowerBound...].prefix(900)
+        XCTAssertTrue(body.contains("Button { toggleDecision(of: row) }"), "the decision cell has to be a button")
+    }
+
+    @MainActor
+    func testColumnChoicesAreRemembered() throws {
+        let vector = try vectorColumns()
+        let all = vector.map { $0.key }
+        let defaults = vector.filter { $0.isDefault }.map { $0.key }
+
+        // nothing saved: the vector's defaults, and creating the model saves nothing
+        var saved: [[String]] = []
+        let fresh = OutlierWindowViewModel(savedColumns: nil, save: { saved.append($0) })
+        XCTAssertEqual(fresh.shownColumnKeys, defaults)
+        XCTAssertTrue(saved.isEmpty)
+
+        // a saved list shows exactly those, whatever the order it was written in, and unknown keys are ignored
+        let chosen = OutlierWindowViewModel(savedColumns: ["maxY", "name", "somethingNew"], save: { saved.append($0) })
+        XCTAssertEqual(chosen.shownColumnKeys, ["name", "maxY"])
+        XCTAssertTrue(chosen.showName)
+        XCTAssertTrue(chosen.showMaxY)
+        XCTAssertFalse(chosen.showWidth)
+        XCTAssertTrue(saved.isEmpty)
+
+        // one flag, in table order
+        chosen.showWidth = true
+        XCTAssertEqual(saved.last, ["name", "width", "maxY"])
+
+        // Select All and Clear All write once each
+        saved = []
+        chosen.selectAll()
+        XCTAssertEqual(saved, [all])
+        chosen.clearAll()
+        XCTAssertEqual(saved, [all, []])
+
+        // an empty saved list is "none", not "the defaults"
+        XCTAssertEqual(OutlierWindowViewModel(savedColumns: [], save: { _ in }).shownColumnKeys, [])
+    }
+
+    @MainActor
+    func testTheColumnKeysAreTheVectors() throws {
+        XCTAssertEqual(OutlierWindowViewModel.columns.map { $0.key }, try vectorColumns().map { $0.key })
+        XCTAssertEqual(OutlierWindowViewModel.columns.map { $0.isDefault }, try vectorColumns().map { $0.isDefault })
+
+        // the preference is the desktop's key, a list of strings
+        // decoded rather than assigned: assigning fires the `didSet` that saves the real preferences file
+        let json = Data(#"{"recentlyOpenedSequencelist":{},"outlierTableColumns":["name","width"]}"#.utf8)
+        let prefs = try JSONDecoder().decode(UserPreferences.self, from: json)
+        XCTAssertEqual(prefs.outlierTableColumns, ["name", "width"])
+        let round = try JSONEncoder().encode(prefs)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: round) as? [String: Any])
+        XCTAssertEqual(object["outlierTableColumns"] as? [String], ["name", "width"])
     }
 }
 
@@ -4771,5 +5011,31 @@ final class MenuBarStatusTests: XCTestCase {
         // Rendering wins over a stale processing flag, and the fraction stays in 0...1.
         XCTAssertEqual(status(isRendering: true, renderFraction: 1.7, steps: steps), .rendering(fraction: 1))
         XCTAssertEqual(localized("ui.menu_bar.rendering_video"), "Rendering video")
+    }
+}
+
+/// The gui's bottom status bar no longer carries the old sequence-alignment phase line the
+/// desktop never had; the "N frames processing" line and Stop stay.
+final class BottomStatusTests: XCTestCase {
+    private static var root: URL {
+        URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    private func source(_ path: String) throws -> String {
+        try String(contentsOf: Self.root.appendingPathComponent(path), encoding: .utf8)
+    }
+
+    func testTheAlignmentPhaseLineIsGone() throws {
+        let bar = try source("gui/star/BottomRightView.swift")
+        XCTAssertFalse(bar.contains("sequenceProcessingState"), "the bottom bar still reads sequenceProcessingState")
+        for key in ["ui.detecting_horizons", "ui.star_keypoints", "ui.earth_keypoints", "ui.first_alignment",
+                    "ui.second_alignment", "ui.alignment_done", "ui.alignment_error", "ui.n_frames_left"] {
+            XCTAssertFalse(bar.contains("\"\(key)\""), "\(key) is still drawn in the bottom bar")
+        }
+        XCTAssertTrue(bar.contains("localized(\"ui.n_frames_processing\""), "the N frames processing line is gone")
+        XCTAssertTrue(bar.contains("viewModel.stopProcessing()"), "the Stop button is gone")
+
+        let model = try source("gui/star/ImageSequenceViewModel.swift")
+        XCTAssertFalse(model.contains("sequenceProcessingState"), "nothing reads it, so the view model should not keep it")
     }
 }

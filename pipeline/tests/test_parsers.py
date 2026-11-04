@@ -50,7 +50,11 @@ def test_skips_for_missing_fixtures_and_opt_in_measurements_are_expected() -> No
                 "/w/U.swift:528: -[StarCppBridgeTests.U g] : Test skipped - a discrete GPU always copies\n"
                 "Test Case '-[StarCppBridgeTests.U g]' skipped (0.001 seconds).\n"
                 "/w/K.swift:24: -[StarCppBridgeTests.K h] : Test skipped - set STAR_KP_MEASURE=1\n"
-                "Test Case '-[StarCppBridgeTests.K h]' skipped (0.000 seconds).\n")
+                "Test Case '-[StarCppBridgeTests.K h]' skipped (0.000 seconds).\n"
+                "/w/R.swift:23: -[StarDaemonTests.R i] : Test skipped - STAR_REAL_SEQUENCE_DIR is not set to a folder of frames\n"
+                "Test Case '-[StarDaemonTests.R i]' skipped (0.001 seconds).\n"
+                "/w/B.swift:175: -[StarDaemonTests.B j] : Test skipped - NSHomeDirectory() ignores $HOME on this machine\n"
+                "Test Case '-[StarDaemonTests.B j]' skipped (0.001 seconds).\n")
     assert parsers.parse_xctest(XC_GREEN + expected).skipped == 0
     other = ("/w/X.swift:9: -[StarCoreTests.X e] : Test skipped - the decoder is not available\n"
              "Test Case '-[StarCoreTests.X e]' skipped (0.001 seconds).\n")
@@ -112,3 +116,33 @@ def test_diff_check_compares_with_where_the_branch_left_develop_not_with_its_mov
     argv = runner._argv(spec, tmp_path, "develop")  # pyright: ignore[reportPrivateUsage]
     assert subprocess.run(argv, check=False, cwd=tmp_path, capture_output=True).returncode == 0
     assert subprocess.run(["git", "diff", "--check", "develop"], check=False, cwd=tmp_path, capture_output=True).returncode != 0, "the old form"
+
+
+XC_RED = """Test Case '-[StarCppTests.OpenCVQoSTests testLowQoSUsesFewerWorkersThanNormalQoS]' started.
+/w/Q.swift:41: error: -[StarCppTests.OpenCVQoSTests testLowQoSUsesFewerWorkersThanNormalQoS] : XCTAssertLessThan failed
+Test Case '-[StarCppTests.OpenCVQoSTests testLowQoSUsesFewerWorkersThanNormalQoS]' failed (0.113 seconds).
+Test Case '-[StarCppTests.OtherTests testFine]' passed (0.001 seconds).
+Test Case '-[StarCppTests.VideoConvertTests testStockFFmpeg]' failed (2.0 seconds).
+Test Case '-[StarCppTests.OpenCVQoSTests testLowQoSUsesFewerWorkersThanNormalQoS]' failed (0.113 seconds).
+\t Executed 3 tests, with 3 failures (0 unexpected) in 2.1 (2.1) seconds
+"""
+
+
+def test_xctest_failures_are_named() -> None:
+    c = parsers.parse_xctest(XC_RED)
+    assert c.failures == ["StarCppTests.OpenCVQoSTests.testLowQoSUsesFewerWorkersThanNormalQoS",
+                          "StarCppTests.VideoConvertTests.testStockFFmpeg"]  # once each, though XCTest prints a failure twice
+    assert parsers.parse_xctest(XC_GREEN).failures == []
+    named = parsers.parse_xctest("Test Case '-[A.B testOne]' failed (0.1 seconds).\n"
+                                 "Test Case '-[A.B testTwo]' failed (0.1 seconds).\n"
+                                 "\t Executed 4 tests, with 2 failures (0 unexpected) in 1 (1) seconds\n")
+    assert named.failures == ["A.B.testOne", "A.B.testTwo"] and named.failed == 2
+
+
+def test_pytest_and_gradle_failures_are_named(tmp_path: Path) -> None:
+    out = parsers.parse_pytest("FAILED tests/test_a.py::test_x - assert 1 == 2\n1 failed, 3 passed in 0.5s\n")
+    assert out.failures == ["tests/test_a.py::test_x"] and out.failed == 1
+    (tmp_path / "TEST-a.xml").write_text(
+        '<testsuite tests="2" failures="1" errors="0" skipped="0"><testcase classname="a.B" name="ok"/>'
+        '<testcase classname="a.B" name="bad"><failure message="m"/></testcase></testsuite>')
+    assert parsers.parse_gradle(tmp_path).failures == ["a.B.bad"]
