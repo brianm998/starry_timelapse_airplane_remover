@@ -71,7 +71,7 @@ def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: st
     elif counts.skipped and not allow_skips:
         status = "skipped-tests"
     return ledger.Result(spec.id, status, sha, time.monotonic() - started - wait, wait, counts.executed,
-                         counts.failed, counts.skipped, str(log), f"exit {code}")
+                         counts.failed, counts.skipped, str(log), f"exit {code}", failures=counts.failures)
 
 
 def log_name(check_id: str) -> str:
@@ -116,8 +116,8 @@ def run_plan(plan: impact.Plan, root: Path, base: str, tiers: set[str], *, allow
         result = run_check(check_id, root, base, log_dir, allow_skips=allow_skips, say=say)
         results.append(result)
         say(_line(result))
-        if not result.green:
-            break  # a red stops the rest: later checks would only bury it
+        if not result.green and check_id.startswith(("build:", "t0:")):
+            break  # a red build's tests could not run and a red t0 is cheap to fix first; a red test check does not hide the others
     return results
 
 

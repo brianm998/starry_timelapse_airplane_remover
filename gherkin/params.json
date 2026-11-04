@@ -87,6 +87,9 @@
     "uiStartupBackFromRemoval": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiStartupSpeedSharpness": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiSequenceWindowsGoWithIt": {
       "sequence": "test_data/test_a7sii_10"
     },
