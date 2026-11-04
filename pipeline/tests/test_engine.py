@@ -279,6 +279,45 @@ async def test_a_timeout_resumes_the_same_session(rig: Rig) -> None:
     assert rig.state(7) == "failed"  # develop never produced a result
 
 
+async def test_an_interrupted_stage_resumes_with_a_resume_note(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.engine.claim(rig.engine.claimable() or rig.db.tickets()[0])
+    sid = rig.db.begin_stage(7, "explore", 1, "opus")
+    rig.db.set_session(sid, "S-old")
+    rig.db.end_stage(sid, "interrupted", detail="daemon restarted")
+    rig.agent.on("explore", explore_ok)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    first = next(r for r in rig.agent.requests if r.stage == "explore")
+    assert first.resume == "S-old"
+    assert "daemon restarted" in first.prompt and "submit_plan" in first.prompt and "not kept" in first.prompt
+    assert "Ticket #7" not in first.prompt  # the ticket prompt is not sent a second time
+
+    # a fresh start after an interrupted row (nothing to resume) still gets the full prompt
+    other = rig.agent.requests[-1]
+    assert other.stage == "develop" and other.resume is None and "daemon restarted" not in other.prompt
+
+
+async def test_no_result_gets_one_nudge_in_the_same_session(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.agent.on("explore", lambda r: StageOutcome("no-result", session_id="S1"), explore_ok)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result", session_id="D1"),
+                 lambda r: StageOutcome("no-result", session_id="D1"),
+                 lambda r: StageOutcome("timeout", session_id="D2"),
+                 lambda r: StageOutcome("no-result"), lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    explores = [r for r in rig.agent.requests if r.stage == "explore"]
+    assert [(r.attempt, r.resume) for r in explores] == [(1, None), (1, "S1")]  # the nudge does not count an attempt
+    assert "submit_plan" in explores[1].prompt and "Ticket #7" not in explores[1].prompt
+    develops = [r for r in rig.agent.requests if r.stage == "develop"]
+    # attempt 1: no-result, nudge (no-result again) -> attempt 2 fresh; attempt 2 times out and attempt 3 resumes it with the ordinary prompt: no nudge
+    assert [(r.attempt, r.resume) for r in develops[:3]] == [(1, None), (1, "D1"), (2, None)]
+    assert "submit_change" in develops[1].prompt
+    assert develops[3].attempt == 3 and develops[3].resume == "D2" and "submit_change" not in develops[3].prompt
+
+
 async def test_crashes_resume_without_counting_an_attempt(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
@@ -857,15 +896,55 @@ async def test_a_retried_branch_with_conflicts_goes_through_the_conflict_stage(r
     assert behind_at_develop == [False], "the resumed stage continues on the merged branch"
 
 
+def still_dropped(req: StageRequest) -> StageOutcome:
+    """A conflict stage that, asked to restore a dropped line, changes nothing and submits what is already there."""
+    req.contract.run_checks({})
+    req.contract.submit_change({"summary": "left as it was"})
+    return accepted(req, "S-conflict-2")
+
+
 async def test_a_dropped_develop_line_parks_a_retried_branch(rig: Rig) -> None:
     stopped_ticket(rig, "shared.md", "mine\n")
     develop_moves(rig, "shared.md", "develop's line\n")
     rig.db.put("catch_up:7", "1")
-    rig.agent.on("conflict", resolver("mine\n"))
+    rig.agent.on("conflict", resolver("mine\n"), still_dropped)  # the second round restores nothing
     await rig.engine.drive(7)
     t = rig.db.ticket(7)
     assert t and t.state == "failed" and "dropped 1 landed line" in (t.park_reason or "")
-    assert [s["stage"] for s in rig.db.stages(7)] == ["conflict"]
+    assert [s["stage"] for s in rig.db.stages(7)] == ["conflict", "conflict"], "one more round with the lines, then parked"
+
+
+async def test_restart_catch_up_retries_dropped_lines_once(rig: Rig) -> None:
+    stopped_ticket(rig, "shared.md", "mine\n")
+    develop_moves(rig, "shared.md", "develop's line\n")
+    rig.db.put("catch_up:7", "1")
+    prompts: list[str] = []
+    waiting: list[set[int]] = []
+    first = resolver("mine\n")  # drops develop's line
+
+    def conflict(req: StageRequest) -> StageOutcome:
+        prompts.append(req.prompt)
+        waiting.append(set(rig.engine.landing_waiting))
+        if len(prompts) == 1:
+            return first(req)
+        wt = req.contract.worktree  # the second round restores it on top of the first resolution
+        (wt / "docs" / "shared.md").write_text("develop's line\nmine\n")
+        sh(wt, "git", "add", "-A")
+        sh(wt, *GIT_AS_T, "commit", "-q", "-m", "restore develop's line")
+        req.contract.run_checks({})
+        req.contract.submit_change({"summary": "restored"})
+        return accepted(req, "S-conflict-2")
+
+    rig.agent.on("conflict", conflict, conflict)
+    rig.agent.on("develop", develop_ok)
+    rig.agent.on("review", review_ok)
+    await rig.engine.drive(7)
+    t = rig.db.ticket(7)
+    assert t and t.state != "failed", t.park_reason if t else None
+    stages = [s["stage"] for s in rig.db.stages(7)]
+    assert stages[:2] == ["conflict", "conflict"] and "develop" in stages
+    assert "docs/shared.md: develop's line" in prompts[1] and "Conflicts merging" not in prompts[1]
+    assert waiting == [set(), set()], "neither round takes landing priority"
 
 
 async def test_a_dirty_worktree_is_not_caught_up(rig: Rig) -> None:

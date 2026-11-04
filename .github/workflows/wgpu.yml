@@ -46,10 +46,22 @@ env:
   STAR_ONLY_WGPU_TESTS: '1'
 
 jobs:
+  # On a push to develop that merges a batch PR whose tree this workflow already passed, `tested` is true and the heavy jobs below
+  # skip (already-tested.yml). It is always false on pull requests, tags and workflow_dispatch, so they run as before.
+  tested:
+    name: Already tested?
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    uses: ./.github/workflows/already-tested.yml
+
   # ─── Linux: Vulkan on lavapipe ───────────────────────────────────────────────
   # ─── OpenCV: built once per OS per key by opencv.yml (cache, then the opencv-prebuilt release, then a build) ───
   opencv-linux:
     name: OpenCV (linux)
+    needs: tested
+    if: needs.tested.outputs.tested != 'true'
     permissions:
       contents: write
     uses: ./.github/workflows/opencv.yml
@@ -58,6 +70,8 @@ jobs:
 
   opencv-macos:
     name: OpenCV (macos)
+    needs: tested
+    if: needs.tested.outputs.tested != 'true'
     permissions:
       contents: write
     uses: ./.github/workflows/opencv.yml
@@ -66,6 +80,8 @@ jobs:
 
   opencv-windows:
     name: OpenCV (windows)
+    needs: tested
+    if: needs.tested.outputs.tested != 'true'
     permissions:
       contents: write
     uses: ./.github/workflows/opencv.yml
@@ -74,7 +90,8 @@ jobs:
 
   linux:
     name: Linux · Vulkan (lavapipe)
-    needs: opencv-linux
+    needs: [tested, opencv-linux]
+    if: needs.tested.outputs.tested != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -125,7 +142,8 @@ jobs:
   # ─── macOS: Metal, and the byte-for-byte comparison with the Metal kernels ───
   macos:
     name: macOS · Metal
-    needs: opencv-macos
+    needs: [tested, opencv-macos]
+    if: needs.tested.outputs.tested != 'true'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -167,7 +185,8 @@ jobs:
   # ─── Windows: Direct3D 12 on WARP ────────────────────────────────────────────
   windows:
     name: Windows · Direct3D 12 (WARP)
-    needs: opencv-windows
+    needs: [tested, opencv-windows]
+    if: needs.tested.outputs.tested != 'true'
     runs-on: windows-2022
     defaults:
       run:

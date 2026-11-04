@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from . import ci, gherkin_nightly, gitutil, landing, tickets, trust, worktrees
-from .db import Ticket
+from .checks import baseline
+from .db import Database, Ticket
 from .github import GitHubError
 
 if TYPE_CHECKING:
@@ -28,9 +29,13 @@ LANDING_STATES = ("ci", "landing")
 BYPASS_NOTE = "The owner landed this with land-now: CI, the overlap re-test and the stop-line wait were bypassed."
 
 
+def land_now_mark(db: Database, n: int) -> bool:
+    return bool(db.get(f"land_now:{n}"))
+
+
 def land_now(eng: Engine, n: int) -> bool:
     """The owner's land-now mark (db kv, set by the monitor): stop waiting for tests and land."""
-    return bool(eng.db.get(f"land_now:{n}"))
+    return land_now_mark(eng.db, n)
 
 
 def pr_body(eng: Engine, t: Ticket) -> str:
@@ -43,6 +48,7 @@ def pr_body(eng: Engine, t: Ticket) -> str:
     return (f"{trust.marker('pr', t.number)}\nCloses #{t.number}\n\n## Plan\n{plan.get('summary', '')}\n\n"
             f"## Acceptance\n{acceptance}\n\n## Local checks at HEAD\n| check | result | tests |\n|---|---|---|\n{rows}\n\n"
             f"## Negative control\n{json.dumps(controls) if controls else 'none planned'}\n"
+            + (f"\n{known}" if (known := baseline.section(eng.db, t.number, gitutil.head_sha(Path(t.worktree or "")))) else "")
             + (f"\n## CI notes\n{notes}\n" if notes else "")
             + (f"\n## Tests bypassed\n{BYPASS_NOTE}\n" if land_now(eng, t.number) else "")
             + "\nOpened by the star pipeline.\n")
@@ -96,12 +102,20 @@ def _infra(eng: Engine, job: ci.Job) -> bool:
         return False
 
 
+def _judge_jobs(eng: Engine, key: int | str, sha: str, reran: set[tuple[str, str]],
+                keep_titles: tuple[str, ...] = ()) -> tuple[list[ci.Job], ci.Verdict]:
+    """Fetch the PR's jobs and judge them; the jobs come back too, for callers that look at more than the verdict. Network calls:
+    runs in a worker thread, never on the event loop."""
+    jobs = fetch_jobs(eng, sha, keep_titles)
+    return jobs, ci.judge(jobs, eng.db.baseline, now=eng.clock(),
+                          head_pushed_at=float(eng.db.get(f"pushed_at:{key}") or eng.clock()),
+                          settle_s=eng.config.ci_settle_s, blocking_wait_s=eng.config.ci_blocking_wait_s,
+                          reran=reran, infra=lambda j: _infra(eng, j))
+
+
 def _judge(eng: Engine, key: int | str, sha: str, reran: set[tuple[str, str]], keep_titles: tuple[str, ...] = ()) -> ci.Verdict:
     """Fetch the PR's jobs and judge them. Network calls: runs in a worker thread, never on the event loop."""
-    return ci.judge(fetch_jobs(eng, sha, keep_titles), eng.db.baseline, now=eng.clock(),
-                    head_pushed_at=float(eng.db.get(f"pushed_at:{key}") or eng.clock()),
-                    settle_s=eng.config.ci_settle_s, blocking_wait_s=eng.config.ci_blocking_wait_s,
-                    reran=reran, infra=lambda j: _infra(eng, j))
+    return _judge_jobs(eng, key, sha, reran, keep_titles)[1]
 
 
 def _rerun(eng: Engine, number: int | None, jobs: list[ci.Job]) -> list[ci.Job]:
@@ -387,10 +401,7 @@ async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: la
         result, _ = await eng.model_stage(t, "conflict", prompt, fresh=True)
         if not result.ok:
             return False
-    dropped = await asyncio.to_thread(landing.audit, wt, mb, base, head)
-    if dropped:
-        shown = "; ".join(f"{d.file}: {d.line.strip()[:80]}" for d in dropped[:5])
-        eng.park(t, f"conflict resolution dropped {len(dropped)} landed line(s): {shown}")
+    if not await eng.audit_conflict(t, wt, mb, base, head):
         return False
     failure = None if land_now(eng, t.number) else await asyncio.to_thread(eng._run_verification, t, wt)  # pyright: ignore[reportPrivateUsage]
     if failure:

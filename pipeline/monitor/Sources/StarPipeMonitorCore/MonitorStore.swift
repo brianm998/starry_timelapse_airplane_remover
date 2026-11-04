@@ -30,6 +30,8 @@ public final class MonitorStore {
         didSet { if !navigating { record(selected, was: oldValue) } }
     }
     public var lastError: String?
+    /// The sidebar's ticket search. Only the sidebar rows read it; counts, badges and the Overview use every ticket.
+    public var search = TicketSearch()
     /// Titles learnt for issues that are not pipeline tickets (from a ticket's detail "Blocked by" list).
     private var issueTitles: [Int: String] = [:]
 
@@ -85,6 +87,15 @@ public final class MonitorStore {
     public var pipelineState: PipelineState { .of(snapshot: snapshot, daemonDown: daemonDown) }
 
     public func tickets(in group: String) -> [TicketSnap] { snapshot?.tickets.filter { $0.group == group } ?? [] }
+
+    /// The tickets of a group that the sidebar search lets through.
+    public func visibleTickets(in group: String) -> [TicketSnap] { search.filter(tickets(in: group)) }
+
+    /// True when there are tickets but the search hides every one of them.
+    public var searchHidesEverything: Bool {
+        guard let all = snapshot?.tickets, !all.isEmpty else { return false }
+        return search.filter(all).isEmpty
+    }
 
     public var selectedTicket: TicketSnap? { snapshot?.tickets.first { $0.number == selected } }
 
@@ -271,6 +282,7 @@ public final class MonitorStore {
     public func cancel(_ number: Int) async { await run { try await $0.cancel(number, reason: "cancelled from the monitor") } }
     public func setPriority(_ number: Int, _ priority: Int) async { await run { try await $0.setPriority(number, priority) } }
     public func landNow(_ number: Int) async { await run { try await $0.landNow(number) } }
+    public func landAll() async { await run { try await $0.landAll() } }
     public func setMuted(_ muted: Bool) async { await run { try await $0.setMuted(muted) } }
     public func setMaxActive(_ n: Int) async { await run { try await $0.setMaxActive(n) } }
 }

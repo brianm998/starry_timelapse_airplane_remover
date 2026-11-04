@@ -410,6 +410,70 @@ MatWrapperRef pib_subtract_image(MatWrapperRef img2, MatWrapperRef img1) {
     return nullptr;
 }
 
+// The colour counterpart of pib_subtract_image, for the dirty clean methods: img1 - img2 per
+// channel, saturated at 0, in img1's own depth and channel count.  img2 is converted to match
+// img1 first (channels, then depth, scaled between 8 and 16 bit).  With a mask, only the
+// pixels on the kept side survive and every other pixel is exactly 0; the mask is split at
+// the same 128 threshold pib_combine_image uses, so white (> 128) is the sky side.
+// pib_subtract_image is left alone: outlier detection depends on its grayscale output.
+MatWrapperRef pib_subtract_image_color(MatWrapperRef img2, MatWrapperRef img1,
+                                       MatWrapperRef mask, bool keepMaskWhite) {
+    if (!img1 || !img2) return nullptr;
+    try {
+        const cv::Mat &base = img1->mat;
+        cv::Mat ref = img2->mat;
+        if (ref.size() != base.size()) {
+            Log_e("pib_subtract_image_color: images must have the same size.");
+            return nullptr;
+        }
+        if (ref.channels() != base.channels()) {
+            cv::Mat converted;
+            if (base.channels() == 1) {
+                cv::cvtColor(ref, converted, ref.channels() == 4 ? cv::COLOR_BGRA2GRAY : cv::COLOR_BGR2GRAY);
+            } else if (base.channels() == 3) {
+                cv::cvtColor(ref, converted, ref.channels() == 1 ? cv::COLOR_GRAY2BGR : cv::COLOR_BGRA2BGR);
+            } else {
+                cv::cvtColor(ref, converted, ref.channels() == 1 ? cv::COLOR_GRAY2BGRA : cv::COLOR_BGR2BGRA);
+            }
+            ref = converted;
+        }
+        if (ref.depth() != base.depth()) {
+            double scale = 1.0;
+            if (ref.depth() == CV_8U && base.depth() == CV_16U) scale = 257.0;
+            else if (ref.depth() == CV_16U && base.depth() == CV_8U) scale = 1.0 / 257.0;
+            cv::Mat converted;
+            ref.convertTo(converted, base.depth(), scale);
+            ref = converted;
+        }
+        // Unsigned depths saturate at 0 on their own; the max keeps signed and float ones honest.
+        cv::Mat diff;
+        cv::subtract(base, ref, diff);
+        if (base.depth() != CV_8U && base.depth() != CV_16U) cv::max(diff, 0, diff);
+
+        if (mask) {
+            cv::Mat m = mask->mat;
+            if (m.size() != base.size()) {
+                Log_e("pib_subtract_image_color: mask must be the size of the images.");
+                return nullptr;
+            }
+            if (m.channels() > 1) cv::cvtColor(m, m, cv::COLOR_BGR2GRAY);
+            if (m.depth() != CV_8U) {
+                double minVal, maxVal;
+                cv::minMaxLoc(m, &minVal, &maxVal);
+                if (maxVal > 0) m.convertTo(m, CV_8U, 255.0 / maxVal);
+                else m = cv::Mat::zeros(m.size(), CV_8U);
+            }
+            cv::Mat dropped;
+            cv::threshold(m, dropped, 128, 255, keepMaskWhite ? cv::THRESH_BINARY_INV : cv::THRESH_BINARY);
+            diff.setTo(cv::Scalar::all(0), dropped);
+        }
+        return wrap(diff);
+    } catch (const cv::Exception &e) {
+        Log_e("OpenCV Exception: %s", e.what());
+    }
+    return nullptr;
+}
+
 MatWrapperRef pib_shrink_dark_regions(MatWrapperRef img, int radius) {
     if (!img) return nullptr;
     try {

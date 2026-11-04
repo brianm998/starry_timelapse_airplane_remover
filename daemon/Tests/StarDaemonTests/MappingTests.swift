@@ -175,8 +175,14 @@ final class MappingTests: XCTestCase {
     }
 
     /// And going back out gets the same view: announcing a save and asking for the preview agree, for every image.
+    /// T2: the dirty methods' outputs have no wire value until the proto gains them; drop this
+    /// and use `FrameViewMode.allCases` again when it does.
+    private static let modesOnTheWire = FrameViewMode.allCases.filter {
+        $0 != .dirtySkyProcessed && $0 != .dirtyEarthProcessed
+    }
+
     func testAnAnnouncedViewIsTheOneThatCanBeAskedFor() {
-        for type in FrameViewMode.allCases {
+        for type in Self.modesOnTheWire {
             let wire = Mapping.protoFrameViewMode(type)
             XCTAssertNotNil(wire, "\(type) has no wire value")
             XCTAssertEqual(wire.map(Mapping.frameViewMode(from:)), type)
@@ -185,9 +191,9 @@ final class MappingTests: XCTestCase {
 
     /// The wire values are all different, so no two images are confused on the way.
     func testNoTwoImagesShareAWireValue() {
-        let wires = FrameViewMode.allCases.compactMap { Mapping.protoFrameViewMode($0) }
-        XCTAssertEqual(Set(wires).count, FrameViewMode.allCases.count)
-        XCTAssertEqual(Star_V1_FrameViewMode.allCases.filter { $0 != .UNRECOGNIZED(-1) }.count, FrameViewMode.allCases.count)
+        let wires = Self.modesOnTheWire.compactMap { Mapping.protoFrameViewMode($0) }
+        XCTAssertEqual(Set(wires).count, Self.modesOnTheWire.count)
+        XCTAssertEqual(Star_V1_FrameViewMode.allCases.filter { $0 != .UNRECOGNIZED(-1) }.count, Self.modesOnTheWire.count)
     }
 
     // MARK: - homography results
