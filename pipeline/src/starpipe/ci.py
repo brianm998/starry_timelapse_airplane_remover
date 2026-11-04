@@ -105,7 +105,8 @@ def _never_ran(job: dict[str, Any], run: dict[str, Any]) -> bool:
     included, and they look the same). A job dict with no `steps` at all is unknown, so counts as scheduled."""
     if job.get("conclusion") != "cancelled" or run.get("conclusion") == "cancelled" or "steps" not in job:
         return False
-    return not any(s.get("conclusion") or s.get("started_at") for s in job.get("steps") or [])
+    steps: list[dict[str, Any]] = job.get("steps") or []
+    return not any(step.get("conclusion") or step.get("started_at") for step in steps)
 
 
 def parse_jobs(runs: list[dict[str, Any]], jobs_by_run: dict[int, list[dict[str, Any]]]) -> list[Job]:
