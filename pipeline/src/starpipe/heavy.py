@@ -189,21 +189,7 @@ class _Activity:
         self.samples: list[_Sample] = []
 
     def _members(self) -> list[psutil.Process]:
-        found: dict[int, psutil.Process] = {}
-        try:
-            root = psutil.Process(self.leader)
-            found[root.pid] = root
-            for child in root.children(recursive=True):
-                found[child.pid] = child
-        except psutil.Error:
-            pass
-        for p in psutil.process_iter():
-            try:
-                if p.pid not in found and os.getpgid(p.pid) == self.leader:
-                    found[p.pid] = p
-            except (psutil.Error, OSError):
-                continue
-        return list(found.values())
+        return _tree(self.leader)
 
     def sample(self, now: float) -> None:
         for p in self._members():
@@ -235,13 +221,53 @@ class _Activity:
         return span
 
 
+def _tree(leader: int) -> list[psutil.Process]:
+    """The job's processes: the leader, all its descendants (whatever process group they moved to) and its group's members."""
+    found: dict[int, psutil.Process] = {}
+    try:
+        root = psutil.Process(leader)
+        found[root.pid] = root
+        for child in root.children(recursive=True):
+            found[child.pid] = child
+    except psutil.Error:
+        pass
+    for p in psutil.process_iter():
+        try:
+            if p.pid not in found and os.getpgid(p.pid) == leader:
+                found[p.pid] = p
+        except (psutil.Error, OSError):
+            continue
+    return list(found.values())
+
+
+def _signal_tree(leader: int, tree: list[psutil.Process], sig: signal.Signals) -> None:
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(leader, sig)
+    for p in tree:
+        with contextlib.suppress(psutil.Error, OSError):
+            p.send_signal(sig)
+
+
+def _running(p: psutil.Process) -> bool:
+    try:
+        return p.is_running() and p.status() != psutil.STATUS_ZOMBIE
+    except psutil.Error:
+        return False
+
+
 def _kill_group(proc: subprocess.Popen[bytes], grace: float) -> None:
-    with contextlib.suppress(ProcessLookupError):
-        os.killpg(proc.pid, signal.SIGTERM)
-    with contextlib.suppress(subprocess.TimeoutExpired):
-        proc.wait(grace)
-    with contextlib.suppress(ProcessLookupError):
-        os.killpg(proc.pid, signal.SIGKILL)  # whatever ignored the TERM, or outlived its leader
+    """TERM then, after the grace, KILL the job's whole tree. The tree is collected first: once the leader dies its
+    children are reparented and can no longer be found from it. Children in other process groups are signalled
+    individually, so the lock is never released with part of the job still running."""
+    tree = [p for p in _tree(proc.pid) if p.pid != proc.pid]
+    if grace > 0:
+        _signal_tree(proc.pid, tree, signal.SIGTERM)
+        deadline = time.monotonic() + grace
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(grace)
+        while time.monotonic() < deadline and any(_running(p) for p in tree):
+            time.sleep(0.05)
+    _signal_tree(proc.pid, tree, signal.SIGKILL)  # whatever ignored the TERM, or outlived its leader
     proc.wait()
 
 
@@ -300,9 +326,7 @@ def run_job(
                     code = proc.returncode
                     break
         except BaseException:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(proc.pid, signal.SIGKILL)  # never release the lock while the job is still running
-            proc.wait()
+            _kill_group(proc, 0)  # never release the lock while any of the job is still running
             raise
         finally:
             for s, h in old.items():
