@@ -212,6 +212,48 @@ def test_rollback_returns_to_the_previous_runtime_and_a_second_rollback_undoes_i
     assert selfupdate.link("current") == second.resolve()
 
 
+def test_switch_refuses_a_missing_or_incomplete_runtime(tmp_path: Path) -> None:
+    repo, sha = make_pipeline_repo(tmp_path)
+    plist, lc = fake_plist(tmp_path), Launchctl()
+    good = selfupdate.build(repo, sha, noop_sync)
+    selfupdate.switch(good, plist, lc, now=1.0)
+    root = selfupdate.runtime_root()
+    before = {name: (root / name).read_text() for name in ("switched_at", "starts.json")}
+    plist_before = plist.read_bytes()
+    lc.calls.clear()
+
+    incomplete = root / "deadbeef"
+    (incomplete / "pipeline").mkdir(parents=True)  # a half-built runtime: no .complete
+    for bad in (root / "gone", incomplete):
+        with pytest.raises(RuntimeError, match="not a complete runtime"):
+            selfupdate.switch(bad, plist, lc, now=2.0)
+        assert selfupdate.link("current") == good.resolve() and selfupdate.link("previous") is None
+        assert {name: (root / name).read_text() for name in before} == before
+        assert plist.read_bytes() == plist_before and lc.calls == []
+
+
+def test_rollback_refuses_an_incomplete_previous(tmp_path: Path) -> None:
+    repo, sha1 = make_pipeline_repo(tmp_path)
+    plist, lc = fake_plist(tmp_path), Launchctl()
+    first = selfupdate.build(repo, sha1, noop_sync)
+    selfupdate.switch(first, plist, lc, now=1.0)
+    (repo / "pipeline" / "v2").write_text("2")
+    sh(repo, "git", "add", "-A")
+    sh(repo, "git", "commit", "-q", "-m", "v2")
+    second = selfupdate.build(repo, sh(repo, "git", "rev-parse", "HEAD").strip(), noop_sync)
+    selfupdate.switch(second, plist, lc, now=2.0)
+    (first / ".complete").unlink()
+    lc.calls.clear()
+
+    with pytest.raises(RuntimeError, match="not a complete runtime"):
+        selfupdate.rollback(plist, lc, clock=lambda: 3.0)
+    assert selfupdate.link("current") == second.resolve() and selfupdate.link("previous") == first.resolve()
+    assert lc.calls == []
+    result = CliRunner().invoke(cli.main, ["self-update", "--rollback"])
+    assert result.exit_code != 0 and "not a complete runtime" in result.output
+    assert selfupdate.link("current") == second.resolve()
+
+
 def test_three_restarts_after_a_switch_are_a_crash_loop(tmp_path: Path) -> None:
     repo, sha = make_pipeline_repo(tmp_path)
     plist, lc = fake_plist(tmp_path), Launchctl()
@@ -331,6 +373,39 @@ def test_only_the_current_and_previous_runtimes_are_kept(tmp_path: Path) -> None
     assert left == {runtimes[1].name, runtimes[2].name}
     assert selfupdate.link("current") == runtimes[2].resolve() and selfupdate.link("previous") == runtimes[1].resolve()
     assert selfupdate.prune() == []
+
+
+def test_a_swap_keeps_the_runtime_it_replaced(tmp_path: Path) -> None:
+    """Pruning in the swap itself once deleted the runtime a rollback needs; the daemon prunes later, once the new one has settled."""
+    repo, _ = make_pipeline_repo(tmp_path)
+    plist, lc = fake_plist(tmp_path), Launchctl()
+    shas: list[str] = []
+    for i in range(2):
+        (repo / "pipeline" / f"v{i}").write_text(str(i))
+        sh(repo, "git", "add", "-A")
+        sh(repo, "git", "commit", "-q", "-m", f"v{i}")
+        shas.append(sh(repo, "git", "rev-parse", "HEAD").strip())
+    first = selfupdate.build(repo, shas[0], noop_sync)
+    selfupdate.switch(first, plist, lc, now=1.0, sleep=lambda _s: None)
+    stray = selfupdate.runtime_root() / "runtime-stray"
+    stray.mkdir()
+    report = selfupdate.update(repo, shas[1], plist, sessions=lambda: 0, sync=noop_sync, test=ok_test, launchctl=lc, sleep=lambda _s: None)
+    second = selfupdate.runtime_dir(shas[1])
+    assert report.switched and "removed" not in report.detail
+    assert selfupdate.link("current") == second.resolve() and selfupdate.link("previous") == first.resolve()
+    assert first.is_dir() and second.is_dir() and stray.is_dir(), "nothing is deleted in the swap"
+
+
+def test_settled_after_the_crash_window(tmp_path: Path) -> None:
+    root = selfupdate.runtime_root()
+    root.mkdir(parents=True, exist_ok=True)
+    assert selfupdate.settled(5.0), "no switch ever recorded"
+    (root / "switched_at").write_text("2000.0")
+    assert not selfupdate.settled(2000.0)
+    assert not selfupdate.settled(2000.0 + selfupdate.CRASH_WINDOW_S), "the window is inclusive, as in crash_loop"
+    assert selfupdate.settled(2000.0 + selfupdate.CRASH_WINDOW_S + 1)
+    for t in (2000.0, 2000.0 + selfupdate.CRASH_WINDOW_S, 2000.0 + selfupdate.CRASH_WINDOW_S + 1):
+        assert selfupdate.settled(t) == (t - 2000.0 > selfupdate.CRASH_WINDOW_S)
 
 
 def test_a_target_that_lacks_the_running_commit_is_not_an_update(tmp_path: Path) -> None:
