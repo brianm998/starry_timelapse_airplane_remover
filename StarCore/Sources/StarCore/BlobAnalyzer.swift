@@ -169,22 +169,6 @@ public actor BlobAnalyzer {
         Log.d("blob analyzer init took \(endTime-startTime) seconds")
     }
 
-    // skips blobs that are absorbed during iteration
-    internal func iterateOverAllBlobs(closure: @Sendable (Int32, Blob) async -> Void) async {
-        // iterate over largest blobs first
-
-        // prepare synchronous sorting with separate map 
-        var blobSizes: [BlobSize] = []
-        for (id, blob) in blobMap {
-            blobSizes.append(BlobSize(id: id, size: await blob.size(), blob: blob))
-        }
-
-        let sortedIds = blobSizes.sorted { $0.size > $1.size }
-        
-        for id in sortedIds {
-            await closure(id.id, id.blob)
-        }
-    }
 /*
     // returns a set of neighbors, and a set of blob ids that have been processed already.
     // repeats the direct neighbor scan for all found neighbors,
@@ -201,17 +185,6 @@ public actor BlobAnalyzer {
                                      processedBlobs: processedBlobs)
     }
 */
-    public func logBlobs() async {
-        Log.d("frame \(frameIndex) has \(blobMap.count) blobs")
-        // the blob reads below are actor hops, and `await` cannot sit inside a log message
-        guard Log.isEnabled(.debug) else { return }
-        for (_, blob) in blobMap {
-            let size = await blob.size()
-            let pixels = await blob.pixels
-            Log.d("frame \(frameIndex) blob.id \(blob.id) \(size) pixels \(pixels)")
-        }
-    }
-
     public var blobRefsObj: BlobRefs { blobRefs }
 
 
