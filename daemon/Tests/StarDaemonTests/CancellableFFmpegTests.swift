@@ -56,7 +56,7 @@ final class CancellableFFmpegTests: XCTestCase {
         try await Task.sleep(nanoseconds: 1_000_000_000)
         task.cancel()
         do {
-            try await task.value
+            try await boundedValue(of: task, seconds: 60, what: "a cancelled ffmpeg render to stop")
             XCTFail("a cancelled render returned normally")
         } catch is CancellationError {
             // expected
@@ -74,7 +74,7 @@ final class CancellableFFmpegTests: XCTestCase {
             ) { _, _, _ in }
         }
         task.cancel()
-        do { try await task.value; XCTFail("returned normally") } catch is CancellationError {}
+        do { try await boundedValue(of: task, seconds: 60, what: "a pre-cancelled ffmpeg render to stop"); XCTFail("returned normally") } catch is CancellationError {}
     }
 
     // MARK: - the default file name

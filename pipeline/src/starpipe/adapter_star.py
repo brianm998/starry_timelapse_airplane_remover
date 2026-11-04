@@ -116,10 +116,17 @@ def _swift_build(pkg: str, *extra: str) -> CheckSpec:
     return CheckSpec(f"build:{pkg}", f"swift build {pkg}", ("swift", "build", "--package-path", pkg, *extra))
 
 
+# xctest prints "Test Case ... started" through buffered stdio, and the check log is a file, so the lines reached it only when the
+# process exited: a hung test (#209) left a log of build output and no name. `script` runs the command on a pty, which makes
+# xctest line-buffer, and passes the command's exit code through (`--verbose` does not unbuffer anything). The \r, ^D and
+# backspaces it adds are dropped or ignored by the parsers.
+LIVE_LOG = ("script", "-q", "/dev/null")
+
+
 def _swift_test(pkg: str, *extra: str, tid: str | None = None) -> CheckSpec:
     return CheckSpec(
         f"test:{tid or pkg}", f"swift test {pkg}",
-        ("swift", "test", "--package-path", pkg, *extra), parser="xctest",
+        (*LIVE_LOG, "swift", "test", "--package-path", pkg, *extra), parser="xctest",
     )
 
 
