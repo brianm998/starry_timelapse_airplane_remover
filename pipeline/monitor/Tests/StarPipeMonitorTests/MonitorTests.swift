@@ -1262,6 +1262,7 @@ final class ProposalTextTests: XCTestCase {
     }
 }
 
+@MainActor
 final class QuestionChoicesTests: XCTestCase {
     private let full = QuestionRow(text: "Which way?", why: "The repo is silent.", options: ["left", "right", "straight on"],
                                    recommendation: "Right")
