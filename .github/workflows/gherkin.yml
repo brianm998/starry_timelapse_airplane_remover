@@ -533,7 +533,7 @@ jobs:
     env:
       NEED_VALIDATOR: ${{ contains(needs.features.outputs.cli, '"validator":true') || contains(needs.features.outputs.macgui, '"validator":true') || contains(needs.features.outputs.desktop, '"validator":true') }}
       NEED_TRAIL: ${{ contains(needs.features.outputs.cli, '"trail":true') || contains(needs.features.outputs.macgui, '"trail":true') || contains(needs.features.outputs.desktop, '"trail":true') }}
-      NEED_CLI: ${{ contains(needs.features.outputs.macgui, '"name":"ui"') }}
+      NEED_CLI: ${{ contains(needs.features.outputs.macgui, '"name":"ui"') || contains(needs.features.outputs.desktop, '"name":"ui"') }}
       NEED_STARD: ${{ needs.features.outputs.desktop != '[]' }}
     steps:
       - uses: actions/checkout@v4
@@ -588,7 +588,7 @@ jobs:
           if [ "$NEED_VALIDATOR" = true ]; then stage removal_tools star-output-verify; fi
           # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator is unrelated)
           if [ "$NEED_TRAIL" = true ]; then stage trail_tools star-removal-verify; fi
-          # the cli: mac-gui makes the processed fixture of its @ui features with it
+          # the cli: the mac gui and desktop legs make the processed fixture of their @ui features with it
           if [ "$NEED_CLI" = true ]; then stage cli star; fi
           # stard: the desktop client's daemon
           if [ "$NEED_STARD" = true ]; then stage daemon stard; fi
@@ -1346,7 +1346,7 @@ jobs:
       - name: Put the binaries in place and make them executable
         shell: bash
         run: |
-          for d in removal_tools trail_tools daemon; do
+          for d in removal_tools trail_tools daemon cli; do
             src="$RUNNER_TEMP/gherkin-bin/$d"
             [ -d "$src" ] || continue
             mkdir -p "$d/.build/release"

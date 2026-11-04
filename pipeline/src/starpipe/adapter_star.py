@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -124,7 +125,10 @@ def _swift_build(pkg: str, *extra: str) -> CheckSpec:
 # process exited: a hung test (#209) left a log of build output and no name. `script` runs the command on a pty, which makes
 # xctest line-buffer, and passes the command's exit code through (`--verbose` does not unbuffer anything). The \r, ^D and
 # backspaces it adds are dropped or ignored by the parsers.
-LIVE_LOG = ("script", "-q", "/dev/null")
+# That is BSD `script`. util-linux's reads `-q /dev/null cmd…` as a typescript file and an extra argument, so on Linux (CI's
+# static checks) the command never ran: there Python's own pty does the same job and keeps the command's argv apart.
+_PTY_RUN = "import os,pty,sys;sys.exit(os.waitstatus_to_exitcode(pty.spawn(sys.argv[1:])))"
+LIVE_LOG = ("script", "-q", "/dev/null") if sys.platform == "darwin" else (sys.executable, "-c", _PTY_RUN)
 
 
 # The swift test suites that run with `--parallel`, each with the test classes that must not share the machine with other
