@@ -83,7 +83,7 @@ class Built:
 class Train:
     def __init__(self, eng: Engine) -> None:
         self.eng = eng
-        self._catch_ups: set[asyncio.Task[None]] = set()
+        self._beside: dict[int, asyncio.Task[None]] = {}  # a conflicted ticket's catch-up, beside the train: it is not batched until done
         self._gates: dict[int, asyncio.Task[None]] = {}  # a ticket's Gherkin feature run, beside the train, before it may be batched
         self._drivers: dict[int, asyncio.Task[None]] = {}  # one task per active batch, driving it through CI and landing
         self._wake = asyncio.Event()  # set when a driver ends, so the loop forms the next batch at once
@@ -112,7 +112,7 @@ class Train:
                 steps += 1
             elif drivers := [t for t in self._drivers.values() if not t.done()]:  # a batch is running: its end may free the train
                 await asyncio.wait(drivers, return_when=asyncio.FIRST_COMPLETED)
-            elif others := [t for t in (*self._catch_ups, *self._gates.values()) if not t.done()]:
+            elif others := [t for t in (*self._beside.values(), *self._gates.values()) if not t.done()]:
                 await asyncio.wait(others)  # a conflicted ticket's rejoin, or the feature runs of everything now ready
             else:
                 break
@@ -238,7 +238,9 @@ class Train:
         """The tickets for the next batch. With another batch in flight, only those sharing no file with any of its members:
         `paths` (from `_paths_of`, computed off the event loop) says which files each ticket changes."""
         eng = self.eng
-        ready = [t for t in eng.db.tickets(("ready",)) if eng.db.batch_of(t.number) is None and not self._gated(t)]
+        # a ticket whose catch-up is still running stays out: landing it would delete the worktree the catch-up is working in
+        ready = [t for t in eng.db.tickets(("ready",))
+                 if eng.db.batch_of(t.number) is None and not self._gated(t) and t.number not in self._beside]
         ids = [t.number for t in ready]
         flying = [n for b in eng.db.active_batches() for n in eng.db.batch_members(int(b["id"]))]
         if flying and paths is None:
@@ -252,6 +254,8 @@ class Train:
 
         groups: list[list[int]] = json.loads(eng.db.get("train_groups") or "[]")
         while groups:  # halves of a batch that went red: exactly these tickets, nothing else
+            if any(n in self._beside for n in groups[0]):
+                return []  # a member is still catching up: the group stays for the next pick, whole
             group = [n for n in groups[0] if n in ids]
             if group and flying and not disjoint(group):
                 return []  # it shares files with the batch in flight: it goes when that one is done
@@ -305,8 +309,8 @@ class Train:
             return
         for n in built.catch_up:  # conflicts with develop itself: the CONFLICT stage runs beside the batch, then back in the queue
             task = asyncio.create_task(self._catch_up_beside(n))
-            self._catch_ups.add(task)
-            task.add_done_callback(self._catch_ups.discard)
+            self._beside[n] = task
+            task.add_done_callback(lambda _t, n=n: self._beside.pop(n, None))
 
     def _fetch(self, root: Path) -> None:
         with self._git_lock:
