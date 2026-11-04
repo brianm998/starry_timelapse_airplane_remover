@@ -55,15 +55,24 @@ def api_token() -> str:
     return path.read_text().strip()
 
 
+BATCH_CI = {"pass": "success", "fail": "failure"}
+
+
+def batch_ci(db: Database, batch: dict[str, Any]) -> str:
+    """The batch's CI result for the monitor: `running` (a pending or rerun verdict, or none yet), `success` or `failure`."""
+    verdict = db.latest_ci_verdict(0, str(batch["head_sha"])) if batch["head_sha"] else None
+    return BATCH_CI.get(verdict or "", "running")
+
+
 def train_info(db: Database, config: Config, now: float) -> dict[str, object]:
     """The landing train's state, computed here for status, the snapshot and the monitor: every active batch (`batches`, oldest first:
-    number, phase, age, members, slow flag; `batch` is the oldest, for clients that show one), the last abandoned batch while it is
+    number, phase, age, members, CI result, slow flag; `batch` is the oldest, for clients that show one), the last abandoned batch while it is
     under an hour old, and the countdown to the next batch."""
     batches: list[dict[str, object]] = []
     for batch in db.active_batches():
         age = max(0.0, now - float(batch["created"]))
         batches.append({"number": batch["id"], "phase": batch["state"], "age_s": int(age), "members": db.batch_members(int(batch["id"])),
-                        "pr_number": batch["pr_number"], "slow": batch["state"] == "building" and age > train.SLOW_BUILDING_S})
+                        "pr_number": batch["pr_number"], "ci": batch_ci(db, batch), "slow": batch["state"] == "building" and age > train.SLOW_BUILDING_S})
     gone = db.last_abandoned_batch(now - train.ABANDONED_MEMORY_S)
     abandoned: dict[str, object] | None = None
     if gone is not None:
@@ -336,8 +345,26 @@ class Daemon:
             self.db.event("self-update", None, old=have, new=target, **({"interrupted": running} if running else {}))
             self._clear_pending()
             self.db.put("self_update_failed", None)
-            selfupdate.prune()
             return "swapped"
+        finally:
+            self._update_lock.release()
+
+    def prune_settled(self) -> list[str]:
+        """Delete the runtimes nothing points at, but only once the current one has stayed up past the crash-loop window.
+
+        Pruning in the swap itself would remove the very runtime a rollback needs. Does nothing when updates are off, when running from a
+        checkout (no links: prune would delete every runtime), when an update is staged but not swapped in (it is neither link), or
+        while staging holds the update lock."""
+        if not self.config.auto_self_update or selfupdate.link("current") is None:
+            return []
+        if not selfupdate.settled():
+            return []
+        if not self._update_lock.acquire(blocking=False):
+            return []
+        try:
+            if self.db.get("self_update_pending"):
+                return []
+            return selfupdate.prune()
         finally:
             self._update_lock.release()
 
@@ -369,6 +396,9 @@ class Daemon:
         if await asyncio.to_thread(self.self_update_once, plist, sync, test) == "swapped":
             log.info("self-update: swapped the runtime; exiting for launchd to restart on it")
             self.exit(0)
+            return
+        if removed := await asyncio.to_thread(self.prune_settled):
+            log.info("self-update: the runtime has settled; pruned old runtime(s) %s", ", ".join(removed))
 
     async def update_loop(self) -> None:
         while True:
@@ -522,7 +552,8 @@ class Daemon:
         return {"behind": behind, "latest": latest}
 
     def fetch_proposals(self) -> list[dict[str, object]]:
-        return [{"number": p.number, "title": p.title, "by": p.by} for p in tickets.proposals(self.engine.gh)]
+        return [{"number": p.number, "title": p.title, "by": p.by or None, "author": p.author or None,
+                 "created_at": p.created_at or None} for p in tickets.proposals(self.engine.gh)]
 
     def settle_proposal(self, n: int, action: str, priority: str | None = None, reason: str = "") -> str:
         """Approve or reject one proposal (blocking: GitHub calls). Only a live `pipe:proposed` issue qualifies, so an
@@ -541,6 +572,42 @@ class Daemon:
             tickets.reject(gh, n, reason)
         self.proposals = [p for p in self.proposals if p["number"] != n]
         return "approved" if action == "approve" else "rejected"
+
+    def proposal_detail(self, n: int) -> dict[str, Any] | None:
+        """One live `pipe:proposed` issue in full (blocking: GitHub calls), or None when #n is not one. GitHubError propagates."""
+        gh = self.engine.gh
+        issue = next((i for i in tickets.open_issues(gh, tickets.PROPOSED) if int(i["number"]) == n), None)
+        if issue is None:
+            return None
+        body = issue.get("body") or ""
+        title = str(issue["title"])
+        every = gh.comments(n)
+        comments: list[dict[str, Any]] = []
+        for c in every[-20:]:
+            text = str(c.get("body") or "")
+            user: dict[str, Any] = c.get("user") or {}
+            comments.append({"author": user.get("login"), "created_at": c.get("created_at"),
+                             "body": text if len(text) <= 4000 else text[:4000] + "\u2026 [truncated]"})
+        blockers: list[dict[str, object]] = []
+        for b in gh.blocked_by(n):
+            blocker = gh.issue(b)
+            if blocker.get("state") == "open":
+                blockers.append({"number": b, "title": str(blocker.get("title") or "")})
+        author: dict[str, Any] = issue.get("user") or {}
+        report = tickets.lint(body, title, self.config.allow_fable)
+        m = tickets.FILED_BY.search(body)
+        return {
+            "number": n, "title": title, "author": author.get("login"),
+            "created_at": issue.get("created_at"), "updated_at": issue.get("updated_at"),
+            "labels": [lab["name"] for lab in issue.get("labels", []) if lab["name"] != tickets.PROPOSED],
+            "by": m.group(1) if m else None, "body": body,
+            "comments": comments, "comment_count": len(every), "blockers": blockers,
+            "readiness": {
+                "lint_ok": report.ok, "errors": report.errors, "warnings": report.warnings,
+                "has_plan": tickets.ticket_plan(body)[0] is not None, "pipeline": tickets.parse_pipeline(body),
+                "queue": {"open": len(tickets.open_issues(gh, "pipeline")), "max": self.config.max_open_tickets},
+            },
+        }
 
     def snapshot(self) -> dict[str, object]:
         """Everything the monitor shows, in one document. The daemon decides groups and activity lines, not the client."""
@@ -905,6 +972,19 @@ class Daemon:
                 raise web.HTTPBadRequest(text="models must be an object of stage to model name")
             models = cast("dict[str, str]", chosen)
             return web.json_response({"results": await asyncio.to_thread(self.enqueue, numbers, models)})
+
+        @r.get("/v1/proposals/{n}")
+        async def proposal(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            if not req.match_info["n"].isdigit():
+                raise web.HTTPBadRequest(text="the issue number must be an integer")
+            n = int(req.match_info["n"])
+            try:
+                detail = await asyncio.to_thread(self.proposal_detail, n)
+            except GitHubError as exc:
+                raise web.HTTPBadGateway(text=str(exc)) from exc
+            if detail is None:
+                raise web.HTTPNotFound(text=f"#{n} is not a proposal")
+            return web.json_response(detail)
 
         @r.post("/v1/proposals/{n}/{action}")
         async def settle(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]

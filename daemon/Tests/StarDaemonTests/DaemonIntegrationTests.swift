@@ -185,13 +185,17 @@ final class DaemonProcess: @unchecked Sendable {
             env.payload = payload
             do {
                 try self.writeEnvelope(env)
-                let reply = try self.readEnvelope(waitingFor: method)
-                switch reply.kind {
-                case .response:   return .response(reply.payload)
-                case .error:      return .error(reply.error, reply.errorCode)
-                case .streamItem: return .streamItem(reply.payload)
-                case .streamEnd:  return .streamEnd
-                default:          return .error("unexpected kind \(reply.kind)", -1)
+                // Notifications the daemon volunteers (warnings) are not the reply: skip them, as stream() does.
+                while true {
+                    let reply = try self.readEnvelope(waitingFor: method)
+                    switch reply.kind {
+                    case .response:     return .response(reply.payload)
+                    case .error:        return .error(reply.error, reply.errorCode)
+                    case .streamItem:   return .streamItem(reply.payload)
+                    case .streamEnd:    return .streamEnd
+                    case .notification: continue
+                    default:            return .error("unexpected kind \(reply.kind)", -1)
+                    }
                 }
             } catch {
                 return .error("\(error)", -1)

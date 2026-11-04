@@ -1239,5 +1239,16 @@
   "ui.menu_bar.tooltip.failed": "star — thất bại",
   "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth chỉ giữ phần mặt đất dưới đường chân trời, nên cần phát hiện đường chân trời và không thể chạy khi tính năng đó bị tắt (--no-horizon).",
   "view_mode.dirtySkyProcessed": "bầu trời chưa làm sạch",
-  "view_mode.dirtyEarthProcessed": "mặt đất chưa làm sạch"
+  "view_mode.dirtyEarthProcessed": "mặt đất chưa làm sạch",
+  "ui.dirty_sky": "Bầu trời chưa làm sạch",
+  "ui.dirty_earth": "Mặt đất chưa làm sạch",
+  "ui.clean_method_tip.dirty_sky": "Chỉ giữ lại những gì đã di chuyển trên bầu trời: các ngôi sao đứng yên chuyển thành màu đen, còn máy bay, vệ tinh và sao băng giữ nguyên màu. Mặt đất màu đen.",
+  "ui.clean_method_tip.dirty_earth": "Chỉ giữ lại những gì đã di chuyển trên mặt đất: mặt đất đứng yên chuyển thành màu đen. Bầu trời màu đen. Cần phát hiện đường chân trời.",
+  "ui.clean_method_tip.dirty_earth_needs_horizon": "Mặt đất chưa làm sạch cần phát hiện đường chân trời. Hãy đặt loại cảnh thành Bầu trời + Đường chân trời để chọn.",
+  "ui.mode_desc_dirty_sky": "Star sẽ chạy ở chế độ bầu trời chưa làm sạch, ngược lại với làm sạch. Mỗi điểm ảnh của bầu trời trở thành ảnh gốc trừ đi khung tham chiếu đã căn chỉnh: các ngôi sao đứng yên chuyển thành màu đen và chỉ những gì đã di chuyển ở đó, như máy bay, vệ tinh và sao băng, giữ nguyên màu. Mặt đất màu đen. Không phát hiện giá trị ngoại lai nào, nên không có gì cần xem lại ở từng khung. Khi không phát hiện đường chân trời, toàn bộ khung được coi là bầu trời.",
+  "ui.mode_desc_dirty_earth": "Star sẽ chạy ở chế độ mặt đất chưa làm sạch, ngược lại với làm sạch. Mỗi điểm ảnh của mặt đất trở thành ảnh gốc trừ đi khung tham chiếu đã căn chỉnh: mặt đất đứng yên chuyển thành màu đen và chỉ những gì đã di chuyển ở đó giữ nguyên màu. Bầu trời màu đen. Không phát hiện giá trị ngoại lai nào, nên không có gì cần xem lại ở từng khung. Chế độ này cần phát hiện đường chân trời.",
+  "ui.frame_mode_desc_dirty_sky": "Chỉ giữ lại những gì đã di chuyển trên bầu trời của khung này (ảnh gốc trừ đi tham chiếu đã căn chỉnh); mặt đất màu đen. Khung này không có gì để xem lại.",
+  "ui.frame_mode_desc_dirty_earth": "Chỉ giữ lại những gì đã di chuyển trên mặt đất của khung này (ảnh gốc trừ đi tham chiếu đã căn chỉnh); bầu trời màu đen. Khung này không có gì để xem lại.",
+  "ui.this_frame_uses_dirty_sky": "Khung này dùng chế độ bầu trời chưa làm sạch",
+  "ui.this_frame_uses_dirty_earth": "Khung này dùng chế độ mặt đất chưa làm sạch"
 }

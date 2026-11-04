@@ -1239,5 +1239,16 @@
   "ui.menu_bar.tooltip.failed": "star — niepowodzenie",
   "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth zostawia tylko ziemię poniżej horyzontu, więc wymaga wykrywania horyzontu i nie może działać, gdy jest ono wyłączone (--no-horizon).",
   "view_mode.dirtySkyProcessed": "nieoczyszczone niebo",
-  "view_mode.dirtyEarthProcessed": "nieoczyszczona ziemia"
+  "view_mode.dirtyEarthProcessed": "nieoczyszczona ziemia",
+  "ui.dirty_sky": "Nieoczyszczone niebo",
+  "ui.dirty_earth": "Nieoczyszczona ziemia",
+  "ui.clean_method_tip.dirty_sky": "Zachowuje tylko to, co poruszyło się na niebie: nieruchome gwiazdy stają się czarne, a samoloty, satelity i meteory zachowują swój kolor. Ziemia jest czarna.",
+  "ui.clean_method_tip.dirty_earth": "Zachowuje tylko to, co poruszyło się na ziemi: nieruchoma ziemia staje się czarna. Niebo jest czarne. Wymaga wykrywania horyzontu.",
+  "ui.clean_method_tip.dirty_earth_needs_horizon": "Nieoczyszczona ziemia wymaga wykrywania horyzontu. Ustaw typ sceny na Niebo + horyzont, aby ją wybrać.",
+  "ui.mode_desc_dirty_sky": "Star uruchomi się w trybie nieoczyszczonego nieba, czyli odwrotności czyszczenia. Każdy piksel nieba staje się oryginałem minus wyrównana klatka odniesienia: nieruchome gwiazdy stają się czarne, a tylko to, co się tam poruszyło, na przykład samoloty, satelity i meteory, zachowuje kolor. Ziemia jest czarna. Nie są wykrywane wartości odstające, więc nie ma nic do przejrzenia na poszczególnych klatkach. Bez wykrywania horyzontu cała klatka liczy się jako niebo.",
+  "ui.mode_desc_dirty_earth": "Star uruchomi się w trybie nieoczyszczonej ziemi, czyli odwrotności czyszczenia. Każdy piksel ziemi staje się oryginałem minus wyrównana klatka odniesienia: nieruchoma ziemia staje się czarna, a tylko to, co się tam poruszyło, zachowuje kolor. Niebo jest czarne. Nie są wykrywane wartości odstające, więc nie ma nic do przejrzenia na poszczególnych klatkach. Ten tryb wymaga wykrywania horyzontu.",
+  "ui.frame_mode_desc_dirty_sky": "Zachowuje tylko to, co poruszyło się na niebie tej klatki (oryginał minus wyrównane odniesienie); ziemia jest czarna. Nie ma tu nic do przejrzenia.",
+  "ui.frame_mode_desc_dirty_earth": "Zachowuje tylko to, co poruszyło się na ziemi tej klatki (oryginał minus wyrównane odniesienie); niebo jest czarne. Nie ma tu nic do przejrzenia.",
+  "ui.this_frame_uses_dirty_sky": "Ta klatka używa trybu nieoczyszczonego nieba",
+  "ui.this_frame_uses_dirty_earth": "Ta klatka używa trybu nieoczyszczonej ziemi"
 }

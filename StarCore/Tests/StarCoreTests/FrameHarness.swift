@@ -376,7 +376,7 @@ final class FrameHarness {
     // MARK: - writing fixtures into the harness tree
 
     /// Write an image to a scratch path under `root` and return the path, for the APIs that take
-    /// filenames rather than images — `HomographyHorizonDetector.prepare` is the main one.
+    /// filenames rather than images.
     func writeScratch(_ image: PixelatedImage, named name: String) -> String {
         let dir = root.appendingPathComponent("scratch")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

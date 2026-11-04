@@ -401,6 +401,8 @@ async def catch_up(eng: Engine, t: Ticket, base: str, mb: str, head: str, ov: la
         result, _ = await eng.model_stage(t, "conflict", prompt, fresh=True)
         if not result.ok:
             return False
+    if rejoin and ((cur := eng.db.ticket(t.number)) is None or cur.state != "ready"):
+        return False  # it left the queue meanwhile (landed, cancelled, parked): its worktree may be gone, so no further round
     if not await eng.audit_conflict(t, wt, mb, base, head):
         return False
     failure = None if land_now(eng, t.number) else await asyncio.to_thread(eng._run_verification, t, wt)  # pyright: ignore[reportPrivateUsage]
@@ -477,12 +479,14 @@ def watch_develop(eng: Engine) -> None:
                         _new_red(eng, job, sha)  # the gate reacts at once: landing stops
                 elif before == "success":
                     eng.db.put(pending, sha)  # first sighting: wait for a second, different run to agree before filing a ticket
-                elif eng.db.get(pending) not in (None, sha):
+                elif (old := eng.db.get(pending)) not in (None, sha):
                     eng.db.put(pending, None)
-                    _new_red(eng, job, sha)
+                    if not _new_red(eng, job, sha):
+                        eng.db.put(pending, old)  # nowhere to file it yet: the next poll tries again
             elif not job.red:
                 eng.db.put(pending, None)  # green again: that was a flake
-            if job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line"):
+            if job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line") == f"{job.workflow}/{job.job}":
+                # only the job that set the line clears it: a green sibling says nothing about the red one
                 eng.db.put("stop_line", None)
                 eng.notifier.clear("develop-red", None)
                 eng.db.event("stop-line-cleared", None, job=job.job)
@@ -493,23 +497,43 @@ def _auto_open(eng: Engine) -> int:
                 if any(lab["name"] == "pipeline" for lab in i.get("labels", []))])
 
 
-def _new_red(eng: Engine, job: ci.Job, sha: str) -> None:
+def _new_red(eng: Engine, job: ci.Job, sha: str) -> bool:
+    """File a ticket for a red develop job. True: dealt with (filed, or an open ticket already covers it). False: could
+    not file it now, so the caller keeps `red_pending` and the next poll tries again. Over the auto-ticket cap the red
+    becomes a proposal (waits for `starpipe approve`) instead of being dropped."""
     gate = job.workflow == ci.GATE
+    name = f"{job.workflow}/{job.job}"
     if gate:
-        eng.db.put("stop_line", f"{job.workflow}/{job.job}")
-        eng.notifier.alert("develop-red", None, f"{job.workflow}/{job.job} is red on develop at {sha[:10]}")
-    if _auto_open(eng) >= eng.config.max_auto_tickets:
-        eng.db.event("auto-ticket-capped", None, job=f"{job.workflow}/{job.job}")
-        return
-    log = ""
+        eng.db.put("stop_line", name)
+        eng.notifier.alert("develop-red", None, f"{name} is red on develop at {sha[:10]}")
+    title = f"develop red: {name}" if gate else f"regression on develop: {name}"
     try:
-        log = eng.gh.failed_log(job.run_id, 4000)
-    except GitHubError:
-        pass
-    title = f"develop red: {job.workflow}/{job.job}" if gate else f"regression on develop: {job.workflow}/{job.job}"
-    body = (f"## Goal\nMake {job.workflow}/{job.job} green on develop again.\n\n## Context\nIt was green and is now red at "
-            f"{sha}. Run {job.run_id}.\n\n```\n{log}\n```\n\n## Acceptance criteria\n- A1: {job.workflow}/{job.job} passes on "
-            f"develop — check: review: CI run on the fix PR\n\n## Tests\nnone: restores an existing check\n\n## Out of scope\n"
-            f"Unrelated failures.\n")
-    n = eng.gh.create_issue(title, body)
-    eng.gh.add_labels(n, ["pipe:filed-by-pipeline", "pipeline", "p0" if gate else "p1"])
+        if any(title.lower() == i["title"].lower() or name.lower() in i["title"].lower()
+               for i in eng.gh.paged("issues?state=open&per_page=100") if "pull_request" not in i):
+            eng.db.event("red-already-ticketed", None, job=name)  # an open ticket (maybe hand-filed) already names it
+            return True
+        propose = _auto_open(eng) >= eng.config.max_auto_tickets
+        if propose and len(tickets.open_issues(eng.gh, tickets.PROPOSED)) >= eng.config.max_proposed:
+            eng.db.event("auto-ticket-capped", None, job=name)
+            return False
+        log = ""
+        try:
+            log = eng.gh.failed_log(job.run_id, 4000)
+        except GitHubError:
+            pass
+        body = (f"## Goal\nMake {name} green on develop again.\n\n## Context\nIt was green and is now red at "
+                f"{sha}. Run {job.run_id}.\n\n```\n{log}\n```\n\n## Acceptance criteria\n- A1: {name} passes on "
+                f"develop — check: review: CI run on the fix PR\n\n## Tests\nnone: restores an existing check\n\n## Out of scope\n"
+                f"Unrelated failures.\n")
+        if propose:
+            eng.gh.ensure_label(tickets.PROPOSED)
+            n = eng.gh.create_issue(title, body + tickets.filed_by("pipeline develop watcher"))
+            eng.gh.add_labels(n, ["pipe:filed-by-pipeline", tickets.PROPOSED, "p0" if gate else "p1"])  # waits for `starpipe approve`
+            eng.db.event("auto-ticket-proposed", None, job=name, issue=n)
+        else:
+            n = eng.gh.create_issue(title, body)
+            eng.gh.add_labels(n, ["pipe:filed-by-pipeline", "pipeline", "p0" if gate else "p1"])
+    except GitHubError as exc:
+        eng.db.event("auto-ticket-failed", None, job=name, error=str(exc))
+        return False
+    return True

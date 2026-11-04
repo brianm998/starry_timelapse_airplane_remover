@@ -83,12 +83,6 @@ final class StandardLineTests: XCTestCase {
         }
     }
 
-    func testYAtZeroXMatchesSolvingForXAtZero() {
-        let line = StandardLine(point1: DoubleCoord(x: -3, y: 4),
-                                point2: DoubleCoord(x: 6, y: -8))
-        XCTAssertEqual(line.yAtZeroX, line.y(forX: 0), accuracy: 1e-9)
-    }
-
     // MARK: - distance
 
     func testDistanceFromTheOriginToTheClassicDiagonal() {
