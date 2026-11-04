@@ -317,7 +317,11 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                                 Segmented(
                                     options = listOf(true to localized("scene_type.sky_horizon"), false to localized("scene_type.sky_only")),
                                     selected = horizon,
-                                    onSelect = { horizon = it },
+                                    // Dirty earth needs a horizon, so it cannot stay chosen once the horizon is off.
+                                    onSelect = {
+                                        horizon = it
+                                        clean = CleanMethodChoice.method(CleanMethodChoice.highLevel(clean).coerced(it), autoPreserve)
+                                    },
                                     tip = { localized(if (it) "ui.sky_horizon_help" else "ui.sky_only_help") },
                                 )
                             }
@@ -338,16 +342,14 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                             SettingGroup(
                                 localized("ui.clean_method"), info = info, infoId = "clean",
                                 help = choicesHelp(
-                                    localized("ui.automatic") to localized(CleanMethodTexts.descriptionKey(HighLevelClean.AUTOMATIC)),
-                                    localized("ui.selective") to localized(CleanMethodTexts.descriptionKey(HighLevelClean.SELECTIVE)),
+                                    *HighLevelClean.values().map { localized(CleanMethodTexts.titleKey(it)) to localized(CleanMethodTexts.descriptionKey(it)) }.toTypedArray(),
                                 ),
                             ) {
                                 Segmented(
-                                    options = listOf(
-                                        HighLevelClean.AUTOMATIC to localized("ui.automatic"),
-                                        HighLevelClean.SELECTIVE to localized("ui.selective"),
-                                    ),
-                                    tip = { localized(CleanMethodTexts.tipKey(it)) },
+                                    options = HighLevelClean.values().map { it to localized(CleanMethodTexts.titleKey(it)) },
+                                    // A switched-off choice (Dirty earth without a horizon) says why instead of what it does.
+                                    tip = { localized(CleanMethodTexts.unavailableTipKey(it, horizon) ?: CleanMethodTexts.tipKey(it)) },
+                                    optionEnabled = { it.isAvailable(horizon) },
                                     selected = CleanMethodChoice.highLevel(clean),
                                     onSelect = { clean = CleanMethodChoice.method(it, autoPreserve) },
                                 )
@@ -356,9 +358,10 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                                     color = StarColors.textDisabled, fontSize = 10.sp,
                                 )
                             }
-                            // Selective always reviews outliers, whatever this is left at.
+                            // Selective always reviews outliers, whatever this is left at, and the dirty methods never do.
+                            val asksAutoPreservation = CleanMethodChoice.highLevel(clean).usesAutoPreservation
                             SettingGroup(
-                                localized("ui.selective_auto_clean").removeSuffix(":"), enabled = clean != CleanMethod.CLEAN_SELECTIVE,
+                                localized("ui.selective_auto_clean").removeSuffix(":"), enabled = asksAutoPreservation,
                                 info = info, infoId = "autoselective",
                                 help = choicesHelp(
                                     localized("ui.yes") to localized(CleanMethodTexts.autoPreservationDescriptionKey(true)),
@@ -371,9 +374,9 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                                     selected = autoPreserve,
                                     onSelect = {
                                         autoPreserve = it
-                                        if (clean != CleanMethod.CLEAN_SELECTIVE) clean = CleanMethodChoice.method(HighLevelClean.AUTOMATIC, it)
+                                        if (asksAutoPreservation) clean = CleanMethodChoice.method(HighLevelClean.AUTOMATIC, it)
                                     },
-                                    enabled = clean != CleanMethod.CLEAN_SELECTIVE,
+                                    enabled = asksAutoPreservation,
                                 )
                             }
                             // How strictly outliers are looked for: only means something when the method finds outlier groups at all.
@@ -556,19 +559,22 @@ private fun <T> Segmented(
     enabled: Boolean = true,
     /** What hovering an option says it means (macOS's `.help` on each choice). */
     tip: (T) -> String? = { null },
+    /** Whether one option can be chosen while the rest can (Dirty earth needs a horizon). */
+    optionEnabled: (T) -> Boolean = { true },
 ) {
     // Wraps onto the next line rather than squeezing an option until its text is cut off.
     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         options.forEach { (value, label) ->
             val isSel = value == selected
+            val usable = enabled && optionEnabled(value)
             val option: @Composable () -> Unit = {
                 Box(
                     Modifier
                         .clip(RoundedCornerShape(5.dp))
-                        .background(if (isSel) (if (enabled) StarColors.accent else StarColors.gray) else StarColors.cellDefault)
-                        .clickable(enabled = enabled) { onSelect(value) }
+                        .background(if (isSel) (if (usable) StarColors.accent else StarColors.gray) else StarColors.cellDefault)
+                        .clickable(enabled = usable) { onSelect(value) }
                         .padding(horizontal = 10.dp, vertical = 5.dp),
-                ) { Text(label, color = if (isSel) Color.White else if (enabled) StarColors.textPrimary else StarColors.textDisabled, fontSize = 11.sp) }
+                ) { Text(label, color = if (isSel) Color.White else if (usable) StarColors.textPrimary else StarColors.textDisabled, fontSize = 11.sp) }
             }
             val text = tip(value)
             if (text == null) option() else HoverTip(text, option)

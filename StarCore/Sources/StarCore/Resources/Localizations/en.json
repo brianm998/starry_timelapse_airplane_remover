@@ -1239,5 +1239,16 @@
   "ui.menu_bar.tooltip.failed": "star — failed",
   "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth keeps only the ground below the horizon, so it needs horizon detection and cannot run with it turned off (--no-horizon).",
   "view_mode.dirtySkyProcessed": "dirty sky",
-  "view_mode.dirtyEarthProcessed": "dirty earth"
+  "view_mode.dirtyEarthProcessed": "dirty earth",
+  "ui.dirty_sky": "Dirty sky",
+  "ui.dirty_earth": "Dirty earth",
+  "ui.clean_method_tip.dirty_sky": "Keeps only what moved in the sky: static stars go black, while airplanes, satellites and meteors keep their colour. The ground is black.",
+  "ui.clean_method_tip.dirty_earth": "Keeps only what moved on the ground: static ground goes black. The sky is black. Needs horizon detection.",
+  "ui.clean_method_tip.dirty_earth_needs_horizon": "Dirty earth needs horizon detection. Set the scene type to Sky + Horizon to choose it.",
+  "ui.mode_desc_dirty_sky": "Star will run in dirty sky mode, the opposite of cleaning. Each sky pixel becomes the original minus the aligned reference frame, so static stars go to black and only what moved there, such as airplanes, satellites and meteors, keeps its colour. The ground is black. No outliers are detected, so there is nothing to review per frame. Without horizon detection the whole frame counts as sky.",
+  "ui.mode_desc_dirty_earth": "Star will run in dirty earth mode, the opposite of cleaning. Each ground pixel becomes the original minus the aligned reference frame, so static ground goes to black and only what moved there keeps its colour. The sky is black. No outliers are detected, so there is nothing to review per frame. This mode needs horizon detection.",
+  "ui.frame_mode_desc_dirty_sky": "Keeps only what moved in the sky of this frame (the original minus the aligned reference); the ground is black. There is nothing to review on this frame.",
+  "ui.frame_mode_desc_dirty_earth": "Keeps only what moved on the ground of this frame (the original minus the aligned reference); the sky is black. There is nothing to review on this frame.",
+  "ui.this_frame_uses_dirty_sky": "This frame uses Dirty sky mode",
+  "ui.this_frame_uses_dirty_earth": "This frame uses Dirty earth mode"
 }

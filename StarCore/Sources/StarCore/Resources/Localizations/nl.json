@@ -1239,5 +1239,16 @@
   "ui.menu_bar.tooltip.failed": "star — mislukt",
   "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth houdt alleen de grond onder de horizon over, dus het heeft horizondetectie nodig en kan niet draaien als die is uitgeschakeld (--no-horizon).",
   "view_mode.dirtySkyProcessed": "onopgeschoonde lucht",
-  "view_mode.dirtyEarthProcessed": "onopgeschoonde grond"
+  "view_mode.dirtyEarthProcessed": "onopgeschoonde grond",
+  "ui.dirty_sky": "Onopgeschoonde lucht",
+  "ui.dirty_earth": "Onopgeschoonde grond",
+  "ui.clean_method_tip.dirty_sky": "Houdt alleen over wat er in de lucht bewoog: stilstaande sterren worden zwart, terwijl vliegtuigen, satellieten en meteoren hun kleur houden. De grond is zwart.",
+  "ui.clean_method_tip.dirty_earth": "Houdt alleen over wat er op de grond bewoog: stilstaande grond wordt zwart. De lucht is zwart. Vereist horizondetectie.",
+  "ui.clean_method_tip.dirty_earth_needs_horizon": "Onopgeschoonde grond vereist horizondetectie. Zet het scènetype op Lucht + Horizon om het te kiezen.",
+  "ui.mode_desc_dirty_sky": "Star draait in de modus onopgeschoonde lucht, het tegenovergestelde van opschonen. Elke luchtpixel wordt het origineel min het uitgelijnde referentiebeeld: stilstaande sterren worden zwart en alleen wat daar bewoog, zoals vliegtuigen, satellieten en meteoren, houdt zijn kleur. De grond is zwart. Er worden geen uitschieters gedetecteerd, dus er valt per beeld niets te beoordelen. Zonder horizondetectie telt het hele beeld als lucht.",
+  "ui.mode_desc_dirty_earth": "Star draait in de modus onopgeschoonde grond, het tegenovergestelde van opschonen. Elke grondpixel wordt het origineel min het uitgelijnde referentiebeeld: stilstaande grond wordt zwart en alleen wat daar bewoog houdt zijn kleur. De lucht is zwart. Er worden geen uitschieters gedetecteerd, dus er valt per beeld niets te beoordelen. Deze modus vereist horizondetectie.",
+  "ui.frame_mode_desc_dirty_sky": "Houdt alleen over wat er in de lucht van dit beeld bewoog (het origineel min de uitgelijnde referentie); de grond is zwart. Er valt op dit beeld niets te beoordelen.",
+  "ui.frame_mode_desc_dirty_earth": "Houdt alleen over wat er op de grond van dit beeld bewoog (het origineel min de uitgelijnde referentie); de lucht is zwart. Er valt op dit beeld niets te beoordelen.",
+  "ui.this_frame_uses_dirty_sky": "Dit beeld gebruikt de modus onopgeschoonde lucht",
+  "ui.this_frame_uses_dirty_earth": "Dit beeld gebruikt de modus onopgeschoonde grond"
 }

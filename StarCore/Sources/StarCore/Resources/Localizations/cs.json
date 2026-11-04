@@ -1239,5 +1239,16 @@
   "ui.menu_bar.tooltip.failed": "star — selhalo",
   "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth ponechává jen zemi pod horizontem, takže potřebuje detekci horizontu a nemůže běžet, když je vypnutá (--no-horizon).",
   "view_mode.dirtySkyProcessed": "nevyčištěná obloha",
-  "view_mode.dirtyEarthProcessed": "nevyčištěná země"
+  "view_mode.dirtyEarthProcessed": "nevyčištěná země",
+  "ui.dirty_sky": "Nevyčištěná obloha",
+  "ui.dirty_earth": "Nevyčištěná země",
+  "ui.clean_method_tip.dirty_sky": "Ponechává jen to, co se pohnulo na obloze: nehybné hvězdy zčernají, zatímco letadla, družice a meteory si zachovají barvu. Země je černá.",
+  "ui.clean_method_tip.dirty_earth": "Ponechává jen to, co se pohnulo na zemi: nehybná země zčerná. Obloha je černá. Vyžaduje detekci horizontu.",
+  "ui.clean_method_tip.dirty_earth_needs_horizon": "Nevyčištěná země vyžaduje detekci horizontu. Nastavte typ scény na Obloha + horizont, abyste ji mohli zvolit.",
+  "ui.mode_desc_dirty_sky": "Star poběží v režimu nevyčištěné oblohy, tedy opaku čištění. Každý pixel oblohy se stane originálem mínus zarovnaný referenční snímek: nehybné hvězdy zčernají a barvu si zachová jen to, co se tam pohnulo, například letadla, družice a meteory. Země je černá. Nezjišťují se žádné odlehlé hodnoty, takže u jednotlivých snímků není co kontrolovat. Bez detekce horizontu se celý snímek počítá jako obloha.",
+  "ui.mode_desc_dirty_earth": "Star poběží v režimu nevyčištěné země, tedy opaku čištění. Každý pixel země se stane originálem mínus zarovnaný referenční snímek: nehybná země zčerná a barvu si zachová jen to, co se tam pohnulo. Obloha je černá. Nezjišťují se žádné odlehlé hodnoty, takže u jednotlivých snímků není co kontrolovat. Tento režim vyžaduje detekci horizontu.",
+  "ui.frame_mode_desc_dirty_sky": "Ponechává jen to, co se pohnulo na obloze tohoto snímku (originál mínus zarovnaná reference); země je černá. V tomto snímku není co kontrolovat.",
+  "ui.frame_mode_desc_dirty_earth": "Ponechává jen to, co se pohnulo na zemi tohoto snímku (originál mínus zarovnaná reference); obloha je černá. V tomto snímku není co kontrolovat.",
+  "ui.this_frame_uses_dirty_sky": "Tento snímek používá režim nevyčištěné oblohy",
+  "ui.this_frame_uses_dirty_earth": "Tento snímek používá režim nevyčištěné země"
 }
