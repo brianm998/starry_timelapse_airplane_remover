@@ -30,6 +30,8 @@ public final class MonitorStore {
         didSet { if !navigating { record(selected, was: oldValue) } }
     }
     public var lastError: String?
+    /// The sidebar's ticket search. Only the sidebar rows read it; counts, badges and the Overview use every ticket.
+    public var search = TicketSearch()
     /// Titles learnt for issues that are not pipeline tickets (from a ticket's detail "Blocked by" list).
     private var issueTitles: [Int: String] = [:]
 
@@ -86,16 +88,35 @@ public final class MonitorStore {
 
     public func tickets(in group: String) -> [TicketSnap] { snapshot?.tickets.filter { $0.group == group } ?? [] }
 
-    public var selectedTicket: TicketSnap? { snapshot?.tickets.first { $0.number == selected } }
+    /// The tickets of a group that the sidebar search lets through.
+    public func visibleTickets(in group: String) -> [TicketSnap] { search.filter(tickets(in: group)) }
 
-    /// A ticket in the snapshot, or an issue some snapshot ticket is blocked by: both can be shown in the detail pane.
-    private func isShowable(_ n: Int, in snap: Snapshot?) -> Bool {
-        snap?.tickets.contains { $0.number == n || $0.blockedBy.contains(n) } ?? false
+    /// True when there are tickets but the search hides every one of them.
+    public var searchHidesEverything: Bool {
+        guard let all = snapshot?.tickets, !all.isEmpty else { return false }
+        return search.filter(all).isEmpty
     }
 
-    /// The selected issue when it is a blocker but not a pipeline ticket; the title is empty when unknown.
+    public var selectedTicket: TicketSnap? { snapshot?.tickets.first { $0.number == selected } }
+
+    /// The proposed issues waiting for the owner, as the sidebar's "Proposed" section lists them.
+    public var proposals: [ProposalSnap] { snapshot?.proposals ?? [] }
+
+    /// The selected issue when it is a proposal (and not also a pipeline ticket).
+    public var selectedProposal: ProposalSnap? {
+        guard selectedTicket == nil else { return nil }
+        return proposals.first { $0.number == selected }
+    }
+
+    /// A ticket or proposal in the snapshot, or an issue some snapshot ticket is blocked by: all can be shown in the detail pane.
+    private func isShowable(_ n: Int, in snap: Snapshot?) -> Bool {
+        guard let snap else { return false }
+        return snap.tickets.contains { $0.number == n || $0.blockedBy.contains(n) } || snap.proposals.contains { $0.number == n }
+    }
+
+    /// The selected issue when it is a blocker but not a pipeline ticket or a proposal; the title is empty when unknown.
     public var selectedIssue: (number: Int, title: String)? {
-        guard let n = selected, selectedTicket == nil, isShowable(n, in: snapshot) else { return nil }
+        guard let n = selected, selectedTicket == nil, selectedProposal == nil, isShowable(n, in: snapshot) else { return nil }
         return (n, issueTitles[n] ?? "")
     }
 
@@ -265,6 +286,10 @@ public final class MonitorStore {
         await run { results = try await $0.enqueue(numbers: numbers, models: models) }
         return results
     }
+
+    /// Approve a proposal; a daemon refusal (full queue, already approved) lands in `lastError`.
+    public func approve(_ number: Int, priority: String? = nil) async { await run { try await $0.approve(number, priority: priority) } }
+    public func reject(_ number: Int, reason: String = "") async { await run { try await $0.reject(number, reason: reason) } }
 
     public func answer(_ number: Int, _ text: String) async { await run { try await $0.answer(number, text: text) } }
     public func retry(_ number: Int, stage: String) async { await run { try await $0.retry(number, stage: stage) } }

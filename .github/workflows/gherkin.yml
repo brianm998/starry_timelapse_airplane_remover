@@ -79,6 +79,10 @@ on:
         description: 'Comma-separated feature names to run (default: all)'
         type: string
         default: ''
+      windows:
+        description: "Which legs run: 'run' (all, the default; also when empty, as under workflow_dispatch), 'skip' (no Windows legs), 'only' (just the Windows legs and what they need)"
+        type: string
+        default: run
 
 # The run name tells a full run from a subset: the daemon counts only `Gherkin: full` (or a push, which was always full) as a
 # green full run, never `Gherkin: <features>`. Other events keep GitHub's own title (the PR title, the head commit message).
@@ -170,6 +174,7 @@ jobs:
   # iMac's) and this gem produce byte-identical output.
   generate-check:
     name: generated files are current
+    if: inputs.windows != 'only'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -203,7 +208,7 @@ jobs:
     name: cli (ubuntu-24.04) · ${{ matrix.shard.label }}
     runs-on: ubuntu-24.04
     needs: [features, ffmpeg-linux, opencv-linux]
-    if: needs.features.outputs.cli != '[]'
+    if: needs.features.outputs.cli != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
       matrix:
@@ -317,7 +322,7 @@ jobs:
     name: cli (windows-2022) · ${{ matrix.shard.label }}
     runs-on: windows-2022
     needs: [features, ffmpeg-windows, opencv-windows]
-    if: needs.features.outputs.cli != '[]'
+    if: needs.features.outputs.cli != '[]' && inputs.windows != 'skip'
     strategy:
       fail-fast: false
       matrix:
@@ -525,7 +530,7 @@ jobs:
     name: build star, stard and the validators (macos-15)
     runs-on: macos-15
     needs: [features, opencv-macos]
-    if: needs.features.outputs.cli != '[]' || needs.features.outputs.macgui != '[]' || needs.features.outputs.desktop != '[]'
+    if: (needs.features.outputs.cli != '[]' || needs.features.outputs.macgui != '[]' || needs.features.outputs.desktop != '[]') && inputs.windows != 'only'
     timeout-minutes: 60
     env:
       NEED_VALIDATOR: ${{ contains(needs.features.outputs.cli, '"validator":true') || contains(needs.features.outputs.macgui, '"validator":true') || contains(needs.features.outputs.desktop, '"validator":true') }}
@@ -602,7 +607,7 @@ jobs:
     name: cli (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos, opencv-macos, build-macos]
-    if: needs.features.outputs.cli != '[]'
+    if: needs.features.outputs.cli != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
       matrix:
@@ -725,16 +730,19 @@ jobs:
   # ffmpeg-gpu.yml once per OS, so a leg waits for the ffmpeg of its own OS only.  One call for all three made every job wait for
   # the slowest build, and when the macOS or Windows cache was cold (20+ minutes) the Linux jobs sat behind it.
   ffmpeg-linux:
+    if: inputs.windows != 'only'
     uses: ./.github/workflows/ffmpeg-gpu.yml
     with:
       platforms: linux
 
   ffmpeg-macos:
+    if: inputs.windows != 'only'
     uses: ./.github/workflows/ffmpeg-gpu.yml
     with:
       platforms: macos
 
   ffmpeg-windows:
+    if: inputs.windows != 'skip'
     uses: ./.github/workflows/ffmpeg-gpu.yml
     with:
       platforms: windows
@@ -742,6 +750,7 @@ jobs:
   # opencv.yml once per OS (cache, then the opencv-prebuilt release, then a build), so a leg waits for the OpenCV of its own OS only.
   opencv-linux:
     name: OpenCV (linux)
+    if: inputs.windows != 'only'
     permissions:
       contents: write
     uses: ./.github/workflows/opencv.yml
@@ -750,6 +759,7 @@ jobs:
 
   opencv-macos:
     name: OpenCV (macos)
+    if: inputs.windows != 'only'
     permissions:
       contents: write
     uses: ./.github/workflows/opencv.yml
@@ -758,6 +768,7 @@ jobs:
 
   opencv-windows:
     name: OpenCV (windows)
+    if: inputs.windows != 'skip'
     permissions:
       contents: write
     uses: ./.github/workflows/opencv.yml
@@ -768,7 +779,7 @@ jobs:
     name: mac gui (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos, opencv-macos, build-macos]
-    if: needs.features.outputs.macgui != '[]'
+    if: needs.features.outputs.macgui != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
       matrix:
@@ -943,7 +954,7 @@ jobs:
     name: desktop (ubuntu-24.04) · ${{ matrix.shard.label }}
     runs-on: ubuntu-24.04
     needs: [features, ffmpeg-linux, opencv-linux]
-    if: needs.features.outputs.desktop != '[]'
+    if: needs.features.outputs.desktop != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
       matrix:
@@ -1088,7 +1099,7 @@ jobs:
     name: desktop (windows-2022) · ${{ matrix.shard.label }}
     runs-on: windows-2022
     needs: [features, ffmpeg-windows, opencv-windows]
-    if: needs.features.outputs.desktop != '[]'
+    if: needs.features.outputs.desktop != '[]' && inputs.windows != 'skip'
     strategy:
       fail-fast: false
       matrix:
@@ -1293,7 +1304,7 @@ jobs:
     name: desktop (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos, build-macos]
-    if: needs.features.outputs.desktop != '[]'
+    if: needs.features.outputs.desktop != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
       matrix:
