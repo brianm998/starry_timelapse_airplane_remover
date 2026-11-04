@@ -164,6 +164,7 @@ private fun ChoiceView(app: AppViewModel, c: VideoCapabilities) {
             enabled = canRender,
             onClick = { doRender() },
             colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+            modifier = Modifier.testTag("render.start"),
         ) { Text(localized("ui.render")) }
     }
 }
