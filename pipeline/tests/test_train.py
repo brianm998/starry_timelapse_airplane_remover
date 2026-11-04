@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from starpipe import ci as ci_mod
 from starpipe import ship
 from starpipe import train as train_mod
 from starpipe.agent import StageOutcome, StageRequest
@@ -88,13 +89,12 @@ async def test_tickets_that_become_ready_during_ci_make_the_next_batch(rig: Rig)
     assert len(rig.gh.prs) == 2 and rig.db.batch_members(1) == [1] and rig.db.batch_members(2) == [2]
 
 
-async def test_no_more_than_batch_max_tickets_in_one_batch(rig: Rig) -> None:
-    rig.engine.config.batch_max = 2
-    for n in (1, 2, 3):
+async def test_every_ready_ticket_joins_one_batch(rig: Rig) -> None:
+    for n in range(1, 9):
         ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
     await train_of(rig).run_until_idle()
-    assert [rig.state(n) for n in (1, 2, 3)] == ["landed"] * 3
-    assert rig.db.batch_members(1) == [1, 2] and rig.db.batch_members(2) == [3]
+    assert [rig.state(n) for n in range(1, 9)] == ["landed"] * 8
+    assert rig.db.batch_members(1) == list(range(1, 9))
 
 
 async def test_one_ticket_waits_for_the_window_for_company(rig: Rig) -> None:
@@ -529,6 +529,64 @@ async def test_a_feature_run_happens_per_ticket_before_batching_not_per_batch(ri
     assert rig.gh.cancelled_runs == []
 
 
+def test_jobs_carry_their_runner_labels() -> None:
+    runs = [{"id": 5, "name": "pr-gate"}]
+    jobs = ci_mod.parse_jobs(runs, {5: [{"name": "mac", "status": "queued", "conclusion": None, "labels": ["macos-15"]},
+                                         {"name": "linux", "status": "queued", "conclusion": None}]})
+    assert [j.labels for j in jobs] == [("macos-15",), ()], "labels come from the job JSON, and are empty when it has none"
+    assert [j.queued_for_macos for j in jobs] == [True, False]
+
+
+async def test_feature_gates_wait_while_batch_macos_jobs_are_queued(rig: Rig) -> None:
+    ready_ticket(rig, 1, "b1.md", "1\n")
+    rig.gh.job_labels["macos"] = ["macos-15"]
+    polls: list[int] = []  # feature runs dispatched so far, at each poll of the batch's CI
+
+    def hook(_sha: str) -> Ci:
+        polls.append(len(rig.gh.dispatches))
+        linux: Ci = [("pr-gate", "linux", "completed", "success")]
+        if len(polls) <= 3:  # a macOS job still waiting for a runner
+            return [*linux, ("pr-gate", "macos", "queued", None)]
+        if len(polls) <= 5:  # running now: no longer queued
+            return [*linux, ("pr-gate", "macos", "in_progress", None)]
+        return PASS
+
+    rig.gh.ci_hook = hook
+    real_sleep = rig.engine.sleep
+    added: list[int] = []
+
+    async def sleep(s: float) -> None:
+        if not added:  # the batch is in CI: a ticket that owes a feature run becomes ready meanwhile
+            added.append(2)
+            ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoMovingTiff16"))
+        await real_sleep(s)
+
+    rig.engine.sleep = sleep
+    await train_of(rig).run_until_idle()
+    assert polls[:4] == [0, 0, 0, 0], f"no feature run started while a macOS job was queued: {polls}"
+    assert polls[-1] == 1, f"it started once nothing was queued, while the batch was still in CI: {polls}"
+    assert len(rig.gh.dispatches) == 1 and rig.gh.cancelled_runs == [], "dispatched once, never cancelled or redone"
+    deferred = [e for e in rig.db.events_since() if e["kind"] == "gate-deferred"]
+    assert [(e["ticket"], e["data"]["batch"], e["data"]["queued_macos"]) for e in deferred] == [(2, 1, 1)], "reported once"
+    assert [rig.state(n) for n in (1, 2)] == ["landed", "landed"]
+
+
+async def test_a_feature_run_already_going_is_left_alone_while_macos_jobs_are_queued(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    train = train_of(rig)
+    batch = rig.db.batch_create("base")
+    train._macos_queued = 2  # pyright: ignore[reportPrivateUsage]
+    going = asyncio.get_running_loop().create_future()
+    train._gates[1] = going  # type: ignore[assignment]  # pyright: ignore[reportPrivateUsage]
+    train._start_gates()  # pyright: ignore[reportPrivateUsage]
+    assert train._gates[1] is going and not going.cancelled() and rig.gh.dispatches == []  # pyright: ignore[reportPrivateUsage]
+    del train._gates[1]  # pyright: ignore[reportPrivateUsage]
+    rig.db.batch_update(batch, state="abandoned")  # no batch active: nothing holds the run back
+    train._start_gates()  # pyright: ignore[reportPrivateUsage]
+    assert 1 in train._gates  # pyright: ignore[reportPrivateUsage]
+    await asyncio.wait(list(train._gates.values()))  # pyright: ignore[reportPrivateUsage]
+
+
 async def test_a_ticket_still_owing_a_feature_run_is_not_batched(rig: Rig) -> None:
     ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
     train = train_of(rig)
@@ -579,3 +637,30 @@ async def test_a_red_pr_job_seeded_on_landing_files_no_regression(rig: Rig) -> N
     ship.watch_develop(rig.engine)
     assert rig.db.get("red_pending:cli/macos") is None and rig.db.get("stop_line") is None
     assert list(rig.gh.issues) == [1], "only the ticket itself: no regression ticket was filed"
+
+
+async def test_land_now_skips_the_window_ci_and_the_stop_line(rig: Rig) -> None:
+    rig.engine.config.batch_window_s = 10_000  # nothing would batch for hours
+    rig.gh.ci_hook = lambda sha: RED  # and CI would fail
+    rig.db.put("stop_line", "pr-gate/linux")
+    ready_ticket(rig, 1, "f1.md", "1\n")
+    t = train_of(rig)
+    assert await t.step() is False and rig.state(1) == "ready", "without the mark the ticket waits"
+    rig.db.put("land_now:1", "1")
+    await t.run_until_idle()
+    assert rig.state(1) == "landed" and develop_has(rig, "docs/f1.md")
+
+
+async def test_a_land_now_ticket_does_not_wait_for_the_ci_of_unflagged_batch_mates(rig: Rig) -> None:
+    rig.engine.config.batch_window_s = 10_000
+    rig.gh.ci_hook = lambda sha: RED
+    for n in (1, 2):
+        ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
+    t = train_of(rig)
+    await t._start([1, 2])  # pyright: ignore[reportPrivateUsage]
+    rig.db.put("land_now:2", "1")
+    await t.step()  # the mixed batch is given up
+    assert rig.state(1) == "ready" and rig.state(2) == "ready"
+    await t.step()  # and the flagged ticket goes alone
+    await t.run_until_idle()
+    assert rig.state(2) == "landed" and rig.state(1) != "landed"

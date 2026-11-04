@@ -21,6 +21,11 @@ MatWrapperRef pib_detect_horizon(MatWrapperRef img);
 
 MatWrapperRef pib_subtract_image(MatWrapperRef img2, MatWrapperRef img1);
 
+// img1 - img2 per channel, clipped at 0, in img1's depth and channels.  mask may be null; when
+// given, pixels on the other side of it (white = > 128) are set to exactly 0.
+MatWrapperRef pib_subtract_image_color(MatWrapperRef img2, MatWrapperRef img1,
+                                       MatWrapperRef mask, bool keepMaskWhite);
+
 // Non-zero mask pixels get image1, zero mask pixels get image2
 MatWrapperRef pib_combine_image(MatWrapperRef image1, MatWrapperRef mask,
                                 MatWrapperRef image2);

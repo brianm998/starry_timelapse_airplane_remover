@@ -116,6 +116,11 @@ final class GuiFeatureRunner {
         .confirmCloseIfAsked: { try $0.confirmClosingIfAsked() },
         .windowOpen: { try $0.expectWindow($0.args[0], open: true) },
         .windowNotOpen: { try $0.expectWindow($0.args[0], open: false) },
+        .openPreferences: { try $0.openPreferences() },
+        .openLocationQuestion: { try $0.openCopiedSequenceAtItsLocationQuestion() },
+        .openVideoImport: { try $0.openVideoAtItsImportDialog() },
+        .saveScreenshot: { try $0.saveScreenshot(named: $0.args[0]) },
+        .saveWindowScreenshot: { try $0.saveScreenshot(named: $0.args[1], ofWindow: $0.args[0]) },
     ]
 
     func run(_ feature: Feature) throws {
@@ -332,8 +337,13 @@ final class GuiFeatureRunner {
         let home = scratch.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         app.launchEnvironment["HOME"] = home.path
+        if savesScreenshots { try keepGPUMergeOff() }
         // Ignore the windows the last run of the app left open (macOS restores them): a feature starts from the app as it opens, not from where an earlier one quit.
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"] + arguments
+        // The parity gallery's window is 1400 by 1100 points, as the desktop client's test window is: XCUITest cannot size a window, so the app does (`ViewModel.uiTestWindowSize`).
+        if savesScreenshots {
+            app.launchArguments += ["-StarUITestWindowSize", "\(Self.galleryWindowSize)"]
+        }
         app.launch()
     }
 
@@ -646,8 +656,104 @@ final class GuiFeatureRunner {
             // the window sets its own title (its view's, not the scene's): the generic one until it lists a frame, then "Outliers for frame N"
             let forFrame = try english("ui.outliers_for_frame")
             return ([try english("ui.outlier_group_information")], [String(forFrame.prefix { $0 != "{" })])
-        default: throw RunnerError("no window called \"\(name)\" (debug, outlier)")
+        case "alignment": return ([try english("ui.star_alignment_info")], [])
+        case "blob": return ([try english("ui.star_blob_processing")], [])
+        default: throw RunnerError("no window called \"\(name)\" (debug, outlier, alignment or blob)")
         }
+    }
+
+    // MARK: the parity gallery
+
+    /// The Preferences item of the app menu (Command-comma), as a user opens them.
+    private func openPreferences() throws {
+        guard app.state != .notRunning else { throw RunnerError("the app is not running") }
+        app.typeKey(",", modifierFlags: .command)
+    }
+
+    /// Launches on the start screen with the question that asks where a chosen image sequence's files go up (what the open panel leads to).
+    private func openCopiedSequenceAtItsLocationQuestion() throws {
+        guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
+        try launch(arguments: ["-StarUITestSequenceLocation", copy.path])
+    }
+
+    /// A short video made from the copied sequence's frames with the bundled ffmpeg, opened as "Load Video" opens one: the import sheet comes up.
+    private func openVideoAtItsImportDialog() throws {
+        guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
+        let ffmpeg = Self.repoRoot.appendingPathComponent("external_binaries/bin/ffmpeg")
+        let video = scratch.appendingPathComponent("gallery-video.mp4")
+        let process = Process()
+        process.executableURL = ffmpeg
+        process.arguments = ["-y", "-loglevel", "error", "-framerate", "5", "-pattern_type", "glob", "-i", copy.appendingPathComponent("*.jpg").path,
+                             "-vf", "scale=1280:-2", "-c:v", "libx264", "-pix_fmt", "yuv420p", video.path]
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: video.path) else { throw RunnerError("could not make a video from \(copy.path)") }
+        try launch(arguments: ["-StarUITestOpenVideo", video.path])
+    }
+
+    private var savesScreenshots: Bool {
+        feature?.steps.contains(where: { $0.action == .saveScreenshot || $0.action == .saveWindowScreenshot }) == true
+    }
+
+    /// A gallery feature can start a run (the processing modal), and this Mac must never run the GPU merge (CLAUDE.md): the scratch preferences
+    /// say so, whatever else they hold (a `recent sequences` seed is kept).
+    private func keepGPUMergeOff() throws {
+        var object = ((try? Data(contentsOf: preferencesFile)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }) ?? [:]
+        object["useGPUForMerge"] = false
+        try JSONSerialization.data(withJSONObject: object).write(to: preferencesFile)
+    }
+
+    /// The main window's content size the gallery is taken at (points), which is the desktop client's test window in pixels.
+    static let galleryWindowSize = "1400x1100"
+
+    /// `<dir>/<client>/<name>.png`, where dir is `STAR_GALLERY_DIR` (`TEST_RUNNER_STAR_GALLERY_DIR` under xcodebuild; the desktop's runner reads the
+    /// same), else `<repo>/.test-data/gallery/latest`.
+    private func galleryFile(_ name: String) -> URL {
+        let dir: URL
+        if let d = ProcessInfo.processInfo.environment["STAR_GALLERY_DIR"], !d.isEmpty { dir = URL(fileURLWithPath: d) }
+        else { dir = Self.repoRoot.appendingPathComponent(".test-data/gallery/latest") }
+        return dir.appendingPathComponent(Self.client).appendingPathComponent("\(name).png")
+    }
+
+    /// The window to photograph: the secondary window of that name, or the main window, which is the one that is none of the secondary ones.
+    private func galleryWindow(_ secondary: String?) throws -> XCUIElement {
+        func matches(_ w: XCUIElement, _ name: String) throws -> Bool {
+            let (titles, prefixes) = try windowTitles(name)
+            return titles.contains(w.title) || prefixes.contains { w.title.hasPrefix($0) }
+        }
+        var found: XCUIElement?
+        try waitFor("the \(secondary.map { "\($0) window" } ?? "main window") to be there", timeout: 30) {
+            for w in self.app.windows.allElementsBoundByIndex where w.exists {
+                if let secondary {
+                    if (try? matches(w, secondary)) == true { found = w; return true }
+                } else if !(["debug", "outlier", "alignment", "blob"].contains { (try? matches(w, $0)) == true }) {
+                    found = w; return true
+                }
+            }
+            return false
+        }
+        return found!
+    }
+
+    /// Saves a screenshot of the window as `<name>.png` in the gallery. A screen is put up over a few frames (sheets slide, thumbnails and the daemon's
+    /// answers arrive later), so the window is photographed until two in a row are the same picture, up to ten seconds.
+    private func saveScreenshot(named name: String, ofWindow secondary: String? = nil) throws {
+        let window = try galleryWindow(secondary)
+        var last: Data?
+        var steady = 0
+        var shot = Data()
+        let deadline = Date().addingTimeInterval(10)
+        while steady < 2 && Date() < deadline {
+            shot = window.screenshot().pngRepresentation
+            steady = (shot == last) ? steady + 1 : 0
+            last = shot
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 0.4)
+        }
+        let file = galleryFile(name)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try shot.write(to: file)
+        print("SCREENSHOT \(name) -> \(file.path) (window \(window.frame.size), \(shot.count) bytes)")
+        guard shot.count > 1000 else { throw RunnerError("the screenshot \"\(name)\" is empty (\(shot.count) bytes)") }
     }
 
     private func expectWindow(_ name: String, open: Bool) throws {

@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextOverflow
+import com.star.desktop.ui.components.HoverTip
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
@@ -70,15 +73,9 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 SectionTitle(localized("ui.display"))
                 // The gui's order: the horizon lines and which kinds, then the filmstrip.
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Switch(checked = showHorizon, onCheckedChange = vm::setShowHorizonOnMainView)
-                    Text(localized("ui.show_horizon_lines"), color = StarColors.white, fontSize = 11.sp)
-                }
+                GridSwitchRow(localized("ui.show_horizon_lines"), showHorizon, vm::setShowHorizonOnMainView)
                 HorizonLineKindToggles(vm)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Switch(checked = showFilmstrip, onCheckedChange = { vm.toggleFilmstrip() })
-                    Text(localized("ui.show_filmstrip"), color = StarColors.white, fontSize = 11.sp)
-                }
+                GridSwitchRow(localized("ui.show_filmstrip"), showFilmstrip) { vm.toggleFilmstrip() }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -124,10 +121,25 @@ private fun cleanMethodName(m: CleanMethod): String = localized(when (m) {
 private fun SectionTitle(text: String) =
     Text(text, color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
 
+/** A switch and its label; the label takes what is left of the row and wraps at its spaces. */
 @Composable
-private fun InfoRow(label: String, value: String, valueColor: Color = StarColors.white) {
+internal fun GridSwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Switch(checked = checked, onCheckedChange = onChange)
+        Text(label, color = StarColors.white, fontSize = 11.sp, modifier = Modifier.weight(1f))
+    }
+}
+
+/**
+ * A label and its value. The label is one line at least 62dp wide, as wide as its own text when that is more, so a long translation never breaks
+ * inside a word; the value takes the rest and is one line, ellipsized with the whole text in a hover tip (a file name has no space to wrap at).
+ */
+@Composable
+internal fun InfoRow(label: String, value: String, valueColor: Color = StarColors.white) {
     Row(Modifier.fillMaxWidth()) {
-        Text(label, color = StarColors.textSecondary, fontSize = 10.sp, modifier = Modifier.width(62.dp))
-        Text(value, color = valueColor, fontSize = 10.sp)
+        Text(label, color = StarColors.textSecondary, fontSize = 10.sp, maxLines = 1, softWrap = false, modifier = Modifier.widthIn(min = 62.dp).padding(end = 6.dp))
+        HoverTip(value, Modifier.weight(1f)) {
+            Text(value, color = valueColor, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }

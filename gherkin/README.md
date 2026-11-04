@@ -224,8 +224,8 @@ The full matrix takes about 3 hours, so it is not what a PR runs. What runs when
 
 | Workflow (name) | File | Runs on | The pipeline |
 |---|---|---|---|
-| **Gherkin smoke** | `gherkin-smoke.yml`, which calls `gherkin.yml` with `smoke: true` | every PR touching program code, pushes to `develop`, by hand | waits for it and blocks on it |
-| **Gherkin** (the full matrix) | `gherkin.yml` | pushes to `develop`/`main`, by hand (`workflow_dispatch`, optionally `features`) | does not wait for it on a PR (`ci_post_merge_workflows` in `pipeline/src/starpipe/config.py` lists this name only); a red run on `develop` is found by the post-merge watch |
+| **Gherkin smoke** | `gherkin-smoke.yml`, which calls `gherkin.yml` with `smoke: true` | every PR touching program code (without the Windows legs), pushes to `develop` (with them), by hand (with them) | waits for it and blocks on it |
+| **Gherkin** (the full matrix) | `gherkin.yml` | pushes to `main`, the nightly dispatch, by hand (`workflow_dispatch`, optionally `features`) | does not wait for it on a PR (`ci_post_merge_workflows` in `pipeline/src/starpipe/config.py` lists this name only); the nightly reruns its failed jobs once and files the tickets (`Gherkin nightly red: …`, `Gherkin flaky: …`); the post-merge watch only updates its baseline |
 
 `gherkin/smoke.json` is the subset, a client name to a list of feature names:
 
@@ -234,7 +234,13 @@ The full matrix takes about 3 hours, so it is not what a PR runs. What runs when
 ```
 
 Each listed feature runs on every OS its client has: cli and desktop on ubuntu, windows and macOS, the mac gui on macOS: seven jobs of
-one feature each. `autoHorizonJpeg` is the cheapest real flow (one 46 MB JPEG dataset, no video, no 16-bit, no trail verifier build). The
+one feature each, **except on a PR, which skips the two Windows jobs** (`cli-windows`, `desktop-windows`): they were the slowest legs of
+every batch (MSVC install, the stard and validator builds), so Windows runs post-merge instead. `gherkin-smoke.yml` passes
+`windows: skip` to `gherkin.yml` on a `pull_request` and `windows: run` otherwise. On the push to `develop` the Windows jobs run
+even when "Already tested?" (`already-tested.yml`) skips the rest because the batch PR's green run covered the tree: the
+`smoke-windows` job then calls `gherkin.yml` with `windows: only`. A Windows-only break is therefore found on `develop` by the
+post-merge watch (a ticket after two red runs), not on the PR; `workflow_dispatch` and the nightly still run every leg. `cli.yml`
+("CLI Build") does the same for `Windows (windows-2022)` and `windows-e2e`: skipped on a PR, run on every push. `autoHorizonJpeg` is the cheapest real flow (one 46 MB JPEG dataset, no video, no 16-bit, no trail verifier build). The
 target is about 30 minutes on a PR; the slow part is the queue for the macOS runners, which is why only three jobs are macOS.
 
 **Changing it:** edit `gherkin/smoke.json`. A name must be a feature of that client (a name in `generated/features-<client>.json`) and

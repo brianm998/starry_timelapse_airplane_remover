@@ -255,6 +255,15 @@ class Database:
         self._exec("INSERT INTO ci_runs(ticket,sha,verdict,detail,at) VALUES (?,?,?,?,?)",
                    (ticket, sha, verdict, json.dumps(detail), self.clock()))
 
+    # gherkin flakes -------------------------------------------------------------------------------------------------
+    def add_flake(self, feature: str, leg: str, run_id: int | str, day: str) -> None:
+        """A job that failed and then passed on the rerun (once per feature, leg and run)."""
+        self._exec("INSERT OR IGNORE INTO gherkin_flakes(feature,leg,run_id,day,at) VALUES (?,?,?,?,?)",
+                   (feature, leg, str(run_id), day, self.clock()))
+
+    def flake_history(self, feature: str) -> list[dict[str, Any]]:
+        return [dict(r) for r in self._all("SELECT feature, leg, run_id, day FROM gherkin_flakes WHERE feature=? ORDER BY id", (feature,))]
+
     # the landing train ----------------------------------------------------------------------------------------------
     def batch_create(self, base_sha: str) -> int:
         cur = self._exec("INSERT INTO batches(state,base_sha,created) VALUES ('building',?,?)", (base_sha, self.clock()))

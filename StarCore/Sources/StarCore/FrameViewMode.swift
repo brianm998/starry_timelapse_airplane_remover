@@ -31,6 +31,8 @@ public enum FrameViewMode: String,
     case autoProcessed          // .automatic(false) CleanMode
     case autoSelectiveProcessed // .autoamtic(true) CleanMode
     case selectiveProcessed     // .selective CleanMode
+    case dirtySkyProcessed      // .dirtySky CleanMode
+    case dirtyEarthProcessed    // .dirtyEarth CleanMode
     case final              // the final processed image, 
                                 // the remove mask is used as a layer mask for the aligned neighbor
            
@@ -78,6 +80,10 @@ public enum FrameViewMode: String,
             "autoSelectiveProcessed"
         case .selectiveProcessed:
             "selectiveProcessed"
+        case .dirtySkyProcessed:
+            "dirtySkyProcessed"
+        case .dirtyEarthProcessed:
+            "dirtyEarthProcessed"
         case .final:
             "final"
         case .starAligned:

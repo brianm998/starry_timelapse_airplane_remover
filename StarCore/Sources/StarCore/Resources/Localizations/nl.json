@@ -19,7 +19,7 @@
   "cli.errors.resume_header": "star: de tijdelijke map is bewaard — hervat met:",
   "cli.errors.video_path_needs_render_video": "--video-path vereist --render-video.",
   "cli.frame_state_change": "beeld {0} gaat naar status {1}",
-  "cli.help.clean_method": "De opschoonmodus voor deze beeldreeks.\nStandaard automatic bij een nieuwe reeks; bij hervatten wordt de waarde uit de\nopgeslagen configuratie gebruikt.",
+  "cli.help.clean_method": "De opschoonmodus voor deze beeldreeks.\nStandaard automatic bij een nieuwe reeks; bij hervatten wordt de waarde uit de\nopgeslagen configuratie gebruikt.\ndirtySky en dirtyEarth doen het omgekeerde van opschonen: ze houden alleen wat er\nbewoog in de lucht, of op de grond, en schrijven de rest van de afbeelding zwart.",
   "cli.help.cloud_aware_merge": "Houdt snel bewegende wolken intact in de samenvoeging die op de sterren is uitgelijnd.\nWolken verschuiven ten opzichte van de sterren, dus een samenvoeging van op de sterren uitgelijnde naburige beelden neemt\nelke wolkenpixel uit een ander moment en laat gestreepte, herhaalde kopieën van\nwolkenranden achter.  Als dit aanstaat, wordt een tweede samenvoeging die op de wolkenbeweging is uitgelijnd\nbijgemengd waar die het beeld beter verklaart, met de sterren teruggezet, zodat wolken\nhun vorm behouden terwijl vliegtuig- en satellietsporen nog steeds worden verwijderd.  Heldere lucht blijft\nongewijzigd.\nKost extra CPU en geheugen op beelden met wolken.  Standaard uit.\nWijzigen voert de samenvoeging van al verwerkte beelden opnieuw uit; hun uitlijning blijft behouden.\n--no-cloud-aware-merge zet het uit.  Wordt net als elke andere vlag hier in de configuratie opgeslagen,\nzodat een hervatting die dit niet herhaalt dezelfde keuze behoudt.",
   "cli.help.detection_type": "Detectietypen",
   "cli.help.extract_in_background": "Begin met verwerken terwijl de beelden van de video nog worden uitgepakt. Standaard aan voor ProRes en formaten die elk beeld snel kunnen leveren, uit voor H.264, H.265 en vergelijkbare.",
@@ -1236,5 +1236,8 @@
   "ui.menu_bar.tooltip.processing": "star — verwerken {0}%",
   "ui.menu_bar.tooltip.rendering": "star — video renderen {0}%",
   "ui.menu_bar.tooltip.finished": "star — voltooid",
-  "ui.menu_bar.tooltip.failed": "star — mislukt"
+  "ui.menu_bar.tooltip.failed": "star — mislukt",
+  "cli.errors.dirty_earth_needs_horizon": "--clean-method dirtyEarth houdt alleen de grond onder de horizon over, dus het heeft horizondetectie nodig en kan niet draaien als die is uitgeschakeld (--no-horizon).",
+  "view_mode.dirtySkyProcessed": "onopgeschoonde lucht",
+  "view_mode.dirtyEarthProcessed": "onopgeschoonde grond"
 }

@@ -104,6 +104,28 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(Overview.topBarCounts([]).map(\.count), [0, 0, 0, 0, 0, 0, 0])
     }
 
+    func testTopBarHelpDescribesEachBucket() {
+        for bucket in Overview.topBarBuckets {
+            XCTAssertFalse(bucket.help.isEmpty, bucket.label)
+            // the tooltip is the stage text followed by the daemon states, and is more than the bare state list
+            XCTAssertTrue(bucket.tooltip.hasPrefix(bucket.help), bucket.label)
+            XCTAssertTrue(bucket.tooltip.hasSuffix("Counts tickets in: " + bucket.states.joined(separator: ", ")), bucket.label)
+            XCTAssertGreaterThan(bucket.help.count, 40, bucket.label)
+        }
+        XCTAssertTrue(Overview.topBarBuckets[6].help.contains("ci"))
+        XCTAssertTrue(Overview.topBarBuckets[4].tooltip.contains("verifying"))
+    }
+
+    func testTopBarHelpSameWithoutSnapshot() throws {
+        // the live tiles (StageCount) and the no-snapshot tiles (buckets) show the same tooltip
+        let base = try XCTUnwrap(try Self.snapshot().tickets.first)
+        var t = base
+        t.state = "developing"
+        for tickets in [[], [t]] {
+            XCTAssertEqual(Overview.topBarCounts(tickets).map(\.tooltip), Overview.topBarBuckets.map(\.tooltip))
+        }
+    }
+
     func testTopBarTileEmphasis() throws {
         let base = try XCTUnwrap(try Self.snapshot().tickets.first)
         func tickets(_ states: [String]) -> [TicketSnap] {
@@ -163,6 +185,87 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(running.stages.first?.stage, "develop")
         XCTAssertEqual(running.stages.first?.lockWaitS, 0)
         XCTAssertNil(running.stages.first?.ended)
+    }
+
+    // sidebar search ---------------------------------------------------------------------------------------------------
+    private static func searchTickets() throws -> [TicketSnap] {
+        let base = try XCTUnwrap(try snapshot().tickets.first)
+        func t(_ n: Int, title: String, branch: String?, body: String) -> TicketSnap {
+            var t = base
+            t.number = n; t.title = title; t.branch = branch; t.body = body
+            return t
+        }
+        return [t(123, title: "Fix the Horizon", branch: "pipe/123-horizon", body: "the mask is wrong"),
+                t(45, title: "Search bar", branch: nil, body: "mentions ZEBRA crossings"),
+                t(7, title: "Unrelated", branch: "pipe/7-misc", body: "")]
+    }
+
+    func testSearchQueryMatchesCheckedFields() throws {
+        let tickets = try Self.searchTickets()
+        func hits(_ q: String) -> [Int] { TicketSearch(query: q).filter(tickets).map(\.number) }
+        XCTAssertEqual(hits(""), [123, 45, 7])
+        XCTAssertEqual(hits("horizon"), [123])          // title, case-insensitive (and the branch)
+        XCTAssertEqual(hits("#123"), [123])             // number with hash
+        XCTAssertEqual(hits("123"), [123])              // number without hash
+        XCTAssertEqual(hits("pipe/7"), [7])             // branch
+        XCTAssertEqual(hits("zebra"), [45])             // body, case-insensitive
+        XCTAssertEqual(hits("nothing like it"), [])
+    }
+
+    func testSearchFieldTogglesAndNoFields() throws {
+        let tickets = try Self.searchTickets()
+        func hits(_ q: String, name: Bool = true, title: Bool = true, body: Bool = true) -> [Int] {
+            TicketSearch(query: q, matchName: name, matchTitle: title, matchBody: body).filter(tickets).map(\.number)
+        }
+        XCTAssertEqual(hits("mask", body: false), [])
+        XCTAssertEqual(hits("mask", name: false, title: false), [123])
+        XCTAssertEqual(hits("Search", title: false), [])
+        XCTAssertEqual(hits("123", name: false), [])
+        XCTAssertEqual(hits("pipe/", name: false, title: false, body: true), [])
+        XCTAssertEqual(hits("horizon", name: false, body: false), [123])
+        XCTAssertEqual(hits("horizon", name: false, title: false, body: false), [])
+        XCTAssertEqual(hits("", name: false, title: false, body: false), [123, 45, 7])  // empty query still shows all
+    }
+
+    func testSearchClear() throws {
+        let tickets = try Self.searchTickets()
+        var search = TicketSearch(query: "zebra", matchName: true, matchTitle: false, matchBody: true)
+        XCTAssertEqual(search.filter(tickets).map(\.number), [45])
+        search.clear()
+        XCTAssertEqual(search.query, "")
+        XCTAssertFalse(search.isActive)
+        XCTAssertEqual(search.matchTitle, false)  // toggles survive
+        XCTAssertEqual(search.filter(tickets).count, tickets.count)
+    }
+
+    func testTicketSnapDecodesBody() throws {
+        let s = try Self.snapshot()
+        XCTAssertTrue(try XCTUnwrap(s.tickets.first).body.contains("## Goal"))
+        // a daemon that predates the field: drop the key and decode again
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.fixture()) as? [String: Any])
+        var rows = try XCTUnwrap(object["tickets"] as? [[String: Any]])
+        for i in rows.indices { rows[i].removeValue(forKey: "body") }
+        object["tickets"] = rows
+        let old = try JSONDecoder().decode(Snapshot.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertEqual(old.tickets.map(\.body), Array(repeating: "", count: old.tickets.count))
+    }
+
+    @MainActor
+    func testSearchDoesNotAffectCounts() throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        let before = (store.needsYouCount, Overview.topBarCounts(store.snapshot!.tickets).map(\.count))
+        store.selected = 5
+        store.search.query = "no ticket contains this text"
+        XCTAssertTrue(store.searchHidesEverything)
+        XCTAssertEqual(store.snapshot!.groups.flatMap { store.visibleTickets(in: $0) }.count, 0)
+        XCTAssertEqual(store.needsYouCount, before.0)
+        XCTAssertEqual(Overview.topBarCounts(store.snapshot!.tickets).map(\.count), before.1)
+        XCTAssertEqual(store.tickets(in: "needs_you").count, 1)
+        XCTAssertEqual(store.selected, 5)  // a filtered-out selection stays selected
+        store.search.clear()
+        XCTAssertFalse(store.searchHidesEverything)
+        XCTAssertEqual(store.visibleTickets(in: "needs_you").count, 1)
     }
 }
 
@@ -234,6 +337,7 @@ final class BlockerLinksTests: XCTestCase {
         XCTAssertEqual(rows.map(\.url.absoluteString), [84, 85].map { "https://github.com/\(repo)/issues/\($0)" })
         XCTAssertEqual(BlockerLinks.detailRows(blockers: [], repo: repo), [])
     }
+
 }
 
 @MainActor
@@ -765,5 +869,102 @@ final class UsageLimitTextTests: XCTestCase {
         XCTAssertEqual(line(.weekly, window(0.95, in: -1)).text, "weekly: —")  // reset already: the old 95% no longer applies
         XCTAssertEqual(line(.weekly, window(0.95, in: -1)).level, .unknown)
         XCTAssertEqual(line(.fiveHour, window(0.95, in: 0)).level, .unknown)
+    }
+}
+
+@MainActor
+final class ProposalTests: XCTestCase {
+    private func client() -> APIClient {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [StubProtocol.self]
+        return APIClient(config: APIConfig(baseURL: URL(string: "http://127.0.0.1:1")!, token: "tok"), session: URLSession(configuration: cfg))
+    }
+
+    /// The recorded snapshot with `proposals` removed, as an older daemon sends it.
+    private func olderDaemonsSnapshot() throws -> Snapshot {
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: FixtureTests.fixture()) as? [String: Any])
+        json.removeValue(forKey: "proposals")
+        return try JSONDecoder().decode(Snapshot.self, from: JSONSerialization.data(withJSONObject: json))
+    }
+
+    private func withProposals(_ list: [ProposalSnap]) throws -> Snapshot {
+        var s = try FixtureTests.snapshot()
+        s.proposalList = list
+        return s
+    }
+
+    func testProposalsDecodeAndOldSnapshotsStillDo() throws {
+        XCTAssertEqual(try FixtureTests.snapshot().proposals,
+                       [ProposalSnap(number: 31, title: "Show the retry budget", by: "review agent")])
+        let old = try olderDaemonsSnapshot()
+        XCTAssertEqual(old.proposals, [])
+        XCTAssertEqual(old.tickets.count, 6)
+    }
+
+    func testProposalRowsComeFromTheSnapshot() throws {
+        let store = MonitorStore()
+        XCTAssertEqual(store.proposals, [])
+        store.apply(try FixtureTests.snapshot())
+        XCTAssertEqual(store.proposals.map(\.number), [31])
+        XCTAssertEqual(store.proposals.first?.title, "Show the retry budget")
+        XCTAssertEqual(store.proposals.first?.by, "review agent")
+        store.apply(try olderDaemonsSnapshot())
+        XCTAssertEqual(store.proposals, [])
+    }
+
+    func testSelectingAProposalIsShowableAndClearsWhenItGoes() throws {
+        let store = MonitorStore()
+        store.apply(try FixtureTests.snapshot())
+        store.selected = 31
+        XCTAssertEqual(store.selectedProposal?.title, "Show the retry budget")
+        XCTAssertNil(store.selectedTicket)
+        XCTAssertNil(store.selectedIssue, "a proposal has its own pane, not the generic issue one")
+        store.apply(try FixtureTests.snapshot())   // survives a refresh while it exists
+        XCTAssertEqual(store.selected, 31)
+        store.apply(try olderDaemonsSnapshot())    // gone: approved, rejected or closed elsewhere
+        XCTAssertNil(store.selected)
+        XCTAssertNil(store.selectedProposal)
+    }
+
+    func testApproveAndRejectPostThenRefresh() async throws {
+        let fixture = try FixtureTests.fixture()
+        final class Seen: @unchecked Sendable { var requests: [(String, String, String)] = [] }
+        let seen = Seen()
+        @Sendable func body(_ r: URLRequest) -> String {
+            let data = r.httpBodyStream.flatMap { stream -> Data in
+                stream.open()
+                defer { stream.close() }
+                var data = Data()
+                var buf = [UInt8](repeating: 0, count: 1024)
+                while stream.hasBytesAvailable {
+                    let n = stream.read(&buf, maxLength: buf.count)
+                    if n <= 0 { break }
+                    data.append(buf, count: n)
+                }
+                return data
+            } ?? r.httpBody ?? Data()
+            return String(decoding: data, as: UTF8.self)
+        }
+        StubProtocol.handler = { request in
+            seen.requests.append((request.httpMethod ?? "", request.url?.path ?? "", body(request)))
+            return request.url?.path == "/v1/snapshot" ? (200, fixture) : (200, Data(#"{"result": "ok"}"#.utf8))
+        }
+        let store = MonitorStore(client: client())
+        await store.approve(31, priority: "p1")
+        XCTAssertNil(store.lastError)
+        XCTAssertEqual(seen.requests.first?.1, "/v1/proposals/31/approve")
+        XCTAssertEqual(seen.requests.first?.0, "POST")
+        XCTAssertTrue(seen.requests.first?.2.contains("\"p1\"") ?? false)
+        XCTAssertEqual(store.snapshot?.proposals.map(\.number), [31], "the snapshot is refreshed after the post")
+        await store.reject(31, reason: "not now")
+        let reject = try XCTUnwrap(seen.requests.first { $0.1 == "/v1/proposals/31/reject" })
+        XCTAssertTrue(reject.2.contains("not now"))
+
+        StubProtocol.handler = { request in
+            request.url?.path == "/v1/snapshot" ? (200, fixture) : (409, Data("3 tickets are already open for the pipeline".utf8))
+        }
+        await store.approve(31)
+        XCTAssertEqual(store.lastError, APIError.status(409, "3 tickets are already open for the pipeline").localizedDescription)
+        XCTAssertTrue(store.lastError?.contains("already open") ?? false)
     }
 }

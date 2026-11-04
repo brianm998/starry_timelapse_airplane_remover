@@ -145,11 +145,22 @@ public struct APIClient: Sendable {
         return try JSONDecoder().decode(Results.self, from: data).results
     }
 
+    /// Approve a proposal (`pipeline` label on); `priority` is "p0"…"p3", nil to keep the issue's own.
+    public func approve(_ number: Int, priority: String? = nil) async throws {
+        try await post("/v1/proposals/\(number)/approve", body: priority.map { ["priority": $0] } ?? [:])
+    }
+
+    /// Reject a proposal: the daemon comments with `reason` (when not empty) and closes it as not planned.
+    public func reject(_ number: Int, reason: String = "") async throws {
+        try await post("/v1/proposals/\(number)/reject", body: ["reason": reason])
+    }
+
     public func answer(_ number: Int, text: String) async throws { try await post("/v1/tickets/\(number)/answer", body: ["text": text]) }
     public func retry(_ number: Int, stage: String) async throws { try await post("/v1/tickets/\(number)/retry", body: ["stage": stage]) }
     public func cancel(_ number: Int, reason: String) async throws { try await post("/v1/tickets/\(number)/cancel", body: ["reason": reason]) }
     public func setPriority(_ number: Int, _ priority: Int) async throws { try await post("/v1/tickets/\(number)/prio", body: ["priority": priority]) }
     public func landNow(_ number: Int) async throws { try await post("/v1/tickets/\(number)/land-now") }
+    public func landAll() async throws { try await post("/v1/land-all") }
     public func setMuted(_ muted: Bool) async throws { try await post("/v1/mute", body: ["muted": muted]) }
     public func setMaxActive(_ n: Int) async throws { try await post("/v1/settings", body: ["max_active": n]) }
 
