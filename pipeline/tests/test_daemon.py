@@ -881,7 +881,7 @@ def test_snapshot_shows_the_active_batch_in_each_phase(rig: Rig) -> None:
         rig.db.batch_update(bid, state=phase)
         landing = d.snapshot()["landing"]
         assert landing["batch"] == {"number": bid, "phase": phase, "age_s": 90, "members": [1, 2],  # type: ignore[index]
-                                    "pr_number": None, "slow": False}
+                                    "pr_number": None, "ci": "running", "slow": False}
         assert d.status()["landing"]["batch"]["phase"] == phase  # type: ignore[index]
 
 
@@ -1113,8 +1113,8 @@ def test_train_info_lists_every_active_batch(rig: Rig) -> None:
     second = rig.db.batch_create("0" * 40)
     rig.db.batch_add(second, 2, 0)  # still building
     rig.now += 30
-    expected = [{"number": first, "phase": "ci", "age_s": 90, "members": [1], "pr_number": 11, "slow": False},
-                {"number": second, "phase": "building", "age_s": 30, "members": [2], "pr_number": None, "slow": False}]
+    expected = [{"number": first, "phase": "ci", "age_s": 90, "members": [1], "pr_number": 11, "ci": "running", "slow": False},
+                {"number": second, "phase": "building", "age_s": 30, "members": [2], "pr_number": None, "ci": "running", "slow": False}]
     for landing in (d.snapshot()["landing"], d.status()["landing"]):
         assert landing["batches"] == expected  # type: ignore[index]
         assert landing["batch"] == expected[0], "`batch` stays the oldest, so a client that shows one keeps working"  # type: ignore[index]
