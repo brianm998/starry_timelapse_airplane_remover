@@ -230,6 +230,7 @@ struct IssuePanelView: View {
 
 /// The detail pane for a proposed issue: approve it (optionally with a priority), reject it (optionally with a reason),
 /// or open it on GitHub. The daemon's refusal (a full queue, an issue that is no longer proposed) shows in the error line.
+/// The title and buttons stay pinned; the issue's labels, readiness, blockers, body and comments scroll beneath them.
 struct ProposalDetailView: View {
     @Bindable var store: MonitorStore
     let proposal: ProposalSnap
@@ -237,14 +238,39 @@ struct ProposalDetailView: View {
     @State private var reason = ""
     @State private var busy = false
 
+    /// The loaded detail, only when it is this proposal's.
+    private var loaded: ProposalDetail? { store.proposalDetail.flatMap { $0.number == proposal.number ? $0 : nil } }
+    private var now: Double { store.snapshot?.now ?? Date().timeIntervalSince1970 }
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            header
+            Divider()
+            content
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .alert("Reject #\(proposal.number)?", isPresented: $rejecting) {
+            TextField("Reason (optional)", text: $reason)
+            Button("Reject", role: .destructive) { reject() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The issue gets a comment with the reason and is closed as not planned.")
+        }
+    }
+
+    private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text("#\(proposal.number)").monospacedDigit().foregroundStyle(.secondary)
                 Text(proposal.title).scaledFont(.title2, weight: .bold).textSelection(.enabled)
                 Spacer()
             }
-            Text("Proposed by \(proposal.by); waiting for your go-ahead.").foregroundStyle(.secondary)
+            if let d = loaded {
+                Text(ProposalText.byLine(d, now: now) + "; waiting for your go-ahead.").foregroundStyle(.secondary)
+            } else {
+                Text("Proposed by \(proposal.by); waiting for your go-ahead.").foregroundStyle(.secondary)
+            }
             HStack {
                 Menu("Approve") {
                     Button("Keep the issue's priority") { approve(nil) }
@@ -259,16 +285,83 @@ struct ProposalDetailView: View {
             }
             .disabled(busy)
             if let error = store.lastError { Text(error).scaledFont(.caption).foregroundStyle(.red) }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let d = loaded {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if !d.labels.isEmpty {
+                        HStack { ForEach(d.labels, id: \.self) { Chip(text: $0) } }
+                    }
+                    if let r = d.readiness { readinessBox(r) }
+                    blockers(d.blockers)
+                    MarkdownView(markdown: d.body)
+                    comments(d)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } else if let error = store.proposalDetailError {
+            Text("Could not load the issue's description: \(error)").scaledFont(.caption).foregroundStyle(.red)
+                .textSelection(.enabled)
+            Spacer()
+        } else {
+            Text("Loading…").foregroundStyle(.secondary)
             Spacer()
         }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .alert("Reject #\(proposal.number)?", isPresented: $rejecting) {
-            TextField("Reason (optional)", text: $reason)
-            Button("Reject", role: .destructive) { reject() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The issue gets a comment with the reason and is closed as not planned.")
+    }
+
+    private func readinessBox(_ r: ProposalReadiness) -> some View {
+        GroupBox("Readiness") {
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(Array(ProposalReadinessText.lines(r).enumerated()), id: \.offset) { _, line in
+                    Label(line.text, systemImage: line.warn ? "exclamationmark.triangle.fill" : "circle.fill")
+                        .labelStyle(ReadinessLabelStyle(warn: line.warn))
+                        .foregroundStyle(line.warn ? Color.orange : Color.primary)
+                        .textSelection(.enabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private func blockers(_ list: [BlockerRef]) -> some View {
+        let rows = BlockerLinks.detailRows(blockers: list, repo: store.snapshot?.repo ?? "")
+        if !rows.isEmpty {
+            GroupBox("Blocked by") {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(rows) { row in
+                        HStack(alignment: .firstTextBaseline) {
+                            Button(row.label) { store.selectIssue(row.number, title: row.title) }
+                                .buttonStyle(.link).monospacedDigit().help("Show \(row.label) here")
+                            Text(row.title).foregroundStyle(.secondary).textSelection(.enabled)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func comments(_ d: ProposalDetail) -> some View {
+        if d.commentCount > 0 || !d.comments.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Divider()
+                Text("Comments").scaledFont(.body, weight: .semibold)
+                if let more = ProposalText.commentOverflow(count: d.commentCount, sent: d.comments.count) {
+                    Text(more).foregroundStyle(.secondary)
+                }
+                ForEach(Array(d.comments.enumerated()), id: \.offset) { _, c in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(ProposalText.commentHeader(c, now: now)).scaledFont(.caption, weight: .semibold).foregroundStyle(.secondary)
+                        MarkdownView(markdown: c.body)
+                    }
+                }
+            }
         }
     }
 
@@ -286,5 +379,54 @@ struct ProposalDetailView: View {
             await store.reject(proposal.number, reason: reason.trimmingCharacters(in: .whitespacesAndNewlines))
             busy = false
         }
+    }
+}
+
+private struct ReadinessLabelStyle: LabelStyle {
+    let warn: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            if warn { configuration.icon } else { Text("•") }
+            configuration.title
+        }
+    }
+}
+
+/// Markdown laid out block by block (`MarkdownBlocks.split`): headings, bullets and paragraphs get their inline markdown
+/// (code, links, emphasis) rendered by `Text`; fenced code is monospaced. A lazy stack keeps a long body cheap.
+struct MarkdownView: View {
+    let markdown: String
+
+    var body: some View {
+        let blocks = MarkdownBlocks.split(markdown)
+        LazyVStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .heading(let level, let text):
+                    inline(text).scaledFont(level <= 1 ? .title3 : level == 2 ? .body : .callout, weight: .semibold)
+                        .padding(.top, level <= 2 ? 6 : 2)
+                case .bullet(let indent, let text):
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("•")
+                        inline(text)
+                    }
+                    .padding(.leading, CGFloat(indent) * 14)
+                case .paragraph(let text):
+                    inline(text)
+                case .code(let text):
+                    Text(text).scaledFont(.caption, monospaced: true).textSelection(.enabled)
+                        .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func inline(_ text: String) -> some View {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        let attributed = (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+        return Text(attributed).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
     }
 }

@@ -114,6 +114,11 @@ public struct APIClient: Sendable {
         try JSONDecoder().decode(TicketDetail.self, from: try await send(request("/v1/tickets/\(number)")))
     }
 
+    /// A proposed issue in full; a 404 means the daemon predates the endpoint or the issue is no longer proposed.
+    public func proposalDetail(_ number: Int) async throws -> ProposalDetail {
+        try JSONDecoder().decode(ProposalDetail.self, from: try await send(request("/v1/proposals/\(number)", timeout: 30)))
+    }
+
     public func log(_ number: Int, lines: Int = 60) async throws -> [String] {
         struct Tail: Decodable { var lines: [String] }
         return try JSONDecoder().decode(Tail.self, from: try await send(request("/v1/tickets/\(number)/log?lines=\(lines)"))).lines
