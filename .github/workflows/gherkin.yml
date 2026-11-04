@@ -948,6 +948,15 @@ jobs:
           path: ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gherkin-artifacts
           if-no-files-found: warn
 
+      - name: Upload the gallery screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-gui-shard-${{ matrix.shard.name }}-gallery
+          # the sandboxed runner cannot write into the workspace, so the gallery falls back to its container's tmp
+          path: ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gallery
+          if-no-files-found: ignore
+
   desktop-linux:
     name: desktop (ubuntu-24.04) · ${{ matrix.shard.label }}
     runs-on: ubuntu-24.04
