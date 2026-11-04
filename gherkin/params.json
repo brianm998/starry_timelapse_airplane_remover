@@ -168,6 +168,12 @@
     "uiStartDuringRun": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiVideoImportCancel": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiOpenWhileProcessing": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiMultiChoiceSheet": {
       "sequence": "test_data/test_a7sii_10"
     },

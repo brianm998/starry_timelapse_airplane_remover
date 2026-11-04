@@ -162,6 +162,10 @@ class DesktopFeatureRunner {
         StepAction.OPEN_PREFERENCES to { t -> openPreferences(t) },
         StepAction.OPEN_LOCATION_QUESTION to { t -> openCopiedSequenceAtItsLocationQuestion(t) },
         StepAction.OPEN_VIDEO_IMPORT to { t -> openVideoAtItsImportDialog(t) },
+        StepAction.START_LONG_VIDEO_IMPORT to { t -> startLongVideoImport(t) },
+        StepAction.VIDEO_FRAMES_EXTRACTING to { t -> expectVideoFramesBeingExtracted(t) },
+        StepAction.VIDEO_FRAMES_GONE to { t -> expectVideoFramesGone(t) },
+        StepAction.CHOOSER_ANSWERS_PROCESSED to { _ -> chooserAnswersWithProcessedCopy() },
         StepAction.SAVE_SCREENSHOT to { t -> saveScreenshot(t, args[0]) },
         StepAction.SAVE_WINDOW_SCREENSHOT to { t -> saveScreenshot(t, args[1], window = args[0]) },
     )
@@ -223,6 +227,7 @@ class DesktopFeatureRunner {
                 com.star.desktop.i18n.Strings.setOverride(null)
                 System.clearProperty(com.star.desktop.ui.initial.NO_INTRO_VIDEO_PROPERTY)
                 System.clearProperty(com.star.desktop.ui.sequence.edit.PROBES_PROPERTY)
+                System.clearProperty(com.star.desktop.ui.initial.CHOOSE_PATH_PROPERTY)
             }
             scratch.deleteRecursively()
         }
@@ -294,7 +299,8 @@ class DesktopFeatureRunner {
         }
         // A gallery feature can start a run (the processing modal), and this Mac must never run the GPU merge (CLAUDE.md): the scratch preferences say so,
         // whatever else they hold.
-        if (feature.steps.any { it.action == StepAction.SAVE_SCREENSHOT || it.action == StepAction.SAVE_WINDOW_SCREENSHOT }) {
+        // (a feature from the processed sequence starts runs too)
+        if (feature.steps.any { it.action == StepAction.SAVE_SCREENSHOT || it.action == StepAction.SAVE_WINDOW_SCREENSHOT || it.action == StepAction.PROCESSED_COPY }) {
             val file = preferencesFile()
             val preferences = runCatching { JsonParser.parseString(file.readText()).asJsonObject }.getOrElse { JsonObject() }
             preferences.addProperty("useGPUForMerge", false)
@@ -1153,6 +1159,57 @@ class DesktopFeatureRunner {
         waitFor(t, "the video import dialog", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("videoimport.import") }
     }
 
+    /** The folder the long video's frames are extracted into: beside the video, named for it (the daemon's rule, as in [importVideo]). */
+    private val longVideoFrames: File get() = File(scratch, "long-video")
+
+    /**
+     * A video of 1900 frames (4K, about 13 s to extract on this Mac, where a click lands within 2 s), made from the copied sequence's frames with the bundled ffmpeg (scaled to 3840 wide, the 19 frames looped), imported
+     * in the foreground as a user does (JPEG, "extract in the background" off), so that the loading screen with its Cancel is what is on screen
+     * while the frames are extracted. Stops once Import has been pressed.
+     */
+    private fun startLongVideoImport(t: ComposeUiTest) {
+        if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
+        val ffmpeg = File(repoRoot(), "external_binaries/bin/ffmpeg").takeIf { it.canExecute() } ?: File("ffmpeg")
+        val video = File(scratch, "long-video.mp4")
+        val frames = sequenceCopy.listFiles { f -> f.extension.lowercase() == "jpg" }?.size ?: 0
+        if (frames == 0) throw RunnerError("no jpg frames in $sequenceCopy to make a video from")
+        val process = ProcessBuilder(
+            ffmpeg.path, "-y", "-loglevel", "error", "-framerate", "5", "-pattern_type", "glob", "-i", File(sequenceCopy, "*.jpg").path,
+            "-vf", "scale=3840:-2,loop=loop=${LONG_VIDEO_LOOPS}:size=$frames:start=0",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "40", "-pix_fmt", "yuv420p", video.path,
+        ).redirectErrorStream(true).start()
+        val log = process.inputStream.bufferedReader().readText()
+        if (process.waitFor() != 0 || !video.isFile) throw RunnerError("could not make a video from $sequenceCopy: $log")
+        val model = newModel()
+        showApp(t, model)
+        t.runOnUiThread { model.openVideo(video.absolutePath) }
+        waitFor(t, "the video import dialog", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("videoimport.import") }
+        t.onNodeWithTag("videoimport.format.jpeg").performClick()
+        // "Extract video in background" is on for a video the probe finds cheap to reach: off, so that the whole extraction is the loading screen.
+        val background = "videoimport.background"
+        if (t.onAllNodesWithTagExists(background) && semanticsOf(t, background)?.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.On) {
+            t.onNodeWithTag(background).performClick()
+        }
+        t.onNodeWithTag("videoimport.import").performClick()
+    }
+
+    /** Frames of the long video are on disk: the extraction has begun (so a folder found gone later was taken back, not never made). */
+    private fun expectVideoFramesBeingExtracted(t: ComposeUiTest) {
+        waitFor(t, "frames to be extracted into $longVideoFrames", 120_000, { "(${longVideoFrames.list()?.size ?: "no folder"})" }) {
+            (longVideoFrames.list()?.size ?: 0) >= 5
+        }
+    }
+
+    private fun expectVideoFramesGone(t: ComposeUiTest) {
+        waitFor(t, "$longVideoFrames to be gone", 30_000, { "(left: ${longVideoFrames.list()?.sorted()?.take(8)} of ${longVideoFrames.list()?.size ?: 0})" }) { !longVideoFrames.exists() }
+    }
+
+    /** What File ▸ Open's chooser answers (the system's own dialog cannot be driven): the processed copy's folder, which leads to the location question. */
+    private fun chooserAnswersWithProcessedCopy() {
+        if (processedConfig == null) throw RunnerError("\"a processed copy of the sequence\" has not run")
+        System.setProperty(com.star.desktop.ui.initial.CHOOSE_PATH_PROPERTY, File(scratch, "processed").path)
+    }
+
     /** `<dir>/<client>/<name>.png`, where dir is `STAR_GALLERY_DIR` (the gui's runner reads the same), else `<repo>/.test-data/gallery/latest`. */
     private fun galleryFile(name: String): File {
         val dir = System.getenv("STAR_GALLERY_DIR")?.takeIf { it.isNotEmpty() }?.let { File(it) } ?: File(repoRoot(), ".test-data/gallery/latest")
@@ -1230,6 +1287,7 @@ class DesktopFeatureRunner {
         const val WINDOW_SHOT_TAG = "gallery.window"
         const val OPEN_TIMEOUT_MS = 10L * 60_000
         const val UI_TIMEOUT_MS = 90_000L
+        const val LONG_VIDEO_LOOPS = 99   // the sequence's frames played this many times over again: 19 frames make 1900
         const val DRAG_HALF_PX = 24f   // a drag around a group is a box this far each way from its centre, in pixels
         const val DRAG_STEPS = 8
         const val PROCESS_TIMEOUT_MS = 50L * 60_000   // auto selective on a 4-core runner took over 25 minutes

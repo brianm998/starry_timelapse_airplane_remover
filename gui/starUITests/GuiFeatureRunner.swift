@@ -120,6 +120,10 @@ final class GuiFeatureRunner {
         .openPreferences: { try $0.openPreferences() },
         .openLocationQuestion: { try $0.openCopiedSequenceAtItsLocationQuestion() },
         .openVideoImport: { try $0.openVideoAtItsImportDialog() },
+        .startLongVideoImport: { try $0.startLongVideoImport() },
+        .videoFramesExtracting: { try $0.expectVideoFramesBeingExtracted() },
+        .videoFramesGone: { try $0.expectVideoFramesGone() },
+        .chooserAnswersProcessed: { try $0.chooserAnswersWithProcessedCopy() },
         .saveScreenshot: { try $0.saveScreenshot(named: $0.args[0]) },
         .saveWindowScreenshot: { try $0.saveScreenshot(named: $0.args[1], ofWindow: $0.args[0]) },
     ]
@@ -338,9 +342,11 @@ final class GuiFeatureRunner {
         let home = scratch.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         app.launchEnvironment["HOME"] = home.path
-        if savesScreenshots { try keepGPUMergeOff() }
+        if savesScreenshots || startsRunsFromTheProcessedCopy { try keepGPUMergeOff() }
         // Ignore the windows the last run of the app left open (macOS restores them): a feature starts from the app as it opens, not from where an earlier one quit.
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"] + arguments
+        // File ▸ Open's open panel cannot be driven: when the feature says what it answers with, the app is told (`ViewModel.uiTestChosenPath`).
+        if let chosen = chosenPath { app.launchArguments += ["-StarUITestChoosePath", chosen] }
         // The parity gallery's window is 1400 by 1100 points, as the desktop client's test window is: XCUITest cannot size a window, so the app does (`ViewModel.uiTestWindowSize`).
         if savesScreenshots {
             app.launchArguments += ["-StarUITestWindowSize", "\(Self.galleryWindowSize)"]
@@ -698,6 +704,77 @@ final class GuiFeatureRunner {
         process.waitUntilExit()
         guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: video.path) else { throw RunnerError("could not make a video from \(copy.path)") }
         try launch(arguments: ["-StarUITestOpenVideo", video.path])
+    }
+
+    /// A feature from the processed sequence starts runs, and this Mac must never run the GPU merge (CLAUDE.md).
+    private var startsRunsFromTheProcessedCopy: Bool {
+        feature?.steps.contains(where: { $0.action == .processedCopy }) == true
+    }
+
+    /// What File ▸ Open's panel answers with, when the feature says (`-StarUITestChoosePath`).
+    private var chosenPath: String?
+
+    /// What File ▸ Open's panel answers: the processed copy's folder, which leads to the question of where its files go.
+    private func chooserAnswersWithProcessedCopy() throws {
+        guard processedConfig != nil else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        chosenPath = scratch.appendingPathComponent("processed").path
+    }
+
+    /// The folder the long video's frames are extracted into: beside the video, named for it (as `importVideo` finds them).
+    private var longVideoFrames: URL { scratch.appendingPathComponent("long-video") }
+
+    /// How many times the sequence's frames are played over again in the long video: 19 frames make 1900.
+    private static let longVideoLoops = 99
+
+    /// A video of 1900 frames (4K, about 13 s to extract on this Mac, where a click lands within 2 s), made from the copied sequence's frames with the bundled ffmpeg (scaled to 3840 wide, the frames looped), imported in
+    /// the foreground as a user does (JPEG, "extract in the background" off), so that the loading screen with its Cancel is what is on screen while
+    /// the frames are extracted. Stops once Import has been pressed.
+    private func startLongVideoImport() throws {
+        guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
+        let frames = try FileManager.default.contentsOfDirectory(atPath: copy.path).filter { $0.lowercased().hasSuffix(".jpg") }.count
+        guard frames > 0 else { throw RunnerError("no jpg frames in \(copy.path) to make a video from") }
+        let ffmpeg = Self.repoRoot.appendingPathComponent("external_binaries/bin/ffmpeg")
+        let video = scratch.appendingPathComponent("long-video.mp4")
+        let process = Process()
+        process.executableURL = ffmpeg
+        process.arguments = ["-y", "-loglevel", "error", "-framerate", "5", "-pattern_type", "glob", "-i", copy.appendingPathComponent("*.jpg").path,
+                             "-vf", "scale=3840:-2,loop=loop=\(Self.longVideoLoops):size=\(frames):start=0",
+                             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "40", "-pix_fmt", "yuv420p", video.path]
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: video.path) else { throw RunnerError("could not make a video from \(copy.path)") }
+        try launch(arguments: ["-StarUITestOpenVideo", video.path])
+        guard element("videoimport.import").waitForExistence(timeout: 120) else {
+            throw RunnerError("the video import sheet did not appear\n\(app.debugDescription)")
+        }
+        let radio = element("videoimport.format.jpeg")
+        if radio.exists { radio.click() } else { app.radioGroups.firstMatch.radioButtons.element(boundBy: 2).click() }
+        // "Extract video in background" is on for a video the probe finds cheap to reach: off, so that the whole extraction is the loading screen.
+        let background = element("videoimport.background")
+        if background.waitForExistence(timeout: 30) {
+            let isOn = (background.value as? String) == "1" || (background.value as? Int) == 1
+            if isOn { background.click() }
+        }
+        // Return is Import's default action (see `importVideo`: the button can be where a click is lost).
+        app.typeKey(.return, modifierFlags: [])
+    }
+
+    /// Frames of the long video are on disk: the extraction has begun (so a folder found gone later was taken back, not never made).
+    private func expectVideoFramesBeingExtracted() throws {
+        var count = 0
+        try waitFor("frames to be extracted into \(longVideoFrames.path)", timeout: 120, interval: 0.25, detail: { "(\(count) files)" }) {
+            count = (try? FileManager.default.contentsOfDirectory(atPath: longVideoFrames.path).count) ?? 0
+            return count >= 5
+        }
+    }
+
+    private func expectVideoFramesGone() throws {
+        try waitFor("\(longVideoFrames.path) to be gone", timeout: 30, interval: 0.5, detail: {
+            let left = ((try? FileManager.default.contentsOfDirectory(atPath: longVideoFrames.path)) ?? []).sorted()
+            return "(left: \(left.prefix(8)) of \(left.count))"
+        }) {
+            !FileManager.default.fileExists(atPath: longVideoFrames.path)
+        }
     }
 
     private var savesScreenshots: Bool {
