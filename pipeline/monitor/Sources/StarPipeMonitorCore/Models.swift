@@ -669,7 +669,7 @@ public enum GroupTitle {
         case "running": "Running"
         case "waiting": "Waiting"
         case "queued": "Queued"
-        case "landed_today": "Landed today"
+        case "landed_today": "Landed"
         case "failed": "Failed"
         default: group
         }
