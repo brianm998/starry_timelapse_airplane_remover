@@ -38,16 +38,24 @@ def _format(argv: tuple[str, ...], root: Path, base: str, log_dir: Path) -> list
 
 
 def _run_argv(spec: star.CheckSpec, argv: list[str], root: Path, log: Path, say: Callable[[str], None],
-              priority: int | None) -> tuple[int, float, heavy.Hung | None]:
-    """One process of a check: (exit code, seconds waiting for the lock, hung)."""
+              priority: int | None) -> heavy.RunResult:
+    """One process of a check: exit code, seconds waiting for the lock, hung, and what it used of the machine."""
     cwd = str(root / spec.cwd)
     env = {**os.environ, **{k: v.format(root=root, build=build_dir(root)) for k, v in spec.env}} if spec.env else None
     with log.open("wb") as out:
         if spec.heavy:
-            job = heavy.run_job(argv, report=say, keep_display_awake=spec.ui, cwd=cwd, stdout=out.fileno(),
-                                priority=priority, env=env)
-            return job.code, job.waited, job.hung
-        return subprocess.run(argv, cwd=cwd, stdout=out, stderr=subprocess.STDOUT, check=False, env=env).returncode, 0.0, None
+            return heavy.run_job(argv, report=say, keep_display_awake=spec.ui, cwd=cwd, stdout=out.fileno(),
+                                 priority=priority, env=env)
+        code = subprocess.run(argv, cwd=cwd, stdout=out, stderr=subprocess.STDOUT, check=False, env=env).returncode
+        return heavy.RunResult(code, 0.0)
+
+
+def _combine(a: heavy.RunResult, b: heavy.RunResult) -> heavy.RunResult:
+    """Two passes of one check as one hold: the mean is weighted by how long each held the lock."""
+    seconds = a.seconds + b.seconds
+    mean = (a.cpu_mean * a.seconds + b.cpu_mean * b.seconds) / seconds if seconds else 0.0
+    return heavy.RunResult(a.code or b.code, a.waited + b.waited, b.hung or a.hung, seconds, mean,
+                           max(a.cpu_peak, b.cpu_peak), max(a.rss_peak_mb, b.rss_peak_mb))
 
 
 def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: str,
@@ -57,17 +65,20 @@ def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: st
         Path(_format((shard,), root, base, log.parent)[0]).unlink(missing_ok=True)
     for xml in spec.xunit:  # a file left by an earlier run of this commit must not stand in for this run's
         Path(_format((xml,), root, base, log.parent)[0]).unlink(missing_ok=True)
-    code, wait, hung = _run_argv(spec, _argv(spec, root, base, log.parent), root, log, say, priority)
+    job = _run_argv(spec, _argv(spec, root, base, log.parent), root, log, say, priority)
+    code, wait, hung = job.code, job.waited, job.hung
     if spec.serial_argv and not hung:  # the classes the parallel pass skipped, alone on the machine
         serial_log = log.with_name(log.stem + ".serial.log")
-        serial_code, serial_wait, hung = _run_argv(spec, _argv(spec, root, base, log.parent, serial=True), root, serial_log,
-                                                   say, priority)
-        code, wait = code or serial_code, wait + serial_wait
-        log = serial_log if serial_code else log
+        serial = _run_argv(spec, _argv(spec, root, base, log.parent, serial=True), root, serial_log, say, priority)
+        hung = serial.hung
+        code, wait = code or serial.code, wait + serial.waited
+        log = serial_log if serial.code else log
+        job = _combine(job, serial)
     if hung:
         return ledger.Result(spec.id, "hung", sha, time.monotonic() - started - wait, wait, log=str(log),
                              detail=f"hung: `{hung.cmd}` made no progress for {hung.idle_s:.0f}s and was killed; the lock is "
-                                    "free. This is not a failure of your change: rerun run_checks")
+                                    "free. This is not a failure of your change: rerun run_checks",
+                             cpu_mean=job.cpu_mean, cpu_peak=job.cpu_peak, rss_peak_mb=job.rss_peak_mb)
     text = log.read_text(errors="replace")
     counts = parsers.Counts()
     if spec.parser == "xunit":
@@ -98,7 +109,8 @@ def _run_command(spec: star.CheckSpec, root: Path, base: str, log: Path, sha: st
         shown = ", ".join(counts.failures[:10]) + (f" and {len(counts.failures) - 10} more" if len(counts.failures) > 10 else "")
         detail += f"; failed: {shown}"
     return ledger.Result(spec.id, status, sha, time.monotonic() - started - wait, wait, counts.executed,
-                         counts.failed, counts.skipped, str(log), detail, failures=counts.failures)
+                         counts.failed, counts.skipped, str(log), detail, failures=counts.failures,
+                         cpu_mean=job.cpu_mean, cpu_peak=job.cpu_peak, rss_peak_mb=job.rss_peak_mb)
 
 
 def _shard_counts(path: Path) -> parsers.Counts:
