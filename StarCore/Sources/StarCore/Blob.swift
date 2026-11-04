@@ -191,12 +191,10 @@ public actor Blob: CustomStringConvertible,
     private var _boundingBox: BoundingBox?
     private var _blobLine: Line?
     private var _blobLineIntensityScore: Double?
-    private var _blobLinePixelScore: Double?
     private var _pixelValues: [UInt16]?
     private var _outlierGroup: OutlierGroup?
 
     public func blobLineIntensityScore() -> Double? { _blobLineIntensityScore }
-    public func blobLinePixelScore() -> Double? { _blobLinePixelScore }
 
     
     // assumes zero, zero origin line
@@ -248,7 +246,6 @@ public actor Blob: CustomStringConvertible,
             {
                 _blobLine = lineInfo.line
                 _blobLineIntensityScore = lineInfo.intensityScore
-                _blobLinePixelScore = lineInfo.pixelScore
             }
             return _blobLine
         }
@@ -282,69 +279,6 @@ public actor Blob: CustomStringConvertible,
         }
     }
 
-    public func medianDistanceFromIdealLine() async -> (Double, Double)? {
-        if let line = await self.originZeroLine {
-            let (_, lineLength) = averageDistanceAndLineLength(from: line)
-            let (_, median, _) = averageMedianMaxDistance(from: line)
-            return (median, lineLength)
-        } else {
-            return nil
-        }
-    }
-
-    // removes all pixels below the given intensity floor
-    public func intensityTrim(by intensityFloor: UInt16) {
-        for pixel in pixels {
-            if pixel.uInt16Value < intensityFloor {
-                pixels.remove(pixel)
-            }
-        }
-    }
-    
-    // trims outlying pixels from the group, especially
-    // ones with very few neighboring pixels
-    public func fancyLineTrim(by minNeighbors: Int = 3) async {
-        if let line = await self.originZeroLine {
-            var newPixels = Set<SortablePixel>()
-            
-            let standardLine = line.standardLine
-            let (_, median, _) = averageMedianMaxDistance(from: line)
-
-            for pixel in pixels {
-
-                let pixelDistance = standardLine.distanceTo(x: pixel.x, y: pixel.y)
-                if pixelDistance < 2 {
-                    newPixels.update(with: pixel)
-                } else {
-
-                    let bounds = self.boundingBox()
-                    let x = pixel.x - bounds.min.x
-                    let y = pixel.y - bounds.min.y
-
-                    var neighborCount: Int = 0
-                    neighborCount += self.hasPixel(x: x-1, y: y-1)
-                    neighborCount += self.hasPixel(x: x,   y: y-1)
-                    neighborCount += self.hasPixel(x: x+1, y: y-1)
-                    neighborCount += self.hasPixel(x: x-1, y: y)
-                    neighborCount += self.hasPixel(x: x+1, y: y)
-                    neighborCount += self.hasPixel(x: x-1, y: y+1)
-                    neighborCount += self.hasPixel(x: x,   y: y+1)
-                    neighborCount += self.hasPixel(x: x+1, y: y+1)
-
-                    if pixelDistance < median {
-                        if neighborCount > 2 { newPixels.update(with: pixel) }
-                    } else if neighborCount > 1 {
-                        newPixels.update(with: pixel)
-                    }
-                }
-            }
-            let diff = self.pixels.count - newPixels.count
-            self.pixels = newPixels
-            Log.d("blog \(self) trimming \(diff) pixels")
-            reset()
-        }
-    }
-
     private var _bunchCalculator: BunchCalculator?
 
     private var _bunches: [Set<SortablePixel>]?
@@ -373,7 +307,6 @@ public actor Blob: CustomStringConvertible,
         _outlierGroup = nil
         _blobLine = nil
         _blobLineIntensityScore = nil
-        _blobLinePixelScore = nil
         _averageDistanceFromIdealLine = nil
         _membersArray = nil
         _maxIntensity = nil
@@ -406,55 +339,6 @@ public actor Blob: CustomStringConvertible,
         return members
     }
     
-    public func neighboringPixelTrim(by minNeighbors: Int = 2) {
-        /*
-         for each pixel in pixels
-         if no other pixels are next to it, discard it
-         */
-
-        var trimmedPixels = Set<SortablePixel>()
-        let bounds = self.boundingBox()
-
-        for pixel in pixels {
-            let x = pixel.x - bounds.min.x
-            let y = pixel.y - bounds.min.y
-            
-            var neighborCount: Int = 0
-            neighborCount += self.hasPixel(x: x-1, y: y-1)
-            neighborCount += self.hasPixel(x: x,   y: y-1)
-            neighborCount += self.hasPixel(x: x+1, y: y-1)
-            neighborCount += self.hasPixel(x: x-1, y: y)
-            neighborCount += self.hasPixel(x: x+1, y: y)
-            neighborCount += self.hasPixel(x: x-1, y: y+1)
-            neighborCount += self.hasPixel(x: x,   y: y+1)
-            neighborCount += self.hasPixel(x: x+1, y: y+1)
-
-            if neighborCount > minNeighbors { trimmedPixels.update(with: pixel) }
-        }
-
-        if trimmedPixels.count != self.pixels.count {
-            Log.d("frame \(frameIndex) blob \(self) DID PIXEL TRIM \(self.pixels.count-trimmedPixels.count) pixels from a start of \(self.pixels.count) pixels")
-            self.pixels = trimmedPixels
-            reset()
-        } else {
-            Log.d("frame \(frameIndex) blob \(self) DID NOT PIXEL TRIM ANY PIXELS")
-        }
-    }
-
-    private func hasPixel(x: Int, y: Int) -> Int {
-        let bounds = self.boundingBox()
-        if x >= 0,
-           y >= 0,
-           x < bounds.width,
-           y < bounds.height,
-           self.membersArray[y*bounds.width+x]
-        {
-            return 1
-        } else {
-            return 0
-        }
-    }
-
     public func remove(pixels: Set<SortablePixel>) {
         self.pixels.subtract(pixels)
     }
@@ -797,46 +681,6 @@ public actor Blob: CustomStringConvertible,
         return ret
     }
 
-    // a point close to the center of this blob if it's a line, relative to its boundingBox
-    public var centralLineCoord: DoubleCoord? {
-        get async {
-            let center = self.boundingBox().centerDouble
-            if let line = await self.originZeroLine {
-                let standardLine = line.standardLine
-                
-                switch line.iterationOrientation {
-                case .horizontal:
-                    return DoubleCoord(x: center.x,
-                                       y: standardLine.y(forX: Double(center.x)))
-                case .vertical:
-                    return DoubleCoord(x: standardLine.x(forY: Double(center.y)),
-                                       y: center.y)
-                }
-            }
-            return nil
-        } 
-    }
-    
-    // a point close to the center of this blob if it's a line, with origin zero 
-    public var originZeroCentralLineCoord: DoubleCoord? {
-        get async {
-            let center = self.boundingBox().centerDouble
-            if let line = await self.originZeroLine {
-                let standardLine = line.standardLine
-                
-                switch line.iterationOrientation {
-                case .horizontal:
-                    return DoubleCoord(x: center.x,
-                                       y: standardLine.y(forX: Double(center.x)))
-                case .vertical:
-                    return DoubleCoord(x: standardLine.x(forY: Double(center.y)),
-                                       y: center.y)
-                }
-            }
-            return nil
-        }
-    }
-    
     public func outlierGroup(at frameIndex: Int,
                             withId id: UInt16? = nil,
                             imageWidth: Double,
@@ -880,14 +724,4 @@ public actor Blob: CustomStringConvertible,
         return lhs.id == rhs.id
     }
 
-}
-
-public func medianIntensities(of blobs: [Blob]) async -> [UInt16] {
-    var intensities: [UInt16] = []
-
-    for blob in blobs {
-        intensities.append(await blob.medianIntensity())
-    }
-
-    return intensities
 }

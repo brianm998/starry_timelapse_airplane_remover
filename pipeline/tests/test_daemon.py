@@ -881,7 +881,7 @@ def test_snapshot_shows_the_active_batch_in_each_phase(rig: Rig) -> None:
         rig.db.batch_update(bid, state=phase)
         landing = d.snapshot()["landing"]
         assert landing["batch"] == {"number": bid, "phase": phase, "age_s": 90, "members": [1, 2],  # type: ignore[index]
-                                    "pr_number": None, "slow": False}
+                                    "pr_number": None, "ci": "running", "slow": False}
         assert d.status()["landing"]["batch"]["phase"] == phase  # type: ignore[index]
 
 
@@ -1003,6 +1003,14 @@ def labels_of(rig: Rig, n: int) -> set[str]:
     return {lab["name"] for lab in rig.gh.issues[n]["labels"]}
 
 
+async def test_snapshot_proposal_without_a_marker_has_author_and_no_by(rig: Rig) -> None:
+    rig.gh.add_issue(30, "By hand", body=GOOD_BODY, author="someone", labels=("pipe:proposed",))
+    d = Daemon(rig.engine, Config(), token="tok")
+    await d.poll_once()
+    assert d.snapshot()["proposals"] == [{"number": 30, "title": "By hand", "by": None, "author": "someone",
+                                          "created_at": "2026-11-01T10:00:00Z"}]
+
+
 async def test_snapshot_lists_proposals_from_the_last_poll(rig: Rig) -> None:
     propose(rig, 21, "Show the retry budget")
     propose(rig, 22, "Rename a key", by="interactive")
@@ -1010,8 +1018,10 @@ async def test_snapshot_lists_proposals_from_the_last_poll(rig: Rig) -> None:
     d = Daemon(rig.engine, Config(), token="tok")
     assert d.snapshot()["proposals"] == []  # nothing polled yet
     await d.poll_once()
-    expected = [{"number": 21, "title": "Show the retry budget", "by": "review agent"},
-                {"number": 22, "title": "Rename a key", "by": "interactive"}]
+    expected = [{"number": 21, "title": "Show the retry budget", "by": "review agent",
+                 "author": "brianm998", "created_at": "2026-11-01T10:00:00Z"},
+                {"number": 22, "title": "Rename a key", "by": "interactive",
+                 "author": "brianm998", "created_at": "2026-11-01T10:00:00Z"}]
     assert d.snapshot()["proposals"] == expected
 
     def boom(path: str) -> list[dict[str, Any]]:
@@ -1101,6 +1111,93 @@ async def test_land_all_marks_every_ticket_in_the_landing_queue(rig: Rig) -> Non
         await client.close()
 
 
+async def test_proposal_detail_returns_the_issue(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget", labels=("pipe:proposed", "bug"))
+    rig.gh.add_issue(22, "By hand", body=GOOD_BODY, author="someone", labels=("pipe:proposed",))
+    client, _ = await api(rig)
+    try:
+        r = await client.get("/v1/proposals/21", headers=AUTH)
+        assert r.status == 200
+        d = await r.json()
+        assert (d["number"], d["title"], d["author"]) == (21, "Show the retry budget", "brianm998")
+        assert (d["created_at"], d["updated_at"]) == ("2026-11-01T10:00:00Z", "2026-11-02T10:00:00Z")
+        assert d["labels"] == ["bug"] and d["by"] == "review agent"
+        assert d["body"] == rig.gh.issues[21]["body"]
+        by_hand = await (await client.get("/v1/proposals/22", headers=AUTH)).json()
+        assert by_hand["by"] is None and by_hand["author"] == "someone"
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_includes_the_latest_comments(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    for i in range(25):
+        rig.gh.say(21, f"u{i}", "x" * 5000 if i == 24 else f"c{i}", created_at=f"2026-11-02T12:{i:02d}:00Z")
+    client, _ = await api(rig)
+    try:
+        d = await (await client.get("/v1/proposals/21", headers=AUTH)).json()
+        assert d["comment_count"] == 25 and len(d["comments"]) == 20
+        assert d["comments"][0] == {"author": "u5", "created_at": "2026-11-02T12:05:00Z", "body": "c5"}
+        last = d["comments"][-1]["body"]
+        assert last.startswith("x" * 4000) and len(last) < 4100 and last != "x" * 4000 and "truncated" in last
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_lists_open_blockers(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    rig.gh.add_issue(30, "Still open")
+    rig.gh.add_issue(31, "Done already")
+    rig.gh.close_issue(31)
+    rig.gh.block(21, 30)
+    rig.gh.block(21, 31)
+    client, _ = await api(rig)
+    try:
+        d = await (await client.get("/v1/proposals/21", headers=AUTH)).json()
+        assert d["blockers"] == [{"number": 30, "title": "Still open"}]
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_says_how_ready_the_body_is(rig: Rig) -> None:
+    planned = GOOD_BODY + "\n## Pipeline\neffort_develop: medium · gherkin: no\n\n## Plan\nsummary: do the whole thing\nparity: neither\nlocalization: no\n- approach: edit it\n"
+    rig.gh.add_issue(21, "Planned", body=planned, labels=("pipe:proposed",))
+    rig.gh.add_issue(22, "Bad", body="just words", labels=("pipe:proposed",))
+    rig.gh.add_issue(23, "Queued", labels=("pipeline",))
+    d = Daemon(rig.engine, Config(max_open_tickets=7), token="tok")
+    client = TestClient(TestServer(d.app()))
+    await client.start_server()
+    try:
+        good = (await (await client.get("/v1/proposals/21", headers=AUTH)).json())["readiness"]
+        assert good["lint_ok"] is True and good["errors"] == [] and good["has_plan"] is True
+        assert good["pipeline"] == {"effort_develop": "medium", "gherkin": "no"}
+        assert good["queue"] == {"open": 1, "max": 7}
+        bad = (await (await client.get("/v1/proposals/22", headers=AUTH)).json())["readiness"]
+        assert bad["lint_ok"] is False and bad["errors"] and bad["has_plan"] is False and bad["pipeline"] == {}
+    finally:
+        await client.close()
+
+
+async def test_proposal_detail_refuses_non_proposals_and_reports_github_errors(rig: Rig) -> None:
+    propose(rig, 21, "Show the retry budget")
+    rig.gh.add_issue(23, "Ordinary ticket", labels=("pipeline",))
+    rig.gh.add_issue(24, "Unlabelled", labels=())
+    client, _ = await api(rig)
+    try:
+        for n in (23, 24, 999):
+            r = await client.get(f"/v1/proposals/{n}", headers=AUTH)
+            assert r.status == 404 and "not a proposal" in await r.text(), n
+        assert (await client.get("/v1/proposals/abc", headers=AUTH)).status == 400
+
+        def down(path: str) -> list[dict[str, Any]]:
+            raise GitHubError("HTTP 502 from GitHub")
+        rig.gh.paged = down  # type: ignore[method-assign]
+        r = await client.get("/v1/proposals/21", headers=AUTH)
+        assert r.status == 502 and "HTTP 502 from GitHub" in await r.text()
+    finally:
+        await client.close()
+
+
 def test_train_info_lists_every_active_batch(rig: Rig) -> None:
     from starpipe.cli import landing_lines
 
@@ -1113,8 +1210,8 @@ def test_train_info_lists_every_active_batch(rig: Rig) -> None:
     second = rig.db.batch_create("0" * 40)
     rig.db.batch_add(second, 2, 0)  # still building
     rig.now += 30
-    expected = [{"number": first, "phase": "ci", "age_s": 90, "members": [1], "pr_number": 11, "slow": False},
-                {"number": second, "phase": "building", "age_s": 30, "members": [2], "pr_number": None, "slow": False}]
+    expected = [{"number": first, "phase": "ci", "age_s": 90, "members": [1], "pr_number": 11, "ci": "running", "slow": False},
+                {"number": second, "phase": "building", "age_s": 30, "members": [2], "pr_number": None, "ci": "running", "slow": False}]
     for landing in (d.snapshot()["landing"], d.status()["landing"]):
         assert landing["batches"] == expected  # type: ignore[index]
         assert landing["batch"] == expected[0], "`batch` stays the oldest, so a client that shows one keeps working"  # type: ignore[index]

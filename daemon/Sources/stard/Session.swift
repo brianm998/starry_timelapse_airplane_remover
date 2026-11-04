@@ -482,14 +482,6 @@ actor Session {
         await startProcessing(startIndex: startIndex, endIndex: endIndex)
     }
 
-    // Re-run the whole frame graph after a reference-horizon change. With hasStaticReferenceHorizon
-    // set, the graph skips per-frame horizon detection and reads reference.tiff directly.
-    func reprocessWithReferenceHorizon() async {
-        guard !closed else { return }
-        await stopRun(announce: false)
-        await startProcessing(startIndex: 0, endIndex: nil)
-    }
-
     // Throw away what a reprocess of `type` must redo, so the frame graph recomputes it.  The
     // per-type work is StarCore's `FrameAirplaneRemover.resetForReprocessing`, which the macOS
     // gui calls too: `.none` deletes nothing, `.horizons` only the horizon images, `.everything`

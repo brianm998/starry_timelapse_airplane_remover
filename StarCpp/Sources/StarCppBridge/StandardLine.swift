@@ -118,11 +118,4 @@ public struct StandardLine {
         return DoubleCoord(x: (b1*c2-b2*c1)/(a1*b2-a2*b1),
                            y: (c1*a2-c2*a1)/(a1*b2-a2*b1))
     }
-
-    var yAtZeroX: Double {
-        // b*y + c = 0
-        // b*y = -c
-        // y = -c/b
-        return -c/b
-    }
 }
