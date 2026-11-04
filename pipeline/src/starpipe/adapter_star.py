@@ -181,7 +181,7 @@ CHECKS: dict[str, CheckSpec] = {
         CheckSpec(
             "build:gui", "xcodebuild gui (scheme star)",
             ("xcodebuild", "-project", "gui/star.xcodeproj", "-scheme", "star", "-configuration", "Debug",
-             "-derivedDataPath", GUI_DD, "CODE_SIGNING_ALLOWED=NO", "build"),
+             "-derivedDataPath", GUI_DD, "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "build"),
         ),
         CheckSpec(
             "build:desktop", "gradle compile star-desktop",
@@ -200,7 +200,7 @@ CHECKS: dict[str, CheckSpec] = {
         CheckSpec(
             "test:gui", "xcodebuild test gui starTests",
             ("xcodebuild", "-project", "gui/star.xcodeproj", "-scheme", "star", "-configuration", "Debug",
-             "-derivedDataPath", GUI_DD, "CODE_SIGNING_ALLOWED=NO", "-only-testing:starTests", "test"),
+             "-derivedDataPath", GUI_DD, "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "-only-testing:starTests", "test"),
             parser="xctest", ui=True,
         ),
         CheckSpec(

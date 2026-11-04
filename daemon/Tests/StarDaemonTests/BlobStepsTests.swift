@@ -170,6 +170,9 @@ final class BlobStepsTests: XCTestCase {
     }
 
     func testTheChangeIsKeptInTheFileTheCustomProcessorReadsAtStart() throws {
+        // CustomBlobProcessor resolves its file with NSHomeDirectory(), which on some macOS setups ignores $HOME;
+        // there the file lands in the real home and this test would check the wrong place (and dirty the real home).
+        try XCTSkipUnless(NSHomeDirectory() == home.path, "NSHomeDirectory() ignores $HOME on this machine")
         let processor = try custom()
         _ = try BlobSteps.apply(setArg(0, "minPixelIntensity", 4321), to: processor)
         // a processor made afterwards reads what was saved

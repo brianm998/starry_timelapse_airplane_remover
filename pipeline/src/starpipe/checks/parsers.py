@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import xml.etree.ElementTree as ET
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
@@ -14,7 +15,7 @@ class Counts:
     executed: int = 0
     failed: int = 0
     skipped: int = 0
-    failures: list[str] = field(default_factory=lambda: list[str]())  # names of the failing tests (xunit only)
+    failures: list[str] = field(default_factory=list[str])  # names of the failing cases, where the parser has them
 
     def __iadd__(self, other: Counts) -> Self:
         self.executed += other.executed
@@ -29,6 +30,7 @@ class Counts:
 
 
 _XCTEST_TOTAL = re.compile(r"Executed (\d+) tests?, with (\d+) failures?(?: \((\d+) unexpected\))?")
+_XCTEST_FAILED = re.compile(r"Test Case '-\[(\S+) (\S+)\]' failed \(")
 _XCTEST_SKIPPED = re.compile(r"Test Case '.*' skipped \(")
 # A test that skips itself because its data is not in the repo or it is an opt-in measurement skips on every machine and every
 # develop run: that is not a test the change silently lost. So does one that measures behaviour only some hardware has (the GCD
@@ -41,11 +43,16 @@ _EXPECTED_SKIP_REASON = (
 _XCTEST_EXPECTED_SKIP = re.compile(r"Test skipped - " + _EXPECTED_SKIP_REASON)
 _XUNIT_EXPECTED_SKIP = re.compile(r"(?:Test skipped - )?" + _EXPECTED_SKIP_REASON)
 # swift-testing: "✔ Test run with 12 tests in 3 suites passed after 0.1 seconds."
+_PYTEST_FAILED = re.compile(r"(?:FAILED|ERROR) (\S+::\S+?)(?: - .*)?$")
 _SWIFT_TESTING = re.compile(r"Test run with (\d+) tests?.* (passed|failed)")
 
 
 def _clean(text: str) -> str:
     return text.replace("\r", "")
+
+
+def _unique(names: Iterable[str]) -> list[str]:
+    return list(dict.fromkeys(names))
 
 
 def parse_xctest(text: str) -> Counts:
@@ -64,6 +71,7 @@ def parse_xctest(text: str) -> Counts:
         counts.executed += int(match.group(1))
         if match.group(2) == "failed":
             counts.failed += 1
+    counts.failures = _unique(f"{m.group(1)}.{m.group(2)}" for m in _XCTEST_FAILED.finditer(text))
     counts.skipped = max(0, len(_XCTEST_SKIPPED.findall(text)) - len(_XCTEST_EXPECTED_SKIP.findall(text)))
     return counts
 
@@ -102,6 +110,9 @@ def parse_gradle(results_dir: Path) -> Counts:
         counts.executed += int(suite.get("tests", 0))
         counts.failed += int(suite.get("failures", 0)) + int(suite.get("errors", 0))
         counts.skipped += int(suite.get("skipped", 0))
+        counts.failures += [f"{case.get('classname', '')}.{case.get('name', '')}" for case in suite.iter("testcase")
+                            if case.find("failure") is not None or case.find("error") is not None]
+    counts.failures = _unique(counts.failures)
     return counts
 
 
@@ -114,4 +125,5 @@ def parse_pytest(text: str) -> Counts:
             skipped = re.search(r"(\d+) skipped", line)
             p, f, s = (int(m.group(1)) if m else 0 for m in (passed, failed, skipped))
             counts = Counts(executed=p + f + s, failed=f, skipped=s)
+    counts.failures = _unique(m.group(1) for line in _clean(text).splitlines() if (m := _PYTEST_FAILED.match(line)))
     return counts

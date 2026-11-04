@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from starpipe import worktrees
+from starpipe import gitutil, ship, worktrees
+from starpipe.checks import impact, ledger
 from starpipe.contracts import Contract
 from starpipe.db import Database
+from starpipe.notify import Notifier
 
 from .fakes import GOOD_BODY, green_runner, make_repo, plan_args, sh
 
@@ -159,3 +162,61 @@ def test_a_free_form_ticket_without_criteria_can_still_get_a_plan(tmp_path: Path
     assert "accepted" in c.submit_plan(plan_args(acceptance=[{"id": "A1", "check": "review: cli.yml"}]))
     c2 = contract(tmp_path / "second", body=GOOD_BODY)  # a ticket that does list criteria keeps the strict check
     assert "not in the ticket" in c2.submit_plan(plan_args(acceptance=[{"id": "A1", "check": "x"}, {"id": "A9", "check": "y"}]))
+
+
+def _red_contract(tmp: Path, monkeypatch: pytest.MonkeyPatch, head: list[str], base: ledger.Result | None, *,
+                  failed: int | None = None) -> tuple[Contract, list[str]]:
+    """A branch whose diff needs `test:StarCpp`, which is red at HEAD with `head` failing; `base` is what the merge-base gives."""
+    c = contract(tmp)
+    commit_change_for(c)
+    def needs_the_test(_paths: list[str]) -> impact.Plan:
+        return impact.Plan(tests=["test:StarCpp"])
+
+    monkeypatch.setattr(impact, "plan_for", needs_the_test)
+    sha = gitutil.head_sha(c.worktree)
+    red = ledger.Result("test:StarCpp", "fail", sha, 0.0, executed=10, failed=len(head) if failed is None else failed, failures=head)
+    ledger.record(red)
+    c.check_runner = lambda _w, _b: [red]
+    c.baseline_runner = lambda _w, _b, _c: base
+    pages: list[str] = []
+    c.notifier = Notifier(c.db, lambda _t, text: pages.append(text))
+    return c, pages
+
+
+def _red_at_base(failures: list[str]) -> ledger.Result:
+    return ledger.Result("test:StarCpp", "fail", "b" * 40, 0.0, executed=10, failed=len(failures), failures=failures)
+
+
+QOS = "StarCppTests.OpenCVQoSTests.testLowQoS"
+
+
+def test_a_failure_that_develop_shares_does_not_block_submit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    c, _ = _red_contract(tmp_path, monkeypatch, [QOS], _red_at_base([QOS, "StarCppTests.Other.testB"]))
+    assert "KNOWN-RED" in c.run_checks({})
+    assert "accepted" in c.submit_change({"summary": "x"})
+
+
+def test_a_new_failure_still_blocks_submit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    c, _ = _red_contract(tmp_path, monkeypatch, [QOS, "StarCppTests.Mine.testNew"], _red_at_base([QOS]))
+    assert "KNOWN-RED" not in c.run_checks({})
+    assert "no green result" in c.submit_change({"summary": "x"})
+    # unnamed failures: the same count is excusable, a larger one is not; neither is a failure the base does not have at all
+    c, _ = _red_contract(tmp_path / "u", monkeypatch, [QOS], _red_at_base([QOS]), failed=2)
+    assert "no green result" in c.submit_change({"summary": "x"})
+    c, _ = _red_contract(tmp_path / "n", monkeypatch, [QOS], None)
+    assert "no green result" in c.submit_change({"summary": "x"})
+    c, _ = _red_contract(tmp_path / "p", monkeypatch, [QOS], ledger.Result("test:StarCpp", "pass", "b" * 40, 0.0, executed=1))
+    assert "no green result" in c.submit_change({"summary": "x"})
+
+
+def test_known_red_is_alerted_once_and_named(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    c, _ = _red_contract(tmp_path, monkeypatch, [QOS], _red_at_base([QOS]))
+    out = c.submit_change({"summary": "x"})
+    assert "accepted" in out and QOS in out and "test:StarCpp" in out
+    again = Contract(c.ticket, c.worktree, c.base_ref, c.db, check_runner=c.check_runner, notifier=c.notifier,
+                     baseline_runner=c.baseline_runner)
+    assert "accepted" in again.submit_change({"summary": "x"})
+    alerts = c.db.open_alerts()
+    assert [a["key"] for a in alerts] == [f"known-red:test:StarCpp:{'b' * 12}"] and QOS in alerts[0]["text"]
+    body = ship.pr_body(SimpleNamespace(db=c.db), c.ticket)  # type: ignore[arg-type]
+    assert "## Known red on develop" in body and QOS in body
