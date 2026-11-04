@@ -114,6 +114,11 @@ public struct APIClient: Sendable {
         try JSONDecoder().decode(TicketDetail.self, from: try await send(request("/v1/tickets/\(number)")))
     }
 
+    /// A proposed issue in full; a 404 means the daemon predates the endpoint or the issue is no longer proposed.
+    public func proposalDetail(_ number: Int) async throws -> ProposalDetail {
+        try JSONDecoder().decode(ProposalDetail.self, from: try await send(request("/v1/proposals/\(number)", timeout: 30)))
+    }
+
     public func log(_ number: Int, lines: Int = 60) async throws -> [String] {
         struct Tail: Decodable { var lines: [String] }
         return try JSONDecoder().decode(Tail.self, from: try await send(request("/v1/tickets/\(number)/log?lines=\(lines)"))).lines
@@ -145,11 +150,23 @@ public struct APIClient: Sendable {
         return try JSONDecoder().decode(Results.self, from: data).results
     }
 
+    /// Approve a proposal (`pipeline` label on); `priority` is "p0"…"p3", nil to keep the issue's own.
+    public func approve(_ number: Int, priority: String? = nil) async throws {
+        try await post("/v1/proposals/\(number)/approve", body: priority.map { ["priority": $0] } ?? [:])
+    }
+
+    /// Reject a proposal: the daemon comments with `reason` (when not empty) and closes it as not planned.
+    public func reject(_ number: Int, reason: String = "") async throws {
+        try await post("/v1/proposals/\(number)/reject", body: ["reason": reason])
+    }
+
     public func answer(_ number: Int, text: String) async throws { try await post("/v1/tickets/\(number)/answer", body: ["text": text]) }
     public func retry(_ number: Int, stage: String) async throws { try await post("/v1/tickets/\(number)/retry", body: ["stage": stage]) }
     public func cancel(_ number: Int, reason: String) async throws { try await post("/v1/tickets/\(number)/cancel", body: ["reason": reason]) }
     public func setPriority(_ number: Int, _ priority: Int) async throws { try await post("/v1/tickets/\(number)/prio", body: ["priority": priority]) }
     public func landNow(_ number: Int) async throws { try await post("/v1/tickets/\(number)/land-now") }
+    public func landAll() async throws { try await post("/v1/land-all") }
+    public func setMuted(_ muted: Bool) async throws { try await post("/v1/mute", body: ["muted": muted]) }
     public func setMaxActive(_ n: Int) async throws { try await post("/v1/settings", body: ["max_active": n]) }
 
     /// The server-sent event stream, from `after`. Ends (throwing) when the connection drops; the caller reconnects.

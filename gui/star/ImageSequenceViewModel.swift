@@ -106,9 +106,6 @@ public enum InteractionMode: String, Equatable, CaseIterable {
     }
 }
 
-// used to limit processing of frames to this max concurrent number
-public let frameProcessingMonitor = FileSystemMonitor(max: 32) // XXX make this configurable
-
 // view model for a sequence of images
 @MainActor @Observable
 public final class ImageSequenceViewModel {
@@ -172,14 +169,9 @@ public final class ImageSequenceViewModel {
     var muxer: FFmpegMuxer = .mov
     var hasAudio = false
     
-    var noImageExplainationText: String = localized("ui.loading_ellipsis")
-
     var backgroundColor = ViewModel.defaultBackgroundColor
 
     var frameStateMap: [FrameProcessingState: Set<FrameAirplaneRemover>] = [:]
-
-    // XXX report this from processAll
-    var sequenceProcessingState: SequenceProcessingState = .unprocessed
 
     // bumped on Stop so in-flight processAll closures know to ignore their final state write
     private var processingGeneration = 0
@@ -221,8 +213,6 @@ public final class ImageSequenceViewModel {
     // how long the arrows are
     var outlierArrowLength: CGFloat = 70 // relative to the frame width above
 
-    let finalProcessingCount = CountActor()
-    
     /// Which detection type this sequence is processed with: its own, from its `config.json`, so a sequence keeps the
     /// one it was made with whatever the preference says now.  The preference (`processingType`) only seeds a new one.
     var detectionType: DetectionType {
@@ -273,8 +263,6 @@ public final class ImageSequenceViewModel {
     
     var numberOfFramesWithOutliersLoaded = 0
     
-    var numberOfFramesLoaded = 0
-
     var outlierGroupTableRows: [OutlierGroupTableRow] = []
     var outlierGroupWindowFrame: FrameAirplaneRemover?
 
@@ -295,6 +283,10 @@ public final class ImageSequenceViewModel {
     var framesLeftToProcess: Int { max(0, frames.count - count(for: .complete)) }
 
     var isRenderingVideo = false
+
+    /// How far the video render has got, 0...1, for the menu-bar wand; the render sheet keeps
+    /// its own copy for its bar.  Only meaningful while `isRenderingVideo`.
+    var videoRenderFraction = 0.0
 
     var hasPendingWork: Bool {
         isProcessingFrames ||
@@ -363,8 +355,6 @@ public final class ImageSequenceViewModel {
 
     // causes tapping an outlier to open a dialog with multiple choices
     var multiChoice = false
-    
-    var updatingFrameBatch = false
 
     var videoPlaybackFramerate = 30
 
@@ -677,8 +667,6 @@ public final class ImageSequenceViewModel {
     }
 
     var showAllFrameViewModes = false
-    var showAllFrameProcessingStates = false
-    var showAllImageCacheStats = false
 
     var multiSelectionType: MultiSelectionType = .all
     var multiSelectionRemovalType: MultiSelectionRemovalType = .keep
@@ -821,8 +809,8 @@ public final class ImageSequenceViewModel {
                         self._currentFrameHighLevelCleanMethod = .automatic
                         self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
                         
-                    case .selective:
-                        self._currentFrameHighLevelCleanMethod = .selective
+                    case .selective, .dirtySky, .dirtyEarth:
+                        self._currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
                         self._currentFrameAutoPreservationMode = .no
                     }
                     
@@ -832,8 +820,8 @@ public final class ImageSequenceViewModel {
                         self._currentFrameHighLevelCleanMethod = .automatic
                         self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
 
-                    case .selective:
-                        self._currentFrameHighLevelCleanMethod = .selective
+                    case let method:
+                        self._currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
                         self._currentFrameAutoPreservationMode = .no
                     }
                 }
@@ -1046,70 +1034,6 @@ public final class ImageSequenceViewModel {
             {
                 await frame.setNumberOfStaticNeighborFrames()
                 try? await frame.recomputeMergedHorizonIfExists()
-            }
-        }
-    }
-
-    // per-frame overrides for numberAlignedNeighborFrames
-    var alignedNeighborFrameOverrides: [Int:Int] {
-        didSet {
-            var realConfig = config.config()
-            realConfig.alignedNeighborFrameOverrides = alignedNeighborFrameOverrides
-            config.update(realConfig)
-        }
-    }
-
-    /// The aligned-neighbor-frame count actually in effect for the current frame
-    /// (either an override or the global default).
-    var currentFrameAlignedNeighborCount: Int {
-        alignedNeighborFrameOverrides[currentIndex] ?? numberOfAlignedNeighborFrames
-    }
-
-    /// True when the current frame has a per-frame override for numberAlignedNeighborFrames.
-    var currentFrameHasAlignedNeighborOverride: Bool {
-        alignedNeighborFrameOverrides[currentIndex] != nil
-    }
-
-    /// Set a per-frame override for numberAlignedNeighborFrames on `frameIndex`.
-    /// If star-alignment images already exist for that frame, they are invalidated
-    /// and reprocessing is triggered immediately using the new neighbor count.
-    func set(alignedNeighborFrames count: Int, forFrame frameIndex: Int) {
-        alignedNeighborFrameOverrides[frameIndex] = count
-        var realConfig = config.config()
-        realConfig.alignedNeighborFrameOverrides = alignedNeighborFrameOverrides
-        config.update(realConfig)
-
-        Task {
-            if frameIndex < frames.count,
-               let frame = frames[frameIndex].frame
-            {
-                await frame.setNumberOfAlignedFrames()
-                let wasInvalidated = (try? await frame.invalidateStarAlignmentIfExists()) ?? false
-                if wasInvalidated {
-                    processFrames(from: frameIndex, to: frameIndex, performClean: false)
-                }
-            }
-        }
-    }
-
-    /// Remove any per-frame override for numberAlignedNeighborFrames on `frameIndex`,
-    /// reverting it to the global default.  Invalidates and re-triggers star
-    /// alignment if it has already been computed.
-    func clearAlignedNeighborFrameOverride(forFrame frameIndex: Int) {
-        alignedNeighborFrameOverrides.removeValue(forKey: frameIndex)
-        var realConfig = config.config()
-        realConfig.alignedNeighborFrameOverrides = alignedNeighborFrameOverrides
-        config.update(realConfig)
-
-        Task {
-            if frameIndex < frames.count,
-               let frame = frames[frameIndex].frame
-            {
-                await frame.setNumberOfAlignedFrames()
-                let wasInvalidated = (try? await frame.invalidateStarAlignmentIfExists()) ?? false
-                if wasInvalidated {
-                    processFrames(from: frameIndex, to: frameIndex, performClean: false)
-                }
             }
         }
     }
@@ -1557,6 +1481,7 @@ public final class ImageSequenceViewModel {
         // run is going — that run's bars would otherwise measure from the wrong place.
         let showsModal = !isProcessingFrames
         isProcessingFrames = true
+        topViewModel?.menuBarOutcome.runStarted()
         if showsModal {
             startProcessingModal(
               steps: steps,
@@ -1969,6 +1894,52 @@ public final class ImageSequenceViewModel {
     /// reads as the finished sequence it is about to take apart.
     var processingStatusText: String? = nil
 
+    /// How fast each step is going, for the time left the modal and the menu-bar wand show.
+    /// One tracker for both, replaced when a run starts so a previous run's samples are gone;
+    /// a reference type that is fed, not state anything draws.
+    @ObservationIgnored var stepRates = StepRateTracker()
+
+    /// Bumped each run, so that a feed left over from the one before stops itself.
+    @ObservationIgnored private var stepRateFeedGeneration = 0
+
+    /// The steps the current run is taking and how far each has got: what the processing modal
+    /// draws and the menu-bar wand summarises.
+    var processingSteps: [ProcessingStepProgress] {
+        // `alreadyDone` describes whichever graph was built last, so until this run's is
+        // the one that was, it is the previous run's answer and belongs to nobody.  The
+        // same number gates the filtering below for the same reason.
+        let graphIsBuilt = processingHasPlan
+        return ProcessingSteps.visible(
+          ProcessingSteps.progress(
+            for: processingStepTypes,
+            counts: frameGraphViewModel.operations,
+            since: processingStepBaseline,
+            alreadyDone: graphIsBuilt ? frameGraphViewModel.alreadyDone : [:]
+          ),
+          graphIsBuilt: graphIsBuilt
+        )
+    }
+
+    /// Whether this run's operations have been built; until then every step reads as empty,
+    /// which is "still planning", not "nothing to do".
+    var processingHasPlan: Bool {
+        frameGraphViewModel.graphBuildsCompleted > processingBuildCount
+    }
+
+    /// Feeds `stepRates` each time the counts change for as long as the run goes, so that an
+    /// estimate exists when someone opens the menu-bar wand after working in another app, not
+    /// only once a view that is on screen has watched for a few seconds.  Driven by
+    /// observation of the counts, not by a timer: nothing runs between changes, and the chain
+    /// ends with the run.
+    private func feedStepRates(generation: Int) {
+        guard generation == stepRateFeedGeneration, isProcessingFrames else { return }
+        withObservationTracking {
+            stepRates.observe(processingSteps)
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in self?.feedStepRates(generation: generation) }
+        }
+    }
+
     var shouldShowTrash: Bool = false
 
     var minimumClassificationSize: Int = 20
@@ -2156,7 +2127,6 @@ public final class ImageSequenceViewModel {
         self.detectionType = config.detectionType
         self.pixelReplacementOverrides = config.pixelReplacementOverrides
         self.staticNeighborFrameOverrides = config.staticNeighborFrameOverrides
-        self.alignedNeighborFrameOverrides = config.alignedNeighborFrameOverrides
         self.cameraMotion = config.tripodHeadWasMoving ? .moving : .fixed
         self.numberOfFramesToProcessConcurrently = config.numberOfFramesToProcessConcurrently
         self.resourceProfile = config.resourceProfile
@@ -2459,8 +2429,8 @@ public final class ImageSequenceViewModel {
                         currentFrameHighLevelCleanMethod = .automatic
                         currentFrameAutoPreservationMode = useOutliers ? .yes : .no
 
-                    case .selective:
-                        currentFrameHighLevelCleanMethod = .selective
+                    case let method:
+                        currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
                         currentFrameAutoPreservationMode = .no
                     }
                 }
@@ -2529,14 +2499,6 @@ public final class ImageSequenceViewModel {
         }
     }
 
-
-    // nonisolated so it doesn't run on the main thread
-    nonisolated func makePreviews(imageAccessor: ImageAccessor) async throws {
-        Log.d("writing missing images")
-
-        try await imageAccessor.writeMissingImages() { _ in }
-    }
-    
     func makeCallbacks() -> Callbacks {
         var callbacks = Callbacks()
 
@@ -2676,11 +2638,6 @@ public final class ImageSequenceViewModel {
         return Double(numberOfFramesWithOutliersLoaded)/Double(imageSequenceSize)
     }
     
-    var frameLoadingProgress: Double {
-        if imageSequenceSize == 0 { return 0 }
-        return Double(numberOfFramesLoaded)/Double(imageSequenceSize)
-    }
-    
     // currently selected index in the sequence
     var currentFrameView: FrameViewModel {
         if currentIndex < 0 { currentIndex = 0 }
@@ -2779,7 +2736,6 @@ public final class ImageSequenceViewModel {
     func cancelProcessing() {
         processingGeneration += 1
         isProcessingFrames = false
-        sequenceProcessingState = .unprocessed
         processingModalShowing = false
         processingStatusText = nil
         returnInFlightHorizonRefinement()
@@ -2809,6 +2765,9 @@ public final class ImageSequenceViewModel {
         processingBuildCount = frameGraphViewModel.graphBuildsCompleted
         processingStepTypes = steps ?? ProcessingSteps.types(for: config.config())
         processingStatusText = status
+        stepRates = StepRateTracker()
+        stepRateFeedGeneration += 1
+        feedStepRates(generation: stepRateFeedGeneration)
         if userPreferences.showProcessingWindow ?? true {
             processingModalShowing = true
         }
@@ -2948,6 +2907,7 @@ public final class ImageSequenceViewModel {
         // and dismissed is still a change the frames on disk have not had.
         self.settingsSnapshot = config.config()
         self.isProcessingFrames = true
+        self.topViewModel?.menuBarOutcome.runStarted()
         self.startProcessingModal()
         processingGeneration += 1
         let capturedGen = processingGeneration
@@ -2967,14 +2927,15 @@ public final class ImageSequenceViewModel {
                         self.isProcessingFrames = false
                         switch processingState {
                         case .done:
+                            self.topViewModel?.menuBarOutcome.runEnded(.finished)
                             self.handleProcessingDone()
                         case .error(let errorString):
                             Log.e("Error: \(errorString)")
+                            self.topViewModel?.menuBarOutcome.runEnded(.failed)
                             self.topViewModel?.report(error: errorString)
                         default:
                             break
                         }
-                        self.sequenceProcessingState = processingState
                     }
                 }
             }
@@ -3083,7 +3044,6 @@ public final class ImageSequenceViewModel {
         
         self.frames[frame.frameIndex].frame = frame
 
-        numberOfFramesLoaded += 1
         if self.initialLoadInProgress {
             var haveAll = true
             for frame in self.frames {
@@ -3309,6 +3269,7 @@ public final class ImageSequenceViewModel {
         processingGeneration += 1
         let runGeneration = processingGeneration
         isProcessingFrames = true
+        topViewModel?.menuBarOutcome.runStarted()
         startProcessingModal()
 
         Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
@@ -3822,6 +3783,8 @@ public final class ImageSequenceViewModel {
             }
         case .selective:
             true
+        case .dirtySky, .dirtyEarth:
+            false
         }
     }
 
@@ -3844,8 +3807,8 @@ public final class ImageSequenceViewModel {
         case .automatic(let useOutliers):
             self._currentFrameHighLevelCleanMethod = .automatic
             self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
-        case .selective:
-            self._currentFrameHighLevelCleanMethod = .selective
+        case .selective, .dirtySky, .dirtyEarth:
+            self._currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
             self._currentFrameAutoPreservationMode = .no
         }
         if getCleanMethod(forFrame: currentIndex) != method {
@@ -3881,6 +3844,7 @@ public final class ImageSequenceViewModel {
         guard token == videoRenderToken else { return }
         videoRenderTask = nil
         isRenderingVideo = false
+        videoRenderFraction = 0
     }
 
     /// Stops the render that is going, if any: ffmpeg is terminated, and the partial video is removed.
@@ -3918,8 +3882,21 @@ public final class ImageSequenceViewModel {
 
         videoRenderTask?.cancel()
         isRenderingVideo = true
+        topViewModel?.menuBarOutcome.runStarted()
+        videoRenderFraction = 0
         let token = UUID()
         videoRenderToken = token
+        let progress: ProgressCallback = { [weak self] current, total, outputDir in
+            if total > 0 {
+                let fraction = Double(current) / Double(total)
+                Task { @MainActor [weak self] in
+                    // A render that was replaced or has ended does not move the next one's bar.
+                    guard let self, self.videoRenderToken == token, self.isRenderingVideo else { return }
+                    self.videoRenderFraction = fraction
+                }
+            }
+            progress(current, total, outputDir)
+        }
         videoRenderTask = Task.detached { [weak self] in
             let listPath = "\(NSTemporaryDirectory())/star-export-\(UUID().uuidString).ffconcat"
             defer { try? FileManager.default.removeItem(atPath: listPath) }
@@ -3958,10 +3935,20 @@ public final class ImageSequenceViewModel {
                 }
             }
             await self?.videoRenderEnded(token)
+            await self?.noteRenderOutcome(outcome)
             switch outcome {
             case .success: completion()
             case .failure(let error): errorCallback(error)
             }
+        }
+    }
+
+    /// Latches how a render ended on the menu-bar wand; a cancelled one sets nothing.
+    private func noteRenderOutcome(_ outcome: Result<Void, Error>) {
+        switch outcome {
+        case .success: topViewModel?.menuBarOutcome.runEnded(.finished)
+        case .failure(let error):
+            if !(error is CancellationError) { topViewModel?.menuBarOutcome.runEnded(.failed) }
         }
     }
 

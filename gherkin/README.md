@@ -1,7 +1,8 @@
 # Gherkin features
 
 One Gherkin corpus drives the same user flow through three Star clients, each run on GitHub
-Actions (`.github/workflows/gherkin.yml`):
+Actions (`.github/workflows/gherkin.yml`; a PR runs only the smoke subset of it, see
+[The smoke subset on a PR](#the-smoke-subset-on-a-pr)):
 
 | Client | Tag | Driver | Runs |
 |---|---|---|---|
@@ -35,10 +36,13 @@ Generated (committed, never edit; each starts with `// @generated` and a `source
 
 * `gherkin/generated/datasets-{cli,mac-gui,desktop}.txt`: the `data:` datasets each client's features need; CI
   runs `test_data/fetch.sh $(cat …)` on exactly that list.
-* `gherkin/generated/features-{cli,mac-gui,desktop}.json`: the features each client runs, as a JSON array; CI builds its
-  (client, OS, feature) matrix from it. The `@ui` features (`uiXxx`) of the mac-gui and desktop legs are the exception:
-  they are a few clicks each and need no dataset, so they share ONE job per leg, the matrix entry `ui`, which expands to the
-  real list (`features` job in `gherkin.yml`) and runs them one after the other in a single build.
+* `gherkin/generated/features-{cli,mac-gui,desktop}.json`: the features each client runs, as a JSON array; CI deals them into
+  shards (the `features` job in `gherkin.yml`: cli 4, mac-gui 3, desktop 3, round-robin with the slow video features first) and
+  its matrix is (client, OS, shard). A shard job sets up and builds once (toolchain, MSVC on Windows, the validator, the trail
+  verifier, stard or Star.app), fetches the union of its features' datasets and runs its features one after the other; one job per
+  feature repeated all of that for every feature. The job name lists the shard's features, and each one still gets its own proof
+  and its own row in the job summary (below). The `@ui` features (`uiXxx`) of the mac-gui and desktop legs are one shard of their own,
+  the entry `ui`: a few clicks each, no dataset, no validator.
 
 Hand-written runners: `cli/Tests/GherkinTests/CliFeatureRunner.swift`,
 `gui/starUITests/GuiFeatureRunner.swift`,
@@ -147,6 +151,29 @@ with the fetch command if it is absent. A sequence is always **copied to a fresh
 directory** first: star derives its temp and output paths from the input directory's name, so processing a
 directory in place would pick up the last run's state.
 
+## When the full matrix runs
+
+The full matrix takes 3-4 hours, mostly waiting for GitHub's few macOS runners, so it does **not** run on every push to the base
+branch (a newer push used to cancel the older run, and on a busy day none finished). It runs:
+
+* **Nightly, 23:00 this Mac's local time**, dispatched by the starpipe daemon (`pipeline/src/starpipe/gherkin_nightly.py`,
+  `gherkin_nightly_enabled` / `gherkin_nightly_start` in the pipeline config), at most once a day. It dispatches a full run only when a
+  file matching `.github/workflows/gherkin-smoke.yml`'s `on.pull_request.paths` list (the PR workflow; `gherkin.yml` has no PR trigger) changed since the last green full run, or when
+  there has never been a green full run. It skips, and records why, when nothing relevant changed, when a full run is already queued or
+  running, or when the last full run (green or red) already tested the current tip. `starpipe status` shows the last decision.
+* On a **push to `main`** (releases) and on **`workflow_dispatch`**. A pull request runs the smoke subset instead (below).
+
+Run by hand, on the base branch:
+
+```bash
+starpipe gherkin run [--force]                 # the nightly's decision now; --force skips the change gate
+gh workflow run gherkin.yml --ref develop      # a full run
+gh workflow run gherkin.yml --ref develop -f features=autoHorizonJpeg,selectiveHorizonTiff16   # a subset
+```
+
+The run name says which: `Gherkin: full` or `Gherkin: <features>`. A green subset run is **not** a green full run: the nightly's
+"last green full run" only counts `Gherkin: full` runs (and older push runs, which were always full).
+
 ## Running locally
 
 Each runner fails (never skips) on missing setup, and refuses a feature with no steps.
@@ -191,16 +218,71 @@ Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<clie
   while the others tested auto): it opens through `openSequence` / `openVideo` and answers the prompts. A render is waited
   for on `AppViewModel.renderState`.
 
+## The smoke subset on a PR
+
+The full matrix takes about 3 hours, so it is not what a PR runs. What runs when:
+
+| Workflow (name) | File | Runs on | The pipeline |
+|---|---|---|---|
+| **Gherkin smoke** | `gherkin-smoke.yml`, which calls `gherkin.yml` with `smoke: true` | every PR touching program code (without the Windows legs), pushes to `develop` (with them), by hand (with them) | waits for it and blocks on it |
+| **Gherkin** (the full matrix) | `gherkin.yml` | pushes to `main`, the nightly dispatch, by hand (`workflow_dispatch`, optionally `features`) | does not wait for it on a PR (`ci_post_merge_workflows` in `pipeline/src/starpipe/config.py` lists this name only); the nightly reruns its failed jobs once and files the tickets (`Gherkin nightly red: …`, `Gherkin flaky: …`); the post-merge watch only updates its baseline |
+
+`gherkin/smoke.json` is the subset, a client name to a list of feature names:
+
+```json
+{ "cli": ["autoHorizonJpeg"], "mac-gui": ["autoHorizonJpeg"], "desktop": ["autoHorizonJpeg"] }
+```
+
+Each listed feature runs on every OS its client has: cli and desktop on ubuntu, windows and macOS, the mac gui on macOS: seven jobs of
+one feature each, **except on a PR, which skips the two Windows jobs** (`cli-windows`, `desktop-windows`): they were the slowest legs of
+every batch (MSVC install, the stard and validator builds), so Windows runs post-merge instead. `gherkin-smoke.yml` passes
+`windows: skip` to `gherkin.yml` on a `pull_request` and `windows: run` otherwise. On the push to `develop` the Windows jobs run
+even when "Already tested?" (`already-tested.yml`) skips the rest because the batch PR's green run covered the tree: the
+`smoke-windows` job then calls `gherkin.yml` with `windows: only`. A Windows-only break is therefore found on `develop` by the
+post-merge watch (a ticket after two red runs), not on the PR; `workflow_dispatch` and the nightly still run every leg. `cli.yml`
+("CLI Build") does the same for `Windows (windows-2022)` and `windows-e2e`: skipped on a PR, run on every push. `autoHorizonJpeg` is the cheapest real flow (one 46 MB JPEG dataset, no video, no 16-bit, no trail verifier build). The
+target is about 30 minutes on a PR; the slow part is the queue for the macOS runners, which is why only three jobs are macOS.
+
+**Changing it:** edit `gherkin/smoke.json`. A name must be a feature of that client (a name in `generated/features-<client>.json`) and
+no list may be empty; the `feature matrix` job fails with an `::error::` otherwise, so a rename cannot leave the smoke run green having
+run nothing. To cover more, add a feature to a list (a `ui…` feature of mac-gui or desktop becomes its own `ui` shard and builds Star.app
+or stard a second time; `removeAirplanes` also builds the trail verifier). Nothing else needs to change: the matrix, the shard job
+names and the legs are the full matrix's.
+
+**How the pipeline judges it:** like any workflow. A smoke job that is red on the PR and green on `develop` gets one rerun, then blocks
+the landing; one that is also red on `develop` does not block. The `develop` baseline comes from the push run of the same workflow, so
+smoke runs on `develop` too, and a feature newly added to the list has no baseline (so cannot block) until its first run there.
+
+**Each chosen feature keeps its "Prove the scenario ran" step**: smoke mode only changes which features the `feature matrix` job deals
+into shards; every leg's proof step (see below) is the full matrix's.
+
 ## Guarding against vacuous greens
 
 `xcodebuild -only-testing:` matching nothing exits 0 having run nothing, so each CI leg also checks the
 log: `Executed N tests, with 0 failures` for xcodebuild (N is the number of features the job runs, and every one of them must
 show `test<Name>Feature` passed), `test<Name>Feature` passed for swift test, and `tests="1"` / `skipped="0"` in
-`build/test-results/gherkinTest/*.xml` for Gradle. A CI job runs one feature, or for the `ui` bundle every `@ui` feature, so the
-guard checks that exactly those tests ran. The Compose runner allows one feature per Gradle run, so the desktop `ui` job calls
+`build/test-results/gherkinTest/*.xml` for Gradle. A CI job runs a shard of features, so the guard checks that exactly those tests
+ran and that every one of them passed. For the cli and gui `gherkin/prove-xctest-features.sh <cli|gui> <log> <feature>...` does it: it
+checks every feature (not stopping at the first miss), prints an `::error::` naming each one that is not proved, and writes one pass/fail
+row per feature to the job summary. The Compose runner allows one feature per Gradle run, so the desktop jobs call
 `gherkin/run-desktop-features.sh`, which runs `gradlew` once per feature and applies the Gradle check to each one's XML; it runs
 every feature even after a failure, keeps each one's reports under `star-desktop/build/gherkin-each/<feature>/`, and a retry of
-it re-runs only the features that failed.
+it re-runs only the features that failed. `gherkin/summarize-desktop-features.sh` then turns its `PASSED` markers into the same
+per-feature summary rows and fails the job if a feature has none.
+
+### The stard hang watchdog (Linux desktop leg)
+
+stard intermittently wedges on the ubuntu desktop leg (autoHorizonVideo, ticket #54): no log line after frame 0's alignment, not even
+the governor's 30 s one. When `STAR_HANG_WATCHDOG_SECONDS` is set (the desktop-linux job sets 360), `run-desktop-features.sh` starts
+`gherkin/hang-watchdog.sh` beside the features. It watches `<scratch>/logs/stard.log` (the Kotlin client appends every stard stderr
+line to it; the scratch dir is read from stard's `--scratch` argument), and when that has not grown for that long it prints, once and
+then once more half that interval later (at 6 and 9 minutes, both before the 10 minute stall), a `::group::stard hang watchdog: dump N ...` into the job log: `ps`, per-thread CPU, the file
+descriptors, each stard thread's kernel stack, a gdb backtrace of every thread, the tail of `stard.log` and a `jstack` of every JVM
+(the Gradle test worker). It lands before the runner's 10 minute ProgressStall and the 25 minute attempt cut, which kill everything.
+Read it in the job log of the hung run (artifacts do not survive a cancel). Threads parked in `DecodedFrameStore.load` or
+`FrameSource.waitUntilAvailableBlocking` mean pool starvation; stard blocked in `write` on fd 2 with the test JVM's stderr-reader thread
+stuck means the stderr pipe. It never kills or fails anything; a missing tool is a one-line note. Run it by hand with
+`gherkin/hang-watchdog.sh <quiet-seconds> [poll-seconds]`; `HANG_WATCHDOG_PGREP` changes the `pgrep` arguments that find stard (the tests use it).
 
 ## Checking airplane and satellite removal
 

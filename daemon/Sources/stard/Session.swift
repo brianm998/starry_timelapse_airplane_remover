@@ -482,14 +482,6 @@ actor Session {
         await startProcessing(startIndex: startIndex, endIndex: endIndex)
     }
 
-    // Re-run the whole frame graph after a reference-horizon change. With hasStaticReferenceHorizon
-    // set, the graph skips per-frame horizon detection and reads reference.tiff directly.
-    func reprocessWithReferenceHorizon() async {
-        guard !closed else { return }
-        await stopRun(announce: false)
-        await startProcessing(startIndex: 0, endIndex: nil)
-    }
-
     // Throw away what a reprocess of `type` must redo, so the frame graph recomputes it.  The
     // per-type work is StarCore's `FrameAirplaneRemover.resetForReprocessing`, which the macOS
     // gui calls too: `.none` deletes nothing, `.horizons` only the horizon images, `.everything`
@@ -663,7 +655,7 @@ actor Session {
     }
 
     /// Give `frame` its own neighbour count of `kind`, or with a nil `count` take its own away; and do what the change calls for
-    /// (macOS `set(alignedNeighborFrames:forFrame:)` and the others).  A new aligned count invalidates the frame's star alignment, and if
+    /// (as the macOS client does).  A new aligned count invalidates the frame's star alignment, and if
     /// it had one the frame is processed again: true when that is under way.  A new static count builds the merged horizon again if
     /// there was one.
     func setNeighborOverride(of frame: FrameAirplaneRemover, kind: NeighborKind, count: Int?) async -> Bool {

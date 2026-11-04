@@ -40,6 +40,7 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import com.star.desktop.ui.components.widestWord
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.OutlierDecisions
@@ -124,13 +125,14 @@ fun OutlierWindowView(vm: SequenceViewModel) {
                     Text(localized("ui.no_outlier_groups_process_in_selective_mode"), color = StarColors.textDisabled, fontSize = 12.sp)
                 }
                 else -> {
-                    val tableWidth = DECISION_WIDTH + SIZE_WIDTH + COLUMN_WIDTH * visible.size
+                    val widths = outlierColumnWidths(visible)
+                    val tableWidth = widths.decision + widths.size + widths.column * visible.size
                     Box(Modifier.fillMaxSize().horizontalScroll(rememberScrollState())) {
                         Column(Modifier.width(tableWidth).fillMaxHeight()) {
                             Row(Modifier.fillMaxWidth().background(StarColors.sidePanel).padding(vertical = 6.dp)) {
-                                Header(localized("ui.remove"), OutlierTable.DECISION, sort, DECISION_WIDTH) { sort = OutlierTable.clicked(sort, it) }
-                                Header(localized("ui.size"), OutlierTable.SIZE, sort, SIZE_WIDTH) { sort = OutlierTable.clicked(sort, it) }
-                                for (c in visible) Header(localized(c.labelKey), c.key, sort, COLUMN_WIDTH) { sort = OutlierTable.clicked(sort, it) }
+                                Header(localized("ui.remove"), OutlierTable.DECISION, sort, widths.decision) { sort = OutlierTable.clicked(sort, it) }
+                                Header(localized("ui.size"), OutlierTable.SIZE, sort, widths.size) { sort = OutlierTable.clicked(sort, it) }
+                                for (c in visible) Header(localized(c.labelKey), c.key, sort, widths.column) { sort = OutlierTable.clicked(sort, it) }
                             }
                             val order = sorted.map { it.groupId }
                             LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
@@ -153,11 +155,11 @@ fun OutlierWindowView(vm: SequenceViewModel) {
                                             .padding(vertical = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        DecisionCell(reason, DECISION_WIDTH) { fvm.toggle(row.groupId) }
-                                        Cell("${row.size}", SIZE_WIDTH)
+                                        DecisionCell(reason, widths.decision) { fvm.toggle(row.groupId) }
+                                        Cell("${row.size}", widths.size)
                                         for (c in visible) {
                                             val v = OutlierTable.value(row, c)
-                                            Cell(if (c.source == OutlierTable.Source.ID) "${row.groupId}" else OutlierTable.formatG(v), COLUMN_WIDTH)
+                                            Cell(if (c.source == OutlierTable.Source.ID) "${row.groupId}" else OutlierTable.formatG(v), widths.column)
                                         }
                                     }
                                 }
@@ -177,12 +179,29 @@ fun OutlierWindowView(vm: SequenceViewModel) {
     }
 }
 
+/** The table's column widths: each the constant it was, or more when a heading has a word (with the sort arrow after it) that does not fit. */
+internal class OutlierColumnWidths(val decision: Dp, val size: Dp, val column: Dp)
+
 @Composable
-private fun Header(text: String, key: String, sort: OutlierTable.Sort, width: Dp, onClick: (String) -> Unit) {
-    val arrow = if (sort.key == key) (if (sort.ascending) " ▲" else " ▼") else ""
+internal fun outlierColumnWidths(visible: List<OutlierTable.Column>): OutlierColumnWidths {
+    // The arrow is joined to the heading's last word by a no-break space, so it never ends up alone on a line; a cell has 6dp of padding each side.
+    @Composable fun need(labels: List<String>) = widestWord(labels.map { it + SORT_ARROW }, 11.sp, FontWeight.SemiBold) + 12.dp
+    return OutlierColumnWidths(
+        decision = maxOf(DECISION_WIDTH, need(listOf(localized("ui.remove")))),
+        size = maxOf(SIZE_WIDTH, need(listOf(localized("ui.size")))),
+        column = maxOf(COLUMN_WIDTH, need(visible.map { localized(it.labelKey) })),
+    )
+}
+
+private const val SORT_ARROW = "\u00A0▲"
+
+/** A column heading: its words wrap at spaces onto a second line in a narrow column, never inside a word (the column is as wide as its widest word). */
+@Composable
+internal fun Header(text: String, key: String, sort: OutlierTable.Sort, width: Dp, onClick: (String) -> Unit) {
+    val arrow = if (sort.key == key) (if (sort.ascending) "\u00A0▲" else "\u00A0▼") else ""
     Text(
         text + arrow,
-        color = StarColors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+        color = StarColors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 2,
         modifier = Modifier.width(width).clickable { onClick(key) }.padding(horizontal = 6.dp),
     )
 }
@@ -206,22 +225,40 @@ private fun DecisionCell(reason: RemoveReason, width: Dp, onToggle: () -> Unit) 
 /** The panel that picks which optional columns show (macOS "Select which columns to show"). */
 @Composable
 private fun ColumnChooser(vm: SequenceViewModel, chosen: Set<String>, onClose: () -> Unit) {
-    Column(Modifier.width(240.dp).fillMaxHeight().padding(start = 8.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("»", color = StarColors.textSecondary, fontSize = 16.sp, modifier = Modifier.clickable(onClick = onClose).padding(horizontal = 4.dp))
-            Text(localized("ui.select_which_columns_to_show"), color = StarColors.textPrimary, fontSize = 12.sp)
-        }
-        Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedButton(onClick = { vm.setAllOutlierColumns(true) }) { Text(localized("ui.select_all"), fontSize = 11.sp) }
-            OutlinedButton(onClick = { vm.setAllOutlierColumns(false) }) { Text(localized("ui.clear_all"), fontSize = 11.sp) }
-        }
+    Column(Modifier.width(columnChooserWidth()).fillMaxHeight().padding(start = 8.dp)) {
+        ColumnChooserTop(onClose, onAll = { vm.setAllOutlierColumns(true) }, onNone = { vm.setAllOutlierColumns(false) })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             for (c in OutlierTable.columns) {
-                Row(Modifier.fillMaxWidth().clickable { vm.setOutlierColumn(c.key, c.key !in chosen) }, verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = c.key in chosen, onCheckedChange = { vm.setOutlierColumn(c.key, it) })
-                    Text(localized(c.labelKey), color = StarColors.textPrimary, fontSize = 11.sp)
-                }
+                ColumnChooserRow(localized(c.labelKey), c.key in chosen) { vm.setOutlierColumn(c.key, it) }
             }
         }
+    }
+}
+
+/**
+ * The chooser's width: 240dp, or more for the longest column name, which is a single identifier-like word with no space to wrap at. It is a
+ * check box (48dp), the name, and the 8dp the chooser is inset by on the left.
+ */
+@Composable
+internal fun columnChooserWidth(): Dp = maxOf(240.dp, widestWord(OutlierTable.columns.map { localized(it.labelKey) }, 11.sp, wholeText = true) + 48.dp + 8.dp + 4.dp)
+
+/** The chooser's title and its two buttons: each takes half the row, and a label that does not fit on one line wraps at its spaces. */
+@Composable
+internal fun ColumnChooserTop(onClose: () -> Unit, onAll: () -> Unit, onNone: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("»", color = StarColors.textSecondary, fontSize = 16.sp, modifier = Modifier.clickable(onClick = onClose).padding(horizontal = 4.dp))
+        Text(localized("ui.select_which_columns_to_show"), color = StarColors.textPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+    }
+    Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        OutlinedButton(onClick = onAll, modifier = Modifier.weight(1f)) { Text(localized("ui.select_all"), fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+        OutlinedButton(onClick = onNone, modifier = Modifier.weight(1f)) { Text(localized("ui.clear_all"), fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+    }
+}
+
+@Composable
+internal fun ColumnChooserRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable { onChange(!checked) }, verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(checked = checked, onCheckedChange = onChange)
+        Text(label, color = StarColors.textPrimary, fontSize = 11.sp, modifier = Modifier.weight(1f))
     }
 }

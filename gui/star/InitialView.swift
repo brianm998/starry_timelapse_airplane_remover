@@ -76,9 +76,9 @@ struct InitialView: View {
               .help(localized("ui.tell_me_how_to_us_this_software")) 
             Spacer()
 
-            FinderStyleDropZone() { providers in
+            FinderStyleDropZone(onDropAction: { providers in
                 handleDrop(providers: providers)
-            }
+            }, onTap: loadImageSequence)
               .frame(maxWidth: 1200, maxHeight: 800)
 
             Spacer()
@@ -171,6 +171,8 @@ struct InitialView: View {
                 pasteboardItem, _ in
                 if let pasteboardItem {
                     if let url = URL(string: pasteboardItem.rawValue) {
+                        // The drop grants this URL for now; keep it for the next launch while it does.
+                        Task { @MainActor in FolderAccess.remember(url) }
 
                         // handle json config files
                         // and directories full of files
@@ -195,6 +197,9 @@ struct InitialView: View {
                                 // left the loading view up forever.
                                 Task { @MainActor in
                                     do {
+                                        // The drop granted only the json: under the sandbox the images and the
+                                        // output folder it names need access too, as for every other way in.
+                                        try FolderAccess.ensureAccess(forConfigFile: url.path)
                                         let config = try ConfigManager(configFilename: url.path)
                                         try await self.viewModel.startup(withConfig: config)
                                         self.viewModel.userPreferences.justOpened(filename: url.path)
@@ -284,6 +289,7 @@ struct InitialView: View {
             {
                 let path = returnedUrl.path
                 Log.d("url path \(path)")
+                FolderAccess.remember(returnedUrl)
 
                 viewModel.eraserTask = Task.detached(priority: .userInitiated) {
                     do {
@@ -314,6 +320,7 @@ struct InitialView: View {
             if let returnedUrl = openPanel.url {
                 let path = returnedUrl.path
                 Log.d("url path \(path)")
+                FolderAccess.remember(returnedUrl)
 
                 startupWithVideoToProcess(path)
             }
@@ -332,6 +339,7 @@ struct InitialView: View {
             if let returnedUrl = openPanel.url {
                 let path = returnedUrl.path
                 Log.d("url path \(path)")
+                FolderAccess.remember(returnedUrl)
                 
                 startupWithSequenceDir(path)
             }
@@ -363,6 +371,11 @@ struct InitialView: View {
 
     /// A sequence has been chosen: ask where its output and working files go, then `startupWithSequenceDir(_:outputDir:)`.
     func startupWithSequenceDir(_ path: String) {
+        // A dropped image grants that file, not its folder: under the sandbox the folder is asked for before anything reads it.
+        guard FolderAccess.ensureAccess(to: path, writable: false) else {
+            handle(error: localized("ui.folder_access_denied", path))
+            return
+        }
         viewModel.pendingSequenceOpen = PendingSequenceOpen(path: path)
     }
 
@@ -499,21 +512,6 @@ struct SplitRevealVideoView: View {
                 RoundedRectangle(cornerRadius: 4)
                     .stroke(Color.black.opacity(0.25), lineWidth: 0.5)
             )
-    }
-
-    /// Fit the video inside 'container' while preserving aspect ratio.
-    private func fitSize(container: CGSize, aspectRatio: CGFloat) -> CGSize {
-        guard container.width > 0 && container.height > 0 else { return .zero }
-        let containerAspect = container.width / container.height
-        if containerAspect > aspectRatio {
-            // container wider -> fit by height
-            let h = container.height
-            return CGSize(width: h * aspectRatio, height: h)
-        } else {
-            // container taller -> fit by width
-            let w = container.width
-            return CGSize(width: w, height: w / aspectRatio)
-        }
     }
 
     // MARK: - ViewModel

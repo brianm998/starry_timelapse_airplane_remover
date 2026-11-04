@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.HoughLines
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.sequence.SequenceViewModel
+import com.star.desktop.ui.components.widestWord
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.HoughLineFinderArg
 import com.star.proto.LineCandidate
@@ -103,13 +104,10 @@ private fun LinesTable(vm: SequenceViewModel, frameIndex: Int, groupId: Int, gro
         return
     }
     Text(localized("ui.info_about_n_lines", shown.size), color = StarColors.textPrimary, fontSize = 11.sp, modifier = Modifier.padding(vertical = 4.dp))
+    val cell = houghLineCellWidth()
     Row(Modifier.background(StarColors.sidePanel).padding(vertical = 4.dp)) {
         for ((column, key) in COLUMNS) {
-            val arrow = if (sort.column == column) (if (sort.ascending) " ▲" else " ▼") else ""
-            Text(
-                localized(key) + arrow, color = StarColors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                modifier = Modifier.width(LINE_CELL).clickable { sort = HoughLines.clicked(sort, column) }.padding(horizontal = 6.dp),
-            )
+            HoughHeader(localized(key), if (sort.column == column) sort.ascending else null, cell) { sort = HoughLines.clicked(sort, column) }
         }
     }
     LazyColumn(Modifier.fillMaxWidth()) {
@@ -121,20 +119,35 @@ private fun LinesTable(vm: SequenceViewModel, frameIndex: Int, groupId: Int, gro
                     .clickable { vm.setOutlierLine(frameIndex, groupId, c) }
                     .padding(vertical = 3.dp),
             ) {
-                LineCell(HoughLines.format(c.intensityScore))
-                LineCell(HoughLines.format(c.pixelScore))
-                LineCell(HoughLines.format(c.line.theta))
-                LineCell(HoughLines.format(c.line.rho))
-                LineCell("${c.line.votes}")
-                LineCell("${c.border}")
+                LineCell(HoughLines.format(c.intensityScore), cell)
+                LineCell(HoughLines.format(c.pixelScore), cell)
+                LineCell(HoughLines.format(c.line.theta), cell)
+                LineCell(HoughLines.format(c.line.rho), cell)
+                LineCell("${c.line.votes}", cell)
+                LineCell("${c.border}", cell)
             }
         }
     }
 }
 
+/** The cell width: 90dp, or more when a heading (with its sort arrow) has a word that does not fit; headings wrap at spaces, never inside a word. */
 @Composable
-private fun LineCell(text: String) {
-    Text(text, color = StarColors.textPrimary, fontSize = 11.sp, maxLines = 1, modifier = Modifier.width(LINE_CELL).padding(horizontal = 6.dp))
+internal fun houghLineCellWidth(): androidx.compose.ui.unit.Dp =
+    maxOf(LINE_CELL, widestWord(COLUMNS.map { localized(it.second) + "\u00A0▲" }, 11.sp, FontWeight.SemiBold) + 12.dp)
+
+/** A heading of the lines table; [ascending] is null unless the table is sorted by this column. */
+@Composable
+internal fun HoughHeader(label: String, ascending: Boolean?, width: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+    val arrow = when (ascending) { null -> ""; true -> "\u00A0▲"; false -> "\u00A0▼" }
+    Text(
+        label + arrow, color = StarColors.textSecondary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 2,
+        modifier = Modifier.width(width).clickable(onClick = onClick).padding(horizontal = 6.dp),
+    )
+}
+
+@Composable
+private fun LineCell(text: String, width: androidx.compose.ui.unit.Dp) {
+    Text(text, color = StarColors.textPrimary, fontSize = 11.sp, maxLines = 1, softWrap = false, modifier = Modifier.width(width).padding(horizontal = 6.dp))
 }
 
 /** The Hough finder's arguments (macOS `ArgableView`): a name, an editable value, and what it does. Return, or leaving the field, applies it. */

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  The bundled ffmpeg and ffprobe in the Mac App Store build (gui/appstore_release.sh re-signs them with this).
+	  Exactly app-sandbox + inherit: they run as children of the sandboxed app and get its file access.
+	  Not ffmpeg.entitlements.plist, whose absolute-path and temporary-exception keys App Review rejects.
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.inherit</key>
+	<true/>
+</dict>
+</plist>

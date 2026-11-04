@@ -1,5 +1,6 @@
 import Foundation
 import StarGherkinKernel
+import AppKit
 import XCTest
 
 /// Runs a generated `Feature` against the real `Star.app` with XCUITest. The step vocabulary is
@@ -78,6 +79,7 @@ final class GuiFeatureRunner {
         .commandClickId: { try $0.clickId($0.args[0], how: .command) },
         .rightClickId: { try $0.clickId($0.args[0], how: .right) },
         .processingFinishes: { try $0.waitForProcessingToFinish() },
+        .processingStops: { try $0.waitForProcessingToStop() },
         .pressKey: { try $0.press($0.args[0]) },
         .idShown: { try $0.expectShown($0.args[0], shown: true) },
         .idNotShown: { try $0.expectShown($0.args[0], shown: false) },
@@ -116,6 +118,11 @@ final class GuiFeatureRunner {
         .windowOpen: { try $0.expectWindow($0.args[0], open: true) },
         .windowNotOpen: { try $0.expectWindow($0.args[0], open: false) },
         .windowTitled: { try $0.expectWindowTitled($0.args[0], title: $0.args[1]) },
+        .openPreferences: { try $0.openPreferences() },
+        .openLocationQuestion: { try $0.openCopiedSequenceAtItsLocationQuestion() },
+        .openVideoImport: { try $0.openVideoAtItsImportDialog() },
+        .saveScreenshot: { try $0.saveScreenshot(named: $0.args[0]) },
+        .saveWindowScreenshot: { try $0.saveScreenshot(named: $0.args[1], ofWindow: $0.args[0]) },
     ]
 
     func run(_ feature: Feature) throws {
@@ -269,12 +276,32 @@ final class GuiFeatureRunner {
         if e.isHittable { e.click() } else { app.typeKey(.return, modifierFlags: []) }
     }
 
+    /// The longest a processing wait may sit on one progress state before it fails (the desktop runner's STALL_LIMIT_MS).
+    private let stallLimit: TimeInterval = 10 * 60
+
+    /// Fails a processing wait whose progress state has stopped changing. One per wait: it times from when it is made, every change of the
+    /// state (the progress node appearing included) restarts the time, and `observe` throws once the state has sat for `stallLimit`.
+    private struct ProgressStall {
+        let limit: TimeInterval
+        private var state: String?
+        private var changedAt = Date()
+        init(limit: TimeInterval) { self.limit = limit }
+
+        mutating func observe(_ current: String?) throws {
+            if let current, current != state { state = current; changedAt = Date(); return }
+            let stuck = Date().timeIntervalSince(changedAt)
+            if stuck >= limit {
+                throw RunnerError("processing made no progress for \(Int(stuck / 60)) min, stuck at \(state ?? "(no progress line)")")
+            }
+        }
+    }
+
     /// Polls `condition` until it holds. Real-time waits only, never a fixed sleep.
     /// `interval`: a busy app (the horizon overlays, previews) can take longer than XCUITest's snapshot timeout to answer, which fails the
     /// test outright, so the long waits poll slowly.
-    private func waitFor(_ what: String, timeout: TimeInterval, interval: TimeInterval = 1, detail: () -> String = { "" }, _ condition: () -> Bool) throws {
+    private func waitFor(_ what: String, timeout: TimeInterval, interval: TimeInterval = 1, detail: () -> String = { "" }, _ condition: () throws -> Bool) throws {
         let deadline = Date().addingTimeInterval(timeout)
-        while !condition() {
+        while !(try condition()) {
             if Date() > deadline { throw RunnerError("timed out after \(Int(timeout))s waiting for \(what) \(detail())") }
             _ = XCTWaiter.wait(for: [XCTestExpectation(description: "poll")], timeout: interval)
         }
@@ -312,8 +339,13 @@ final class GuiFeatureRunner {
         let home = scratch.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         app.launchEnvironment["HOME"] = home.path
+        if savesScreenshots { try keepGPUMergeOff() }
         // Ignore the windows the last run of the app left open (macOS restores them): a feature starts from the app as it opens, not from where an earlier one quit.
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"] + arguments
+        // The parity gallery's window is 1400 by 1100 points, as the desktop client's test window is: XCUITest cannot size a window, so the app does (`ViewModel.uiTestWindowSize`).
+        if savesScreenshots {
+            app.launchArguments += ["-StarUITestWindowSize", "\(Self.galleryWindowSize)"]
+        }
         app.launch()
     }
 
@@ -345,10 +377,18 @@ final class GuiFeatureRunner {
     /// come up over the loading view) is not one to click, and a click on one that has gone fails the whole test.
     private enum Click { case plain, command, right }
 
+    /// What a failed wait for a click target prints before the tree: whether the element is there, how big it is on screen, whether it can be
+    /// hit and what display it is on. (A group that was 0.9 x 0.3 pt was there for the whole wait and never hittable; the tree alone did not say.)
+    private func whyNotClickable(_ e: XCUIElement, _ identifier: String) -> String {
+        let window = app.windows.firstMatch
+        let scale = NSScreen.main.map { "\($0.backingScaleFactor)" } ?? "unknown"
+        return "\n\(identifier): exists \(e.exists), hittable \(e.isHittable), frame \(e.frame), window \(window.exists ? "\(window.frame)" : "none"), backingScaleFactor \(scale), screen \(NSScreen.main?.frame ?? .zero)\n\(app.debugDescription)"
+    }
+
     private func clickId(_ identifier: String, how: Click = .plain) throws {
         let e = element(identifier)
         var scroller = Scroller()
-        try waitFor("\(identifier) to be clickable", timeout: 60, detail: { "\n\(self.app.debugDescription)" }) {
+        try waitFor("\(identifier) to be clickable", timeout: 60, detail: { self.whyNotClickable(e, identifier) }) {
             if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller) }
             return e.exists && e.isHittable
         }
@@ -375,7 +415,9 @@ final class GuiFeatureRunner {
         let progress = element("processing.progress")
         var sawRunning = false
         var last = "(none)"
+        var stall = ProgressStall(limit: stallLimit)
         try waitFor("processing to finish", timeout: 20 * 60, interval: 3, detail: { "(last progress: \(last))" }) {
+            try stall.observe(progress.exists ? progress.label : nil)
             guard progress.exists else { return false }
             let state = progress.label
             last = state
@@ -383,6 +425,23 @@ final class GuiFeatureRunner {
             guard parts.count == 3, let complete = Int(parts[0]), let total = Int(parts[1]) else { return false }
             if parts[2] == "running" { sawRunning = true }
             return sawRunning && parts[2] == "idle" && total > 0 && complete == total
+        }
+    }
+
+    /// Waits for the run to be idle, whether or not every frame is complete (a run that another start put an end to leaves the frames it cleared
+    /// unfinished). Idle has to be read twice, a poll apart, so the moment between a run being stopped and the next one starting is not taken
+    /// for the end; the line is only in the left panel of the edit and scrub screens.
+    private func waitForProcessingToStop() throws {
+        let progress = element("processing.progress")
+        var idleLooks = 0
+        var last = "(none)"
+        try waitFor("processing to stop", timeout: 20 * 60, interval: 3, detail: { "(last progress: \(last))" }) {
+            guard progress.exists else { idleLooks = 0; return false }
+            last = progress.label
+            let parts = last.split(separator: "/").map(String.init)
+            guard parts.count == 3, parts[2] == "idle" else { idleLooks = 0; return false }
+            idleLooks += 1
+            return idleLooks >= 2
         }
     }
 
@@ -607,8 +666,117 @@ final class GuiFeatureRunner {
             // the window sets its own title (its view's, not the scene's): the generic one until it lists a frame, then "Outliers for frame N"
             let forFrame = try english("ui.outliers_for_frame")
             return ([try english("ui.outlier_group_information")], [String(forFrame.prefix { $0 != "{" })])
-        default: throw RunnerError("no window called \"\(name)\" (debug, outlier)")
+        case "alignment": return ([try english("ui.star_alignment_info")], [])
+        case "blob": return ([try english("ui.star_blob_processing")], [])
+        default: throw RunnerError("no window called \"\(name)\" (debug, outlier, alignment or blob)")
         }
+    }
+
+    // MARK: the parity gallery
+
+    /// The Preferences item of the app menu (Command-comma), as a user opens them.
+    private func openPreferences() throws {
+        guard app.state != .notRunning else { throw RunnerError("the app is not running") }
+        app.typeKey(",", modifierFlags: .command)
+    }
+
+    /// Launches on the start screen with the question that asks where a chosen image sequence's files go up (what the open panel leads to).
+    private func openCopiedSequenceAtItsLocationQuestion() throws {
+        guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
+        try launch(arguments: ["-StarUITestSequenceLocation", copy.path])
+    }
+
+    /// A short video made from the copied sequence's frames with the bundled ffmpeg, opened as "Load Video" opens one: the import sheet comes up.
+    private func openVideoAtItsImportDialog() throws {
+        guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
+        let ffmpeg = Self.repoRoot.appendingPathComponent("external_binaries/bin/ffmpeg")
+        let video = scratch.appendingPathComponent("gallery-video.mp4")
+        let process = Process()
+        process.executableURL = ffmpeg
+        process.arguments = ["-y", "-loglevel", "error", "-framerate", "5", "-pattern_type", "glob", "-i", copy.appendingPathComponent("*.jpg").path,
+                             "-vf", "scale=1280:-2", "-c:v", "libx264", "-pix_fmt", "yuv420p", video.path]
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: video.path) else { throw RunnerError("could not make a video from \(copy.path)") }
+        try launch(arguments: ["-StarUITestOpenVideo", video.path])
+    }
+
+    private var savesScreenshots: Bool {
+        feature?.steps.contains(where: { $0.action == .saveScreenshot || $0.action == .saveWindowScreenshot }) == true
+    }
+
+    /// A gallery feature can start a run (the processing modal), and this Mac must never run the GPU merge (CLAUDE.md): the scratch preferences
+    /// say so, whatever else they hold (a `recent sequences` seed is kept).
+    private func keepGPUMergeOff() throws {
+        var object = ((try? Data(contentsOf: preferencesFile)).flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }) ?? [:]
+        object["useGPUForMerge"] = false
+        try JSONSerialization.data(withJSONObject: object).write(to: preferencesFile)
+    }
+
+    /// The main window's content size the gallery is taken at (points), which is the desktop client's test window in pixels.
+    static let galleryWindowSize = "1400x1100"
+
+    /// `<dir>/<client>/<name>.png`, where dir is `STAR_GALLERY_DIR` (`TEST_RUNNER_STAR_GALLERY_DIR` under xcodebuild; the desktop's runner reads the
+    /// same), else `<repo>/.test-data/gallery/latest`. The runner is sandboxed and on CI cannot write into the workspace (Code=513), so when that
+    /// directory cannot be made the gallery goes to the runner container's tmp (`NSTemporaryDirectory()/gallery/latest`, as `saveArtifacts` does).
+    /// Returns the file, with its directory made.
+    private func galleryFile(_ name: String) throws -> URL {
+        let wanted: URL
+        if let d = ProcessInfo.processInfo.environment["STAR_GALLERY_DIR"], !d.isEmpty { wanted = URL(fileURLWithPath: d) }
+        else { wanted = Self.repoRoot.appendingPathComponent(".test-data/gallery/latest") }
+        let fallback = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("gallery/latest")
+        var firstError: Error?
+        for dir in [wanted, fallback] {
+            let folder = dir.appendingPathComponent(Self.client)
+            do {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                return folder.appendingPathComponent("\(name).png")
+            } catch {
+                firstError = firstError ?? error
+                print("GALLERY cannot use \(folder.path): \(error)")
+            }
+        }
+        throw firstError!
+    }
+
+    /// The window to photograph: the secondary window of that name, or the main window, which is the one that is none of the secondary ones.
+    private func galleryWindow(_ secondary: String?) throws -> XCUIElement {
+        func matches(_ w: XCUIElement, _ name: String) throws -> Bool {
+            let (titles, prefixes) = try windowTitles(name)
+            return titles.contains(w.title) || prefixes.contains { w.title.hasPrefix($0) }
+        }
+        var found: XCUIElement?
+        try waitFor("the \(secondary.map { "\($0) window" } ?? "main window") to be there", timeout: 30) {
+            for w in self.app.windows.allElementsBoundByIndex where w.exists {
+                if let secondary {
+                    if (try? matches(w, secondary)) == true { found = w; return true }
+                } else if !(["debug", "outlier", "alignment", "blob"].contains { (try? matches(w, $0)) == true }) {
+                    found = w; return true
+                }
+            }
+            return false
+        }
+        return found!
+    }
+
+    /// Saves a screenshot of the window as `<name>.png` in the gallery. A screen is put up over a few frames (sheets slide, thumbnails and the daemon's
+    /// answers arrive later), so the window is photographed until two in a row are the same picture, up to ten seconds.
+    private func saveScreenshot(named name: String, ofWindow secondary: String? = nil) throws {
+        let window = try galleryWindow(secondary)
+        var last: Data?
+        var steady = 0
+        var shot = Data()
+        let deadline = Date().addingTimeInterval(10)
+        while steady < 2 && Date() < deadline {
+            shot = window.screenshot().pngRepresentation
+            steady = (shot == last) ? steady + 1 : 0
+            last = shot
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 0.4)
+        }
+        let file = try galleryFile(name)
+        try shot.write(to: file)
+        print("SCREENSHOT \(name) -> \(file.path) (window \(window.frame.size), \(shot.count) bytes)")
+        guard shot.count > 1000 else { throw RunnerError("the screenshot \"\(name)\" is empty (\(shot.count) bytes)") }
     }
 
     private func expectWindow(_ name: String, open: Bool) throws {
@@ -853,8 +1021,12 @@ final class GuiFeatureRunner {
 
         let progress = element("processing.progress")
         var last = "(none)"
+        var stall = ProgressStall(limit: stallLimit)
         try waitFor("processing to finish", timeout: 45 * 60, interval: 5, detail: { "(last progress: \(last))" }) {
-            guard let out = try? outputFrames(), ((try? frameFiles(in: out).count) ?? 0) >= expected else { return false }
+            let onDisk = (try? outputFrames()).flatMap { try? frameFiles(in: $0).count } ?? 0
+            // Until every frame is on disk the progress line is not read (a busy app answers slowly), so the frames written are the progress
+            // that is watched: a run stuck at 0 of N fails at the stall limit, and each new frame restarts it. Once the line is read it counts too.
+            guard onDisk >= expected else { try stall.observe("\(onDisk)/\(expected) frames on disk"); return false }
             // With a render afterwards the render sheet covers the window the moment the run ends, and the progress line is no longer in
             // reach: the frames all being on disk (and still so a poll later) is the end of processing.
             if rendersVideo {
@@ -862,6 +1034,7 @@ final class GuiFeatureRunner {
                 if settledOnce { completeFrames = expected }
                 return settledOnce
             }
+            try stall.observe("\(onDisk)/\(expected) frames on disk, progress \(progress.exists ? progress.label : "(not shown)")")
             guard progress.exists else { return false }
             let state = progress.label
             if state != last { print("progress: \(state)") }

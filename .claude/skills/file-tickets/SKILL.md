@@ -60,3 +60,37 @@ the monitor or ran `starpipe allow-opus <n>`. Never write opus into a ticket on 
 - Put in Context what the conversation established (files, commits, numbers) so a cold agent can start.
 - Filing is all or nothing per ticket: on failure the command closes what it created and says so.
 - Never apply `pipeline` to something the owner has not approved, and never treat an outsider's issue as approved work.
+
+## Carrying a plan (skips EXPLORE)
+
+EXPLORE costs up to 45 minutes. When the conversation that produced the ticket already settled the approach **and you opened the
+files you name**, add a `## Plan` section and the pipeline builds `plan.json` from it with no EXPLORE session. Leave it out otherwise:
+a ticket nobody planned should go through EXPLORE, and a guessed plan is worse than none, because the pipeline only checks that each
+`file:` exists and has that line, not that your claim about it is true.
+
+```markdown
+## Plan
+summary: <one or two sentences>
+parity: neither | both | gui-only — <reason> | desktop-only — <reason>
+localization: yes | no
+- approach: <step>
+- file: <repo path>:<line> — <what is there and why it matters>
+- risk: <risk>
+```
+
+- `summary`, `parity` and `localization` are required, with at least one `approach`. `file:` and `risk:` lines are optional but a
+  `file:` line per place you looked is what makes the plan checkable. `parity` and `localization` are the two cross-client decisions
+  CLAUDE.md makes mandatory (a `pipeline/` or docs-only change is `neither` / `no`).
+- The criteria are your `A<n> … — check:` lines (each check becomes the plan's acceptance check). `## Pipeline` must say `gherkin:`
+  explicitly, a feature list or `no`.
+- `## Tests` must then be structured, one per line, or `none:`:
+
+  ```markdown
+  - <unit|daemon|cli-gherkin|ui>: <target path> <test name> — shows: A<n>[ — fails before fix]
+  none: <reason>
+  ```
+  A bug's tests say `— fails before fix`.
+- `starpipe ticket lint` checks all of this without a worktree. At claim time the same checks EXPLORE's plan has to pass run against
+  the fresh worktree; if they fail, the ticket goes to EXPLORE and its prompt lists what was wrong with your plan.
+- A plan is used from any ticket the owner's token filed: an interactive session, a `$STARPIPE_AGENT` filing, or an approved proposal
+  (`--propose`). Only tickets the pipeline files itself (its own follow-ups) always run EXPLORE.

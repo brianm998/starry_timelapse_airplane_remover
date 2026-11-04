@@ -34,6 +34,7 @@
   { "case": "rightClickId"          , "text": "I right-click \"<id>\"" },
   { "case": "clickLabel"            , "text": "I click the label \"<key>\"" },
   { "case": "processingFinishes"    , "text": "I wait for processing to finish" },
+  { "case": "processingStops"       , "text": "I wait for processing to stop" },
   { "case": "wait"                  , "text": "I wait <n:int> seconds" },
   { "case": "largeWindow"           , "text": "I make the window large" },
   { "case": "idStillSays"           , "text": "\"<id>\" is still saying \"<text>\"" },
@@ -69,5 +70,10 @@
   { "case": "menuNotThere"          , "text": "the menu \"<menu>\" is not there" },
   { "case": "processedCopy"         , "text": "a processed copy of the sequence {sequence}" },
   { "case": "openProcessed"         , "text": "I open the processed copy" },
-  { "case": "confirmCloseIfAsked"   , "text": "I confirm closing if it is asked" }
+  { "case": "confirmCloseIfAsked"   , "text": "I confirm closing if it is asked" },
+  { "case": "openPreferences"       , "text": "I open the preferences" },
+  { "case": "openLocationQuestion"  , "text": "I open the copied sequence at its location question" },
+  { "case": "openVideoImport"       , "text": "I open a video of the copied sequence at its import dialog" },
+  { "case": "saveScreenshot"        , "text": "I save a screenshot named \"<name>\"" },
+  { "case": "saveWindowScreenshot"  , "text": "I save a screenshot of the \"<window>\" window named \"<name>\"" }
 ]

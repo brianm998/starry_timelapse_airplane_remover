@@ -18,7 +18,12 @@ import com.star.desktop.ui.theme.StarColors
 /** Hover popup with a short help text, shown after the pointer rests on [content] (macOS `.help`). */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun HoverTip(text: String, content: @Composable () -> Unit) {
+fun HoverTip(text: String, content: @Composable () -> Unit) = HoverTip(text, Modifier, content)
+
+/** [HoverTip] with a [modifier] for the area itself, for a cell that must take its share of a row (the area is the cell, not the text in it). */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun HoverTip(text: String, modifier: Modifier, content: @Composable () -> Unit) {
     TooltipArea(
         tooltip = {
             Surface(shape = RoundedCornerShape(4.dp), color = StarColors.prefsCard, shadowElevation = 4.dp) {
@@ -27,6 +32,7 @@ fun HoverTip(text: String, content: @Composable () -> Unit) {
         },
         delayMillis = 400,
         tooltipPlacement = TooltipPlacement.CursorPoint(offset = DpOffset(0.dp, 16.dp)),
+        modifier = modifier,
         content = content,
     )
 }

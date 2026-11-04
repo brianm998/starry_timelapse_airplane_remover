@@ -36,6 +36,7 @@ class Job:
     run_id: int
     completed_at: float | None = None
     run_done: bool = True  # GitHub refuses `rerun-failed-jobs` on a run that is still going
+    labels: tuple[str, ...] = ()  # the runner labels the job asked for, e.g. ("macos-15",)
 
     @property
     def key(self) -> tuple[str, str]:
@@ -44,6 +45,11 @@ class Job:
     @property
     def done(self) -> bool:
         return self.status == "completed"
+
+    @property
+    def queued_for_macos(self) -> bool:
+        """Waiting for a macOS runner, the scarce kind."""
+        return self.status == "queued" and any(label.startswith("macos") for label in self.labels)
 
     @property
     def red(self) -> bool:
@@ -98,7 +104,8 @@ def parse_jobs(runs: list[dict[str, Any]], jobs_by_run: dict[int, list[dict[str,
     for run in runs:
         for j in jobs_by_run.get(int(run["id"]), []):
             out.append(Job(run.get("name") or "", j["name"], j["status"], j.get("conclusion"), int(run["id"]),
-                           _ts(j.get("completed_at")), run.get("status", "completed") == "completed"))
+                           _ts(j.get("completed_at")), run.get("status", "completed") == "completed",
+                           tuple(j.get("labels") or ())))
     return out
 
 
@@ -144,4 +151,30 @@ def judge(jobs: list[Job], baseline: Baseline, *, now: float, head_pushed_at: fl
             f"{j.workflow}/{j.job}" for j in verdict.rerun)
     elif pending:
         verdict.kind, verdict.reason = "pending", "other jobs still running"
+    return verdict
+
+
+def judge_feature_run(jobs: list[Job], reran: set[tuple[str, str]], *, run_completed: bool = False,
+                      run_conclusion: str | None = None, run_id: int = 0) -> Verdict:
+    """The jobs of ONE dispatched Gherkin feature run (a ticket's `gherkin:` features, proven on its own branch).
+
+    Every job blocks: there is no develop baseline for a subset run's job names (a baseline lookup would make a red one a
+    harmless `known_red`), and a slow job is never demoted, because the run is the proof the ticket asked for. A red job gets
+    one rerun; red twice is `fail`. A run that finished with no jobs (a feature name that does not exist) fails at once instead
+    of hanging."""
+    if not jobs:
+        if not run_completed:
+            return Verdict("pending", "the feature run has no jobs yet")
+        empty = Job("Gherkin", "feature matrix (no jobs ran)", "completed", run_conclusion or "failure", run_id)
+        return Verdict("fail", "the feature run finished without running any job (unknown feature name?)", blocking=[empty])
+    if not all(j.done for j in jobs):
+        return Verdict("pending", "the feature run is still going")
+    red = [j for j in jobs if j.red]
+    verdict = Verdict("pass")
+    verdict.blocking = [j for j in red if j.key in reran]
+    verdict.rerun = [j for j in red if j.key not in reran]
+    if verdict.blocking:
+        verdict.kind, verdict.reason = "fail", "feature run red twice: " + ", ".join(f"{j.workflow}/{j.job}" for j in verdict.blocking)
+    elif verdict.rerun:
+        verdict.kind, verdict.reason = "rerun", "feature run red: " + ", ".join(f"{j.workflow}/{j.job}" for j in verdict.rerun)
     return verdict
