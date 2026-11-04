@@ -192,6 +192,12 @@
     "uiGalleryPostRender": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiVideoRender": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiVideoRenderCancel": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiGalleryWindows": {
       "sequence": "test_data/test_a7sii_10"
     },

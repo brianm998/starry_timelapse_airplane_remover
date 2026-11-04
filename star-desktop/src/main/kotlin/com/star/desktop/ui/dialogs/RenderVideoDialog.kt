@@ -201,7 +201,7 @@ internal fun RenderOptions(app: AppViewModel, state: RenderOptionsState, frameCo
     val rateOptions = c.frameRateCapsList.map { (if (it.custom) "custom" else RenderVideo.rateText(it.value)) to (if (it.custom) localized("ui.custom_2") else RenderVideo.rateText(it.value)) }
     val rateKey = if (rateEntry?.custom == true) "custom" else RenderVideo.rateText(choice.frameRate)
     val customRate = state.customRate
-    Picker(localized("ui.frame_rate"), rateOptions, rateKey) { key ->
+    Picker(localized("ui.frame_rate"), rateOptions, rateKey, tag = "render.frame_rate") { key ->
         state.customPicked = key == "custom"
         if (key == "custom") {
             // Kept at what it was, or a rate to start from; the field takes over from here.
@@ -218,7 +218,7 @@ internal fun RenderOptions(app: AppViewModel, state: RenderOptionsState, frameCo
             if (problem) {
                 Text(
                     localized("ui.enter_a_number_from_a_to_b", RenderVideo.rateText(RenderVideo.CUSTOM_MIN), RenderVideo.rateText(RenderVideo.CUSTOM_MAX)),
-                    color = StarColors.red, fontSize = 10.sp, modifier = Modifier.weight(1f),
+                    color = StarColors.red, fontSize = 10.sp, modifier = Modifier.weight(1f).testTag("render.custom_frame_rate.message"),
                 )
             }
             BasicTextField(
@@ -346,13 +346,14 @@ private fun Description(text: String) {
 
 /** A picker of (value, shown) pairs: the value is what is chosen, the text is what the user reads. */
 @Composable
-private fun Picker(label: String, options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
+private fun Picker(label: String, options: List<Pair<String, String>>, selected: String, tag: String? = null, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = StarColors.textSecondary, fontSize = 12.sp)
         Box {
             Box(
                 Modifier
+                    .then(if (tag != null) Modifier.testTag(tag) else Modifier)
                     .width(300.dp)
                     .clip(StarShapes.picker)
                     .background(StarColors.cellDefault)

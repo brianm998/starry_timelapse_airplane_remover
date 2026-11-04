@@ -136,6 +136,10 @@ class DesktopFeatureRunner {
         StepAction.ID_SAYS to { t -> expectSays(t, args[0], args[1]) },
         StepAction.TYPE_INTO to { t -> typeInto(t, args[0], args[1]) },
         StepAction.ID_HOLDS to { t -> expectHolds(t, args[0], args[1].toInt()) },
+        StepAction.ID_ENABLED to { t -> expectEnabled(t, args[0], enabled = true) },
+        StepAction.ID_DISABLED to { t -> expectEnabled(t, args[0], enabled = false) },
+        StepAction.RENDERED_VIDEO_FRAMES to { t -> renderedVideoHasEveryFrame(t, args[0].toInt()) },
+        StepAction.NO_VIDEO_LEFT to { t -> noVideoLeft(t) },
         StepAction.ID_FOCUSED to { t -> expectFocus(t, args[0], focused = true) },
         StepAction.ID_NOT_FOCUSED to { t -> expectFocus(t, args[0], focused = false) },
         StepAction.LANGUAGE_IS to { },   // read when the run starts
@@ -524,6 +528,63 @@ class DesktopFeatureRunner {
         waitFor(t, "\"$id\" ${if (focused) "to have" else "not to have"} the keyboard", 20_000, { "(Focused: ${semanticsOf(t, id)?.getOrNull(SemanticsProperties.Focused)})" }) {
             (semanticsOf(t, id)?.getOrNull(SemanticsProperties.Focused) ?: false) == focused
         }
+    }
+
+    /** The control takes clicks (a button that is not greyed out), or does not. */
+    private fun expectEnabled(t: ComposeUiTest, id: String, enabled: Boolean) {
+        expectShown(t, id, shown = true)
+        waitFor(t, "\"$id\" ${if (enabled) "enabled" else "disabled"}", 20_000, { "(Disabled: ${semanticsOf(t, id)?.contains(SemanticsProperties.Disabled)})" }) {
+            val config = semanticsOf(t, id)
+            config != null && !config.contains(SemanticsProperties.Disabled) == enabled
+        }
+    }
+
+    /** The folder the processed copy's videos are written to: its config's `outputPath`. */
+    private fun processedOutputFolder(): File {
+        val config = processedConfig ?: throw RunnerError("\"a processed copy of the sequence\" has not run")
+        val path = JsonParser.parseString(config.readText()).asJsonObject["outputPath"]?.asString ?: throw RunnerError("${config.path} has no outputPath")
+        return File(path)
+    }
+
+    /** The videos in [folder] (not its subfolders), by the containers a render writes. */
+    private fun videosIn(folder: File): List<File> =
+        folder.listFiles().orEmpty().filter { it.isFile && it.extension.lowercase() in setOf("mov", "mp4", "mkv", "avi") }
+
+    /**
+     * The one video the render wrote has a frame for each image of the processed copy's sequence, at [framesPerSecond]. Read with the bundled
+     * ffprobe (the @ui shard builds no star-output-verify).
+     */
+    private fun renderedVideoHasEveryFrame(t: ComposeUiTest, framesPerSecond: Int) {
+        val config = processedConfig ?: throw RunnerError("\"a processed copy of the sequence\" has not run")
+        val folder = processedOutputFolder()
+        waitFor(t, "a video in ${folder.path}", 60_000) { videosIn(folder).isNotEmpty() }
+        val found = videosIn(folder)
+        if (found.size != 1) throw RunnerError("expected one rendered video in ${folder.path}, found ${found.map { it.name }}")
+        // the frames: the sequence's images, beside its working folder (`input/<name>` for `input/star_temp_<name>`)
+        val working = config.parentFile
+        val sequence = File(working.parentFile, working.name.removePrefix("star_temp_"))
+        val images = sequence.listFiles().orEmpty().filter { it.extension.lowercase() in setOf("tif", "tiff", "jpg", "jpeg", "png") }
+        if (images.isEmpty()) throw RunnerError("no images in ${sequence.path}")
+        val bin = File(repoRoot(), "external_binaries/bin")
+        val ffprobe = listOf("ffprobe", "ffprobe.exe").map { File(bin, it) }.firstOrNull { it.canExecute() } ?: File("ffprobe")
+        val process = ProcessBuilder(
+            ffprobe.path, "-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames,r_frame_rate",
+            "-of", "default=noprint_wrappers=1", found[0].path,
+        ).redirectErrorStream(true).start()
+        val text = process.inputStream.bufferedReader().readText()
+        if (process.waitFor() != 0) throw RunnerError("ffprobe failed on ${found[0].path}:\n$text")
+        fun value(key: String) = text.lines().firstOrNull { it.startsWith("$key=") }?.removePrefix("$key=")?.trim()
+        val frames = value("nb_read_frames")?.toIntOrNull()
+        val rate = value("r_frame_rate")
+        if (frames == null || rate == null) throw RunnerError("ffprobe's answer has no frame count and rate:\n$text")
+        if (frames != images.size) throw RunnerError("${found[0].name} has $frames frames, the sequence ${images.size}")
+        if (rate != "$framesPerSecond/1") throw RunnerError("${found[0].name} is at $rate, expected $framesPerSecond/1")
+    }
+
+    /** No video is in the output folder, now or soon (a cancelled render's partial file goes when its process has ended). */
+    private fun noVideoLeft(t: ComposeUiTest) {
+        val folder = processedOutputFolder()
+        waitFor(t, "the output folder to hold no video", 30_000, { "(${videosIn(folder).map { it.name }})" }) { videosIn(folder).isEmpty() }
     }
 
     /** The first whole number in the control's text is [number]: what an open field holds, or the text of a control that shows it. */

@@ -295,6 +295,7 @@ struct RenderOptionsView: View {
                             }
                         }
                     }
+                      .accessibilityIdentifier("render.frame_rate")
                     if customPicked {
                         TextField("", text: $draft.frameRateString)
                           .frame(maxWidth: 60)
@@ -325,6 +326,7 @@ struct RenderOptionsView: View {
                     Text(localized("ui.enter_a_number_from_a_to_b", RenderVideoSheetView.rateText(RenderVideoSheetView.customFrameRateRange.lowerBound), RenderVideoSheetView.rateText(RenderVideoSheetView.customFrameRateRange.upperBound)))
                       .font(.caption)
                       .foregroundColor(.red)
+                      .accessibilityIdentifier("render.custom_frame_rate.message")
                 }
                 
                 Text(frameRate.description)

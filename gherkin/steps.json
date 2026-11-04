@@ -62,6 +62,8 @@
   { "case": "idSays"                , "text": "\"<id>\" says \"<text>\"" },
   { "case": "typeInto"              , "text": "I type \"<text>\" into \"<id>\"" },
   { "case": "idHolds"               , "text": "\"<id>\" holds the number <n:int>" },
+  { "case": "idEnabled"             , "text": "\"<id>\" is enabled" },
+  { "case": "idDisabled"            , "text": "\"<id>\" is disabled" },
   { "case": "idFocused"             , "text": "\"<id>\" has the keyboard" },
   { "case": "idNotFocused"          , "text": "\"<id>\" does not have the keyboard" },
   { "case": "languageIs"            , "text": "the language is \"<code>\"" },
@@ -74,5 +76,7 @@
   { "case": "openLocationQuestion"  , "text": "I open the copied sequence at its location question" },
   { "case": "openVideoImport"       , "text": "I open a video of the copied sequence at its import dialog" },
   { "case": "saveScreenshot"        , "text": "I save a screenshot named \"<name>\"" },
-  { "case": "saveWindowScreenshot"  , "text": "I save a screenshot of the \"<window>\" window named \"<name>\"" }
+  { "case": "saveWindowScreenshot"  , "text": "I save a screenshot of the \"<window>\" window named \"<name>\"" },
+  { "case": "renderedVideoFrames"   , "text": "the rendered video has one frame per frame of the sequence at <n:int> frames per second" },
+  { "case": "noVideoLeft"           , "text": "no video is left in the output folder" }
 ]
