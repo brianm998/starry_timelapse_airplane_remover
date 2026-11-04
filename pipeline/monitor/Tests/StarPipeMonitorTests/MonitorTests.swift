@@ -31,7 +31,7 @@ final class FixtureTests: XCTestCase {
 
     func testLandingQueueSectionShowsTheBatchTheAbandonedBatchAndTheSlowFlag() throws {
         var s = try Self.snapshot()
-        XCTAssertEqual(s.landing.batch, BatchInfo(number: 2, phase: "ci", ageS: 90, members: [3], prNumber: 12, slow: false))
+        XCTAssertEqual(s.landing.batch, BatchInfo(number: 2, phase: "ci", ageS: 90, members: [3], prNumber: 12, slow: false, ci: "running"))
         XCTAssertEqual(s.landing.lastAbandoned?.reason, "develop moved")
         XCTAssertEqual(Overview.landingLines(s.landing).map(\.text),
                        ["batch 2: ci · age 1m · #3", "batch 1 abandoned 1m ago: develop moved"])
@@ -52,6 +52,41 @@ final class FixtureTests: XCTestCase {
         s.landing.nextBatchInS = nil
         XCTAssertEqual(Overview.landingLines(s.landing), [])
         XCTAssertEqual(Overview.landingLines(nil), [])
+    }
+
+    func testLandingQueueColoursFollowTheBatchCI() throws {
+        var s = try Self.snapshot()
+        XCTAssertEqual(s.landing.batch?.ci, "running")
+        let member = try XCTUnwrap(s.tickets.first { $0.number == 3 })
+        let outsider = try XCTUnwrap(s.tickets.first { $0.number != 3 })
+        XCTAssertEqual(Overview.landingLines(s.landing).first?.ci, "running")
+        XCTAssertEqual(Overview.chipCI(member, s.landing), "running")
+        XCTAssertNil(Overview.chipCI(outsider, s.landing), "a ticket outside the batch keeps its own state colour")
+        for ci in ["success", "failure"] {
+            s.landing.batch?.ci = ci
+            XCTAssertEqual(Overview.landingLines(s.landing).first?.ci, ci)
+            XCTAssertEqual(Overview.chipCI(member, s.landing), ci)
+        }
+        // An older daemon sends no `ci`: it decodes, and nothing is coloured.
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: Self.fixture()) as? [String: Any])
+        var landing = try XCTUnwrap(json["landing"] as? [String: Any])
+        var batch = try XCTUnwrap(landing["batch"] as? [String: Any])
+        batch.removeValue(forKey: "ci")
+        landing["batch"] = batch
+        json["landing"] = landing
+        let old = try JSONDecoder().decode(Snapshot.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertNil(old.landing.batch?.ci)
+        XCTAssertNil(Overview.landingLines(old.landing).first?.ci)
+        XCTAssertNil(Overview.chipCI(member, old.landing))
+    }
+
+    func testAnAbandonedBatchShowsRed() throws {
+        var s = try Self.snapshot()
+        s.landing.batch = nil
+        s.landing.lastAbandoned = AbandonedBatch(number: 7, state: "abandoned", reason: "develop moved", agoS: 60)
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.ci), ["failure"])
+        s.landing.lastAbandoned = AbandonedBatch(number: 7, state: "failed", reason: "CI red", agoS: 60)
+        XCTAssertEqual(Overview.landingLines(s.landing).map(\.ci), ["failure"])
     }
 
     func testSnapshotDecodesMaxActive() throws {

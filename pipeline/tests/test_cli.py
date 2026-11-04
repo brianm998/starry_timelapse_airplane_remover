@@ -114,6 +114,13 @@ def test_status_prints_the_active_batch_and_the_abandoned_one() -> None:
     assert landing_lines({}) == []
 
 
+def test_landing_lines_say_the_ci_result() -> None:
+    batch = {"number": 69, "phase": "ci", "age_s": 60, "members": [246, 188], "pr_number": 5, "slow": False}
+    assert landing_lines({"batch": {**batch, "ci": "running"}}) == ["batch 69: ci running · age 1m · #246 #188"]
+    assert landing_lines({"batch": {**batch, "ci": "failure"}}) == ["batch 69: ci failure · age 1m · #246 #188"]
+    assert landing_lines({"batch": batch}) == ["batch 69: ci · age 1m · #246 #188"]  # an older daemon says nothing
+
+
 def test_daemon_run_holds_off_idle_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
     from starpipe import cli
 

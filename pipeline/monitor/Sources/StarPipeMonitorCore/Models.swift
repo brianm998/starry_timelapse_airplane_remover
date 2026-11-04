@@ -153,9 +153,11 @@ public struct BatchInfo: Codable, Sendable, Equatable {
     public var members: [Int]
     public var prNumber: Int?
     public var slow: Bool
+    /// The batch's CI result: `running`, `success` or `failure`; nil from a daemon that predates the field.
+    public var ci: String?
 
     enum CodingKeys: String, CodingKey {
-        case number, phase, members, slow
+        case number, phase, members, slow, ci
         case ageS = "age_s"
         case prNumber = "pr_number"
     }
@@ -408,6 +410,14 @@ public enum Overview {
     public struct LandingLine: Equatable, Sendable {
         public var text: String
         public var slow: Bool
+        /// `running`, `success` or `failure`; nil for a line that says nothing about CI (so it keeps its plain look).
+        public var ci: String? = nil
+    }
+
+    /// The CI result the chip of a landing-queue ticket takes: its batch's, when it is a member of the batch on show.
+    public static func chipCI(_ ticket: TicketSnap, _ landing: Landing?) -> String? {
+        guard let b = landing?.batch, b.members.contains(ticket.number) else { return nil }
+        return b.ci
     }
 
     static func span(_ seconds: Int) -> String { seconds >= 60 ? "\(seconds / 60)m" : "\(seconds)s" }
@@ -421,13 +431,13 @@ public enum Overview {
             let members = b.members.map { "#\($0)" }.joined(separator: " ")
             let text = "batch \(b.number): \(b.phase) · age \(span(b.ageS))" + (members.isEmpty ? "" : " · \(members)")
                 + (b.slow ? " · SLOW" : "")
-            lines.append(LandingLine(text: text, slow: b.slow))
+            lines.append(LandingLine(text: text, slow: b.slow, ci: b.ci))
         } else if let next = landing.nextBatchInS {
             lines.append(LandingLine(text: "no batch yet: the next one starts in \(next)s", slow: false))
         }
         if let a = landing.lastAbandoned {
             let verb = a.state == "failed" ? "failed" : "abandoned"
-            lines.append(LandingLine(text: "batch \(a.number) \(verb) \(span(a.agoS)) ago: \(a.reason)", slow: false))
+            lines.append(LandingLine(text: "batch \(a.number) \(verb) \(span(a.agoS)) ago: \(a.reason)", slow: false, ci: "failure"))
         }
         return lines
     }

@@ -55,15 +55,24 @@ def api_token() -> str:
     return path.read_text().strip()
 
 
+BATCH_CI = {"pass": "success", "fail": "failure"}
+
+
+def batch_ci(db: Database, batch: dict[str, Any]) -> str:
+    """The batch's CI result for the monitor: `running` (a pending or rerun verdict, or none yet), `success` or `failure`."""
+    verdict = db.latest_ci_verdict(0, str(batch["head_sha"])) if batch["head_sha"] else None
+    return BATCH_CI.get(verdict or "", "running")
+
+
 def train_info(db: Database, config: Config, now: float) -> dict[str, object]:
     """The landing train's state, computed here for status, the snapshot and the monitor: every active batch (`batches`, oldest first:
-    number, phase, age, members, slow flag; `batch` is the oldest, for clients that show one), the last abandoned batch while it is
+    number, phase, age, members, CI result, slow flag; `batch` is the oldest, for clients that show one), the last abandoned batch while it is
     under an hour old, and the countdown to the next batch."""
     batches: list[dict[str, object]] = []
     for batch in db.active_batches():
         age = max(0.0, now - float(batch["created"]))
         batches.append({"number": batch["id"], "phase": batch["state"], "age_s": int(age), "members": db.batch_members(int(batch["id"])),
-                        "pr_number": batch["pr_number"], "slow": batch["state"] == "building" and age > train.SLOW_BUILDING_S})
+                        "pr_number": batch["pr_number"], "ci": batch_ci(db, batch), "slow": batch["state"] == "building" and age > train.SLOW_BUILDING_S})
     gone = db.last_abandoned_batch(now - train.ABANDONED_MEMORY_S)
     abandoned: dict[str, object] | None = None
     if gone is not None:
