@@ -163,12 +163,12 @@ struct HeaderStrip: View {
             if let snapshot = store.snapshot {
                 ForEach(Overview.topBarCounts(snapshot.tickets)) { c in
                     CounterTile(value: "\(c.count)", label: c.label, color: stateColor(c.states[0]), emphasis: c.emphasis)
-                        .help("Counts tickets in: \(c.states.joined(separator: ", "))")
+                        .help(c.tooltip)
                 }
             } else {
                 ForEach(Overview.topBarBuckets, id: \.label) { b in
                     CounterTile(value: "—", label: b.label, color: .secondary, emphasis: .idle)
-                        .help("Counts tickets in: \(b.states.joined(separator: ", "))")
+                        .help(b.tooltip)
                 }
             }
         }

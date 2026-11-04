@@ -104,6 +104,28 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(Overview.topBarCounts([]).map(\.count), [0, 0, 0, 0, 0, 0, 0])
     }
 
+    func testTopBarHelpDescribesEachBucket() {
+        for bucket in Overview.topBarBuckets {
+            XCTAssertFalse(bucket.help.isEmpty, bucket.label)
+            // the tooltip is the stage text followed by the daemon states, and is more than the bare state list
+            XCTAssertTrue(bucket.tooltip.hasPrefix(bucket.help), bucket.label)
+            XCTAssertTrue(bucket.tooltip.hasSuffix("Counts tickets in: " + bucket.states.joined(separator: ", ")), bucket.label)
+            XCTAssertGreaterThan(bucket.help.count, 40, bucket.label)
+        }
+        XCTAssertTrue(Overview.topBarBuckets[6].help.contains("ci"))
+        XCTAssertTrue(Overview.topBarBuckets[4].tooltip.contains("verifying"))
+    }
+
+    func testTopBarHelpSameWithoutSnapshot() throws {
+        // the live tiles (StageCount) and the no-snapshot tiles (buckets) show the same tooltip
+        let base = try XCTUnwrap(try Self.snapshot().tickets.first)
+        var t = base
+        t.state = "developing"
+        for tickets in [[], [t]] {
+            XCTAssertEqual(Overview.topBarCounts(tickets).map(\.tooltip), Overview.topBarBuckets.map(\.tooltip))
+        }
+    }
+
     func testTopBarTileEmphasis() throws {
         let base = try XCTUnwrap(try Self.snapshot().tickets.first)
         func tickets(_ states: [String]) -> [TicketSnap] {
