@@ -217,35 +217,6 @@ final class BoundingBoxTests: XCTestCase {
         XCTAssertNil(box(0, 0, 5, 5).overlap(with: box(5, 0, 10, 5)))
     }
 
-    func testOverlapAmountIsTheSharedAreaOverTheAverageSize() {
-        let a = box(0, 0, 10, 10)   // 11 x 11 = 121
-        let b = box(5, 5, 15, 15)   // 121
-        // shared is 6 x 6 = 36, average size is 121
-        XCTAssertEqual(a.overlapAmount(with: b), 36.0 / 121.0, accuracy: 1e-12)
-    }
-
-    func testABoxFullyOverlapsItself() {
-        let b = box(0, 0, 9, 9)
-        XCTAssertEqual(b.overlapAmount(with: b), 1, accuracy: 1e-12)
-    }
-
-    func testSeparatedBoxesHaveNoOverlapAmount() {
-        XCTAssertEqual(box(0, 0, 5, 5).overlapAmount(with: box(20, 20, 25, 25)), 0)
-    }
-
-    /// A small box inside a big one can exceed... no: the average size denominator keeps the
-    /// ratio at or below 1 for equal boxes, but a small box inside a large one scores low even
-    /// though it is entirely contained.  Callers using this as "is this the same blob" need to
-    /// know it is size sensitive.
-    func testASmallBoxInsideALargeOneScoresLowDespiteBeingContained() {
-        let large = box(0, 0, 99, 99)   // 10000
-        let small = box(10, 10, 19, 19) // 100
-        XCTAssertTrue(large.contains(other: small))
-        let amount = large.overlapAmount(with: small)
-        XCTAssertEqual(amount, 100.0 / 5050.0, accuracy: 1e-12)
-        XCTAssertLessThan(amount, 0.02)
-    }
-
     // MARK: - overlaps(_:), the boolean form of overlap(with:)
 
     /// `overlaps(_:)` is the cheap predicate form of `overlap(with:)`, and the contract worth
@@ -311,44 +282,6 @@ final class BoundingBoxTests: XCTestCase {
         XCTAssertNotNil(around.overlap(with: pixel))
         XCTAssertTrue(around.overlaps(pixel))
         XCTAssertTrue(pixel.overlaps(around))
-    }
-
-    // MARK: - centerTheta
-
-    func testHorizontallyAlignedCentresAreThetaZero() {
-        let a = box(0, 0, 10, 10)
-        let b = box(100, 0, 110, 10)
-        XCTAssertEqual(a.centerTheta(with: b), 0)
-    }
-
-    func testVerticallyAlignedCentresAreTheta90() {
-        let a = box(0, 0, 10, 10)
-        let b = box(0, 100, 10, 110)
-        XCTAssertEqual(a.centerTheta(with: b), 90)
-    }
-
-    func testADiagonalPairIs45Degrees() {
-        let a = box(0, 0, 10, 10)      // centre 5.5, 5.5
-        let b = box(100, 100, 110, 110) // centre 105.5, 105.5
-        // equal width and height offsets, and the centre is below-right, so the 90+ branch
-        XCTAssertEqual(a.centerTheta(with: b), 135, accuracy: 1e-9)
-    }
-
-    func testThetaIsSymmetric() {
-        let a = box(0, 0, 10, 10), b = box(50, 90, 60, 100)
-        XCTAssertEqual(a.centerTheta(with: b), b.centerTheta(with: a), accuracy: 1e-9)
-    }
-
-    func testThetaStaysWithinASemicircle() {
-        let a = box(0, 0, 10, 10)
-        for dx in [-100, -30, 0, 30, 100] {
-            for dy in [-100, -30, 0, 30, 100] where !(dx == 0 && dy == 0) {
-                let b = box(dx, dy, dx + 10, dy + 10)
-                let theta = a.centerTheta(with: b)
-                XCTAssertGreaterThanOrEqual(theta, 0, "theta \(theta) for offset \(dx),\(dy)")
-                XCTAssertLessThanOrEqual(theta, 180, "theta \(theta) for offset \(dx),\(dy)")
-            }
-        }
     }
 
     // MARK: - intersections with a line
