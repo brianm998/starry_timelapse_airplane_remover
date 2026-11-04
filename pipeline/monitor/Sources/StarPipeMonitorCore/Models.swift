@@ -12,6 +12,8 @@ public struct Snapshot: Codable, Sendable, Equatable {
     /// How many tickets may run at once (the owner's override, else config.toml).
     public var maxActive: Int
     public var usagePauseUntil: String?
+    /// The latest five-hour and weekly usage windows a stage's stream reported; nil before any event.
+    public var usageWindows: UsageWindows?
     public var heavy: HeavyState
     public var tickets: [TicketSnap]
     public var groups: [String]
@@ -24,13 +26,99 @@ public struct Snapshot: Codable, Sendable, Equatable {
     public var version: String
     public var repo: String
     public var nightly: NightlyInfo?
+    /// Open `pipe:proposed` issues awaiting the owner's go-ahead; absent from an older daemon's snapshot.
+    public var proposalList: [ProposalSnap]?
+
+    /// `proposalList` without the optional: empty for a daemon that does not send proposals.
+    public var proposals: [ProposalSnap] { proposalList ?? [] }
 
     enum CodingKeys: String, CodingKey {
         case daemon, pause, muted, heavy, tickets, groups, runtime, landing, develop, now, version, repo, nightly
+        case proposalList = "proposals"
         case usagePauseUntil = "usage_pause_until"
+        case usageWindows = "usage_windows"
         case maxActive = "max_active"
         case interventionsWeek = "interventions_week"
         case eventsCursor = "events_cursor"
+    }
+}
+
+/// A proposed issue: filed by `by` (an agent or "interactive") when it carries a marker, else opened on GitHub by `author`.
+public struct ProposalSnap: Codable, Sendable, Equatable, Identifiable {
+    public var number: Int
+    public var title: String
+    /// The starpipe filed-by marker's name; nil when there is none (missing, empty and the legacy "unknown" all mean that).
+    public var by: String?
+    public var author: String?
+    public var createdAt: String?
+    public var id: Int { number }
+
+    public init(number: Int, title: String, by: String? = nil, author: String? = nil, createdAt: String? = nil) {
+        self.number = number
+        self.title = title
+        self.by = ProposalSnap.filer(by)
+        self.author = author
+        self.createdAt = createdAt
+    }
+
+    enum CodingKeys: String, CodingKey { case number, title, by, author, createdAt = "created_at" }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(number: try c.decode(Int.self, forKey: .number), title: try c.decode(String.self, forKey: .title),
+                  by: try c.decodeIfPresent(String.self, forKey: .by),
+                  author: try c.decodeIfPresent(String.self, forKey: .author),
+                  createdAt: try c.decodeIfPresent(String.self, forKey: .createdAt))
+    }
+
+    private static func filer(_ by: String?) -> String? {
+        guard let by, !by.isEmpty, by != "unknown" else { return nil }
+        return by
+    }
+
+    private var authorName: String? { (author?.isEmpty == false) ? author : nil }
+
+    /// The row's second line: "review agent · 3d ago", "opened by brianm998 · 3d ago", or just "3d ago".
+    public func byline(now: Double) -> String {
+        let who = by ?? authorName.map { "opened by \($0)" }
+        return [who, ProposalText.shortAge(iso: createdAt, now: now)].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// The detail header: "Proposed by review agent 3 days ago; waiting for your go-ahead."
+    public func headerSentence(now: Double) -> String {
+        let age = ProposalText.age(iso: createdAt, now: now)
+        let lead: String
+        if let by {
+            lead = ["Proposed by \(by)", age].compactMap { $0 }.joined(separator: " ")
+        } else if let a = authorName {
+            lead = ["Opened on GitHub by \(a)", age].compactMap { $0 }.joined(separator: " ")
+        } else {
+            return "Waiting for your go-ahead."
+        }
+        return lead + "; waiting for your go-ahead."
+    }
+}
+
+public struct UsageWindows: Codable, Sendable, Equatable {
+    public var fiveHour: UsageWindow?
+    public var sevenDay: UsageWindow?
+
+    public init(fiveHour: UsageWindow? = nil, sevenDay: UsageWindow? = nil) {
+        self.fiveHour = fiveHour
+        self.sevenDay = sevenDay
+    }
+
+    enum CodingKeys: String, CodingKey { case fiveHour = "five_hour", sevenDay = "seven_day" }
+}
+
+/// `utilization` is a fraction (0.08 = 8%); `resetsAt` is epoch seconds, spelled as the daemon stores it.
+public struct UsageWindow: Codable, Sendable, Equatable {
+    public var utilization: Double
+    public var resetsAt: Double
+
+    public init(utilization: Double, resetsAt: Double) {
+        self.utilization = utilization
+        self.resetsAt = resetsAt
     }
 }
 
@@ -107,9 +195,11 @@ public struct BatchInfo: Codable, Sendable, Equatable {
     public var members: [Int]
     public var prNumber: Int?
     public var slow: Bool
+    /// The batch's CI result: `running`, `success` or `failure`; nil from a daemon that predates the field.
+    public var ci: String?
 
     enum CodingKeys: String, CodingKey {
-        case number, phase, members, slow
+        case number, phase, members, slow, ci
         case ageS = "age_s"
         case prNumber = "pr_number"
     }
@@ -148,14 +238,35 @@ public struct TicketSnap: Codable, Sendable, Equatable, Identifiable {
     public var parkReason: String?
     public var question: String?
     public var stages: [StageSnap]
+    /// The GitHub issue body, for the sidebar search; empty from a daemon that predates the field.
+    public var body: String
 
     public var id: Int { number }
 
     enum CodingKeys: String, CodingKey {
-        case number, title, state, priority, group, activity, model, branch, worktree, question, stages
+        case number, title, state, priority, group, activity, model, branch, worktree, question, stages, body
         case blockedBy = "blocked_by"
         case prNumber = "pr_number"
         case parkReason = "park_reason"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        number = try c.decode(Int.self, forKey: .number)
+        title = try c.decode(String.self, forKey: .title)
+        state = try c.decode(String.self, forKey: .state)
+        priority = try c.decode(Int.self, forKey: .priority)
+        group = try c.decode(String.self, forKey: .group)
+        activity = try c.decode(String.self, forKey: .activity)
+        model = try c.decodeIfPresent(String.self, forKey: .model)
+        blockedBy = try c.decode([Int].self, forKey: .blockedBy)
+        prNumber = try c.decodeIfPresent(Int.self, forKey: .prNumber)
+        branch = try c.decodeIfPresent(String.self, forKey: .branch)
+        worktree = try c.decodeIfPresent(String.self, forKey: .worktree)
+        parkReason = try c.decodeIfPresent(String.self, forKey: .parkReason)
+        question = try c.decodeIfPresent(String.self, forKey: .question)
+        stages = try c.decode([StageSnap].self, forKey: .stages)
+        body = try c.decodeIfPresent(String.self, forKey: .body) ?? ""
     }
 }
 
@@ -182,8 +293,13 @@ public struct TicketDetail: Codable, Sendable, Equatable {
     public var question: QuestionRow?
     /// The open issues this ticket waits for; empty from a daemon that predates the field.
     public var blockers: [BlockerRef]
+    /// `retry from ci when unblocked` while a `starpipe retry --when-unblocked` waits; nil from a daemon that predates it.
+    public var heldRetry: String?
 
-    enum CodingKeys: String, CodingKey { case number, plan, checks, question, blockers }
+    enum CodingKeys: String, CodingKey {
+        case number, plan, checks, question, blockers
+        case heldRetry = "held_retry"
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -192,6 +308,116 @@ public struct TicketDetail: Codable, Sendable, Equatable {
         checks = try c.decode([CheckRow].self, forKey: .checks)
         question = try c.decodeIfPresent(QuestionRow.self, forKey: .question)
         blockers = try c.decodeIfPresent([BlockerRef].self, forKey: .blockers) ?? []
+        heldRetry = try c.decodeIfPresent(String.self, forKey: .heldRetry)
+    }
+}
+
+/// `GET /v1/proposals/{n}`: a proposed issue in full, with what the owner needs to decide on it.
+public struct ProposalDetail: Codable, Sendable, Equatable {
+    public var number: Int
+    public var title: String
+    public var author: String?
+    public var createdAt: String?
+    public var updatedAt: String?
+    public var labels: [String]
+    /// Who filed it (an agent or "interactive"), from the body's `starpipe:filed-by` marker.
+    public var by: String?
+    public var body: String
+    /// The most recent comments the daemon sent (it caps them), oldest first.
+    public var comments: [ProposalComment]
+    /// How many comments the issue has in all; more than `comments.count` when the daemon capped them.
+    public var commentCount: Int
+    public var blockers: [BlockerRef]
+    public var readiness: ProposalReadiness?
+
+    enum CodingKeys: String, CodingKey {
+        case number, title, author, labels, by, body, comments, blockers, readiness
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case commentCount = "comment_count"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        number = try c.decode(Int.self, forKey: .number)
+        title = try c.decode(String.self, forKey: .title)
+        author = try c.decodeIfPresent(String.self, forKey: .author)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+        updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
+        labels = try c.decodeIfPresent([String].self, forKey: .labels) ?? []
+        by = try c.decodeIfPresent(String.self, forKey: .by)
+        body = try c.decodeIfPresent(String.self, forKey: .body) ?? ""
+        comments = try c.decodeIfPresent([ProposalComment].self, forKey: .comments) ?? []
+        commentCount = try c.decodeIfPresent(Int.self, forKey: .commentCount) ?? comments.count
+        blockers = try c.decodeIfPresent([BlockerRef].self, forKey: .blockers) ?? []
+        readiness = try c.decodeIfPresent(ProposalReadiness.self, forKey: .readiness)
+    }
+}
+
+public struct ProposalComment: Codable, Sendable, Equatable {
+    public var author: String?
+    public var createdAt: String?
+    public var body: String
+
+    enum CodingKeys: String, CodingKey { case author, body; case createdAt = "created_at" }
+
+    public init(author: String?, createdAt: String?, body: String) {
+        self.author = author
+        self.createdAt = createdAt
+        self.body = body
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        author = try c.decodeIfPresent(String.self, forKey: .author)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+        body = try c.decodeIfPresent(String.self, forKey: .body) ?? ""
+    }
+}
+
+/// Whether the proposal is ready to approve: the ticket lint's verdict, the plan, the `## Pipeline` overrides and the queue.
+public struct ProposalReadiness: Codable, Sendable, Equatable {
+    public var lintOk: Bool
+    public var errors: [String]
+    public var warnings: [String]
+    public var hasPlan: Bool
+    public var pipeline: [String: String]
+    public var queue: Queue
+
+    public struct Queue: Codable, Sendable, Equatable {
+        public var open: Int
+        public var max: Int
+
+        public init(open: Int, max: Int) {
+            self.open = open
+            self.max = max
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case errors, warnings, pipeline, queue
+        case lintOk = "lint_ok"
+        case hasPlan = "has_plan"
+    }
+
+    public init(lintOk: Bool, errors: [String] = [], warnings: [String] = [], hasPlan: Bool,
+                pipeline: [String: String] = [:], queue: Queue) {
+        self.lintOk = lintOk
+        self.errors = errors
+        self.warnings = warnings
+        self.hasPlan = hasPlan
+        self.pipeline = pipeline
+        self.queue = queue
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        lintOk = try c.decode(Bool.self, forKey: .lintOk)
+        errors = try c.decodeIfPresent([String].self, forKey: .errors) ?? []
+        warnings = try c.decodeIfPresent([String].self, forKey: .warnings) ?? []
+        hasPlan = try c.decodeIfPresent(Bool.self, forKey: .hasPlan) ?? false
+        pipeline = try c.decodeIfPresent([String: String].self, forKey: .pipeline) ?? [:]
+        queue = try c.decode(Queue.self, forKey: .queue)
     }
 }
 
@@ -275,27 +501,74 @@ public enum Overview {
     public struct StageCount: Equatable, Sendable, Identifiable {
         public var label: String
         public var states: [String]
+        public var help: String
         public var count: Int
         public var id: String { label }
+
+        /// The hover text: what the stage does, then which daemon states the tile counts.
+        public var tooltip: String { Overview.tooltip(help: help, states: states) }
+
+        /// How loudly the tile draws: the owner's queue when it is non-empty, a muted tile for zero, otherwise normal.
+        public var emphasis: TileEmphasis {
+            if count == 0 { return .idle }
+            return states.contains("needs-input") ? .attention : .active
+        }
+    }
+
+    public enum TileEmphasis: Equatable, Sendable { case attention, active, idle }
+
+    /// One top-bar bucket: its tile label, the daemon states it counts, and what the stage means (the hover help).
+    public struct TopBarBucket: Sendable {
+        public var label: String
+        public var states: [String]
+        public var help: String
+
+        /// The hover text: what the stage does, then which daemon states the tile counts.
+        public var tooltip: String { Overview.tooltip(help: help, states: states) }
+    }
+
+    static func tooltip(help: String, states: [String]) -> String {
+        help + "\nCounts tickets in: " + states.joined(separator: ", ")
     }
 
     /// The top bar's seven buckets, in display order. `paused` and terminal states belong to none.
-    public static let topBarBuckets: [(label: String, states: [String])] = [
-        ("Needs input", ["needs-input"]), ("Queued", ["queued"]), ("Exploring", ["exploring"]),
-        ("Developing", ["developing"]), ("Testing", ["verifying"]), ("Review", ["review"]),
-        ("Landing", landingStates),
+    /// Labels are short and lowercase so they fit a tile on one line.
+    public static let topBarBuckets: [TopBarBucket] = [
+        TopBarBucket(label: "need you", states: ["needs-input"],
+                     help: "An agent stopped and asked a question, or parked the ticket. It waits for your answer and does nothing until you give one."),
+        TopBarBucket(label: "queued", states: ["queued"],
+                     help: "Approved tickets waiting for a free slot (max_active). No agent has started on them."),
+        TopBarBucket(label: "exploring", states: ["exploring"],
+                     help: "An agent is reading the code and writing the plan for the ticket. Skipped when the ticket carries its own ## Plan."),
+        TopBarBucket(label: "developing", states: ["developing"],
+                     help: "An agent is writing the change in the ticket's own worktree, including rework after review findings."),
+        TopBarBucket(label: "testing", states: ["verifying"],
+                     help: "The builds and tests the change needs are running. A failure goes to a fix agent and back here."),
+        TopBarBucket(label: "review", states: ["review"],
+                     help: "A fresh reviewer is checking the diff against the acceptance criteria. It either approves or sends the ticket back to developing."),
+        TopBarBucket(label: "landing", states: landingStates,
+                     help: "Approved changes on their way into develop: ready (waiting for a CI slot), ci (checks running on the PR or batch), landing (merging, resolving conflicts)."),
     ]
 
     /// Tickets per top-bar bucket, zeros included.
     public static func topBarCounts(_ tickets: [TicketSnap]) -> [StageCount] {
         topBarBuckets.map { bucket in
-            StageCount(label: bucket.label, states: bucket.states, count: tickets.filter { bucket.states.contains($0.state) }.count)
+            StageCount(label: bucket.label, states: bucket.states, help: bucket.help,
+                       count: tickets.filter { bucket.states.contains($0.state) }.count)
         }
     }
 
     public struct LandingLine: Equatable, Sendable {
         public var text: String
         public var slow: Bool
+        /// `running`, `success` or `failure`; nil for a line that says nothing about CI (so it keeps its plain look).
+        public var ci: String? = nil
+    }
+
+    /// The CI result the chip of a landing-queue ticket takes: its batch's, when it is a member of the batch on show.
+    public static func chipCI(_ ticket: TicketSnap, _ landing: Landing?) -> String? {
+        guard let b = landing?.batch, b.members.contains(ticket.number) else { return nil }
+        return b.ci
     }
 
     static func span(_ seconds: Int) -> String { seconds >= 60 ? "\(seconds / 60)m" : "\(seconds)s" }
@@ -309,16 +582,80 @@ public enum Overview {
             let members = b.members.map { "#\($0)" }.joined(separator: " ")
             let text = "batch \(b.number): \(b.phase) · age \(span(b.ageS))" + (members.isEmpty ? "" : " · \(members)")
                 + (b.slow ? " · SLOW" : "")
-            lines.append(LandingLine(text: text, slow: b.slow))
+            lines.append(LandingLine(text: text, slow: b.slow, ci: b.ci))
         } else if let next = landing.nextBatchInS {
             lines.append(LandingLine(text: "no batch yet: the next one starts in \(next)s", slow: false))
         }
         if let a = landing.lastAbandoned {
             let verb = a.state == "failed" ? "failed" : "abandoned"
-            lines.append(LandingLine(text: "batch \(a.number) \(verb) \(span(a.agoS)) ago: \(a.reason)", slow: false))
+            lines.append(LandingLine(text: "batch \(a.number) \(verb) \(span(a.agoS)) ago: \(a.reason)", slow: false, ci: "failure"))
         }
         return lines
     }
+
+    public enum Severity: Equatable, Sendable { case normal, ok, warn, bad }
+
+    /// One "Pipeline status" row: the label and value the top bar used to show, its colour class, and the short word
+    /// the top bar still shows while the row is abnormal (nil for rows that never raise attention).
+    public struct StatusRow: Equatable, Sendable, Identifiable {
+        public var label: String
+        public var value: String
+        public var severity: Severity
+        public var attention: String? = nil
+        public var id: String { label }
+    }
+
+    /// The status items in the order the top bar showed them. Usage limit, Monitor update, Paused and Interventions appear only when present.
+    public static func statusRows(snapshot s: Snapshot?, connection: Connection, updateAvailable: Bool,
+                                  rebuildCommand: String, timeZone: TimeZone = .current) -> [StatusRow] {
+        let down: Bool
+        var daemon = "connecting…"
+        if case .down(let why) = connection { down = true; daemon = "down: \(why)" } else {
+            down = false
+            if let s { daemon = "up, \(s.runtime.sha)" + (s.runtime.behindDevelop > 0 ? ", behind develop by \(s.runtime.behindDevelop)" : "") }
+        }
+        var lock = "—"
+        if let heavy = s?.heavy {
+            if let h = heavy.holders.first {
+                let elapsed = Int((s?.now ?? h.since) - h.since)
+                let who = h.ticket.isEmpty ? "interactive" : "#\(h.ticket)"
+                lock = "\(who) \(h.cmd.prefix(36)) \(elapsed / 60)m" + (heavy.queue.isEmpty ? "" : " · \(heavy.queue.count) queued")
+            } else { lock = heavy.queue.isEmpty ? "idle" : "\(heavy.queue.count) waiting" }
+        }
+        let red = s?.landing.stopLine != nil
+        var landing = "—"
+        if let l = s?.landing { landing = l.stopLine.map { "stopped: \($0)" } ?? (l.paused ? "paused" : "running") }
+        var develop = "—"
+        if let d = s?.develop {
+            let gate = d.gate.isEmpty ? "pr-gate: no data" : "pr-gate " + (d.gate.values.allSatisfy { $0 == "success" } ? "green" : "red")
+            develop = "\(gate), \(d.knownRed) known red"
+        }
+        var rows = [
+            StatusRow(label: "Daemon", value: daemon, severity: down ? .bad : .ok, attention: down ? "Daemon down" : nil),
+            StatusRow(label: "Heavy lock", value: lock, severity: .normal),
+            StatusRow(label: "Landing", value: landing, severity: s?.landing.paused == true || red ? .warn : .normal,
+                      attention: s?.landing.paused == true ? "Landing paused" : nil),
+            StatusRow(label: "develop", value: develop, severity: red ? .bad : .normal, attention: red ? "develop red" : nil),
+        ]
+        if let until = s?.usagePauseUntil, let t = Double(until) {
+            let time = Date(timeIntervalSince1970: t).formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: timeZone))
+            rows.append(StatusRow(label: "Usage limit", value: "model stages wait until \(time)", severity: .warn, attention: "Usage limit"))
+        }
+        if updateAvailable {
+            rows.append(StatusRow(label: "Monitor update", value: "Update available — \(rebuildCommand)", severity: .warn, attention: "Update available"))
+        }
+        if let pause = s?.pause { rows.append(StatusRow(label: "Paused", value: pause, severity: .warn, attention: "Paused")) }
+        rows.append(StatusRow(label: "Last nightly", value: s?.nightly?.line ?? "none yet",
+                              severity: (s?.nightly?.reds ?? 0) > 0 || s?.nightly?.status == "error" ? .warn : .normal))
+        if let week = s?.interventionsWeek, !week.isEmpty {
+            rows.append(StatusRow(label: "Interventions (7 d)", value: week.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", "),
+                                  severity: .normal))
+        }
+        return rows
+    }
+
+    /// The words the top bar's attention indicator shows: one per abnormal row; empty when all is well.
+    public static func attentionWords(_ rows: [StatusRow]) -> [String] { rows.compactMap(\.attention) }
 
     public static func landingQueue(_ tickets: [TicketSnap]) -> [TicketSnap] {
         landingStates.flatMap { state in tickets.filter { $0.state == state }.sorted { $0.number < $1.number } }

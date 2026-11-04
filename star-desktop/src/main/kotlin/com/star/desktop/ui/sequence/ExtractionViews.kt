@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.ExtractionFormat
 import com.star.desktop.i18n.localized
+import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.FrameEtaResponse
 import kotlinx.coroutines.delay
@@ -103,46 +104,48 @@ fun FrameWaitPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             delay(1000)
         }
     }
-    Box(
-        modifier.fillMaxSize().background(StarColors.appBackground.copy(alpha = 0.85f))
-            // nothing underneath can be clicked or dragged while the frame is not there
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        event.changes.forEach { it.consume() }
+    HoverTip(localized("ui.tool_needs_extracted_frame")) {
+        Box(
+            modifier.fillMaxSize().background(StarColors.appBackground.copy(alpha = 0.85f))
+                // nothing underneath can be clicked or dragged while the frame is not there
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            event.changes.forEach { it.consume() }
+                        }
                     }
                 }
-            }
-            .testTag("extraction.waitpanel"),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            Modifier.clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = 0.7f)).padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .testTag("extraction.waitpanel"),
+            contentAlignment = Alignment.Center,
         ) {
-            Text(localized("ui.frame_not_extracted", "%,d".format(index)), color = StarColors.white, fontSize = 18.sp)
-            val e = eta
-            val seekable = vm.extraction.collectAsState().value?.seekable ?: true
-            val now = e?.jump == true || seekable
-            if (e != null && e.known) {
-                if (now) {
-                    Text(localized("ui.frame_extracting_now", ExtractionFormat.duration(e.seconds)), color = StarColors.white, fontSize = 13.sp)
-                    LinearProgressIndicator(Modifier.width(260.dp), color = StarColors.accent)
+            Column(
+                Modifier.clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = 0.7f)).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(localized("ui.frame_not_extracted", "%,d".format(index)), color = StarColors.white, fontSize = 18.sp)
+                val e = eta
+                val seekable = vm.extraction.collectAsState().value?.seekable ?: true
+                val now = e?.jump == true || seekable
+                if (e != null && e.known) {
+                    if (now) {
+                        Text(localized("ui.frame_extracting_now", ExtractionFormat.duration(e.seconds)), color = StarColors.white, fontSize = 13.sp)
+                        LinearProgressIndicator(Modifier.width(260.dp), color = StarColors.accent)
+                    } else {
+                        Text(
+                            localized("ui.frame_extraction_in_order", "%,d".format(e.sweepHead), ExtractionFormat.duration(e.seconds)),
+                            color = StarColors.white, fontSize = 13.sp,
+                        )
+                        LinearProgressIndicator(progress = { e.fraction.toFloat().coerceIn(0f, 1f) }, modifier = Modifier.width(260.dp), color = StarColors.accent)
+                    }
                 } else {
-                    Text(
-                        localized("ui.frame_extraction_in_order", "%,d".format(e.sweepHead), ExtractionFormat.duration(e.seconds)),
-                        color = StarColors.white, fontSize = 13.sp,
-                    )
-                    LinearProgressIndicator(progress = { e.fraction.toFloat().coerceIn(0f, 1f) }, modifier = Modifier.width(260.dp), color = StarColors.accent)
+                    Text(localized("ui.frame_extraction_estimating"), color = StarColors.white, fontSize = 13.sp)
+                    LinearProgressIndicator(Modifier.width(260.dp), color = StarColors.accent)
                 }
-            } else {
-                Text(localized("ui.frame_extraction_estimating"), color = StarColors.white, fontSize = 13.sp)
-                LinearProgressIndicator(Modifier.width(260.dp), color = StarColors.accent)
+                if (!now) Text(localized("ui.frame_extraction_in_order_reason"), color = StarColors.textSecondary, fontSize = 11.sp)
+                if (e != null && e.error.isNotEmpty()) Text(localized("ui.extraction_failed", e.error), color = StarColors.red, fontSize = 12.sp)
             }
-            if (!now) Text(localized("ui.frame_extraction_in_order_reason"), color = StarColors.textSecondary, fontSize = 11.sp)
-            if (e != null && e.error.isNotEmpty()) Text(localized("ui.extraction_failed", e.error), color = StarColors.red, fontSize = 12.sp)
         }
     }
 }

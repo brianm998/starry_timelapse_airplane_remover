@@ -77,6 +77,11 @@ class GitHub:
         blocker = self.issue(blocked_by)
         self.api("POST", f"issues/{number}/dependencies/blocked_by", {"issue_id": blocker["id"]})
 
+    def unblock(self, number: int, blocked_by: int) -> None:
+        """Remove the link that says `number` is blocked by `blocked_by`."""
+        blocker = self.issue(blocked_by)
+        self.api("DELETE", f"issues/{number}/dependencies/blocked_by/{blocker['id']}")
+
     def close_issue(self, number: int, reason: str = "not_planned") -> None:
         self.api("PATCH", f"issues/{number}", {"state": "closed", "state_reason": reason})
 

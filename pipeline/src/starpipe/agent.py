@@ -65,6 +65,7 @@ class StageRequest:
     fence: guards.Fence
     resume: str | None = None
     on_session: Callable[[str], None] = lambda _sid: None  # called as soon as the session id is known
+    on_usage: Callable[[dict[str, Any]], None] = lambda _windows: None  # the stream's `unifiedWindows`, as it arrives
 
 
 @dataclass
@@ -82,8 +83,11 @@ class AgentRunner(Protocol):
     async def run(self, req: StageRequest) -> StageOutcome: ...
 
 
-def sanitized_env(ticket: int, nightly: bool = False) -> dict[str, str]:
-    """The session's environment: no inherited Claude session variables, the OAuth token from claude.env."""
+def sanitized_env(ticket: int, nightly: bool = False, budget_s: float = 4 * 3600) -> dict[str, str]:
+    """The session's environment: no inherited Claude session variables, the OAuth token from claude.env.
+
+    Bash gets the stage budget as its default and maximum timeout: at Claude Code's 120 s default a long foreground
+    command (heavy-lock wait plus a build) is moved to the background, and the session then stops on a declined call."""
     env = {k: v for k, v in os.environ.items() if not k.startswith("CLAUDE") and k not in SESSION_ENV_DROP}
     token_file = home() / "claude.env"
     if token_file.exists():
@@ -93,6 +97,7 @@ def sanitized_env(ticket: int, nightly: bool = False) -> dict[str, str]:
                 env[key.removeprefix("export ").strip()] = value.strip().strip("\"'")
     env["STARPIPE_TICKET"] = str(ticket)
     env["MCP_TOOL_TIMEOUT"] = str(4 * 3600 * 1000)
+    env["BASH_DEFAULT_TIMEOUT_MS"] = env["BASH_MAX_TIMEOUT_MS"] = str(int(budget_s * 1000))
     if nightly:
         env["STARPIPE_NIGHTLY"] = "1"
     return env
@@ -123,6 +128,15 @@ def parse_usage_limit(info: Any) -> float | None:
         return None
     resets = getattr(info, "resets_at", None)
     return float(resets) if resets else time.time() + DEFAULT_USAGE_PAUSE_S
+
+
+def usage_windows_of(info: Any) -> dict[str, Any] | None:
+    """The `unifiedWindows` dict of a rate-limit event's raw payload, or None when absent or not a dict."""
+    raw: object = getattr(info, "raw", None)
+    if not isinstance(raw, dict):
+        return None
+    windows: object = cast("dict[str, object]", raw).get("unifiedWindows")
+    return cast("dict[str, Any]", windows) if isinstance(windows, dict) else None
 
 
 def _session_id_of(message: object) -> str | None:
@@ -189,7 +203,7 @@ class SdkRunner:
             model=req.model, effort=cast(Any, req.effort), cwd=str(req.fence.worktree), permission_mode="bypassPermissions",
             setting_sources=["project"], resume=req.resume,
             system_prompt={"type": "preset", "preset": "claude_code", "append": req.system_append},
-            mcp_servers={"star": server}, env=sanitized_env(req.ticket),
+            mcp_servers={"star": server}, env=sanitized_env(req.ticket, budget_s=req.budget_s),
             hooks={"PreToolUse": [HookMatcher(hooks=[self._hook(req.fence)])]},
             disallowed_tools=sorted(guards.FORBIDDEN_TOOLS | ({"Write", "Edit", "NotebookEdit"} if req.fence.read_only else set())),
         )
@@ -210,6 +224,9 @@ class SdkRunner:
                         outcome.session_id = sid
                         req.on_session(sid)  # recorded now, so a daemon kill mid-stage can still resume it
                     if isinstance(message, RateLimitEvent):
+                        windows = usage_windows_of(message.rate_limit_info)
+                        if windows:
+                            req.on_usage(windows)
                         resets = parse_usage_limit(message.rate_limit_info)
                         if resets:
                             outcome.status, outcome.resets_at = "usage-limit", resets

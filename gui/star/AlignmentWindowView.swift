@@ -3,6 +3,7 @@ import StarCppBridge
 import StarCore
 import logging
 import Charts
+import AppKit
 
 struct AlignmentWindowView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
@@ -40,11 +41,42 @@ struct AlignmentWindowView: View {
           }
     }
         
+    /// What the window says in place of its charts, as catalogue keys in order (nothing when there is data to chart).  The desktop
+    /// client's `AlignmentWindowTexts.emptyState` is the same rule; both are held to `gherkin/ui/vectors/alignmentWindow.json`.
+    /// The gui always has the alignment data in its view model, so the vector's `fetched` is true here.
+    static func emptyState(hasSequence: Bool, hasData: Bool, processing: Bool) -> [String] {
+        if !hasSequence {
+            return ["ui.no_image_sequence_loaded", "ui.load_an_image_sequence_in_the_main_star"]
+        }
+        if hasData { return [] }
+        return processing
+          ? ["ui.waiting_for_alignment_data"]
+          : ["ui.no_alignment_data_process_the_sequence_first"]
+    }
+
     func mainView(_ viewModel: ImageSequenceViewModel) -> some View {
         @Bindable var viewModel = viewModel
-        return HStack {
+        let hasData = viewModel.starAlignmentInfo.contains(where: { !$0.isEmpty })
+          || (viewModel.allowEarthAlignment && viewModel.earthAlignmentInfo.contains(where: { !$0.isEmpty }))
+        let empty = Self.emptyState(
+          hasSequence: true,
+          hasData: hasData,
+          processing: viewModel.isProcessingFrames
+        )
+        if !empty.isEmpty {
+            return AnyView(
+              VStack {
+                  ForEach(empty, id: \.self) { Text(localized($0)) }
+              }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            )
+        }
+        return AnyView(HStack {
             ScrollView {
                 VStack(alignment: .leading) {
+                    Text(localized("ui.alignment_chart_help"))
+                      .font(.caption)
+                      .foregroundColor(.secondary)
                     // Gated on the sequence's alignment data rather than on the current
                     // frame's results: mid-run the current frame is often not aligned yet,
                     // which left this window with only its legend.
@@ -58,6 +90,7 @@ struct AlignmentWindowView: View {
                               .frame(minHeight: 320)
                         }
                         if showStarKeypoints {
+                            Text(localized("ui.star_keypoints"))
                             AlignmentKeypointsChart(
                               keyPoints: viewModel.skyKeypointCounts
                             )
@@ -75,6 +108,7 @@ struct AlignmentWindowView: View {
                               .frame(minHeight: 320)
                         }
                         if showEarthKeypoints {
+                            Text(localized("ui.earth_keypoints"))
                             AlignmentKeypointsChart(
                               keyPoints: viewModel.earthKeypointCounts
                             )
@@ -84,7 +118,7 @@ struct AlignmentWindowView: View {
             }
             self.controlsView
         }
-          .environment(viewModel)
+          .environment(viewModel))
     }
 
     private var controlsView: some View {
@@ -131,6 +165,52 @@ struct AlignmentWindowView: View {
         }
 
         return offsets.sorted()
+    }
+}
+
+/// Zoom with the scroll wheel while the pointer is over the view and Command or Control is held (what the help line
+/// `ui.alignment_chart_help` says; the desktop client's charts do the same).  A plain scroll is left to the page the
+/// charts are on.  The event monitor is app-wide, so it is installed only while the pointer is over the view.
+private struct ScrollWheelZoom: ViewModifier {
+    let onZoom: (Double) -> Void
+    @State private var monitor = ScrollMonitor()
+
+    func body(content: Content) -> some View {
+        content
+          .onHover { inside in
+              if inside { monitor.install(onZoom) } else { monitor.remove() }
+          }
+          .onDisappear { monitor.remove() }
+    }
+}
+
+private final class ScrollMonitor {
+    private var token: Any?
+
+    func install(_ onZoom: @escaping (Double) -> Void) {
+        guard token == nil else { return }
+        token = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { event in
+            guard event.modifierFlags.contains(.command) || event.modifierFlags.contains(.control) else {
+                return event
+            }
+            // Scrolling up zooms in, 12% a notch (a trackpad reports tenths of one).
+            let notches = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY / 10 : event.scrollingDeltaY
+            if notches != 0 { onZoom(pow(1.12, Double(notches))) }
+            return nil
+        }
+    }
+
+    func remove() {
+        if let token { NSEvent.removeMonitor(token) }
+        token = nil
+    }
+
+    deinit { remove() }
+}
+
+private extension View {
+    func scrollWheelZoom(_ onZoom: @escaping (Double) -> Void) -> some View {
+        modifier(ScrollWheelZoom(onZoom: onZoom))
     }
 }
 
@@ -267,6 +347,7 @@ struct AlignmentKeypointsChart: View {
                          //   hoveredOffset = nil
                         }
                     }
+                    .scrollWheelZoom { zoom(by: $0) }
               }
           }
           .frame(minHeight: 320)
@@ -277,11 +358,15 @@ struct AlignmentKeypointsChart: View {
     private func zoom(scale: CGFloat) {
         let delta = scale / lastMagnification
         lastMagnification = scale
+        zoom(by: Double(delta))
+    }
 
+    /// Zoom in by `delta` (more than 1) or out (less than 1) about the centre of what shows.
+    private func zoom(by delta: Double) {
         let center = (xDomain.lowerBound + xDomain.upperBound) / 2
         let currentSpan = xDomain.upperBound - xDomain.lowerBound
         guard delta != 0 else { return }
-        var newSpan = max(10, Int(Double(currentSpan) / Double(delta)))
+        var newSpan = max(10, Int(Double(currentSpan) / delta))
 
         if newSpan > keyPoints.count { newSpan = keyPoints.count }
         if newSpan < 20 { newSpan = 20 }
@@ -542,6 +627,7 @@ struct AlignmentDeviationChart: View {
                             hoveredOffset = nil
                         }
                     }
+                    .scrollWheelZoom { zoom(by: $0) }
               }
           }
     }
@@ -561,11 +647,15 @@ struct AlignmentDeviationChart: View {
     private func zoom(scale: CGFloat) {
         let delta = scale / lastMagnification
         lastMagnification = scale
+        zoom(by: Double(delta))
+    }
 
+    /// Zoom in by `delta` (more than 1) or out (less than 1) about the centre of what shows.
+    private func zoom(by delta: Double) {
         let center = (xDomain.lowerBound + xDomain.upperBound) / 2
         let currentSpan = xDomain.upperBound - xDomain.lowerBound
         guard delta != 0 else { return }
-        var newSpan = max(10, Int(Double(currentSpan) / Double(delta)))
+        var newSpan = max(10, Int(Double(currentSpan) / delta))
 
         if newSpan > frames.count { newSpan = frames.count }
         if newSpan < 20 { newSpan = 20 }
@@ -594,38 +684,6 @@ struct AlignmentDeviationChart: View {
         let upper = min(maxFrame, lower + (xDomain.count - 1))
 
         if lower < upper { xDomain = lower ... upper }
-    }
-    
-    var oldBody: some View {
-        Chart {
-            ForEach(points) { point in
-                LineMark(
-                  x: .value(localized("ui.frame_capitalised"), point.baseFrame),
-                  y: .value(localized("ui.deviation"), point.signedDeviation)
-                )
-                  .foregroundStyle(
-                    by: .value(
-                      localized("ui.neighbor"),
-                      point.offset > 0
-                        ? "+\(point.offset)"
-                        : "\(point.offset)"
-                    )
-                  )
-                //                  .foregroundStyle(by: .value("Offset", point.offset))
-                  .interpolationMethod(.linear)
-                
-            }
-        }
-          .chartXAxisLabel(localized("ui.frame_index"))
-          .chartYAxisLabel(localized("ui.deviation"))
-          .chartLegend(position: .trailing)
-          .frame(minHeight: 300)
-          .chartYScale(domain: symmetricDomain())
-    }
-
-    func symmetricDomain() -> ClosedRange<Double> {
-        let maxDeviation = abs(points.map(\.signedDeviation).max() ?? 1)
-        return -maxDeviation ... maxDeviation
     }
     
     func makeDeviationPoints(

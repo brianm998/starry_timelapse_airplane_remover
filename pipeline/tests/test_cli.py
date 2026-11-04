@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+import asyncio
 import importlib.metadata
+import json
+import os
 import plistlib
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 from click.testing import CliRunner
 
 from starpipe import selfupdate
-from starpipe.cli import landing_lines, main
+from starpipe.cli import landing_lines, main, update_hold_line
 from starpipe.config import home
 
 from .fakes import sh
-from .test_selfupdate import Launchctl, make_pipeline_repo, noop_sync
+from .test_selfupdate import Launchctl, fake_plist, make_pipeline_repo, noop_sync
 
 
 def make_repo(tmp: Path) -> Path:
@@ -110,3 +114,170 @@ def test_status_prints_the_active_batch_and_the_abandoned_one() -> None:
                                       "batch 7 abandoned 18m ago: develop moved with overlapping changes"]
     assert landing_lines({"batch": None, "last_abandoned": None, "next_batch_in_s": 45}) == ["no batch yet: the next one starts in 45s"]
     assert landing_lines({}) == []
+
+
+def test_landing_lines_say_the_ci_result() -> None:
+    batch = {"number": 69, "phase": "ci", "age_s": 60, "members": [246, 188], "pr_number": 5, "slow": False}
+    assert landing_lines({"batch": {**batch, "ci": "running"}}) == ["batch 69: ci running · age 1m · #246 #188"]
+    assert landing_lines({"batch": {**batch, "ci": "failure"}}) == ["batch 69: ci failure · age 1m · #246 #188"]
+    assert landing_lines({"batch": batch}) == ["batch 69: ci · age 1m · #246 #188"]  # an older daemon says nothing
+
+
+def test_daemon_run_holds_off_idle_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    from starpipe import cli
+
+    hold_off = getattr(cli, "_hold_off_idle_sleep")  # noqa: B009 - private on purpose
+    calls: list[list[str]] = []
+
+    def record(argv: list[str], **_kw: Any) -> None:
+        calls.append(argv)
+    monkeypatch.setattr(cli.subprocess, "Popen", record)
+    hold_off()
+    assert calls == [["caffeinate", "-i", "-w", str(os.getpid())]]
+
+    def missing(*_a: Any, **_kw: Any) -> None:
+        raise FileNotFoundError
+    monkeypatch.setattr(cli.subprocess, "Popen", missing)
+    hold_off()  # no caffeinate: not an error
+
+
+def test_status_says_when_a_self_update_holds_claims(monkeypatch: pytest.MonkeyPatch) -> None:
+    hold = {"sha": "e3c559f6aabbccdd", "left_s": 7 * 60 + 5, "waiting_on": [73]}
+    assert update_hold_line(hold) == "self-update to e3c559f6 pending: holding new work, waiting on #73, swaps in 7m"
+    assert update_hold_line({**hold, "waiting_on": [73, 74], "left_s": 40}) == (
+        "self-update to e3c559f6 pending: holding new work, waiting on #73 #74, swaps in 40s")
+    assert update_hold_line(None) is None
+
+    class FakeClient:
+        def __init__(self, hold: dict[str, object] | None) -> None:
+            self.hold = hold
+
+        def call(self, _method: str, _path: str) -> dict[str, object]:
+            return {"daemon": {"pid": 1, "error": None}, "self_update": {"pending": "e3c559f6", "hold": self.hold}, "tickets": []}
+
+    for h, shown in ((hold, True), (None, False)):
+        monkeypatch.setattr("starpipe.cli._client", lambda h=h: FakeClient(h))  # type: ignore[misc]
+        out = CliRunner().invoke(main, ["status"])
+        assert out.exit_code == 0 and ("self-update to e3c559f6 pending" in out.output) is shown
+
+
+class FakeDaemon:
+    def __init__(self, result: str = "ok") -> None:
+        self.calls: list[tuple[str, str, dict[str, Any] | None]] = []
+        self.result = result
+
+    def call(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+        self.calls.append((method, path, body))
+        return {"result": self.result}
+
+
+def test_block_adds_links_to_an_existing_ticket(monkeypatch: pytest.MonkeyPatch) -> None:
+    from starpipe import github
+
+    from .fakes import FakeGitHub
+
+    gh = FakeGitHub()
+    for n in (7, 174, 199):
+        gh.add_issue(n, f"ticket {n}")
+    gh.add_issue(50, "not a pipeline ticket", labels=())
+    monkeypatch.setattr(github, "GitHub", lambda _cfg: gh)  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
+    run = CliRunner()
+    out = run.invoke(main, ["block", "7", "#174,199"])
+    assert out.exit_code == 0, out.output
+    assert gh.deps[7] == [174, 199]
+    assert run.invoke(main, ["block", "7", "174"]).exit_code == 0 and gh.deps[7] == [174, 199], "an existing link is not added twice"
+    assert run.invoke(main, ["block", "7", "7"]).exit_code != 0, "a ticket cannot block itself"
+    assert run.invoke(main, ["block", "174", "7"]).exit_code != 0, "7 is blocked by 174: the reverse link would close a cycle"
+    assert run.invoke(main, ["block", "50", "7"]).exit_code != 0, "not a pipeline ticket"
+    out = run.invoke(main, ["unblock", "7", "174"])
+    assert out.exit_code == 0, out.output
+    assert gh.deps[7] == [199]
+    assert run.invoke(main, ["unblock", "7", "174"]).exit_code != 0, "no such link"
+
+
+def test_retry_without_the_flag_is_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
+    from starpipe import cli
+
+    daemon = FakeDaemon("note: #7 is still blocked by #174; retried anyway")
+    monkeypatch.setattr(cli, "_client", lambda: daemon)
+    out = CliRunner().invoke(main, ["retry", "7", "ci"])
+    assert out.exit_code == 0 and "still blocked by #174" in out.output, out.output
+    assert daemon.calls == [("POST", "/v1/tickets/7/retry", {"stage": "ci"})], "no when_unblocked unless asked for"
+
+    daemon.result = "ok"
+    out = CliRunner().invoke(main, ["retry", "7", "ci", "--when-unblocked"])
+    assert out.exit_code == 0 and out.output.strip() == "ok"
+    assert daemon.calls[-1] == ("POST", "/v1/tickets/7/retry", {"stage": "ci", "when_unblocked": True})
+
+
+def _run_daemon(monkeypatch: pytest.MonkeyPatch) -> Any:
+    from starpipe import cli
+    from starpipe import daemon as daemon_mod
+
+    class Stub:
+        def run(self) -> object:
+            return None
+    monkeypatch.setattr(cli, "_hold_off_idle_sleep", lambda: None)
+    def build(_cfg: object) -> Stub:
+        return Stub()
+
+    def load(*_a: object, **_k: object) -> None:
+        return None
+
+    def run(_coro: object) -> None:
+        return None
+    monkeypatch.setattr(daemon_mod, "build", build)
+    monkeypatch.setattr(cli.config_mod, "load", load)
+    monkeypatch.setattr(asyncio, "run", run)
+    return CliRunner().invoke(main, ["daemon", "run"])
+
+
+def test_daemon_run_logs_its_runtime_and_start_count(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                      caplog: pytest.LogCaptureFixture) -> None:
+    repo, sha = make_pipeline_repo(tmp_path)
+    rt = selfupdate.build(repo, sha, noop_sync)
+    selfupdate.switch(rt, fake_plist(tmp_path), Launchctl(), now=1.0, restart=False)
+    caplog.set_level("INFO")
+    result = _run_daemon(monkeypatch)
+    assert result.exit_code == 0, result.output
+    text = caplog.text
+    assert f"runtime {rt.name} sha {sha[:12]}" in text and "1 start(s) since the last switch" in text
+
+
+def test_crash_loop_rollback_logs_why(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    import time
+
+    repo, sha = make_pipeline_repo(tmp_path)
+    first = selfupdate.build(repo, sha, noop_sync)
+    (repo / "pipeline" / "n.txt").write_text("2")
+    sh(repo, "git", "add", "-A")
+    sh(repo, "git", "commit", "-q", "-m", "2")
+    second = selfupdate.build(repo, sh(repo, "git", "rev-parse", "HEAD").strip(), noop_sync)
+    plist = fake_plist(tmp_path)
+    selfupdate.switch(first, plist, Launchctl(), now=1.0, restart=False)
+    selfupdate.switch(second, plist, Launchctl(), now=time.time(), restart=False)
+    monkeypatch.setattr(cli_mod(), "_plist_path", lambda: plist)
+    monkeypatch.setattr(selfupdate, "real_launchctl", Launchctl())
+    monkeypatch.setattr(selfupdate, "restart_agent", _noop)
+    (selfupdate.runtime_root() / "starts.json").write_text(json.dumps([time.time()] * 3))
+    caplog.set_level("INFO")
+    result = _run_daemon(monkeypatch)
+    assert result.exit_code == 1
+    assert "crash loop: 4 starts since the switch at" in caplog.text and "window 300s" in caplog.text
+
+    def boom(*_a: Any, **_k: Any) -> str:
+        raise RuntimeError("no previous runtime")
+    monkeypatch.setattr(selfupdate, "rollback", boom)
+    (selfupdate.runtime_root() / "starts.json").write_text(json.dumps([time.time()] * 5))
+    caplog.clear()
+    result = _run_daemon(monkeypatch)
+    assert result.exit_code == 1 and "rollback failed: no previous runtime" in caplog.text
+
+
+def _noop(*_a: object, **_k: object) -> None:
+    return None
+
+
+def cli_mod() -> Any:
+    from starpipe import cli
+    return cli

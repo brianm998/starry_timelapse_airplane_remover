@@ -4,6 +4,7 @@ import com.star.desktop.i18n.localized
 import java.awt.FileDialog
 import java.awt.Frame
 import java.io.File
+import java.io.IOException
 import javax.swing.JFileChooser
 
 /** How a chosen path should be opened. */
@@ -47,14 +48,72 @@ fun resolveDrop(files: List<File>): OpenAction? {
     }
 }
 
-/** Native directory chooser (image sequence by default, or a folder for [title]). Opens at [startAt] when that is a folder. Blocks on the EDT. */
-fun chooseDirectory(title: String = localized("ui.open_image_sequence").trimEnd('…', '.'), startAt: String? = null): String? {
+private const val DIRECTORIES_PROPERTY = "apple.awt.fileDialogForDirectories"
+
+/**
+ * Folder chooser (image sequence by default, or a folder for [title]). Opens at [startAt] when that is a folder. Blocks on the EDT.
+ * It is the platform's own: the Finder panel on a Mac, Explorer's folder picker on Windows, the desktop's chooser (zenity or kdialog) on
+ * Linux, as the gui's `NSOpenPanel` is on a Mac. Swing's `JFileChooser` is the fallback where no native one is available.
+ */
+fun chooseDirectory(title: String = localized("ui.open_image_sequence").trimEnd('…', '.'), startAt: String? = null): String? =
+    chooseDirectory(
+        System.getProperty("os.name").orEmpty(), title, startAt,
+        FolderDialogs(::nativeFolderDialog, ::windowsFolderDialog, ::linuxFolderDialog, ::swingFolderDialog),
+    )
+
+/** The platform choice behind [chooseDirectory], with the dialogs passed in so it can be tested without showing one. */
+internal fun chooseDirectory(osName: String, title: String, startAt: String?, dialogs: FolderDialogs): String? {
+    val start = startAt?.let { File(it) }?.takeIf { it.isDirectory }
+    val chosen = when (folderPickerFor(osName)) {
+        FolderPicker.MAC_PANEL -> withFolderDialogProperty { dialogs.mac(title, start) }
+        FolderPicker.WINDOWS_EXPLORER -> orSwing(dialogs.windows, dialogs.swing, title, start)
+        FolderPicker.LINUX_NATIVE -> orSwing(dialogs.linux, dialogs.swing, title, start)
+        FolderPicker.SWING -> dialogs.swing(title, start)
+    }
+    return chosen?.absolutePath
+}
+
+/** Shows [native]; Swing's chooser takes over only when the native one is unavailable (not when the user cancelled it). */
+private fun orSwing(native: (String, File?) -> FolderResult, swing: (String, File?) -> File?, title: String, start: File?): File? {
+    val result = try { native(title, start) } catch (_: IOException) { FolderResult.Unavailable }
+    return when (result) {
+        is FolderResult.Chosen -> result.folder
+        FolderResult.Cancelled -> null
+        FolderResult.Unavailable -> swing(title, start)
+    }
+}
+
+/**
+ * Runs [block] with `apple.awt.fileDialogForDirectories` set, which is what makes a macOS `FileDialog` pick folders. The property is read
+ * when the dialog is shown, so it is set around that call only and put back afterwards, whether the dialog is cancelled or throws.
+ */
+internal fun <T> withFolderDialogProperty(block: () -> T): T {
+    val previous = System.getProperty(DIRECTORIES_PROPERTY)
+    System.setProperty(DIRECTORIES_PROPERTY, "true")
+    try {
+        return block()
+    } finally {
+        if (previous == null) System.clearProperty(DIRECTORIES_PROPERTY) else System.setProperty(DIRECTORIES_PROPERTY, previous)
+    }
+}
+
+/** The macOS `FileDialog`; only meaningful inside [withFolderDialogProperty]. */
+private fun nativeFolderDialog(title: String, start: File?): File? {
+    val dialog = FileDialog(null as Frame?, title, FileDialog.LOAD)
+    start?.let { dialog.directory = it.absolutePath }
+    dialog.isVisible = true
+    val dir = dialog.directory ?: return null
+    val file = dialog.file ?: return null
+    return File(dir, file)
+}
+
+private fun swingFolderDialog(title: String, start: File?): File? {
     val chooser = JFileChooser().apply {
         fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
         dialogTitle = title
-        startAt?.let { File(it).takeIf { f -> f.isDirectory }?.let { f -> currentDirectory = f } }
+        start?.let { currentDirectory = it }
     }
-    return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFile?.absolutePath else null
+    return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) chooser.selectedFile else null
 }
 
 /** Whether [name] ends in one of [extensions] (given without the dot), whatever its case. */

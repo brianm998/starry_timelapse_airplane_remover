@@ -76,9 +76,9 @@ struct InitialView: View {
               .help(localized("ui.tell_me_how_to_us_this_software")) 
             Spacer()
 
-            FinderStyleDropZone() { providers in
+            FinderStyleDropZone(onDropAction: { providers in
                 handleDrop(providers: providers)
-            }
+            }, onTap: loadImageSequence)
               .frame(maxWidth: 1200, maxHeight: 800)
 
             Spacer()
@@ -512,21 +512,6 @@ struct SplitRevealVideoView: View {
                 RoundedRectangle(cornerRadius: 4)
                     .stroke(Color.black.opacity(0.25), lineWidth: 0.5)
             )
-    }
-
-    /// Fit the video inside 'container' while preserving aspect ratio.
-    private func fitSize(container: CGSize, aspectRatio: CGFloat) -> CGSize {
-        guard container.width > 0 && container.height > 0 else { return .zero }
-        let containerAspect = container.width / container.height
-        if containerAspect > aspectRatio {
-            // container wider -> fit by height
-            let h = container.height
-            return CGSize(width: h * aspectRatio, height: h)
-        } else {
-            // container taller -> fit by width
-            let w = container.width
-            return CGSize(width: w, height: w / aspectRatio)
-        }
     }
 
     // MARK: - ViewModel

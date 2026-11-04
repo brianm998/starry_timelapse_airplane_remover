@@ -31,7 +31,7 @@ The shared expectations for the macOS gui and the desktop client (see `plans/GUI
 * `known-gaps.json` — the parity backlog. A `@ui` feature that fails on a client where it is listed here passes, and says `KNOWN GAP`; one that
   fails where it is not listed fails; one that is listed and now passes fails until the entry is removed. `{"gaps": {"<feature>": {"mac-gui": "<why>", "desktop": "<why>"}}}`.
   Both runners read it (`GuiFeatureRunner.knownGap`, `DesktopFeatureRunner.knownGap`). It is empty. It held four features for the desktop for a while, which were gaps of the *test host*, not of the app
-  (the desktop has the same menu, windows, start screen and recents button, but the Compose test host has no AWT menu bar or window, and cannot start the JavaFX video the start screen embeds); they closed when
+  (the desktop has the same menu, windows, start screen and recents button, but the Compose test host has no AWT menu bar or window, and the start screen's ffmpeg video is turned off for a `@ui` feature); they closed when
   the runner learned to work on what the app draws those from (below). It then held one real difference, the decision-tree menu items, until the owner chose the gui's behaviour. A feature of the gui's that fails on the desktop for a real
   difference goes here with that difference as the reason.
 
@@ -90,6 +90,11 @@ are different: they stay literal in the feature and the runner supplies their va
 | `I choose the menu command "<command>"` / `the menu command "<command>" is enabled` / `is disabled` | by a `commands.json` id: its menu title and label come from that file and the English catalogue (gui: the menu bar; desktop: the menus as data, see below) |
 | `the menu "<menu>" is there` / `is not there` | the menu is in the menu bar, by a `commands.json` menu (`file`, `actions`, `tools`, `window`): its title comes from that file and the catalogue; the generator checks the name |
 | `the "<window>" window is open` / `is not open` | `debug` or `outlier` (gui: a window with that title; desktop: the view model's flag `Main.kt` shows the window for) |
+| `I open the preferences` | the Preferences sheet or dialog, as the app menu's item (Command-comma) opens it (gui: the key; desktop: what the AWT preferences handler of `Main.kt` calls, `openPreferences`, as the test host has no menu bar) |
+| `I open the copied sequence at its location question` | the start screen with the question that asks where a chosen image sequence's files go (gui: `-StarUITestSequenceLocation <dir>`; desktop: `requestSequence`); the open panel that leads to it cannot be driven |
+| `I open a video of the copied sequence at its import dialog` | makes a short video from the copy's frames with the bundled ffmpeg and opens it as Load Video does, which raises the import dialog (gui: `-StarUITestOpenVideo`; desktop: `openVideo`) |
+| `I save a screenshot named "<name>"` | writes the main window as `<dir>/<client>/<name>.png` for the parity gallery (below); `<name>` is letters, digits, `-` and `_`, and one name is used once in a feature |
+| `I save a screenshot of the "<window>" window named "<name>"` | the same for a secondary window (`debug`, `outlier`, `alignment`, `blob`) at its own size: the gui photographs the window; the desktop draws `SecondaryWindowContent`, which `Main.kt` puts in its `Window` too, at the size the window opens at |
 
 The features so far (all pass on both clients): `uiStartupDefaults`, `uiStartupReturnStarts`, `uiStartupHorizonQuestion`, `uiStartupMovingHorizonQuestion`,
 `uiStartupNoHorizonSkips`, `uiStartupBackToHorizon`, `uiStartupBackFromRemoval`, `uiRemovalSelectiveChoice`, `uiSettingsFromStartup`, `uiSettingsTabs`,
@@ -100,7 +105,7 @@ The features so far (all pass on both clients): `uiStartupDefaults`, `uiStartupR
 **What the desktop's runner does where the gui has an AWT menu bar, windows and a video.** The desktop's menu bar and secondary windows are AWT, which the Compose test host does not have, so those steps work on what the
 app draws them from, and a test holds the drawing to that. The menus are data, `starMenus(app)` (titles, labels, enabled, handler), which `StarMenuBar` draws as the `MenuBar` and nothing else builds; the runner reads it
 with `starMenusNow` (on the UI thread, without composing anything) and chooses an item by calling its handler (a disabled item cannot be chosen, as in a menu). A window is open when the flag in the view model that `Main.kt` shows its `Window` for says so, and
-`SecondaryWindowsWiringTest` holds `Main.kt` to that. The start screen's JavaFX video is off for a `@ui` feature (`-Dstar.ui.noIntroVideo`, `NO_INTRO_VIDEO_PROPERTY`; the gui has a video too and plays it), the
+`SecondaryWindowsWiringTest` holds `Main.kt` to that. The start screen's ffmpeg video is off for a `@ui` feature (`-Dstar.ui.noIntroVideo`, `NO_INTRO_VIDEO_PROPERTY`; the gui has a video too and plays it), the
 preferences are the scratch `user.home`'s, and where a list has a control per row (the recents' remove button) a click on the id takes the first.
 
 **Two things about keys on the desktop's test host.** A click on a control with a hover tip (the neighbour field) leaves the tip up, and a tip is a second Compose root; the key step sends the pointer to a corner, which closes it, and then keys the first root, the window's. And a key sent after a number field gave up the keyboard (Return, Esc) did not reach the host's key handler, though the host held the focus (traced: no event arrived; cause not found), so `uiNumberFields` asks `has the keyboard` / `does not have the keyboard` and does not press an arrow after it.
@@ -122,6 +127,27 @@ per Gradle run: a second in the same JVM trips over the first one's leftover cor
 
 Not written yet, from §6.3: the snapshots and the other probes, and the rest of the outlier features (E2 to E6, L6 to L8, L10), and the fixture
 `ui_small` (the in-repo `test_data/test_a7sii_10` stands in for it; the processed one is made by the cli, above).
+
+## The parity gallery
+
+The string- and id-level parity tests cannot see a drop zone that is a fraction of the other client's size. The `uiGallery*` features (`uiGalleryStart`,
+`uiGalleryStartup`, `uiGalleryProcessing`, `uiGallerySequence`, `uiGalleryProcessed`, `uiGalleryMultiSelect`, `uiGalleryMultiChoice`, `uiGalleryPostRender`,
+`uiGalleryWindows`, `uiGalleryPreferences`, `uiGalleryVideoImport`, `uiGalleryLocation`) visit each screen of both clients and save it with `I save a screenshot named
+"<name>"`; `starpipe.gallery` then lays the two folders side by side in one page. It is advisory: nothing compares pictures and no run fails on a difference.
+
+* **Where.** `<dir>/<client>/<name>.png`, client `mac-gui` or `desktop`, `<dir>` being `STAR_GALLERY_DIR` (to xcodebuild as `TEST_RUNNER_STAR_GALLERY_DIR`), else `<repo>/.test-data/gallery/latest`.
+  The gui's runner is sandboxed and on CI cannot write there (`Code=513`); when it cannot make that folder it saves into its container's tmp
+  (`~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gallery/latest`), which the mac-gui job uploads as `gherkin-gui-shard-<shard>-gallery`.
+  A run overwrites only the names it saves. The same name on both clients is the same screen; a name only one client saves is a gap in the page.
+* **Size.** The desktop's test window is 1400 by 1100 pixels. The gui's is 1400 by 1100 points: XCUITest cannot size a window, so a feature that saves a screenshot launches the app with
+  `-StarUITestWindowSize 1400x1100`, which `starApp.swift` applies to the main window (needs a display at least that tall). A gui PNG is Retina, twice the pixels; the page shows both at
+  the same width and prints each file's own pixel size.
+* **GPU merge is off.** A gallery feature can start a run (`uiGalleryProcessing`), and the GPU merge must not run on this Mac (CLAUDE.md), so both runners put `useGPUForMerge: false` in the scratch preferences.
+* **Running.** One feature per Gradle run, as above, and one `xcodebuild` per gui feature (`-only-testing:starUITests/GeneratedFeatureUITests/testUiGalleryStartFeature`, with the display awake: `caffeinate -d -u`).
+  The `uiGalleryProcessed`, `uiGalleryMultiSelect`, `uiGalleryMultiChoice` and `uiGalleryPostRender` features start from the processed sequence (below).
+* **The page.** `gherkin/ui/gallery.sh [dir]` (that is `python -m starpipe.gallery <dir>`, tested in `pipeline/tests/test_gallery.py`) writes `<dir>/index.html`: a row per screen, gui left, desktop right.
+* **Steps coverage.** `StepCoverageTests` (`gherkin/StarGherkin`) reads the three runners' dispatch tables and fails when a step a client's features use is not in its table, and when a client lacks the screenshot steps.
+* A screen one client cannot reach in a feature is not faked: leave the step out on that side (or list the feature in `known-gaps.json` with the reason) and the page shows the gap.
 
 ## macOS-only check: the Dock icon brings the desktop's window back (M10)
 

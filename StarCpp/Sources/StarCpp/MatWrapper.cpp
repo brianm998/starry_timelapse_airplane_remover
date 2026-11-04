@@ -888,14 +888,6 @@ int mat_wrapper_split(MatWrapperRef ref, int tileWidth, int tileHeight,
     return 0;
 }
 
-void mat_wrapper_free_split(CImageMatrixElement *elements, int count) {
-    if (!elements) return;
-    for (int i = 0; i < count; i++) {
-        mat_wrapper_release(elements[i].image);
-    }
-    free(elements);
-}
-
 MatWrapperRef mat_wrapper_combine(const CImageMatrixElement *elements, int count) {
     if (!elements || count <= 0) return nullptr;
     try {

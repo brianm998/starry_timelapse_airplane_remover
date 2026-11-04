@@ -30,7 +30,6 @@ uint64_t buffer_holder_bits_per_component(BufferHolderRef ref);
 // --- Typed access ---
 uint8_t  *buffer_holder_as_uint8(BufferHolderRef ref);
 uint16_t *buffer_holder_as_uint16(BufferHolderRef ref);
-uint32_t *buffer_holder_as_uint32(BufferHolderRef ref);
 
 // --- Convert to MatWrapper ---
 MatWrapperRef buffer_holder_to_mat(BufferHolderRef ref);

@@ -6,12 +6,14 @@ import SwiftUI
 struct OverviewView: View {
     @Bindable var store: MonitorStore
     @State private var confirming: TicketSnap?
+    @State private var confirmingAll = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 Text("Overview").scaledFont(.title2, weight: .bold)
                 if let error = store.lastError { Text(error).foregroundStyle(.red).scaledFont(.caption) }
+                pipelineStatus
                 activeModels
                 concurrency
                 landingQueue
@@ -28,6 +30,36 @@ struct OverviewView: View {
             Button("Cancel", role: .cancel) {}
         } message: { _ in
             Text("CI, the overlap re-test and the stop-line wait are skipped, and the PR says the owner bypassed them. A conflict still goes to the conflict stage, and an explicit landing pause still holds it.")
+        }
+        .confirmationDialog("Land every ticket in the queue without waiting for tests?", isPresented: $confirmingAll, titleVisibility: .visible) {
+            Button("Land all (skip tests)", role: .destructive) { Task { await store.landAll() } }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every ticket in the landing queue is marked land-now at once and lands together. CI, the overlap re-test and the stop-line wait are skipped.")
+        }
+    }
+
+    // 0. pipeline status --------------------------------------------------------------------------------------------
+    private var pipelineStatus: some View {
+        section("Pipeline status") {
+            Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 6) {
+                ForEach(store.statusRows) { row in
+                    GridRow {
+                        Text(row.label).foregroundStyle(.secondary)
+                        Text(row.value).foregroundStyle(color(row.severity)).textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private func color(_ severity: Overview.Severity) -> Color {
+        switch severity {
+        case .normal: .secondary
+        case .ok: .green
+        case .warn: .orange
+        case .bad: .red
         }
     }
 
@@ -89,10 +121,13 @@ struct OverviewView: View {
                 if landing?.stopLine == nil && landing?.paused != true { Chip(text: "landing open", color: .green) }
             }
             ForEach(Array(Overview.landingLines(landing).enumerated()), id: \.offset) { _, line in
-                Text(line.text).monospacedDigit().foregroundStyle(line.slow ? Color.orange : Color.secondary)
+                Text(line.text).monospacedDigit().foregroundStyle(ciColor(line.ci) ?? (line.slow ? Color.orange : Color.secondary))
             }
             if queue.isEmpty {
                 Text("Nothing is waiting to land.").foregroundStyle(.secondary)
+            }
+            if queue.count > 1 {
+                Button("Land all (skip tests)") { confirmingAll = true }
             }
             ForEach(queue) { t in
                 HStack(spacing: 8) {
@@ -100,7 +135,7 @@ struct OverviewView: View {
                     Text(t.title).lineLimit(1)
                     Spacer()
                     if t.state == "ready" { Text(t.activity).scaledFont(.caption).foregroundStyle(.secondary).lineLimit(1) }
-                    Chip(text: t.state, color: stateColor(t.state))
+                    Chip(text: t.state, color: ciColor(Overview.chipCI(t, landing)) ?? stateColor(t.state))
                     Button("Land now (skip tests)") { confirming = t }
                 }
                 .contentShape(Rectangle())

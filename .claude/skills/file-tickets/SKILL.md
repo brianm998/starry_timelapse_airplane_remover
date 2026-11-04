@@ -92,5 +92,5 @@ localization: yes | no
   A bug's tests say `— fails before fix`.
 - `starpipe ticket lint` checks all of this without a worktree. At claim time the same checks EXPLORE's plan has to pass run against
   the fresh worktree; if they fail, the ticket goes to EXPLORE and its prompt lists what was wrong with your plan.
-- Only a ticket filed from an interactive session by the owner uses the plan. Proposals (`--propose`), `$STARPIPE_AGENT` filings and the
-  pipeline's own follow-ups always run EXPLORE.
+- A plan is used from any ticket the owner's token filed: an interactive session, a `$STARPIPE_AGENT` filing, or an approved proposal
+  (`--propose`). Only tickets the pipeline files itself (its own follow-ups) always run EXPLORE.

@@ -1,0 +1,55 @@
+name: Output validator (cached build)
+description: >
+  Provides removal_tools/.build/release/star-output-verify (.exe on Windows).  Restores the executable from actions/cache and builds it
+  only on a miss, saving it after a successful build.  Cache only the executable, never removal_tools/.build: the repository's Actions
+  cache is close to its quota.  Run after checkout, after the Swift toolchain is installed and after the OpenCV artifact is in place.
+
+outputs:
+  cache-hit:
+    description: "'true' when the executable came from the cache"
+    value: ${{ steps.restore.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    # The key names everything the package compiles: removal_tools, StarCore, the packages StarCore depends on by path (StarCpp, logging),
+    # the OpenCV digest StarCpp links against (opencv/cache_key.sh, the same digest opencv.yml keys its cache on), the toolchain and the OS.
+    # A change to any of them is a new key, so a stale validator is never run.
+    - name: Compute the output validator cache key
+      id: key
+      shell: bash
+      env:
+        SOURCES: ${{ hashFiles('removal_tools/Package.swift', 'removal_tools/Sources/**', 'StarCore/Package.swift', 'StarCore/Sources/**', 'StarCpp/Package.swift', 'StarCpp/Sources/**', 'logging/Package.swift', 'logging/Sources/**') }}
+      run: |
+        swift_id=$(swift --version 2>&1 | head -n 1 | tr -c 'A-Za-z0-9.\n' '-' | tr -d '\r\n')
+        opencv=$(opencv/cache_key.sh)
+        echo "key=output-verify-${RUNNER_OS}-${RUNNER_ARCH}-${swift_id}-${SOURCES}-${opencv}" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the output validator
+      id: restore
+      uses: actions/cache/restore@v4
+      with:
+        path: |
+          removal_tools/.build/release/star-output-verify
+          removal_tools/.build/release/star-output-verify.exe
+        key: ${{ steps.key.outputs.key }}
+
+    - name: Build the output validator
+      if: steps.restore.outputs.cache-hit != 'true'
+      shell: bash
+      run: swift build -c release --package-path removal_tools
+
+    - name: Save the output validator
+      if: steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: |
+          removal_tools/.build/release/star-output-verify
+          removal_tools/.build/release/star-output-verify.exe
+        key: ${{ steps.key.outputs.key }}
+
+    - name: Report the output validator
+      shell: bash
+      run: |
+        ls removal_tools/.build/release/star-output-verify*
+        echo "Output validator: **$([ "${{ steps.restore.outputs.cache-hit }}" = true ] && echo "restored from cache" || echo "built")** (key ${{ steps.key.outputs.key }})" >> "$GITHUB_STEP_SUMMARY"
