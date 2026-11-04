@@ -1261,3 +1261,78 @@ final class ProposalTextTests: XCTestCase {
                        "octocat · 2 hours ago")
     }
 }
+
+final class QuestionChoicesTests: XCTestCase {
+    private let full = QuestionRow(text: "Which way?", why: "The repo is silent.", options: ["left", "right", "straight on"],
+                                   recommendation: "Right")
+
+    private func client() -> APIClient {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [StubProtocol.self]
+        return APIClient(config: APIConfig(baseURL: URL(string: "http://127.0.0.1:1")!, token: "tok"), session: URLSession(configuration: cfg))
+    }
+
+    func testQuestionRowDecodesOptionsAndToleratesAnOlderDaemon() throws {
+        let json = #"{"text": "Which way?", "why": "The repo is silent.", "options": ["left", "right"], "recommendation": "right"}"#
+        let q = try JSONDecoder().decode(QuestionRow.self, from: Data(json.utf8))
+        XCTAssertEqual(q, QuestionRow(text: "Which way?", why: "The repo is silent.", options: ["left", "right"], recommendation: "right"))
+        let older = try JSONDecoder().decode(QuestionRow.self, from: Data(#"{"text": "Which way?"}"#.utf8))
+        XCTAssertEqual(older.text, "Which way?")
+        XCTAssertEqual(older.options, [])
+        XCTAssertNil(older.why)
+        XCTAssertNil(older.recommendation)
+        let detail = try JSONDecoder().decode(TicketDetail.self, from: Data(#"{"number": 7, "checks": [], "question": {"text": "q"}}"#.utf8))
+        XCTAssertEqual(detail.question?.options, [])
+    }
+
+    func testQuestionChoicesListEveryOptionAndMarkTheRecommendedOne() {
+        XCTAssertEqual(QuestionChoices.rows(for: full),
+                       [.option("left", isRecommended: false), .option("right", isRecommended: true),
+                        .option("straight on", isRecommended: false), .other],
+                       "one row per option in order, the recommendation matched loosely, Other last")
+        let none = QuestionRow(text: "q", options: ["a", "b"], recommendation: "c")
+        XCTAssertEqual(QuestionChoices.rows(for: none), [.option("a", isRecommended: false), .option("b", isRecommended: false), .other])
+        let twice = QuestionRow(text: "q", options: ["a", "A"], recommendation: "a")
+        XCTAssertEqual(QuestionChoices.rows(for: twice), [.option("a", isRecommended: true), .option("A", isRecommended: false), .other])
+    }
+
+    func testChoosingAnOptionSendsItsTextAndOtherSendsTheTypedAnswer() async throws {
+        XCTAssertEqual(QuestionChoices.answerText(for: .option("left", isRecommended: false), typed: "ignored"), "left")
+        XCTAssertEqual(QuestionChoices.answerText(for: .other, typed: "  something else \n"), "something else")
+        XCTAssertNil(QuestionChoices.answerText(for: .other, typed: ""))
+        XCTAssertNil(QuestionChoices.answerText(for: .other, typed: "  \n "))
+
+        final class Seen: @unchecked Sendable { var posts: [(String, String)] = [] }
+        let seen = Seen()
+        let fixture = try FixtureTests.fixture()
+        StubProtocol.handler = { request in
+            if request.url?.path == "/v1/snapshot" { return (200, fixture) }
+            let stream = request.httpBodyStream
+            stream?.open()
+            var data = Data()
+            var buf = [UInt8](repeating: 0, count: 1024)
+            while let stream, stream.hasBytesAvailable {
+                let n = stream.read(&buf, maxLength: buf.count)
+                if n <= 0 { break }
+                data.append(buf, count: n)
+            }
+            stream?.close()
+            seen.posts.append((request.url?.path ?? "", String(decoding: request.httpBody ?? data, as: UTF8.self)))
+            return (200, Data(#"{"result": "ok"}"#.utf8))
+        }
+        let store = MonitorStore(client: client())
+        let choice = try XCTUnwrap(QuestionChoices.rows(for: full).first)
+        await store.answer(7, try XCTUnwrap(QuestionChoices.answerText(for: choice, typed: "")))
+        await store.answer(7, try XCTUnwrap(QuestionChoices.answerText(for: .other, typed: " my own ")))
+        XCTAssertEqual(seen.posts.map(\.0), ["/v1/tickets/7/answer", "/v1/tickets/7/answer"])
+        XCTAssertTrue(seen.posts[0].1.contains("\"left\""), seen.posts[0].1)
+        XCTAssertTrue(seen.posts[1].1.contains("\"my own\""), seen.posts[1].1)
+    }
+
+    func testQuestionWithoutOptionsKeepsTheFreeTextAnswer() {
+        let plain = QuestionRow(text: "What now?")
+        XCTAssertFalse(QuestionChoices.hasOptions(plain))
+        XCTAssertEqual(QuestionChoices.rows(for: plain), [], "no option rows and no Other: the view shows the plain text field")
+        XCTAssertTrue(QuestionChoices.hasOptions(full))
+    }
+}

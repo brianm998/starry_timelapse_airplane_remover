@@ -451,8 +451,30 @@ public struct CheckRow: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey { case result; case checkId = "check_id" }
 }
 
+/// The open question a ticket waits on. Only `text` comes from a daemon that predates the structured fields.
 public struct QuestionRow: Codable, Sendable, Equatable {
     public var text: String
+    /// Why the agent could not settle it from the repo; empty or nil when none was given.
+    public var why: String?
+    /// The concrete answers on offer, in the order the agent gave them; empty when it asked an open question.
+    public var options: [String]
+    /// The option the agent recommends, when it named one.
+    public var recommendation: String?
+
+    public init(text: String, why: String? = nil, options: [String] = [], recommendation: String? = nil) {
+        self.text = text
+        self.why = why
+        self.options = options
+        self.recommendation = recommendation
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        text = try c.decode(String.self, forKey: .text)
+        why = try c.decodeIfPresent(String.self, forKey: .why)
+        options = try c.decodeIfPresent([String].self, forKey: .options) ?? []
+        recommendation = try c.decodeIfPresent(String.self, forKey: .recommendation)
+    }
 }
 
 /// One line of the event stream (`GET /v1/events` as server-sent events).

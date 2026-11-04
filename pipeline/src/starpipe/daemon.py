@@ -164,14 +164,14 @@ def question_view(row: dict[str, Any] | None) -> dict[str, object] | None:
     if row is None:
         return None
     try:
-        payload = json.loads(row.get("payload") or "{}")
+        loaded: object = json.loads(row.get("payload") or "{}")
     except (TypeError, ValueError):
-        payload = {}
-    if not isinstance(payload, dict):
-        payload = {}
-    raw = payload.get("options")
-    options = [o for o in (str(x).strip() for x in raw if x is not None) if o] if isinstance(raw, list) else []
-    why, recommendation = payload.get("why"), payload.get("recommendation")
+        loaded = {}
+    payload: dict[str, Any] = cast("dict[str, Any]", loaded) if isinstance(loaded, dict) else {}
+    raw: object = payload.get("options")
+    options = [o for o in (str(x).strip() for x in cast("list[Any]", raw) if x is not None) if o] if isinstance(raw, list) else []
+    why: object = payload.get("why")
+    recommendation: object = payload.get("recommendation")
     return {"text": row["text"], "why": str(why).strip() if why else "", "options": options,
             "recommendation": str(recommendation).strip() if recommendation else ""}
 
