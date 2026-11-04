@@ -77,6 +77,11 @@ class GitHub:
         blocker = self.issue(blocked_by)
         self.api("POST", f"issues/{number}/dependencies/blocked_by", {"issue_id": blocker["id"]})
 
+    def unblock(self, number: int, blocked_by: int) -> None:
+        """Remove the link that says `number` is blocked by `blocked_by`."""
+        blocker = self.issue(blocked_by)
+        self.api("DELETE", f"issues/{number}/dependencies/blocked_by/{blocker['id']}")
+
     def close_issue(self, number: int, reason: str = "not_planned") -> None:
         self.api("PATCH", f"issues/{number}", {"state": "closed", "state_reason": reason})
 
@@ -148,6 +153,15 @@ class GitHub:
         query = f"per_page={per_page}" + (f"&head_sha={sha}" if sha else "") + (f"&branch={branch}" if branch else "")
         data: dict[str, Any] = self.api("GET", f"actions/runs?{query}") or {}
         return data.get("workflow_runs", [])
+
+    def workflow_file_runs(self, file: str, branch: str, per_page: int = 50) -> list[dict[str, Any]]:
+        """One workflow's runs on a branch, newest first (workflow_runs lists every workflow's)."""
+        data: dict[str, Any] = self.api("GET", f"actions/workflows/{file}/runs?branch={branch}&per_page={per_page}") or {}
+        return data.get("workflow_runs", [])
+
+    def dispatch_workflow(self, file: str, ref: str, inputs: dict[str, str]) -> None:
+        """Start a workflow_dispatch run. GitHub answers 204 with no run id."""
+        self.api("POST", f"actions/workflows/{file}/dispatches", {"ref": ref, "inputs": inputs})
 
     def run_jobs(self, run_id: int, version: str | None = None) -> list[dict[str, Any]]:
         """A run's jobs. With a `version` (only for a completed run: its attempt and update time) the answer is remembered, since a

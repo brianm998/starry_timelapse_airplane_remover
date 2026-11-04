@@ -94,6 +94,15 @@ struct FilmstripImageView: View {
                       .shadow(radius: 1)
                       .help(localized("ui.this_frame_uses_selective_mode"))
                       .foregroundColor(self.processingColor)
+                case .dirtySky, .dirtyEarth:
+                    // the dirty methods reuse the automatic icon; the hover text says which
+                    AutoIcon()
+                      .padding(2)
+                      .shadow(radius: 1)
+                      .help(localized(frameView.cleanMethod == .dirtySky
+                                        ? "ui.this_frame_uses_dirty_sky"
+                                        : "ui.this_frame_uses_dirty_earth"))
+                      .foregroundColor(self.processingColor)
                 }
                 
                 

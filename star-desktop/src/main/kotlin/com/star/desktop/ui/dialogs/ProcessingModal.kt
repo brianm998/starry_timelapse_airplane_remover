@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -36,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameStateCounts
@@ -48,6 +50,7 @@ import com.star.desktop.ui.components.AlignmentInfoButton
 import com.star.desktop.ui.components.AlignmentInfoOverlay
 import com.star.desktop.ui.components.DeviationChart
 import com.star.desktop.ui.components.HoverTip
+import com.star.desktop.ui.components.widestWord
 import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
@@ -57,9 +60,39 @@ private val NAME_WIDTH = 180.dp
 private val NUMBER_WIDTH = 46.dp
 /** The time-left column between each bar and its counts. */
 private val ETA_WIDTH = 56.dp
+/** The least the modal is ever wide; a language whose column headings need more makes it wider (see [processingModalContentWidth]). */
+val PROCESSING_MODAL_MIN_WIDTH = 480.dp
+/** What the modal's own padding takes off its width: 20dp for the card and 20dp for the scrolling steps, each side. */
+private val PROCESSING_MODAL_PADDING = 80.dp
+private val ROW_GAP = 12.dp
+/** The bar is the cell that gives way, but not below this. */
+private val MIN_BAR_WIDTH = 80.dp
+
+/**
+ * The widths of the step rows' columns, which every row shares so the numbers line up under their headings. Each is the constant it always was,
+ * or more when a word of its text (a heading, a step name) is wider: a cell narrower than a word breaks the word in two.
+ */
+internal class ProcessingColumns(val name: Dp, val number: Dp, val eta: Dp) {
+    val count: Dp get() = number * 3
+    /** Every column and the gaps between them, with the bar at its least. */
+    val required: Dp get() = name + eta + count + ROW_GAP * 4 + MIN_BAR_WIDTH
+}
+
+@Composable
+internal fun rememberProcessingColumns(rows: List<StepRow>, extraction: Boolean = false): ProcessingColumns {
+    val headings = widestWord(listOf(localized("ui.queued"), localized("ui.running"), localized("ui.done")), 12.sp)
+    val ofM = widestWord(listOf(localized("ui.n_of_m_complete", 99999, 99999)), 12.sp)
+    // The heading may wrap at its space; an estimate is one line, as long as the longest the column shows ("9 h 59 min").
+    val eta = maxOf(widestWord(listOf(localized("ui.time_left")), 12.sp), widestWord(listOf(ProcessingHeadline.duration(9 * 3600.0 + 59 * 60)), 12.sp, wholeText = true))
+    val names = widestWord(rows.map { it.name } + (if (extraction) listOf(localized("ui.processing_step_extracting_video")) else emptyList()), 13.sp)
+    // The count under the extraction row is three number columns wide, so the widest word of "n of m complete" sets a third of it.
+    return ProcessingColumns(maxOf(NAME_WIDTH, names), maxOf(NUMBER_WIDTH, headings, ofM / 3), maxOf(ETA_WIDTH, eta))
+}
+
+/** The width of the steps' list at the least the modal is: the width the test lays the rows out at. */
+internal fun processingModalContentWidth(columns: ProcessingColumns): Dp = maxOf(PROCESSING_MODAL_MIN_WIDTH, columns.required + PROCESSING_MODAL_PADDING) - PROCESSING_MODAL_PADDING
 /** For what is finished or has nothing left: quieter than the white of what is live. */
 private val SETTLED = Color(0.68f, 0.68f, 0.68f)
-private val COUNT_WIDTH = NUMBER_WIDTH * 3
 
 /**
  * Whether this run's plan is complete, which is what the report's `graph_built` says. A report arrives as soon as the run starts, with every
@@ -92,10 +125,12 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
 
     // Return is the Preview button, the sheet's default one in the gui.
     // The tag is on the scrim, which merges the sheet's texts into its own node: one on a text inside it is not found.
+    val columns = rememberProcessingColumns(rows, extraction = extraction?.active == true)
+    val minWidth = processingModalContentWidth(columns) + PROCESSING_MODAL_PADDING
     Box(Modifier.fillMaxSize().background(StarColors.scrim).clickable(enabled = false) {}.testTag("processing.modal").defaultAction(svm::dismissProcessingModal), contentAlignment = Alignment.Center) {
         Column(
             Modifier
-                .widthIn(min = 480.dp, max = 640.dp)
+                .widthIn(min = minWidth, max = maxOf(640.dp, minWidth))
                 .padding(20.dp)
                 .clip(StarShapes.card)
                 .background(StarColors.prefsCard),
@@ -136,29 +171,45 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
                             .padding(horizontal = 10.dp, vertical = 5.dp),
                     )
                 }
-                Box(Modifier.weight(1f))
-                Text(
-                    localized("ui.preview_while_processing_help"), color = StarColors.white, fontSize = 11.sp,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.widthIn(max = 320.dp),
-                )
-                HoverTip(localized("ui.preview_while_processing_help")) {
-                    Button(onClick = svm::dismissProcessingModal, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
-                        Text(localized("ui.preview"))
-                    }
-                }
+                PreviewFooter(svm::dismissProcessingModal, Modifier.weight(1f))
             }
         }
         if (showingInfo) AlignmentInfoOverlay(cameraMoving) { showingInfo = false }
     }
 }
 
+/** The Preview button's least width: wide enough for "Preview" at the button's padding, and the floor for a short translation. */
+val PREVIEW_BUTTON_MIN_WIDTH = 104.dp
+
+/** The footer's right-hand side: what Preview does, and the Preview button (Return is the same button, from the scrim). */
+@Composable
+fun PreviewFooter(onPreview: () -> Unit, modifier: Modifier = Modifier, label: String = localized("ui.preview")) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+        // The button is measured first and keeps the width its label needs; the help text is the part that wraps when the dialog is narrow.
+        Text(
+            localized("ui.preview_while_processing_help"), color = StarColors.white, fontSize = 11.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1f, fill = false).widthIn(max = 320.dp).testTag("processing.previewHelp"),
+        )
+        HoverTip(localized("ui.preview_while_processing_help")) {
+            Button(onClick = onPreview, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.widthIn(min = PREVIEW_BUTTON_MIN_WIDTH).testTag("processing.previewButton"),
+            ) {
+                // One line in any language: the button is as wide as the label, not the label as wide as the room left over.
+                Text(label, maxLines = 1, softWrap = false, modifier = Modifier.testTag("processing.previewLabel"))
+            }
+        }
+    }
+}
+
 /** One bar per processing step, stacked in the order the daemon sends them (also drawn by the reopened-sequence panel, over what was found on disk). */
 @Composable
 internal fun StepsView(rows: List<StepRow>, hasReport: Boolean, extraction: com.star.proto.FrameExtraction? = null, estimates: Map<String, Double> = emptyMap()) {
+    val cols = rememberProcessingColumns(rows, extraction = extraction != null && extraction.active)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(localized("ui.steps"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         // Extracting the video's frames comes first, above the horizon, for frames that are being extracted from a video.
-        if (extraction != null && extraction.active) ExtractionRowView(extraction)
+        if (extraction != null && extraction.active) ExtractionRowView(extraction, cols)
         when {
             // Nothing reported yet: the run is still being planned.
             !hasReport -> Text("…", color = StarColors.textSecondary, fontSize = 12.sp)
@@ -168,12 +219,12 @@ internal fun StepsView(rows: List<StepRow>, hasReport: Boolean, extraction: com.
                 // Done above, Processing beneath it, each heading only while it has rows: a finishing step moves from one list to the other.
                 val (done, processing) = rows.partition { it.isDone }
                 if (done.isNotEmpty()) {
-                    GroupHeader(localized("ui.done"), showsCounts = true)
-                    done.forEach { StepRowView(it, isDone = true, estimates[it.type]) }
+                    GroupHeader(localized("ui.done"), showsCounts = true, cols)
+                    done.forEach { StepRowView(it, isDone = true, estimates[it.type], cols) }
                 }
                 if (processing.isNotEmpty()) {
-                    GroupHeader(localized("ui.processing"), showsCounts = done.isEmpty())
-                    processing.forEach { StepRowView(it, isDone = false, estimates[it.type]) }
+                    GroupHeader(localized("ui.processing"), showsCounts = done.isEmpty(), cols)
+                    processing.forEach { StepRowView(it, isDone = false, estimates[it.type], cols) }
                 }
             }
         }
@@ -182,62 +233,65 @@ internal fun StepsView(rows: List<StepRow>, hasReport: Boolean, extraction: com.
 
 /** A sub-label over a group of rows; the first one on screen also names the three number columns, which line up with every row below. */
 @Composable
-private fun GroupHeader(title: String, showsCounts: Boolean) {
-    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun GroupHeader(title: String, showsCounts: Boolean, cols: ProcessingColumns) {
+    Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ROW_GAP)) {
         Text(title, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.weight(1f))
         if (showsCounts) {
-            EtaColumn(localized("ui.time_left"), StarColors.textSecondary)
-            CountColumns(localized("ui.queued"), localized("ui.running"), localized("ui.done"), List(3) { StarColors.textSecondary })
+            EtaColumn(localized("ui.time_left"), cols, StarColors.textSecondary, heading = true)
+            CountColumns(localized("ui.queued"), localized("ui.running"), localized("ui.done"), List(3) { StarColors.textSecondary }, cols, heading = true)
         }
     }
 }
 
-/** The queued, running and done columns. */
+/**
+ * The queued, running and done columns. A [heading] is a word or two that may wrap at its space onto a second line (the column is as wide as its
+ * widest word); the numbers under it are one line each.
+ */
 @Composable
-private fun CountColumns(queued: String, running: String, done: String, colors: List<Color>) {
+private fun CountColumns(queued: String, running: String, done: String, colors: List<Color>, cols: ProcessingColumns, heading: Boolean = false) {
     Row {
         for ((index, text) in listOf(queued, running, done).withIndex()) {
-            Text(text, color = colors[index], fontSize = 12.sp, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(NUMBER_WIDTH))
+            Text(text, color = colors[index], fontSize = 12.sp, maxLines = if (heading) 2 else 1, softWrap = heading, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(cols.number))
         }
     }
 }
 
 /** The time left for a step, in the column beside its bar; empty until there is a rate to go on. */
 @Composable
-private fun EtaColumn(text: String, color: Color = Color.White) {
-    Text(text, color = color, fontSize = 12.sp, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(ETA_WIDTH))
+private fun EtaColumn(text: String, cols: ProcessingColumns, color: Color = Color.White, heading: Boolean = false) {
+    Text(text, color = color, fontSize = 12.sp, maxLines = if (heading) 2 else 1, softWrap = heading, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(cols.eta))
 }
 
 private fun etaText(seconds: Double?): String = if (seconds == null || !seconds.isFinite()) "" else ProcessingHeadline.duration(seconds)
 
 @Composable
-private fun ExtractionRowView(e: com.star.proto.FrameExtraction) {
+private fun ExtractionRowView(e: com.star.proto.FrameExtraction, cols: ProcessingColumns) {
     val name = localized("ui.processing_step_extracting_video")
     HoverTip(name) {
-        Row(Modifier.fillMaxWidth().testTag("processing.extraction"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(name, color = StarColors.white, fontSize = 13.sp, maxLines = 2, modifier = Modifier.width(NAME_WIDTH))
+        Row(Modifier.fillMaxWidth().testTag("processing.extraction"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ROW_GAP)) {
+            Text(name, color = StarColors.white, fontSize = 13.sp, maxLines = 2, modifier = Modifier.width(cols.name))
             val done = if (e.total > 0) (e.extracted.toFloat() / e.total).coerceIn(0f, 1f) else 0f
             Row(Modifier.weight(1f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(Color(0.32f, 0.32f, 0.32f))) {
                 if (done > 0f) Box(Modifier.weight(done).fillMaxHeight().background(StarColors.green))
                 if (done < 1f) Box(Modifier.weight(1f - done).fillMaxHeight())
             }
-            EtaColumn(if (e.complete || !e.etaKnown) "" else etaText(e.etaSeconds))
+            EtaColumn(if (e.complete || !e.etaKnown) "" else etaText(e.etaSeconds), cols)
             Text(
                 localized("ui.n_of_m_complete", e.extracted, e.total),
                 color = StarColors.white, fontSize = 12.sp, maxLines = 2,
-                textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(COUNT_WIDTH),
+                textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(cols.count),
             )
         }
     }
 }
 
 @Composable
-private fun StepRowView(step: StepRow, isDone: Boolean, secondsLeft: Double?) {
+internal fun StepRowView(step: StepRow, isDone: Boolean, secondsLeft: Double?, cols: ProcessingColumns) {
     HoverTip(step.help) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(step.name, color = if (!step.hasWork) StarColors.textSecondary else if (isDone) SETTLED else StarColors.white, fontSize = 13.sp, maxLines = 2, modifier = Modifier.width(NAME_WIDTH))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(ROW_GAP)) {
+            Text(step.name, color = if (!step.hasWork) StarColors.textSecondary else if (isDone) SETTLED else StarColors.white, fontSize = 13.sp, maxLines = 2, modifier = Modifier.width(cols.name))
             StepBar(step, Modifier.weight(1f))
-            EtaColumn(if (isDone) "" else etaText(secondsLeft))
+            EtaColumn(if (isDone) "" else etaText(secondsLeft), cols)
             // A step with no operations is only on screen while the plan is still being worked out, so this says "not known yet".
             // A column goes quiet when it has nothing to say: nothing queued, nothing running, or everything done.
             if (step.hasWork) CountColumns(
@@ -247,8 +301,9 @@ private fun StepRowView(step: StepRow, isDone: Boolean, secondsLeft: Double?) {
                     if (step.running == 0) SETTLED else StarColors.white,
                     if (step.completed == step.total) SETTLED else StarColors.white,
                 ),
+                cols,
             )
-            else Text("—", color = StarColors.textSecondary, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(COUNT_WIDTH))
+            else Text("—", color = StarColors.textSecondary, fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.width(cols.count))
         }
     }
 }

@@ -23,12 +23,14 @@ name: Gherkin
 # Test data is fetched from the `test-data` release (test_data/datasets.json) into .test-data by every job, and is NOT cached:
 # one actions/cache entry per (client, feature) held 7.6 GiB of the ~9.9 GiB in use against the repository's 10 GB Actions cache limit
 # (the same dataset stored once per feature that uses it), so every save evicted something that was expensive to rebuild (the
-# macOS and Windows ffmpeg, the Windows OpenCV and StarDecisionTrees) and those rebuilt on every run.  A release download is seconds; see
+# macOS and Windows ffmpeg, StarDecisionTrees) and those rebuilt on every run.  A release download is seconds; see
 # https://docs.github.com/actions/using-workflows/caching-dependencies-to-speed-up-workflows#usage-limits-and-eviction-policy
 #
 # The @ui features that start from a processed sequence (`a processed copy of the sequence`) need the fixture that gherkin/ui/make-processed-fixture.sh
-# makes with the release cli.  The `ui` job of each of mac-gui, desktop-linux, desktop-windows and desktop-macos therefore has a step that builds the cli
-# and makes the fixture once (about 180 MB, deliberately not cached, see above); a cli that cannot be built fails that step.
+# makes with the release cli.  The `ui` shard of each of mac-gui, desktop-linux, desktop-windows and desktop-macos therefore has a step that makes the
+# fixture once, before the features (about 180 MB, deliberately not cached, see above): desktop-linux and desktop-windows build the cli in a step of their
+# own and fail it with an `::error::` if they cannot; the macOS legs take build-macos's cli, whose failure turns the workflow red.  Each step exports
+# STAR_CLI_PATH, STAR_UI_FIXTURES and STAR_CLI_BUILD=0, so every feature's call of the script finds the same directory and never builds the cli itself.
 #
 # Every leg ends with a "vacuous green" check: it fails the job unless the log (or the Gradle XML) shows that every feature of the
 # shard ran, passed and was not skipped (gherkin/prove-xctest-features.sh, gherkin/run-desktop-features.sh). Exit codes alone are not
@@ -38,27 +40,22 @@ name: Gherkin
 # `star-removal-verify` as a subprocess, so the shards holding one (`trail` in the matrix entry: the list is in the `features` job)
 # build trail_tools in release first. Its reports and crops ride on each job's gherkin-artifacts upload. See gherkin/README.md.
 #
+# The full matrix above runs on pushes to develop/main and by hand; it is NOT what a PR runs (the pipeline would not wait for ~3 h).
+# A PR runs "Gherkin smoke" (gherkin-smoke.yml), this same file in smoke mode: one feature per leg from gherkin/smoke.json, which
+# the CI judge waits for and blocks on. See "The smoke subset on a PR" in gherkin/README.md.
+#
 # DUPLICATED ON PURPOSE (collapse into reusable workflows later, see gherkin/README.md): the apt/Eigen/
-# Swift/MSVC/OpenCV/StarDecisionTrees setup of cli.yml's `linux`/`macos`/`windows` jobs, the stard build
+# Swift/MSVC/StarDecisionTrees setup of cli.yml's `linux`/`macos`/`windows` jobs, the stard build
 # steps of kotlin-client.yml's linux-package/windows-package/macos-signed jobs, and cli.yml's
-# ci-assets fetch for the GUI. Their cache keys are shared with those jobs.
+# ci-assets fetch for the GUI. Their cache keys are shared with those jobs. OpenCV is not duplicated: it comes from opencv.yml
+# (jobs opencv-linux/-macos/-windows below), the artifact opencv-<os> downloaded into opencv/.
 
+# A push to develop does NOT start it any more: the full matrix takes 3-4 h and a newer push cancelled the older run, so on a busy day
+# none finished. The starpipe daemon dispatches ONE full run a night (23:00 local, pipeline/src/starpipe/gherkin_nightly.py) when
+# a file this workflow's own `paths` list names changed since the last green full run. See gherkin/README.md, "When the full matrix runs".
 on:
   push:
-    branches: [main, develop]
-    paths:
-      - 'gherkin/**'
-      - 'test_data/**'
-      - 'cli/**'
-      - 'gui/**'
-      - 'star-desktop/**'
-      - 'daemon/**'
-      - 'StarCore/**'
-      - 'StarCpp/**'
-      - 'trail_tools/**'
-      - '.github/workflows/gherkin.yml'
-  pull_request:
-    branches: [main, develop]
+    branches: [main]
     paths:
       - 'gherkin/**'
       - 'test_data/**'
@@ -76,13 +73,38 @@ on:
         description: 'Comma-separated feature names to run (default: all), e.g. autoHorizonJpeg,selectiveHorizonTiff16'
         required: false
         default: ''
+  # gherkin-smoke.yml ("Gherkin smoke", what a PR runs) calls this file with `smoke: true`: the features come from gherkin/smoke.json
+  # instead of the full lists. There is no pull_request trigger here: a PR gets the smoke workflow, and the full matrix runs on pushes.
+  workflow_call:
+    inputs:
+      smoke:
+        description: 'Run only the features of gherkin/smoke.json'
+        type: boolean
+        default: false
+      features:
+        description: 'Comma-separated feature names to run (default: all)'
+        type: string
+        default: ''
+      windows:
+        description: "Which legs run: 'run' (all, the default; also when empty, as under workflow_dispatch), 'skip' (no Windows legs), 'only' (just the Windows legs and what they need)"
+        type: string
+        default: run
+
+# The run name tells a full run from a subset: the daemon counts only `Gherkin: full` (or a push, which was always full) as a
+# green full run, never `Gherkin: <features>`. Other events keep GitHub's own title (the PR title, the head commit message).
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('Gherkin: {0}', inputs.features || 'full') || github.event.pull_request.title || github.event.head_commit.message }}"
+
+# gherkin-smoke.yml grants its caller job contents: write so the opencv-<os> jobs can save a build as a release asset; every other job here
+# only reads
+permissions:
+  contents: read
 
 concurrency:
   group: gherkin-${{ github.workflow }}-${{ github.ref }}
-  # a newer push to develop supersedes the older develop runs still going, so a burst of pushes does not queue several
-  # long runs; release tags have their own group and are never cancelled. The pipeline's develop watch skips cancelled
-  # runs, so the CI judge's baseline stays the last run that ended success or failure.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
+  # a newer push to a PR supersedes the older run still going; the nightly dispatch on the base branch and release pushes to main
+  # are never cancelled by a newer one. The pipeline's watch skips cancelled runs, so the CI judge's baseline stays the last
+  # run that ended success or failure.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ─── The matrix: which features each client runs, in which shards ────────────
@@ -103,6 +125,7 @@ jobs:
       - id: m
         env:
           ONLY: ${{ inputs.features }}
+          SMOKE: ${{ inputs.smoke }}
           # shards per client: the knob for trading job count (setup paid once per shard) against how long one shard runs serially
           SHARDS_CLI: 4
           SHARDS_MAC_GUI: 3
@@ -130,7 +153,17 @@ jobs:
                 features: (.features | join(" "))
               })'
           for c in cli mac-gui desktop; do
-            if [ -n "$ONLY" ]; then
+            if [ "$SMOKE" = true ]; then
+              # smoke mode: the features listed for this client in gherkin/smoke.json. A listed name that is not a feature of the client
+              # (renamed, removed, never tagged for it) or an empty list is an error: either would leave the leg with no shards, skipped,
+              # and the smoke run would be green having run nothing.
+              arr=$(jq -c --arg c "$c" '.[$c] // []' gherkin/smoke.json)
+              missing=$(jq -nr --argjson s "$arr" --slurpfile a "gherkin/generated/features-$c.json" '$s - $a[0] | join(", ")')
+              if [ "$arr" = '[]' ] || [ -n "$missing" ]; then
+                echo "::error::gherkin/smoke.json: the list for $c is empty or names features $c does not run: ${missing:-(none listed)}"
+                exit 1
+              fi
+            elif [ -n "$ONLY" ]; then
               arr=$(jq -c --arg only "$ONLY" '[ .[] | select(. as $f | ($only | split(",") | map(gsub("[ ]";"")) | index($f)) != null) ]' "gherkin/generated/features-$c.json")
             else
               arr=$(jq -c . "gherkin/generated/features-$c.json")
@@ -147,6 +180,7 @@ jobs:
   # iMac's) and this gem produce byte-identical output.
   generate-check:
     name: generated files are current
+    if: inputs.windows != 'only'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -179,8 +213,8 @@ jobs:
   cli-linux:
     name: cli (ubuntu-24.04) · ${{ matrix.shard.label }}
     runs-on: ubuntu-24.04
-    needs: [features, ffmpeg-linux]
-    if: needs.features.outputs.cli != '[]'
+    needs: [features, ffmpeg-linux, opencv-linux]
+    if: needs.features.outputs.cli != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
       matrix:
@@ -212,13 +246,11 @@ jobs:
         with:
           swift-version: '6.0'
 
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/linux
-            opencv/include
-          key: opencv-linux-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          name: opencv-linux
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -227,10 +259,6 @@ jobs:
             StarDecisionTrees/lib/release/linux
             StarDecisionTrees/include/release/linux
           key: dt-linux-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/linux/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -250,9 +278,8 @@ jobs:
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
-      - name: Build the output validator
-        shell: bash
-        run: swift build -c release --package-path removal_tools
+      - name: Output validator (restored from cache, built only on a miss)
+        uses: ./.github/actions/output-validator
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
@@ -299,8 +326,8 @@ jobs:
   cli-windows:
     name: cli (windows-2022) · ${{ matrix.shard.label }}
     runs-on: windows-2022
-    needs: [features, ffmpeg-windows]
-    if: needs.features.outputs.cli != '[]'
+    needs: [features, ffmpeg-windows, opencv-windows]
+    if: needs.features.outputs.cli != '[]' && inputs.windows != 'skip'
     strategy:
       fail-fast: false
       matrix:
@@ -404,13 +431,11 @@ jobs:
               }
           }
 
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/windows
-            opencv/include
-          key: opencv-windows-msvc14.40-sdk22621-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          name: opencv-windows
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -419,10 +444,6 @@ jobs:
             StarDecisionTrees/lib/release/windows
             StarDecisionTrees/include/release/windows
           key: dt-windows-msvc14.40-sdk22621-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/windows/opencv2.lib ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -452,9 +473,8 @@ jobs:
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
-      - name: Build the output validator
-        shell: bash
-        run: swift build -c release --package-path removal_tools
+      - name: Output validator (restored from cache, built only on a miss)
+        uses: ./.github/actions/output-validator
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
@@ -503,11 +523,95 @@ jobs:
           path: ${{ runner.temp }}/gherkin-artifacts
           if-no-files-found: warn
 
+  # ─── macOS: one build of the binaries the three macOS legs run ───────────────
+  # cli-macos, mac-gui and desktop-macos each used to build the same star / stard / output validator on the same runner image (the validator
+  # alone links all of StarCore: ~3 min per leg, stard another ~4 in desktop-macos).  They are built once here and shared as the artifact
+  # gherkin-bin-macos: one directory per package (removal_tools, trail_tools, cli, daemon) holding the executables and the SwiftPM resource
+  # bundles that sit beside them (StarResources looks there first, see StarCore/Sources/StarCore/StarResources.swift).  A leg downloads it
+  # into <package>/.build/release/, the place its runner already looks, and restores the executable bit (upload-artifact drops the mode).
+  # Only what some shard of some leg uses is built: the `"validator":true` / `"trail":true` / `"name":"ui"` tests read the matrix JSON above.
+  build-macos:
+    name: build star, stard and the validators (macos-15)
+    runs-on: macos-15
+    needs: [features, opencv-macos]
+    if: (needs.features.outputs.cli != '[]' || needs.features.outputs.macgui != '[]' || needs.features.outputs.desktop != '[]') && inputs.windows != 'only'
+    timeout-minutes: 60
+    env:
+      NEED_VALIDATOR: ${{ contains(needs.features.outputs.cli, '"validator":true') || contains(needs.features.outputs.macgui, '"validator":true') || contains(needs.features.outputs.desktop, '"validator":true') }}
+      NEED_TRAIL: ${{ contains(needs.features.outputs.cli, '"trail":true') || contains(needs.features.outputs.macgui, '"trail":true') || contains(needs.features.outputs.desktop, '"trail":true') }}
+      NEED_CLI: ${{ contains(needs.features.outputs.macgui, '"name":"ui"') || contains(needs.features.outputs.desktop, '"name":"ui"') }}
+      NEED_STARD: ${{ needs.features.outputs.desktop != '[]' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # The StarDecisionTrees .swiftmodule only imports under the compiler that built it, and cli.yml's macos-14 jobs share the plain
+      # dt-macos key with a different Swift: key this one on the toolchain.
+      - name: Toolchain id for the cache key
+        id: toolchain
+        run: echo "id=$(xcodebuild -version | tr -c 'A-Za-z0-9.\n' _ | tr '\n' - | sed 's/-$//')" >> "$GITHUB_OUTPUT"
+
+      - name: Install Eigen3 via Homebrew
+        run: brew install eigen
+
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
+        with:
+          name: opencv-macos
+          path: opencv
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/macos
+            StarDecisionTrees/include/release/macos
+          key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build StarDecisionTrees (if not cached)
+        run: |
+          if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
+
+      # Each product is built, then copied with its resource bundles into $RUNNER_TEMP/gherkin-bin/<package>/ (cp fails, and so does the
+      # job, if a product is missing).  The bin path comes from `swift build --show-bin-path`, not a guessed .build/release.
+      - name: Build and stage the binaries
+        shell: bash
+        run: |
+          stage() {   # stage <package dir> <product>
+            pkg="$1"; exe="$2"
+            swift build -c release --package-path "$pkg"
+            bin="$(swift build -c release --package-path "$pkg" --show-bin-path)"
+            mkdir -p "$RUNNER_TEMP/gherkin-bin/$pkg"
+            cp "$bin/$exe" "$RUNNER_TEMP/gherkin-bin/$pkg/"
+            for r in "$bin"/*.bundle "$bin"/*.resources; do if [ -e "$r" ]; then cp -R "$r" "$RUNNER_TEMP/gherkin-bin/$pkg/"; fi; done
+            ls -l "$RUNNER_TEMP/gherkin-bin/$pkg"
+          }
+          # removal_tools/star-output-verify: every client's runner calls it for the validation steps (the @ui features have none)
+          if [ "$NEED_VALIDATOR" = true ]; then stage removal_tools star-output-verify; fi
+          # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator is unrelated)
+          if [ "$NEED_TRAIL" = true ]; then stage trail_tools star-removal-verify; fi
+          # the cli: the mac gui and desktop legs make the processed fixture of their @ui features with it
+          if [ "$NEED_CLI" = true ]; then stage cli star; fi
+          # stard: the desktop client's daemon
+          if [ "$NEED_STARD" = true ]; then stage daemon stard; fi
+
+      - name: Upload the binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-bin-macos
+          path: ${{ runner.temp }}/gherkin-bin
+          if-no-files-found: error
+          retention-days: 3
+
   cli-macos:
     name: cli (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
-    needs: [features, ffmpeg-macos]
-    if: needs.features.outputs.cli != '[]'
+    needs: [features, ffmpeg-macos, opencv-macos, build-macos]
+    if: needs.features.outputs.cli != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
       matrix:
@@ -540,13 +644,11 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/macos
-            opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          name: opencv-macos
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -555,10 +657,6 @@ jobs:
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
           key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/macos/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -577,18 +675,28 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
-      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.
-      - name: Build the output validator
-        shell: bash
-        run: swift build -c release --package-path removal_tools
+      # removal_tools/star-output-verify (every client's runner calls it for the validation steps) and trail_tools/star-removal-verify (the
+      # trail-removal features' Then steps run it as a subprocess) come from build-macos, into the .build/release the runner looks in.
+      # The star under test is still the one `swift test` below builds: it is a -enable-testing build of the same package.
+      - name: Fetch the shared binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: gherkin-bin-macos
+          path: ${{ runner.temp }}/gherkin-bin
 
-      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
-      - name: Build the trail verifier (release)
-        if: ${{ matrix.shard.trail }}
+      - name: Put the binaries in place and make them executable
         shell: bash
         run: |
-          swift build -c release --package-path trail_tools
-          echo "STAR_REMOVAL_REPORTS=${{ runner.temp }}/gherkin-artifacts/removal" >> "$GITHUB_ENV"
+          for d in removal_tools trail_tools; do
+            src="$RUNNER_TEMP/gherkin-bin/$d"
+            [ -d "$src" ] || continue
+            mkdir -p "$d/.build/release"
+            cp -R "$src/." "$d/.build/release/"
+            find "$d/.build/release" -maxdepth 1 -type f -exec chmod +x {} +
+          done
+          if [ "${{ matrix.shard.trail }}" = true ]; then
+            echo "STAR_REMOVAL_REPORTS=${{ runner.temp }}/gherkin-artifacts/removal" >> "$GITHUB_ENV"
+          fi
 
       - name: Run the Gherkin features against the built star
         # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target
@@ -626,31 +734,62 @@ jobs:
   # ffmpeg-gpu.yml once per OS, so a leg waits for the ffmpeg of its own OS only.  One call for all three made every job wait for
   # the slowest build, and when the macOS or Windows cache was cold (20+ minutes) the Linux jobs sat behind it.
   ffmpeg-linux:
+    if: inputs.windows != 'only'
     uses: ./.github/workflows/ffmpeg-gpu.yml
     with:
       platforms: linux
 
   ffmpeg-macos:
+    if: inputs.windows != 'only'
     uses: ./.github/workflows/ffmpeg-gpu.yml
     with:
       platforms: macos
 
   ffmpeg-windows:
+    if: inputs.windows != 'skip'
     uses: ./.github/workflows/ffmpeg-gpu.yml
+    with:
+      platforms: windows
+
+  # opencv.yml once per OS (cache, then the opencv-prebuilt release, then a build), so a leg waits for the OpenCV of its own OS only.
+  opencv-linux:
+    name: OpenCV (linux)
+    if: inputs.windows != 'only'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: linux
+
+  opencv-macos:
+    name: OpenCV (macos)
+    if: inputs.windows != 'only'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: macos
+
+  opencv-windows:
+    name: OpenCV (windows)
+    if: inputs.windows != 'skip'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
     with:
       platforms: windows
 
   mac-gui:
     name: mac gui (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
-    needs: [features, ffmpeg-macos]
-    if: needs.features.outputs.macgui != '[]'
+    needs: [features, ffmpeg-macos, opencv-macos, build-macos]
+    if: needs.features.outputs.macgui != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
       matrix:
         shard: ${{ fromJSON(needs.features.outputs.macgui) }}
     # a shard runs its features one after the other in the one build (the `ui` shard: every @ui feature); one old job's allowance per feature
-    timeout-minutes: ${{ matrix.shard.name == 'ui' && 150 || matrix.shard.minutes['90'] }}
+    timeout-minutes: ${{ matrix.shard.name == 'ui' && 120 || matrix.shard.minutes['90'] }}
     steps:
       - uses: actions/checkout@v4
 
@@ -691,13 +830,11 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/macos
-            opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          name: opencv-macos
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -706,10 +843,6 @@ jobs:
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
           key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/macos/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -736,13 +869,33 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
-      # The @ui features that start from the processed sequence (`a processed copy of the sequence`, see gherkin/ui/README.md) need the
-      # fixture the release cli makes: built here, once, so the build is visible and a cli that cannot be built fails this step, instead of
-      # being built inside the first feature or leaving the features skipped.  The runners call make-processed-fixture.sh for every
-      # feature; the exports below make each call name the same <sequence>-<cli stamp> directory and take its READY shortcut.  STAR_CLI_BUILD=0
-      # (the runners default it to 1) keeps a missing cli an error.  Not an actions/cache entry, deliberately: see the header on the cache
-      # budget.  The fixture is about 180 MB per leg and its key would change with nearly every push (cli/, StarCore/, StarCpp/).
-      - name: Make the processed fixture (release cli, once)
+      # removal_tools/star-output-verify (every client's runner calls it for the validation steps; the @ui features have none), trail_tools/
+      # star-removal-verify (the trail-removal features' Then steps run it as a subprocess) and, for the @ui shard, the cli, all come from
+      # build-macos, into the .build/release the runners look in: no `swift build` here.
+      - name: Fetch the shared binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: gherkin-bin-macos
+          path: ${{ runner.temp }}/gherkin-bin
+
+      - name: Put the binaries in place and make them executable
+        shell: bash
+        run: |
+          for d in removal_tools trail_tools cli; do
+            src="$RUNNER_TEMP/gherkin-bin/$d"
+            [ -d "$src" ] || continue
+            mkdir -p "$d/.build/release"
+            cp -R "$src/." "$d/.build/release/"
+            find "$d/.build/release" -maxdepth 1 -type f -exec chmod +x {} +
+          done
+
+      # The @ui features that start from a processed sequence ask for one made by the cli (gherkin/ui/make-processed-fixture.sh). The UI-test
+      # runner is sandboxed (`swift build` there dies with "xcrun: error: cannot be used within an App Sandbox") and it cannot write the
+      # fixture into the workspace, so the fixture is made here, once, with the shared cli of build-macos (a build that fails there turns the
+      # workflow red, so it is reported, not skipped); the runner finds it ready: the same cli binary gives the same fixture directory.
+      # STAR_UI_FIXTURES and STAR_CLI_BUILD=0 go to the runner too (TEST_RUNNER_ twins, on the xcodebuild step below), so a missing cli is
+      # an error and never a `swift build`.  Not an actions/cache entry: see the header.
+      - name: Make the processed fixture for the @ui features
         shell: bash
         env:
           FEATURES: ${{ matrix.shard.features }}
@@ -750,17 +903,13 @@ jobs:
           STAR_SYSTEM_FLOOR_MB: 512
         run: |
           set -euo pipefail
-          # only a shard with a feature that starts from the processed sequence needs the fixture (the `ui` shard)
           need=false
           for n in $FEATURES; do
             if grep -q 'a processed copy of the sequence' "gherkin/features/$n.feature"; then need=true; fi
           done
           if [ "$need" = false ]; then echo "no feature of this shard needs the processed fixture"; exit 0; fi
-          fail() { echo "::error::$1"; exit 1; }
-          swift build -c release --package-path cli || fail "the star cli could not be built on this runner (mac gui (macos-15)), so the processed-fixture @ui features cannot run"
-          BIN="$(swift build -c release --package-path cli --show-bin-path)/star"
-          [ -x "$BIN" ] || fail "the star cli build left no $BIN (mac gui (macos-15))"
-          CLI="$BIN"
+          CLI="$GITHUB_WORKSPACE/cli/.build/release/star"
+          if [ ! -x "$CLI" ]; then echo "::error::no star cli at $CLI (mac gui (macos-15)): gherkin-bin-macos from build-macos did not hold one, so the processed-fixture @ui features cannot run"; exit 1; fi
           FIXTURES="$GITHUB_WORKSPACE/.test-data/ui-processed"
           export STAR_CLI_PATH="$CLI" STAR_UI_FIXTURES="$FIXTURES" STAR_CLI_BUILD=0
           gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
@@ -768,25 +917,7 @@ jobs:
             echo "STAR_CLI_PATH=$CLI"
             echo "STAR_UI_FIXTURES=$FIXTURES"
             echo "STAR_CLI_BUILD=0"
-            # xcodebuild strips TEST_RUNNER_ and hands the rest to the UI-test runner
-            echo "TEST_RUNNER_STAR_CLI_PATH=$CLI"
-            echo "TEST_RUNNER_STAR_UI_FIXTURES=$FIXTURES"
-            echo "TEST_RUNNER_STAR_CLI_BUILD=0"
           } >> "$GITHUB_ENV"
-
-      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
-      # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
-      - name: Build the output validator
-        if: ${{ matrix.shard.validator }}
-        shell: bash
-        run: swift build -c release --package-path removal_tools
-
-      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
-      - name: Build the trail verifier (release)
-        if: ${{ matrix.shard.trail }}
-        shell: bash
-        run: |
-          swift build -c release --package-path trail_tools
 
       # Release, but ENABLE_TESTABILITY=YES: the scheme's other test target (starTests) is `@testable import Star`, and Release
       # builds every test target even under -only-testing.
@@ -800,6 +931,9 @@ jobs:
           STAR_SYSTEM_FLOOR_MB: 512
           TEST_RUNNER_STAR_SYSTEM_FLOOR_MB: 512
           TEST_RUNNER_STAR_FFMPEG_DIR: ${{ github.workspace }}/external_binaries/bin
+          TEST_RUNNER_STAR_CLI_PATH: ${{ env.STAR_CLI_PATH }}
+          TEST_RUNNER_STAR_UI_FIXTURES: ${{ env.STAR_UI_FIXTURES }}
+          TEST_RUNNER_STAR_CLI_BUILD: 0
         run: |
           set -o pipefail
           xcodebuild test \
@@ -840,11 +974,20 @@ jobs:
           path: ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gherkin-artifacts
           if-no-files-found: warn
 
+      - name: Upload the gallery screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-gui-shard-${{ matrix.shard.name }}-gallery
+          # the sandboxed runner cannot write into the workspace, so the gallery falls back to its container's tmp
+          path: ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gallery
+          if-no-files-found: ignore
+
   desktop-linux:
     name: desktop (ubuntu-24.04) · ${{ matrix.shard.label }}
     runs-on: ubuntu-24.04
-    needs: [features, ffmpeg-linux]
-    if: needs.features.outputs.desktop != '[]'
+    needs: [features, ffmpeg-linux, opencv-linux]
+    if: needs.features.outputs.desktop != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
       matrix:
@@ -870,20 +1013,18 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake make git pkg-config perl dpkg-dev zip \
             libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev \
-            libcurl4-openssl-dev
+            libcurl4-openssl-dev gdb
 
       - name: Set up Swift
         uses: SwiftyLab/setup-swift@latest
         with:
           swift-version: '6.0'
 
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/linux
-            opencv/include
-          key: opencv-linux-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          name: opencv-linux
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -892,10 +1033,6 @@ jobs:
             StarDecisionTrees/lib/release/linux
             StarDecisionTrees/include/release/linux
           key: dt-linux-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/linux/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -952,10 +1089,9 @@ jobs:
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
-      - name: Build the output validator
+      - name: Output validator (restored from cache, built only on a miss)
         if: ${{ matrix.shard.validator }}
-        shell: bash
-        run: swift build -c release --package-path removal_tools
+        uses: ./.github/actions/output-validator
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
@@ -970,21 +1106,24 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # release.sh cloned OpenCV above, and its Android sample wrapper jar is not one setup-gradle recognises.
-      - name: Drop OpenCV's vendored Android Gradle wrapper
-        run: rm -rf opencv/opencv/platforms/android
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
       # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.
       # stard intermittently wedges outright after frame 0's alignment (no governor line for the rest of the run, so it is stuck, not slow;
       # autoHorizonVideo, about 3 runs in 14), and the whole 50 minutes of the test timeout go by. A passing autoHorizonVideo leg takes
-      # 8-13 minutes, so cut an attempt off at 25 and try once more; the retry kills any stard left behind. Root cause: filed as a follow-up.
+      # 8-13 minutes, so cut an attempt off at 25 and try once more; the retry kills any stard left behind.
+      # Root cause (ticket #54): gherkin/hang-watchdog.sh runs beside the features and, after 6 minutes of a silent stard.log (before the
+      # 10 minute ProgressStall and the 25 minute cut), prints ps, stard's thread stacks and a jstack of the test JVM into this step's log.
+      # Read that dump in the next hung run; it is what the fix is built from.
       - name: Run the Gherkin features in the Compose UI
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
+          STAR_HANG_WATCHDOG_SECONDS: '360'
         uses: nick-fields/retry@v3
         with:
           # an attempt of a shard is all its features; a retry runs only those that failed (the script keeps what passed)
@@ -994,7 +1133,7 @@ jobs:
           polling_interval_seconds: 5
           warning_on_retry: true
           # The killed run's marker would make the next stard report a crashed run and cover the UI with an alert.
-          on_retry_command: pkill -x stard || true; rm -rf star-desktop/build/run-markers
+          on_retry_command: pkill -x stard || true; rm -rf star-desktop/build/run-markers; pkill -f 'hang-watchdog[.]sh' || true
           shell: bash
           command: gherkin/run-desktop-features.sh "$GITHUB_WORKSPACE/daemon/.build/release/stard" ${{ matrix.shard.features }}
 
@@ -1027,8 +1166,8 @@ jobs:
   desktop-windows:
     name: desktop (windows-2022) · ${{ matrix.shard.label }}
     runs-on: windows-2022
-    needs: [features, ffmpeg-windows]
-    if: needs.features.outputs.desktop != '[]'
+    needs: [features, ffmpeg-windows, opencv-windows]
+    if: needs.features.outputs.desktop != '[]' && inputs.windows != 'skip'
     strategy:
       fail-fast: false
       matrix:
@@ -1135,13 +1274,11 @@ jobs:
               }
           }
 
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/windows
-            opencv/include
-          key: opencv-windows-msvc14.40-sdk22621-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          name: opencv-windows
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -1150,10 +1287,6 @@ jobs:
             StarDecisionTrees/lib/release/windows
             StarDecisionTrees/include/release/windows
           key: dt-windows-msvc14.40-sdk22621-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/windows/opencv2.lib ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -1212,10 +1345,9 @@ jobs:
 
       # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
       # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
-      - name: Build the output validator
+      - name: Output validator (restored from cache, built only on a miss)
         if: ${{ matrix.shard.validator }}
-        shell: bash
-        run: swift build -c release --package-path removal_tools
+        uses: ./.github/actions/output-validator
 
       # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
       - name: Build the trail verifier (release)
@@ -1230,11 +1362,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Drop OpenCV's vendored Android Gradle wrapper
-        run: rm -rf opencv/opencv/platforms/android
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
       # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.
@@ -1271,15 +1403,15 @@ jobs:
   desktop-macos:
     name: desktop (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
-    needs: [features, ffmpeg-macos]
-    if: needs.features.outputs.desktop != '[]'
+    needs: [features, ffmpeg-macos, build-macos]
+    if: needs.features.outputs.desktop != '[]' && inputs.windows != 'only'
     strategy:
       fail-fast: false
       matrix:
         shard: ${{ fromJSON(needs.features.outputs.desktop) }}
     # a shard runs its features one after the other in the one build (the `ui` shard: every @ui feature); one old job's allowance per feature
     # (`minutes` in the matrix entry: capped at 360, the hosted-runner limit)
-    timeout-minutes: ${{ matrix.shard.name == 'ui' && 180 || matrix.shard.minutes['100'] }}
+    timeout-minutes: ${{ matrix.shard.name == 'ui' && 150 || matrix.shard.minutes['100'] }}
     steps:
       - uses: actions/checkout@v4
 
@@ -1292,48 +1424,6 @@ jobs:
         run: |
           names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-desktop.json; done | sort -u)
           if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "$FEATURES needs no test data"; fi
-
-      - name: Select latest Xcode (Swift 6)
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      # The StarDecisionTrees .swiftmodule only imports under the compiler that built it, and cli.yml's macos-14 jobs share the plain
-      # dt-macos key with a different Swift: key this one on the toolchain.
-      - name: Toolchain id for the cache key
-        id: toolchain
-        run: echo "id=$(xcodebuild -version | tr -c 'A-Za-z0-9.\n' _ | tr '\n' - | sed 's/-$//')" >> "$GITHUB_OUTPUT"
-
-      - name: Install Eigen3 via Homebrew
-        run: brew install eigen
-
-      - name: Cache OpenCV
-        uses: actions/cache@v4
-        with:
-          path: |
-            opencv/lib/macos
-            opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
-
-      - name: Cache StarDecisionTrees
-        uses: actions/cache@v4
-        with:
-          path: |
-            StarDecisionTrees/lib/release/macos
-            StarDecisionTrees/include/release/macos
-          key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/macos/libopencv2.a ]; then cd opencv && ./release.sh; else echo "OpenCV: restored from cache"; fi
-
-      - name: Build StarDecisionTrees (if not cached)
-        run: |
-          if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
-
-      - name: Build stard (release)
-        working-directory: daemon
-        run: swift build -c release
 
       # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
       - name: Fetch ffmpeg/ffprobe
@@ -1348,13 +1438,32 @@ jobs:
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
           echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
 
-      # The @ui features that start from the processed sequence (`a processed copy of the sequence`, see gherkin/ui/README.md) need the
-      # fixture the release cli makes: built here, once, so the build is visible and a cli that cannot be built fails this step, instead of
-      # being built inside the first feature or leaving the features skipped.  The runners call make-processed-fixture.sh for every
-      # feature; the exports below make each call name the same <sequence>-<cli stamp> directory and take its READY shortcut.  STAR_CLI_BUILD=0
-      # (the runners default it to 1) keeps a missing cli an error.  Not an actions/cache entry, deliberately: see the header on the cache
-      # budget.  The fixture is about 180 MB per leg and its key would change with nearly every push (cli/, StarCore/, StarCpp/).
-      - name: Make the processed fixture (release cli, once)
+      # stard, removal_tools/star-output-verify (every client's runner calls it for the validation steps; the @ui features have none) and
+      # trail_tools/star-removal-verify (the trail-removal features' Then steps run it as a subprocess) come from build-macos, into the
+      # .build/release the runner and run-desktop-features.sh look in: no `swift build`, and so no Xcode, Eigen, OpenCV or StarDecisionTrees here.
+      - name: Fetch the shared binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: gherkin-bin-macos
+          path: ${{ runner.temp }}/gherkin-bin
+
+      - name: Put the binaries in place and make them executable
+        shell: bash
+        run: |
+          for d in removal_tools trail_tools daemon cli; do
+            src="$RUNNER_TEMP/gherkin-bin/$d"
+            [ -d "$src" ] || continue
+            mkdir -p "$d/.build/release"
+            cp -R "$src/." "$d/.build/release/"
+            find "$d/.build/release" -maxdepth 1 -type f -exec chmod +x {} +
+          done
+
+      # The @ui features that start from a processed sequence (`a processed copy of the sequence`, see gherkin/ui/README.md) need the fixture
+      # the release cli makes.  The cli is build-macos's (a build that fails there turns the workflow red, so it is reported, not skipped); the
+      # fixture is made here once, so the first feature does not make it lazily, and the exports make every feature's call of
+      # make-processed-fixture.sh name the same <sequence>-<cli stamp> directory and take its READY shortcut.  STAR_CLI_BUILD=0 (the runner
+      # defaults it to 1) keeps a missing cli an error instead of a `swift build` inside a feature.  Not an actions/cache entry: see the header.
+      - name: Make the processed fixture (shared cli, once)
         shell: bash
         env:
           FEATURES: ${{ matrix.shard.features }}
@@ -1362,17 +1471,13 @@ jobs:
           STAR_SYSTEM_FLOOR_MB: 512
         run: |
           set -euo pipefail
-          # only a shard with a feature that starts from the processed sequence needs the fixture (the `ui` shard)
           need=false
           for n in $FEATURES; do
             if grep -q 'a processed copy of the sequence' "gherkin/features/$n.feature"; then need=true; fi
           done
           if [ "$need" = false ]; then echo "no feature of this shard needs the processed fixture"; exit 0; fi
-          fail() { echo "::error::$1"; exit 1; }
-          swift build -c release --package-path cli || fail "the star cli could not be built on this runner (desktop (macos-15)), so the processed-fixture @ui features cannot run"
-          BIN="$(swift build -c release --package-path cli --show-bin-path)/star"
-          [ -x "$BIN" ] || fail "the star cli build left no $BIN (desktop (macos-15))"
-          CLI="$BIN"
+          CLI="$GITHUB_WORKSPACE/cli/.build/release/star"
+          if [ ! -x "$CLI" ]; then echo "::error::no star cli at $CLI (desktop (macos-15)): gherkin-bin-macos from build-macos did not hold one, so the processed-fixture @ui features cannot run"; exit 1; fi
           FIXTURES="$GITHUB_WORKSPACE/.test-data/ui-processed"
           export STAR_CLI_PATH="$CLI" STAR_UI_FIXTURES="$FIXTURES" STAR_CLI_BUILD=0
           gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
@@ -1382,31 +1487,17 @@ jobs:
             echo "STAR_CLI_BUILD=0"
           } >> "$GITHUB_ENV"
 
-      # removal_tools/star-output-verify: every client's runner calls it for the validation steps.  The @ui features (uiXxx) have none,
-      # and it links all of StarCore: 3 to 6 minutes of building for a job that goes on to run a few clicks.
-      - name: Build the output validator
-        if: ${{ matrix.shard.validator }}
-        shell: bash
-        run: swift build -c release --package-path removal_tools
-
-      # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess (the output validator above is unrelated).
-      - name: Build the trail verifier (release)
-        if: ${{ matrix.shard.trail }}
-        shell: bash
-        run: |
-          swift build -c release --package-path trail_tools
-
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
-      - name: Drop OpenCV's vendored Android Gradle wrapper
-        run: rm -rf opencv/opencv/platforms/android
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
       # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.

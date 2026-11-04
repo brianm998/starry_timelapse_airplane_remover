@@ -14,8 +14,9 @@
 # The fixture is kept under STAR_UI_FIXTURES (default <repo>/.test-data/ui-processed), in a directory named for the sequence and for the cli that made
 # it, so a new build of the cli makes a new one and a second feature of the same run finds the first's. The cli is STAR_CLI_PATH, else the release
 # build in cli/.build; with STAR_CLI_BUILD=1 a missing one is built first (swift build -c release --package-path cli), which takes a while.
-# CI (the `ui` jobs of gherkin.yml) builds the cli in a step of its own, makes the fixture here once, and exports STAR_CLI_PATH, STAR_UI_FIXTURES and
-# STAR_CLI_BUILD=0, so every feature's call finds that directory and its READY; a cli that is missing is then exit 2, never a build inside a feature.
+# CI (the `ui` shard of gherkin.yml) makes the fixture once in a step of its own, with the cli that desktop-linux and desktop-windows build in a step
+# and the macOS legs take from build-macos, and exports STAR_CLI_PATH, STAR_UI_FIXTURES and STAR_CLI_BUILD=0, so every feature's call finds that
+# directory and its READY; a cli that is missing is then exit 2, never a build inside a feature.
 
 set -eu
 
@@ -36,7 +37,7 @@ if [ ! -x "$star" ]; then
 fi
 
 name=$(basename "$sequence")
-# GNU stat first: BSD stat rejects -c and falls through, but GNU stat takes -f (filesystem status) and prints a page of it before failing on the format operand
+# GNU stat first: its -f means "filesystem status" and succeeds, so trying BSD's -f first never reached the fallback on Linux or Windows
 stamp=$(stat -c '%Y-%s' "$star" 2>/dev/null || stat -f '%m-%z' "$star")
 fixtures=${STAR_UI_FIXTURES:-$root/.test-data/ui-processed}
 dest="$fixtures/$name-$stamp"

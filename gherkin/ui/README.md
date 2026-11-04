@@ -31,7 +31,7 @@ The shared expectations for the macOS gui and the desktop client (see `plans/GUI
 * `known-gaps.json` — the parity backlog. A `@ui` feature that fails on a client where it is listed here passes, and says `KNOWN GAP`; one that
   fails where it is not listed fails; one that is listed and now passes fails until the entry is removed. `{"gaps": {"<feature>": {"mac-gui": "<why>", "desktop": "<why>"}}}`.
   Both runners read it (`GuiFeatureRunner.knownGap`, `DesktopFeatureRunner.knownGap`). It is empty. It held four features for the desktop for a while, which were gaps of the *test host*, not of the app
-  (the desktop has the same menu, windows, start screen and recents button, but the Compose test host has no AWT menu bar or window, and cannot start the JavaFX video the start screen embeds); they closed when
+  (the desktop has the same menu, windows, start screen and recents button, but the Compose test host has no AWT menu bar or window, and the start screen's ffmpeg video is turned off for a `@ui` feature); they closed when
   the runner learned to work on what the app draws those from (below). It then held one real difference, the decision-tree menu items, until the owner chose the gui's behaviour. A feature of the gui's that fails on the desktop for a real
   difference goes here with that difference as the reason.
 
@@ -90,6 +90,11 @@ are different: they stay literal in the feature and the runner supplies their va
 | `I choose the menu command "<command>"` / `the menu command "<command>" is enabled` / `is disabled` | by a `commands.json` id: its menu title and label come from that file and the English catalogue (gui: the menu bar; desktop: the menus as data, see below) |
 | `the menu "<menu>" is there` / `is not there` | the menu is in the menu bar, by a `commands.json` menu (`file`, `actions`, `tools`, `window`): its title comes from that file and the catalogue; the generator checks the name |
 | `the "<window>" window is open` / `is not open` | `debug` or `outlier` (gui: a window with that title; desktop: the view model's flag `Main.kt` shows the window for) |
+| `I open the preferences` | the Preferences sheet or dialog, as the app menu's item (Command-comma) opens it (gui: the key; desktop: what the AWT preferences handler of `Main.kt` calls, `openPreferences`, as the test host has no menu bar) |
+| `I open the copied sequence at its location question` | the start screen with the question that asks where a chosen image sequence's files go (gui: `-StarUITestSequenceLocation <dir>`; desktop: `requestSequence`); the open panel that leads to it cannot be driven |
+| `I open a video of the copied sequence at its import dialog` | makes a short video from the copy's frames with the bundled ffmpeg and opens it as Load Video does, which raises the import dialog (gui: `-StarUITestOpenVideo`; desktop: `openVideo`) |
+| `I save a screenshot named "<name>"` | writes the main window as `<dir>/<client>/<name>.png` for the parity gallery (below); `<name>` is letters, digits, `-` and `_`, and one name is used once in a feature |
+| `I save a screenshot of the "<window>" window named "<name>"` | the same for a secondary window (`debug`, `outlier`, `alignment`, `blob`) at its own size: the gui photographs the window; the desktop draws `SecondaryWindowContent`, which `Main.kt` puts in its `Window` too, at the size the window opens at |
 
 The features so far (all pass on both clients): `uiStartupDefaults`, `uiStartupReturnStarts`, `uiStartupHorizonQuestion`, `uiStartupMovingHorizonQuestion`,
 `uiStartupNoHorizonSkips`, `uiStartupBackToHorizon`, `uiStartupBackFromRemoval`, `uiRemovalSelectiveChoice`, `uiSettingsFromStartup`, `uiSettingsTabs`,
@@ -98,7 +103,7 @@ The features so far (all pass on both clients): `uiStartupDefaults`, `uiStartupR
 **What the desktop's runner does where the gui has an AWT menu bar, windows and a video.** The desktop's menu bar and secondary windows are AWT, which the Compose test host does not have, so those steps work on what the
 app draws them from, and a test holds the drawing to that. The menus are data, `starMenus(app)` (titles, labels, enabled, handler), which `StarMenuBar` draws as the `MenuBar` and nothing else builds; the runner reads it
 with `starMenusNow` (on the UI thread, without composing anything) and chooses an item by calling its handler (a disabled item cannot be chosen, as in a menu). A window is open when the flag in the view model that `Main.kt` shows its `Window` for says so, and
-`SecondaryWindowsWiringTest` holds `Main.kt` to that. The start screen's JavaFX video is off for a `@ui` feature (`-Dstar.ui.noIntroVideo`, `NO_INTRO_VIDEO_PROPERTY`; the gui has a video too and plays it), the
+`SecondaryWindowsWiringTest` holds `Main.kt` to that. The start screen's ffmpeg video is off for a `@ui` feature (`-Dstar.ui.noIntroVideo`, `NO_INTRO_VIDEO_PROPERTY`; the gui has a video too and plays it), the
 preferences are the scratch `user.home`'s, and where a list has a control per row (the recents' remove button) a click on the id takes the first.
 
 **Two things about keys on the desktop's test host.** A click on a control with a hover tip (the neighbour field) leaves the tip up, and a tip is a second Compose root; the key step sends the pointer to a corner, which closes it, and then keys the first root, the window's. And a key sent after a number field gave up the keyboard (Return, Esc) did not reach the host's key handler, though the host held the focus (traced: no event arrived; cause not found), so `uiNumberFields` asks `has the keyboard` / `does not have the keyboard` and does not press an arrow after it.
@@ -116,10 +121,60 @@ Run one with `./gradlew gherkinTest -Pstar.stard.path=$PWD/../daemon/.build/debu
 per Gradle run: a second in the same JVM trips over the first one's leftover coroutines) and with `xcodebuild test … -only-testing:starUITests/GeneratedFeatureUITests/testUiStartupDefaultsFeature`
 (see `gherkin/README.md`).
 
-**The processed sequence** (`make-processed-fixture.sh`). The outlier-group features start from a sequence that has been processed: processing it inside each feature would take 100 s on the desktop and 12 minutes in the gui, so the cli does it once, selective, no horizon, a static camera, and the runners take a relocated copy. The script keeps it under `STAR_UI_FIXTURES` (default `.test-data/ui-processed`, which git ignores) in a directory named for the sequence and for the cli that made it, so a new cli makes a new one and a second feature of the same run finds the first's (about 180 MB, made in about 90 s once the cli is built). The cli is `STAR_CLI_PATH`, else `cli/.build/release/star`, and the runners ask the script to build it when it is missing (`STAR_CLI_BUILD=1`: `swift build -c release --package-path cli`, six minutes on this Mac). **A CI job that runs these features therefore needs a toolchain that builds the cli.** The `ui` jobs of `gherkin.yml` (mac-gui and the three desktop legs) have a step, `Make the processed fixture (release cli, once)`, that runs when any
-feature of the job uses the step: it builds the release cli (a cli that cannot be built fails the step, with an `::error::` naming the leg), runs this script once, and exports `STAR_CLI_PATH`, `STAR_UI_FIXTURES` and `STAR_CLI_BUILD=0`
-(and the `TEST_RUNNER_` twins for the gui) so that every feature's own call finds the same directory and its `READY`, and a missing cli is an error rather than a build inside the first feature. It is not cached: the fixture is about 180 MB a leg and its key would change with
+**The processed sequence** (`make-processed-fixture.sh`). The outlier-group features start from a sequence that has been processed: processing it inside each feature would take 100 s on the desktop and 12 minutes in the gui, so the cli does it once, selective, no horizon, a static camera, and the runners take a relocated copy. The script keeps it under `STAR_UI_FIXTURES` (default `.test-data/ui-processed`, which git ignores) in a directory named for the sequence and for the cli that made it, so a new cli makes a new one and a second feature of the same run finds the first's (about 180 MB, made in about 90 s once the cli is built). The cli is `STAR_CLI_PATH`, else `cli/.build/release/star`, and the runners ask the script to build it when it is missing (`STAR_CLI_BUILD=1`: `swift build -c release --package-path cli`, six minutes on this Mac). **A CI job that runs these features therefore needs a cli.** The `ui` shard of each of mac-gui and the three desktop legs in `gherkin.yml` has a step that runs when any of its features uses the step, and makes the fixture once, before the features: desktop-linux and desktop-windows build the release cli in a step of their own (`swift build -c release --package-path cli`, an `::error::` naming the leg if it cannot), and mac-gui and desktop-macos take the one `build-macos` built (if that fails the workflow is red, and the step says so if the binary is missing). Each step runs this script once and exports `STAR_CLI_PATH`, `STAR_UI_FIXTURES` and `STAR_CLI_BUILD=0` (and the `TEST_RUNNER_` twins for the gui, whose runner is sandboxed and cannot build anything) so that every feature's own call finds the same directory and its `READY`, and a missing cli is an error rather than a build inside the first feature. It is not cached: the fixture is about 180 MB a leg and its key would change with
 nearly every push. The script prints the directory with `cygpath -m` where that exists (Git Bash), because the desktop runner's JVM copies from the printed path; whether the Windows leg works end to end is settled by a run, not by this note. One outlier group of the open frame is found by the id `outlier.first`, under `-StarUITestProbes YES` (gui) or `-Dstar.ui.probes` (desktop): the smallest box drawn on the frame, which is the one on top; clicking it is a click on the frame.
 
 Not written yet, from §6.3: the snapshots and the other probes, and the rest of the outlier features (E2 to E6, L6 to L8, L10), and the fixture
 `ui_small` (the in-repo `test_data/test_a7sii_10` stands in for it; the processed one is made by the cli, above).
+
+## The parity gallery
+
+The string- and id-level parity tests cannot see a drop zone that is a fraction of the other client's size. The `uiGallery*` features (`uiGalleryStart`,
+`uiGalleryStartup`, `uiGalleryProcessing`, `uiGallerySequence`, `uiGalleryProcessed`, `uiGalleryMultiSelect`, `uiGalleryMultiChoice`, `uiGalleryPostRender`,
+`uiGalleryWindows`, `uiGalleryPreferences`, `uiGalleryVideoImport`, `uiGalleryLocation`) visit each screen of both clients and save it with `I save a screenshot named
+"<name>"`; `starpipe.gallery` then lays the two folders side by side in one page. It is advisory: nothing compares pictures and no run fails on a difference.
+
+* **Where.** `<dir>/<client>/<name>.png`, client `mac-gui` or `desktop`, `<dir>` being `STAR_GALLERY_DIR` (to xcodebuild as `TEST_RUNNER_STAR_GALLERY_DIR`), else `<repo>/.test-data/gallery/latest`.
+  The gui's runner is sandboxed and on CI cannot write there (`Code=513`); when it cannot make that folder it saves into its container's tmp
+  (`~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gallery/latest`), which the mac-gui job uploads as `gherkin-gui-shard-<shard>-gallery`.
+  A run overwrites only the names it saves. The same name on both clients is the same screen; a name only one client saves is a gap in the page.
+* **Size.** The desktop's test window is 1400 by 1100 pixels. The gui's is 1400 by 1100 points: XCUITest cannot size a window, so a feature that saves a screenshot launches the app with
+  `-StarUITestWindowSize 1400x1100`, which `starApp.swift` applies to the main window (needs a display at least that tall). A gui PNG is Retina, twice the pixels; the page shows both at
+  the same width and prints each file's own pixel size.
+* **GPU merge is off.** A gallery feature can start a run (`uiGalleryProcessing`), and the GPU merge must not run on this Mac (CLAUDE.md), so both runners put `useGPUForMerge: false` in the scratch preferences.
+* **Running.** One feature per Gradle run, as above, and one `xcodebuild` per gui feature (`-only-testing:starUITests/GeneratedFeatureUITests/testUiGalleryStartFeature`, with the display awake: `caffeinate -d -u`).
+  The `uiGalleryProcessed`, `uiGalleryMultiSelect`, `uiGalleryMultiChoice` and `uiGalleryPostRender` features start from the processed sequence (below).
+* **The page.** `gherkin/ui/gallery.sh [dir]` (that is `python -m starpipe.gallery <dir>`, tested in `pipeline/tests/test_gallery.py`) writes `<dir>/index.html`: a row per screen, gui left, desktop right.
+* **Steps coverage.** `StepCoverageTests` (`gherkin/StarGherkin`) reads the three runners' dispatch tables and fails when a step a client's features use is not in its table, and when a client lacks the screenshot steps.
+* A screen one client cannot reach in a feature is not faked: leave the step out on that side (or list the feature in `known-gaps.json` with the reason) and the page shows the gap.
+
+## macOS-only check: the Dock icon brings the desktop's window back (M10)
+
+A `@ui` feature cannot show this: the Compose test host has no AWT windows, so the window the Dock icon reopens does not exist there. `star-desktop/packaging/dock-reopen-check.sh`
+runs the packaged app instead, on a Mac, and is not a feature: it is not generated, not in `known-gaps.json` and not in CI.
+
+```
+cd star-desktop
+./gradlew createDistributable -Pstard=$PWD/../daemon/.build/debug/stard      # a packaged app: `./gradlew run` is a bare `java` with no bundle, which `open -a` cannot address
+packaging/dock-reopen-check.sh build/compose/binaries/main/app [work-dir]
+```
+
+It starts `Star.app` with no sequence (its `HOME` is in the work dir, so your preferences are not touched), brings it forward as a launch from the Dock does, and prints one line per state:
+
+| line | what it saw |
+|---|---|
+| `PASS 1/3` | the main window (layer 0, at least 200 by 200) is on screen and titled `Star`, the start screen's title |
+| `PASS 2/3` | after a click on the window's red close button (what `onCloseRequest`, `AppViewModel.requestCloseWindow`, answers; there is no work in progress, so no "Close Anyway" question), the process is still running and has no window on screen |
+| `PASS 3/3` | after `open -a Star.app` (what a Dock click sends: a reopen event, and the app is raised) the same process has its main window back, titled `Star`; if that brings nothing in 15 s the script tries a bare AppleScript `reopen` and says so |
+
+Exit codes: `0` all three passed; `1` a state failed (`FAIL:` says which, and what was seen: whether the process is running, every on-screen window of it with its size, and the app's last output); `77` skipped,
+with `SKIP: <why>` (not a Mac, no display or no GUI session on the console, no `Star.app` in the image, or System Events will not answer or cannot see the window, i.e. Automation or Accessibility is not granted to the terminal or runner).
+A skip is not a pass: nothing was looked at. The guard is at the top of the script.
+
+It does not tell the two listeners in `Main.kt` apart: `open -a` raises the app too, so `AppReopenedListener` (the Dock click) and `AppForegroundListener` (the app coming forward) could each have shown the window. The close is the
+window's own button, not Cmd-W (that is the menu's Close, `requestCloseSession`). The start screen is known by its title only, and the check starts with no sequence open, so it does not show that a loaded sequence is unloaded by the close
+(`MainWindowCloseTest` and `PendingWorkTest` hold the rule). It needs the packaged app to carry a `stard` and ffmpeg (`createDistributable` refuses otherwise), but the window does not depend on the engine.
+
+**Running it somewhere else** needs a macOS runner with a logged-in desktop session (a display, and the user on the console: not ssh, not a headless VM), Automation and Accessibility granted to the shell or runner that runs it,
+and the packaged app built first (`createDistributable`, with a built `stard`). System Events answers slowly under load (20 s a call seen here) and the app's
+window can take a minute to appear in the accessibility tree, so the script waits up to 120 s for it and a run takes two to four minutes.

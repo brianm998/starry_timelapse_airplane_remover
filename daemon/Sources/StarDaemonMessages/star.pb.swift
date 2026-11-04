@@ -155,6 +155,8 @@ public enum Star_V1_CleanMethod: SwiftProtobuf.Enum, Swift.CaseIterable {
   case cleanAutomatic // = 0
   case cleanAutomaticTrue // = 1
   case cleanSelective // = 2
+  case cleanDirtySky // = 3
+  case cleanDirtyEarth // = 4
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -166,6 +168,8 @@ public enum Star_V1_CleanMethod: SwiftProtobuf.Enum, Swift.CaseIterable {
     case 0: self = .cleanAutomatic
     case 1: self = .cleanAutomaticTrue
     case 2: self = .cleanSelective
+    case 3: self = .cleanDirtySky
+    case 4: self = .cleanDirtyEarth
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -175,6 +179,8 @@ public enum Star_V1_CleanMethod: SwiftProtobuf.Enum, Swift.CaseIterable {
     case .cleanAutomatic: return 0
     case .cleanAutomaticTrue: return 1
     case .cleanSelective: return 2
+    case .cleanDirtySky: return 3
+    case .cleanDirtyEarth: return 4
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -184,6 +190,8 @@ public enum Star_V1_CleanMethod: SwiftProtobuf.Enum, Swift.CaseIterable {
     .cleanAutomatic,
     .cleanAutomaticTrue,
     .cleanSelective,
+    .cleanDirtySky,
+    .cleanDirtyEarth,
   ]
 
 }
@@ -307,6 +315,10 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
 
   /// a moving sequence's horizon consensus, drawn as a mask
   case viewConsensusHorizon // = 16
+
+  /// the output of the dirty sky / dirty earth clean methods
+  case viewDirtySkyProcessed // = 17
+  case viewDirtyEarthProcessed // = 18
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -332,6 +344,8 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
     case 14: self = .viewAutoSelectiveProcessed
     case 15: self = .viewSelectiveProcessed
     case 16: self = .viewConsensusHorizon
+    case 17: self = .viewDirtySkyProcessed
+    case 18: self = .viewDirtyEarthProcessed
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -355,6 +369,8 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
     case .viewAutoSelectiveProcessed: return 14
     case .viewSelectiveProcessed: return 15
     case .viewConsensusHorizon: return 16
+    case .viewDirtySkyProcessed: return 17
+    case .viewDirtyEarthProcessed: return 18
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -378,6 +394,8 @@ public enum Star_V1_FrameViewMode: SwiftProtobuf.Enum, Swift.CaseIterable {
     .viewAutoSelectiveProcessed,
     .viewSelectiveProcessed,
     .viewConsensusHorizon,
+    .viewDirtySkyProcessed,
+    .viewDirtyEarthProcessed,
   ]
 
 }
@@ -4756,7 +4774,7 @@ extension Star_V1_OpenStage: SwiftProtobuf._ProtoNameProviding {
 }
 
 extension Star_V1_CleanMethod: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CLEAN_AUTOMATIC\0\u{1}CLEAN_AUTOMATIC_TRUE\0\u{1}CLEAN_SELECTIVE\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CLEAN_AUTOMATIC\0\u{1}CLEAN_AUTOMATIC_TRUE\0\u{1}CLEAN_SELECTIVE\0\u{1}CLEAN_DIRTY_SKY\0\u{1}CLEAN_DIRTY_EARTH\0")
 }
 
 extension Star_V1_DetectionType: SwiftProtobuf._ProtoNameProviding {
@@ -4768,7 +4786,7 @@ extension Star_V1_PreviewSize: SwiftProtobuf._ProtoNameProviding {
 }
 
 extension Star_V1_FrameViewMode: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0VIEW_ORIGINAL\0\u{1}VIEW_PROCESSED\0\u{1}VIEW_SUBTRACTION\0\u{1}VIEW_VALIDATION\0\u{1}VIEW_HORIZON\0\u{1}VIEW_MERGED_HORIZON\0\u{1}VIEW_USER_HORIZON\0\u{1}VIEW_STAR_ALIGNED\0\u{1}VIEW_FAILED_STAR_ALIGNED\0\u{1}VIEW_EARTH_ALIGNED\0\u{1}VIEW_FAILED_EARTH_ALIGNED\0\u{1}VIEW_BLOBS\0\u{1}VIEW_REMOVE_MASK\0\u{1}VIEW_AUTO_PROCESSED\0\u{1}VIEW_AUTO_SELECTIVE_PROCESSED\0\u{1}VIEW_SELECTIVE_PROCESSED\0\u{1}VIEW_CONSENSUS_HORIZON\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0VIEW_ORIGINAL\0\u{1}VIEW_PROCESSED\0\u{1}VIEW_SUBTRACTION\0\u{1}VIEW_VALIDATION\0\u{1}VIEW_HORIZON\0\u{1}VIEW_MERGED_HORIZON\0\u{1}VIEW_USER_HORIZON\0\u{1}VIEW_STAR_ALIGNED\0\u{1}VIEW_FAILED_STAR_ALIGNED\0\u{1}VIEW_EARTH_ALIGNED\0\u{1}VIEW_FAILED_EARTH_ALIGNED\0\u{1}VIEW_BLOBS\0\u{1}VIEW_REMOVE_MASK\0\u{1}VIEW_AUTO_PROCESSED\0\u{1}VIEW_AUTO_SELECTIVE_PROCESSED\0\u{1}VIEW_SELECTIVE_PROCESSED\0\u{1}VIEW_CONSENSUS_HORIZON\0\u{1}VIEW_DIRTY_SKY_PROCESSED\0\u{1}VIEW_DIRTY_EARTH_PROCESSED\0")
 }
 
 extension Star_V1_NeighborKind: SwiftProtobuf._ProtoNameProviding {

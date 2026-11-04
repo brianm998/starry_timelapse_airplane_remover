@@ -24,8 +24,32 @@ public final class MonitorStore {
     public private(set) var recentChanges: [Change] = []
     public private(set) var detail: TicketDetail?
     public private(set) var logLines: [String] = []
-    public var selected: Int?
+    /// The view showing in the detail pane: a ticket number, or nil for the Overview. Every change the owner makes
+    /// (sidebar, Overview rows, home button) lands here and is recorded in the navigation history.
+    public var selected: Int? {
+        didSet {
+            if selected != oldValue { dropProposalDetail() }
+            if !navigating { record(selected, was: oldValue) }
+        }
+    }
+    /// The selected proposal's body, comments, blockers and readiness; nil until fetched, and dropped when the selection moves.
+    public private(set) var proposalDetail: ProposalDetail?
+    /// Why the proposal detail could not be loaded (an older daemon answers 404); kept apart from `lastError`, which
+    /// approve and reject own.
+    public private(set) var proposalDetailError: String?
+    /// Blockers of the loaded proposal: not snapshot `blocked_by` entries, so they are remembered to stay selectable.
+    private var proposalBlockers: Set<Int> = []
     public var lastError: String?
+    /// The sidebar's ticket search. Only the sidebar rows read it; counts, badges and the Overview use every ticket.
+    public var search = TicketSearch()
+    /// Titles learnt for issues that are not pipeline tickets (from a ticket's detail "Blocked by" list).
+    private var issueTitles: [Int: String] = [:]
+
+    /// Most views the back/forward history keeps; the oldest are dropped first.
+    public static let historyLimit = 100
+    private var history: [Int?] = [nil]
+    private var position = 0
+    @ObservationIgnored private var navigating = false
 
     public var onAlert: (@MainActor (Alert) -> Void)?
     /// Called with the update notice when the daemon reports newer monitor code; the sha is recorded as announced
@@ -61,6 +85,12 @@ public final class MonitorStore {
     public var daemonDown: Bool { if case .down = connection { true } else { false } }
 
     /// The menu-bar badge: a red dot when develop is red or the daemon is down.
+    /// The "Pipeline status" rows (top-bar items that moved into the Overview).
+    public var statusRows: [Overview.StatusRow] {
+        Overview.statusRows(snapshot: snapshot, connection: connection, updateAvailable: updateAvailable,
+                            rebuildCommand: MonitorUpdates.rebuildCommand)
+    }
+
     public var needsAttention: Bool { developRed || daemonDown }
 
     /// The colour of the star in the menu bar and the Dock.
@@ -68,14 +98,56 @@ public final class MonitorStore {
 
     public func tickets(in group: String) -> [TicketSnap] { snapshot?.tickets.filter { $0.group == group } ?? [] }
 
+    /// The tickets of a group that the sidebar search lets through.
+    public func visibleTickets(in group: String) -> [TicketSnap] { search.filter(tickets(in: group)) }
+
+    /// True when there are tickets but the search hides every one of them.
+    public var searchHidesEverything: Bool {
+        guard let all = snapshot?.tickets, !all.isEmpty else { return false }
+        return search.filter(all).isEmpty
+    }
+
     public var selectedTicket: TicketSnap? { snapshot?.tickets.first { $0.number == selected } }
+
+    /// The proposed issues waiting for the owner, as the sidebar's "Proposed" section lists them.
+    public var proposals: [ProposalSnap] { snapshot?.proposals ?? [] }
+
+    /// The selected issue when it is a proposal (and not also a pipeline ticket).
+    public var selectedProposal: ProposalSnap? {
+        guard selectedTicket == nil else { return nil }
+        return proposals.first { $0.number == selected }
+    }
+
+    /// A ticket or proposal in the snapshot, or an issue some snapshot ticket is blocked by: all can be shown in the detail pane.
+    private func isShowable(_ n: Int, in snap: Snapshot?) -> Bool {
+        guard let snap else { return false }
+        return snap.tickets.contains { $0.number == n || $0.blockedBy.contains(n) } || snap.proposals.contains { $0.number == n }
+            || proposalBlockers.contains(n)
+    }
+
+    /// The selected issue when it is a blocker but not a pipeline ticket or a proposal; the title is empty when unknown.
+    public var selectedIssue: (number: Int, title: String)? {
+        guard let n = selected, selectedTicket == nil, selectedProposal == nil, isShowable(n, in: snapshot) else { return nil }
+        return (n, issueTitles[n] ?? "")
+    }
+
+    /// Show a blocker issue in the detail pane (recorded in the history like any selection).
+    public func selectIssue(_ number: Int, title: String? = nil) {
+        if let title, !title.isEmpty { issueTitles[number] = title }
+        selected = number
+    }
 
     // loading ------------------------------------------------------------------------------------------------------
     public func apply(_ new: Snapshot) {
         Alerts.diff(old: snapshot, new: new).forEach { onAlert?($0) }
         snapshot = new
         connection = .live
-        if let selected, !new.tickets.contains(where: { $0.number == selected }) { self.selected = nil }
+        if let selected, !isShowable(selected, in: new) {
+            // a snapshot-driven reset is not a navigation
+            navigating = true
+            self.selected = nil
+            navigating = false
+        }
     }
 
     public func apply(event: ServerEvent) {
@@ -101,11 +173,44 @@ public final class MonitorStore {
         onUpdate?(alert)
     }
 
+    private func dropProposalDetail() {
+        proposalDetail = nil
+        proposalDetailError = nil
+    }
+
+    /// Fetch the selected proposal's detail once per selection: each call costs the daemon several GitHub requests, so the
+    /// poll loop does not repeat it, but a failure is retried on the next tick. A reply for a selection that has moved on is dropped.
+    private func refreshProposal(_ n: Int, client: APIClient) async {
+        guard proposalDetail?.number != n else { return }
+        do {
+            let fresh = try await client.proposalDetail(n)
+            guard selected == n else { return }
+            proposalDetail = fresh
+            proposalDetailError = nil
+            for b in fresh.blockers {
+                proposalBlockers.insert(b.number)
+                if !b.title.isEmpty { issueTitles[b.number] = b.title }
+            }
+        } catch {
+            guard selected == n else { return }
+            proposalDetail = nil
+            proposalDetailError = error.localizedDescription
+        }
+    }
+
     public func refreshSelected() async {
-        guard let client, let n = selected else { detail = nil; logLines = []; return }
+        guard let client, let n = selected else { detail = nil; logLines = []; dropProposalDetail(); return }
+        if selectedProposal != nil {
+            // a proposal has no ticket detail or log: those endpoints would 404
+            detail = nil
+            logLines = []
+            await refreshProposal(n, client: client)
+            return
+        }
         let fresh = try? await client.detail(n)
         guard selected == n else { return }
         detail = fresh
+        for b in fresh?.blockers ?? [] where !b.title.isEmpty { issueTitles[b.number] = b.title }
         let lines = (try? await client.log(n)) ?? []
         guard selected == n else { return }
         logLines = lines
@@ -116,6 +221,48 @@ public final class MonitorStore {
         selected = nil
         detail = nil
         logLines = []
+        dropProposalDetail()
+    }
+
+    // navigation history -------------------------------------------------------------------------------------------
+    private func record(_ view: Int?, was old: Int?) {
+        guard view != old else { return }
+        history.removeSubrange((position + 1)...)
+        history.append(view)
+        if history.count > Self.historyLimit { history.removeFirst(history.count - Self.historyLimit) }
+        position = history.count - 1
+    }
+
+    private func isLive(_ view: Int?) -> Bool {
+        guard let view else { return true }
+        return isShowable(view, in: snapshot)
+    }
+
+    /// The nearest history entry in `step` direction that can be shown and differs from what is showing.
+    private func target(_ step: Int) -> Int? {
+        var i = position + step
+        while history.indices.contains(i) {
+            if history[i] != selected && isLive(history[i]) { return i }
+            i += step
+        }
+        return nil
+    }
+
+    public var canGoBack: Bool { target(-1) != nil }
+    public var canGoForward: Bool { target(1) != nil }
+
+    public func goBack() { go(target(-1)) }
+    public func goForward() { go(target(1)) }
+
+    private func go(_ index: Int?) {
+        guard let index else { return }
+        position = index
+        navigating = true
+        selected = history[index]
+        navigating = false
+        detail = nil
+        logLines = []
+        dropProposalDetail()
     }
 
     /// Poll the snapshot, follow the event stream, and reconnect with backoff. Safe to call once at launch.
@@ -185,10 +332,16 @@ public final class MonitorStore {
         return results
     }
 
+    /// Approve a proposal; a daemon refusal (full queue, already approved) lands in `lastError`.
+    public func approve(_ number: Int, priority: String? = nil) async { await run { try await $0.approve(number, priority: priority) } }
+    public func reject(_ number: Int, reason: String = "") async { await run { try await $0.reject(number, reason: reason) } }
+
     public func answer(_ number: Int, _ text: String) async { await run { try await $0.answer(number, text: text) } }
     public func retry(_ number: Int, stage: String) async { await run { try await $0.retry(number, stage: stage) } }
     public func cancel(_ number: Int) async { await run { try await $0.cancel(number, reason: "cancelled from the monitor") } }
     public func setPriority(_ number: Int, _ priority: Int) async { await run { try await $0.setPriority(number, priority) } }
     public func landNow(_ number: Int) async { await run { try await $0.landNow(number) } }
+    public func landAll() async { await run { try await $0.landAll() } }
+    public func setMuted(_ muted: Bool) async { await run { try await $0.setMuted(muted) } }
     public func setMaxActive(_ n: Int) async { await run { try await $0.setMaxActive(n) } }
 }

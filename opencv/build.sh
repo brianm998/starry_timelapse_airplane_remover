@@ -141,7 +141,11 @@ fi
 # even unpatched, dispatch_apply on the global queue ran the bodies at the caller's QoS, so
 # that half of the premise above did not hold. The patch changes the *width*: a .background
 # caller gets 6 worker threads where the unpatched queue used all 18, so Light takes fewer
-# cores, not just lower-priority ones. It is the only GCD dispatch in the OpenCV modules
+# cores, not just lower-priority ones. That narrowing has only been measured on Apple
+# silicon: on x86_64 / macOS 15.8 (Intel iMac Pro) a .background caller gets the same width
+# as .utility (36 vs 36) with the patch compiled in, so the width test is skipped on x86_64.
+# The two inheritance tests pass even unpatched and do not prove the patch, so on Intel
+# nothing in the tests guards it. It is the only GCD dispatch in the OpenCV modules
 # star builds; re-check with
 #   grep -rln -e dispatch_apply -e dispatch_get_global_queue opencv/modules
 # after any version bump. Linux and Windows do not use the GCD backend, and have no QoS.

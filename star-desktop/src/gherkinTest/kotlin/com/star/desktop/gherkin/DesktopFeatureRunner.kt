@@ -36,7 +36,16 @@ import com.star.desktop.gherkin.generated.StepAction
 import com.star.desktop.ui.app.AppScreen
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.app.MenuEntry
+import com.star.desktop.ui.app.SecondaryWindow
+import com.star.desktop.ui.app.SecondaryWindowContent
 import com.star.desktop.ui.app.StarApp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.captureToImage
 import com.star.desktop.ui.app.starMenusNow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -150,6 +159,11 @@ class DesktopFeatureRunner {
         StepAction.CONFIRM_CLOSE_IF_ASKED to { t -> confirmClosingIfAsked(t) },
         StepAction.WINDOW_OPEN to { t -> expectWindow(t, args[0], open = true) },
         StepAction.WINDOW_NOT_OPEN to { t -> expectWindow(t, args[0], open = false) },
+        StepAction.OPEN_PREFERENCES to { t -> openPreferences(t) },
+        StepAction.OPEN_LOCATION_QUESTION to { t -> openCopiedSequenceAtItsLocationQuestion(t) },
+        StepAction.OPEN_VIDEO_IMPORT to { t -> openVideoAtItsImportDialog(t) },
+        StepAction.SAVE_SCREENSHOT to { t -> saveScreenshot(t, args[0]) },
+        StepAction.SAVE_WINDOW_SCREENSHOT to { t -> saveScreenshot(t, args[1], window = args[0]) },
     )
 
     fun run(feature: Feature) {
@@ -159,7 +173,7 @@ class DesktopFeatureRunner {
         if (feature.steps.isEmpty()) throw RunnerError("feature \"${feature.name}\" has no steps: refusing to pass vacuously")
         // The client keeps its preferences in ~/.star.userprefs.json; a test must neither read nor write the real one.
         // a @ui feature may compare what the app says with the English catalogue
-        // and may show the start screen, which would otherwise embed a JavaFX video that cannot start headless
+        // and may show the start screen, which would otherwise spawn ffmpeg for its video background
         if ("@ui" in feature.tags) {
             // English, unless the feature says `the language is "<code>"`
             com.star.desktop.i18n.Strings.setOverride(feature.steps.firstOrNull { it.action == StepAction.LANGUAGE_IS }?.args?.firstOrNull() ?: "en")
@@ -278,6 +292,14 @@ class DesktopFeatureRunner {
             preferences.addProperty("language", code)
             file.writeText(preferences.toString())
         }
+        // A gallery feature can start a run (the processing modal), and this Mac must never run the GPU merge (CLAUDE.md): the scratch preferences say so,
+        // whatever else they hold.
+        if (feature.steps.any { it.action == StepAction.SAVE_SCREENSHOT || it.action == StepAction.SAVE_WINDOW_SCREENSHOT }) {
+            val file = preferencesFile()
+            val preferences = runCatching { JsonParser.parseString(file.readText()).asJsonObject }.getOrElse { JsonObject() }
+            preferences.addProperty("useGPUForMerge", false)
+            file.writeText(preferences.toString())
+        }
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         scope = appScope
         // No auto-open hook and no autoMode: either one suppresses the startup prompts, and the prompts are how a user sets the
@@ -313,7 +335,7 @@ class DesktopFeatureRunner {
         val model = newModel()
         model.openVideo(sequenceCopy.absolutePath)
 
-        // Only the dialog is composed: the start screen behind it embeds a JavaFX video background, and JavaFX cannot start headless.
+        // Only the dialog is composed: the start screen behind it plays an ffmpeg video background, which a test host should not spawn.
         t.setContent { VideoImportDialog(sequenceCopy.absolutePath, probe = { null }, onImport = model::confirmVideoImport, onCancel = model::cancelVideoImport) }
         val format = FrameFormatChoice.valueOf(param("frame_format").uppercase())
         waitFor(t, "the video import dialog", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("videoimport.import") }
@@ -401,8 +423,11 @@ class DesktopFeatureRunner {
     private fun waitForProcessingToFinish(t: ComposeUiTest) {
         var sawRunning = false
         var last = "(none)"
+        val stall = ProgressStall(STALL_LIMIT_MS * 1_000_000)
         waitFor(t, "processing to finish", 20L * 60_000, { "(last progress: $last)" }) {
-            val state = semanticsOf(t, "processing.progress")?.getOrNull(SemanticsProperties.StateDescription) ?: return@waitFor false
+            val state = semanticsOf(t, "processing.progress")?.getOrNull(SemanticsProperties.StateDescription)
+            stall.observe(state)
+            if (state == null) return@waitFor false
             last = state
             val parts = state.split('/')
             if (parts.size != 3) return@waitFor false
@@ -583,8 +608,8 @@ class DesktopFeatureRunner {
 
     private fun finishOpening(t: ComposeUiTest, model: AppViewModel, answer: Boolean = true) {
         // The sequence opens in the background, driven by the view model and not by composition. Nothing is composed until it has:
-        // the start screen (the first thing StarApp would draw) embeds a JavaFX video background, and JavaFX cannot start headless, so
-        // composing it blocks the UI thread for good. (A @ui feature turns the video off, so one that wants the start screen can have it.)
+        // the start screen (the first thing StarApp would draw) plays an ffmpeg video background, which a test host should not spawn, so
+        // it is not composed. (A @ui feature turns the video off, so one that wants the start screen can have it.)
         val deadline = System.nanoTime() + OPEN_TIMEOUT_MS * 1_000_000
         while (model.screen.value !is AppScreen.Sequence) {
             model.error.value?.let { throw RunnerError("the app reported an error while opening: $it") }
@@ -605,7 +630,31 @@ class DesktopFeatureRunner {
      * (`Window(onKeyEvent = ...)`) on an ancestor, in the bubble phase, with the focus put on it to begin with.
      */
     private fun showApp(t: ComposeUiTest, model: AppViewModel) {
-        if ("@ui" in feature.tags) t.setContent { KeyHost(model) { StarApp(model) } } else t.setContent { StarApp(model) }
+        if ("@ui" in feature.tags) t.setContent { KeyHost(model) { SecondaryWindowOverlay(model) { StarApp(model) } } } else t.setContent { StarApp(model) }
+    }
+
+    /** The secondary window the parity gallery is drawing now (null the rest of the time). */
+    private val shownWindow = androidx.compose.runtime.mutableStateOf<SecondaryWindow?>(null)
+
+    /**
+     * The test host has no AWT window to show a secondary window in, so for a screenshot of one its content (`SecondaryWindowContent`, which `Main.kt`
+     * puts in its `Window` too) is drawn over the app at the size the window opens at, tagged so the capture is of that and not of the app behind it.
+     */
+    @androidx.compose.runtime.Composable
+    private fun SecondaryWindowOverlay(model: AppViewModel, app: @androidx.compose.runtime.Composable () -> Unit) {
+        androidx.compose.foundation.layout.Box {
+            app()
+            val kind = shownWindow.value
+            if (kind != null) {
+                val screen by model.screen.collectAsState()
+                androidx.compose.foundation.layout.Box(
+                    androidx.compose.ui.Modifier
+                        .size(kind.size.width, kind.size.height)
+                        .background(com.star.desktop.ui.theme.StarColors.appBackground)
+                        .testTag(WINDOW_SHOT_TAG),
+                ) { SecondaryWindowContent(kind, model, (screen as? AppScreen.Sequence)?.vm) }
+            }
+        }
     }
 
     /** Horizon → camera → (select horizon: No) → what to remove → Start processing, as a user answers them. */
@@ -671,12 +720,15 @@ class DesktopFeatureRunner {
         // "<complete>/<total>/<running|idle>", set on the left panel's progress line. Finished: every frame complete and the run over.
         var last = "(none)"
         var lastDump = 0L
+        val stall = ProgressStall(STALL_LIMIT_MS * 1_000_000)
         waitFor(t, "processing to finish", PROCESS_TIMEOUT_MS, { "last progress: $last" }) {
             model.error.value?.let { throw RunnerError("the app reported an error while processing: $it") }
             // A dead engine (killed by the OS, say for memory) never finishes the run: without this the wait sits out its whole timeout.
             model.engineDown.value?.let { throw RunnerError("the engine stopped while processing: $it") }
             val nodes = t.onAllNodes(hasTestTag("processing.progress")).fetchSemanticsNodes()
             val state = nodes.firstOrNull()?.config?.getOrNull(SemanticsProperties.StateDescription)
+            // A run that has stopped moving (the Windows runner sat at 0/19/running for the whole timeout) fails here, not 50 minutes on.
+            stall.observe(state)
             if (state == null) {
                 if (System.nanoTime() - lastDump > 20_000_000_000L) { lastDump = System.nanoTime(); println("no progress node (${nodes.size}); tree:\n" + t.onRoot().printToString(40)) }
                 return@waitFor false
@@ -988,17 +1040,30 @@ class DesktopFeatureRunner {
         val source = resolveSequence(param("sequence"))
         val script = File(repoRoot(), "gherkin/ui/make-processed-fixture.sh")
         // A machine without a built cli builds it (the script's STAR_CLI_BUILD): the first feature of a run that needs the processed sequence waits for that.
-        val builder = ProcessBuilder("bash", script.path, source.path).redirectError(ProcessBuilder.Redirect.INHERIT)
+        val isWindows = System.getProperty("os.name").startsWith("Windows")
+        val builder = ProcessBuilder(bashExecutable(isWindows), script.path, source.path)
         builder.environment().putIfAbsent("STAR_CLI_BUILD", "1")
         val process = builder.start()
+        // The script's stderr (its own messages, the cli build) is read as it comes, passed on to the log, and its tail goes into the error: an inherited
+        // stderr never reached the CI log of the Gradle test worker, which left a script that exited at once with nothing to say why.
+        val errTail = ArrayDeque<String>()
+        val errReader = Thread {
+            process.errorStream.bufferedReader().forEachLine { line ->
+                System.out.println("processed fixture: $line")
+                synchronized(errTail) { errTail.addLast(line); if (errTail.size > 40) errTail.removeFirst() }
+            }
+        }.apply { isDaemon = true; start() }
         val printed = process.inputStream.bufferedReader().readText().lines().lastOrNull { it.isNotBlank() }?.trim()
-        if (process.waitFor() != 0 || printed == null) throw RunnerError("could not make the processed sequence (the script's own message is above)")
-        val target = File(scratch, "processed")
-        File(printed).copyRecursively(target)
-        target.walkTopDown().filter { it.isFile && it.extension == "json" && it.length() < 8_000_000 }.forEach { f ->
-            val text = f.readText()
-            if (printed in text) f.writeText(text.replace(printed, target.path))
+        val exit = process.waitFor()
+        errReader.join(5_000)
+        if (exit != 0 || printed == null) {
+            val said = synchronized(errTail) { errTail.joinToString("\n") }
+            throw RunnerError("could not make the processed sequence (the script exited $exit, printed ${printed ?: "nothing"}); its stderr:\n$said")
         }
+        val target = File(scratch, "processed")
+        val fixture = nativeFixturePath(printed, isWindows)
+        File(fixture).copyRecursively(target)
+        relocateJsonFiles(target, fixture, target.path)
         processedConfig = File(target, "input/star_temp_${source.name}/config.json")
     }
 
@@ -1053,6 +1118,89 @@ class DesktopFeatureRunner {
         waitFor(t, "the $name window to be ${if (open) "open" else "closed"}", 15_000) { windowIsOpen(name) == open }
     }
 
+    // ---- the parity gallery ----
+
+    /** What the AWT preferences handler of `Main.kt` calls (a Mac's Preferences item; the test host has no menu bar). */
+    private fun openPreferences(t: ComposeUiTest) {
+        val model = vm ?: throw RunnerError("no app is running")
+        t.runOnUiThread { model.openPreferences() }
+        t.waitForIdle()
+    }
+
+    /** The start screen with the question that asks where a chosen image sequence's files go up, as the Load Image Sequence button leads to. */
+    private fun openCopiedSequenceAtItsLocationQuestion(t: ComposeUiTest) {
+        if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
+        val model = newModel()
+        showApp(t, model)
+        t.runOnUiThread { model.requestSequence(sequenceCopy.absolutePath) }
+        waitFor(t, "the sequence location question", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("sequencelocation.open") }
+    }
+
+    /** A short video made from the copied sequence's frames with the bundled ffmpeg, opened as Load Video opens one: the import dialog comes up. */
+    private fun openVideoAtItsImportDialog(t: ComposeUiTest) {
+        if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
+        val ffmpeg = File(repoRoot(), "external_binaries/bin/ffmpeg").takeIf { it.canExecute() } ?: File("ffmpeg")
+        val video = File(scratch, "gallery-video.mp4")
+        val process = ProcessBuilder(
+            ffmpeg.path, "-y", "-loglevel", "error", "-framerate", "5", "-pattern_type", "glob", "-i", File(sequenceCopy, "*.jpg").path,
+            "-vf", "scale=1280:-2", "-c:v", "libx264", "-pix_fmt", "yuv420p", video.path,
+        ).redirectErrorStream(true).start()
+        val log = process.inputStream.bufferedReader().readText()
+        if (process.waitFor() != 0 || !video.isFile) throw RunnerError("could not make a video from $sequenceCopy: $log")
+        val model = newModel()
+        showApp(t, model)
+        t.runOnUiThread { model.openVideo(video.absolutePath) }
+        waitFor(t, "the video import dialog", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("videoimport.import") }
+    }
+
+    /** `<dir>/<client>/<name>.png`, where dir is `STAR_GALLERY_DIR` (the gui's runner reads the same), else `<repo>/.test-data/gallery/latest`. */
+    private fun galleryFile(name: String): File {
+        val dir = System.getenv("STAR_GALLERY_DIR")?.takeIf { it.isNotEmpty() }?.let { File(it) } ?: File(repoRoot(), ".test-data/gallery/latest")
+        return File(File(dir, CLIENT), "$name.png")
+    }
+
+    private fun pixels(image: java.awt.image.BufferedImage): IntArray = image.getRGB(0, 0, image.width, image.height, null, 0, image.width)
+
+    /**
+     * Saves the main window (the whole 1400 by 1100 root), or with [window] the secondary window of that name drawn at its own size, as a PNG.
+     * Frames, thumbnails and the daemon's answers arrive on real threads, not on the test clock, so the capture is repeated until two in a row
+     * are the same picture (up to six seconds), and the step fails on a file that is empty.
+     */
+    private fun saveScreenshot(t: ComposeUiTest, name: String, window: String? = null) {
+        val kind = window?.let { SecondaryWindow.named(it) ?: throw RunnerError("no window called \"$it\"") }
+        shownWindow.value = kind
+        try {
+            fun capture(): java.awt.image.BufferedImage {
+                // The Debug window follows the log with a `while (true) { delay(200) }`, so the test clock always has work pending and waitForIdle
+                // (which captureToImage calls too) never returns while the clock advances itself: its frames are stepped by hand, with it off.
+                val following = kind == SecondaryWindow.DEBUG
+                if (following) { t.mainClock.autoAdvance = false; repeat(5) { t.mainClock.advanceTimeByFrame() } } else t.waitForIdle()
+                try {
+                    val node = if (kind != null) t.onNodeWithTag(WINDOW_SHOT_TAG) else t.onAllNodes(isRoot())[0]
+                    return node.captureToImage().toAwtImage()
+                } finally {
+                    if (following) t.mainClock.autoAdvance = true
+                }
+            }
+            var image = capture()
+            var steady = 0
+            var tries = 0
+            while (steady < 2 && tries++ < 30) {
+                Thread.sleep(200)
+                val next = capture()
+                steady = if (pixels(next).contentEquals(pixels(image))) steady + 1 else 0
+                image = next
+            }
+            val file = galleryFile(name)
+            file.parentFile.mkdirs()
+            javax.imageio.ImageIO.write(image, "png", file)
+            println("SCREENSHOT $name -> $file (${image.width}x${image.height})")
+            if (file.length() < 1000) throw RunnerError("the screenshot \"$name\" is empty (${file.length()} bytes)")
+        } finally {
+            shownWindow.value = null
+        }
+    }
+
     // ---- waiting ----
 
     private fun ComposeUiTest.onAllNodesWithTagExists(tag: String): Boolean =
@@ -1079,11 +1227,13 @@ class DesktopFeatureRunner {
     private companion object {
         const val IDLE_STOPPED_NS = 3_000_000_000L
         const val CLIENT = "desktop"
+        const val WINDOW_SHOT_TAG = "gallery.window"
         const val OPEN_TIMEOUT_MS = 10L * 60_000
         const val UI_TIMEOUT_MS = 90_000L
         const val DRAG_HALF_PX = 24f   // a drag around a group is a box this far each way from its centre, in pixels
         const val DRAG_STEPS = 8
         const val PROCESS_TIMEOUT_MS = 50L * 60_000   // auto selective on a 4-core runner took over 25 minutes
+        const val STALL_LIMIT_MS = 10L * 60_000   // longest a processing wait may sit on one progress line; see the survey in the commit message
         const val RENDER_TIMEOUT_MS = 10L * 60_000
         val REMOVAL_ACTIONS = setOf(StepAction.AIRPLANES_REMOVED, StepAction.SATELLITES_REMOVED, StepAction.STARS_PRESERVED, StepAction.NOTHING_ELSE_CHANGED)
         val VIDEO_EXTS = setOf("mov", "mp4", "m4v", "avi", "mkv", "mpg", "mpeg")

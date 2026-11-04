@@ -67,29 +67,6 @@ public final class FrameGraphViewModel {
         }
     }
 
-    public func hasOperations(ofType type: OperationType, atMax max: Int? = nil) -> Bool {
-        if let states = operations[type] {
-            if let max {
-                if let numberDone = states[.done],
-                   numberDone == max
-                {
-                    return false
-                } else if let numberQueued = states[.queued],
-                          numberQueued == max
-                {
-                    return false
-                }
-            } 
-            var number: UInt = 0
-            for count in states.values {
-                number += count
-            }
-            return number != 0
-        } else {
-            return false
-        }
-    }
-    
     public func reset() {
         operations = [:]
         alreadyDone = [:]

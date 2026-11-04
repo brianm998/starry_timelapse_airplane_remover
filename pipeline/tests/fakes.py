@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import shutil
 import subprocess
 import tempfile
@@ -69,6 +70,7 @@ def make_repo(tmp: Path) -> Path:
 
 
 Ci = list[tuple[str, str, str, str | None]]  # (workflow, job, status, conclusion)
+FeatureJobs = list[tuple[str, str]]  # one attempt of a dispatched Gherkin feature run: (job, conclusion)
 DEFAULT_CI: Ci = [("pr-gate", "linux", "completed", "success")]
 
 
@@ -78,6 +80,7 @@ class FakeGitHub(GitHub):
         self.origin = origin
         self.prs: dict[int, dict[str, Any]] = {}
         self.ci: dict[str, Ci] = {}
+        self.job_labels: dict[str, list[str]] = {}  # job name -> the runner labels GitHub reports for it
         self.develop_ci: Ci = []
         self.develop_history: list[Ci] = []  # older develop runs, newest first, after develop_ci
         self.logs: dict[int, str] = {}
@@ -96,17 +99,27 @@ class FakeGitHub(GitHub):
         self.comment_list: dict[int, list[dict[str, Any]]] = {}
         self.deps: dict[int, list[int]] = {}
         self.next_id = 1000
+        # dispatched Gherkin feature runs: what each attempt (first run, then each rerun) of every run's jobs ends as, and how many
+        # times GitHub is asked for the run list before the first attempt finishes
+        self.dispatches: list[tuple[str, str, dict[str, str]]] = []
+        self.feature_attempts: list[FeatureJobs] = [[("cli (macos-15) · a", "success")]]
+        self.feature_pending_polls = 0
+        self.feature_runs: dict[int, dict[str, Any]] = {}
+        self._feature_ids = itertools.count(5000)  # dispatches come from worker threads: a counter, not len()
 
     def add_issue(self, number: int, title: str, body: str = GOOD_BODY, author: str = OWNER,
-                  labels: tuple[str, ...] = ("pipeline",)) -> None:
+                  labels: tuple[str, ...] = ("pipeline",),
+                  created_at: str = "2026-11-01T10:00:00Z", updated_at: str = "2026-11-02T10:00:00Z") -> None:
         self.issues[number] = {"number": number, "title": title, "body": body, "state": "open",
+                               "created_at": created_at, "updated_at": updated_at,
                                "user": {"login": author}, "labels": [{"name": n} for n in labels]}
         self.timelines[number] = [{"event": "labeled", "label": {"name": "pipeline"}, "actor": {"login": OWNER}}]
         self.comment_list[number] = []
 
-    def say(self, number: int, user: str, body: str) -> int:
+    def say(self, number: int, user: str, body: str, created_at: str = "2026-11-02T12:00:00Z") -> int:
         self.next_id += 1
-        self.comment_list[number].append({"id": self.next_id, "user": {"login": user}, "body": body})
+        self.comment_list[number].append({"id": self.next_id, "user": {"login": user}, "body": body,
+                                          "created_at": created_at})
         return self.next_id
 
     def paged(self, path: str) -> list[dict[str, Any]]:
@@ -129,6 +142,13 @@ class FakeGitHub(GitHub):
 
     def blocked_by(self, number: int) -> list[int]:
         return self.deps.get(number, [])
+
+    def block(self, number: int, blocked_by: int) -> None:
+        self.issue(blocked_by)
+        self.deps.setdefault(number, []).append(blocked_by)
+
+    def unblock(self, number: int, blocked_by: int) -> None:
+        self.deps[number].remove(blocked_by)
 
     def comment(self, number: int, body: str) -> int:
         return self.say(number, OWNER, body)  # the pipeline posts with the owner's token
@@ -184,6 +204,29 @@ class FakeGitHub(GitHub):
     def find_pr(self, branch: str) -> dict[str, Any] | None:
         return next((p for p in self.prs.values() if p["branch"] == branch), None)
 
+    def dispatch_workflow(self, file: str, ref: str, inputs: dict[str, str]) -> None:
+        self.dispatches.append((file, ref, inputs))
+        run_id = next(self._feature_ids)
+        self.feature_runs[run_id] = {"id": run_id, "branch": ref, "sha": self._head(ref), "attempt": 1,
+                                     "title": f"Gherkin: {inputs.get('features') or 'full'}", "polls": self.feature_pending_polls}
+
+    def _feature_run(self, r: dict[str, Any]) -> dict[str, Any]:
+        jobs: FeatureJobs = self.feature_attempts[min(int(r["attempt"]), len(self.feature_attempts)) - 1]
+        done = r["polls"] <= 0
+        self.run_jobs_by_id[r["id"]] = [{"name": j, "status": "completed" if done else "in_progress",
+                                         "conclusion": c if done else None, "completed_at": None} for j, c in jobs]
+        ok = bool(jobs) and {c for _, c in jobs} == {"success"}
+        return {"id": r["id"], "name": "Gherkin", "event": "workflow_dispatch", "display_title": r["title"], "head_sha": r["sha"],
+                "status": "completed" if done else "in_progress", "conclusion": ("success" if ok else "failure") if done else None,
+                "run_attempt": r["attempt"], "updated_at": str(r["attempt"])}
+
+    def workflow_file_runs(self, file: str, branch: str, per_page: int = 50) -> list[dict[str, Any]]:
+        mine = [r for r in self.feature_runs.values() if r["branch"] == branch]
+        out = [self._feature_run(r) for r in reversed(mine)]  # newest first
+        for r in mine:
+            r["polls"] -= 1
+        return out
+
     def workflow_runs(self, sha: str | None = None, branch: str | None = None, per_page: int = 50) -> list[dict[str, Any]]:
         if branch:
             generations = [("develop", self.develop_ci), *((f"develop~{n}", ci) for n, ci in enumerate(self.develop_history, 1))]
@@ -195,8 +238,8 @@ class FakeGitHub(GitHub):
             for wf in dict.fromkeys(w for w, *_ in jobs):
                 run_id = self.run_ids.setdefault((key, wf), 1000 + len(self.run_ids))
                 mine = [(j, st, c) for w, j, st, c in jobs if w == wf]
-                self.run_jobs_by_id[run_id] = [{"name": j, "status": st, "conclusion": c, "completed_at": None}
-                                               for j, st, c in mine]
+                self.run_jobs_by_id[run_id] = [{"name": j, "status": st, "conclusion": c, "completed_at": None,
+                                                "labels": self.job_labels.get(j, [])} for j, st, c in mine]
                 done = all(st == "completed" for _, st, _ in mine)
                 conclusions = {c for _, _, c in mine}
                 # a run's own conclusion: cancelled when the runner cancelled all of it, as a newer push does
@@ -204,6 +247,8 @@ class FakeGitHub(GitHub):
                               else "failure") if done else None
                 runs.append({"id": run_id, "name": wf, "status": "completed" if done else "in_progress", "conclusion": conclusion,
                              "head_sha": self.develop_sha if key == "develop" else key})
+        if sha:  # a dispatched feature run shows up in the commit's runs too
+            runs += [self._feature_run(r) for r in self.feature_runs.values() if r["sha"] == sha]
         return runs
 
     def run_jobs(self, run_id: int, version: str | None = None) -> list[dict[str, Any]]:
@@ -211,6 +256,9 @@ class FakeGitHub(GitHub):
 
     def rerun_failed(self, run_id: int) -> None:
         self.reruns.append(run_id)
+        if run_id in self.feature_runs:
+            self.feature_runs[run_id]["attempt"] += 1
+            self.feature_runs[run_id]["polls"] = 0
 
     def failed_log(self, run_id: int, limit: int = 12000) -> str:
         return self.logs.get(run_id, "Run swift test\nerror: boom")
@@ -249,6 +297,19 @@ class FakeGitHub(GitHub):
 
 
 Script = Callable[[StageRequest], Awaitable[StageOutcome] | StageOutcome]
+
+
+class FakeAnnouncer:
+    """Records what would have been said, so the suite never makes a sound."""
+
+    def __init__(self, fail: bool = False) -> None:
+        self.calls: list[tuple[str, int]] = []
+        self.fail = fail
+
+    def announce(self, kind: str, n: int) -> None:
+        self.calls.append((kind, n))
+        if self.fail:
+            raise RuntimeError("no speakers")
 
 
 class FakeAgent:

@@ -123,10 +123,7 @@ private fun SelectiveToolsSection(vm: SequenceViewModel) {
     // The trash, and what is in it: shown over the frame and, while it is, taken in by the tools above.
     SwitchRow(localized("ui.show_trash"), localized("ui.show_trash_help"), showTrash, vm::setShowTrash)
     HoverTip(localized("ui.only_unclassified_help")) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            androidx.compose.material3.Checkbox(checked = onlyUnclassified, onCheckedChange = { vm.setClassifyOnlyUnclassified(it) })
-            Text(localized("ui.only_unclassified"), color = StarColors.orange, fontSize = 11.sp)
-        }
+        OnlyUnclassifiedRow(onlyUnclassified) { vm.setClassifyOnlyUnclassified(it) }
     }
 
     // How strongly the outlier groups and the trash are drawn (macOS: sliders, in memory only).
@@ -258,16 +255,13 @@ private fun ProcessingSection(app: com.star.desktop.ui.app.AppViewModel, vm: Seq
                 localized(if (info?.cleanMethodOverridden == true) "ui.processing_mode_current_custom" else "ui.processing_mode_current_default", modeName),
                 color = StarColors.white, fontSize = 11.sp, modifier = Modifier.testTag("right.mode"),
             )
-            androidx.compose.material3.OutlinedButton(
-                onClick = { showChangeMode = true },
-                modifier = Modifier.testTag("right.changemode"),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-            ) { Text(localized("ui.change_mode"), fontSize = 11.sp) }
+            ChangeModeButton { showChangeMode = true }
         }
     }
     if (showChangeMode) {
         com.star.desktop.ui.dialogs.ChangeProcessingModeDialog(
             current = activeMethod,
+            horizonDetection = app.sessions.session.value?.config?.horizonDetectionEnabled != false,
             onCancel = { showChangeMode = false },
             onConfirm = { fvm.setCleanMethod(it); showChangeMode = false },
         )
@@ -338,17 +332,49 @@ private fun SectionDivider() {
     androidx.compose.material3.HorizontalDivider(color = StarColors.cellDefault, modifier = Modifier.padding(vertical = 4.dp))
 }
 
-/** A switch and its label, with hover help when [help] is given. */
+/** "Change mode…": one line while it fits, else wrapping at its spaces, centred, in the button's own width. */
 @Composable
-private fun SwitchRow(label: String, help: String?, checked: Boolean, onChange: (Boolean) -> Unit, tag: String? = null) {
+internal fun ChangeModeButton(onClick: () -> Unit) {
+    androidx.compose.material3.OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier.testTag("right.changemode"),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+    ) { Text(localized("ui.change_mode"), fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }
+}
+
+/** The "only unclassified" check box and its label. */
+@Composable
+internal fun OnlyUnclassifiedRow(checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        androidx.compose.material3.Checkbox(checked = checked, onCheckedChange = onChange)
+        Text(localized("ui.only_unclassified"), color = StarColors.orange, fontSize = 11.sp, modifier = Modifier.weight(1f))
+    }
+}
+
+/** The width of a Material 3 switch. */
+private val SWITCH_WIDTH = 52.dp
+
+/** A switch and its label, with hover help when [help] is given; the label goes beside the switch, or under it when one of its words would not fit beside it. */
+@Composable
+internal fun SwitchRow(label: String, help: String?, checked: Boolean, onChange: (Boolean) -> Unit, tag: String? = null) {
+    val widestWord = com.star.desktop.ui.components.widestWord(listOf(label), 11.sp)
     val row = @Composable {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            androidx.compose.material3.Switch(
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+            @Composable fun switch() = androidx.compose.material3.Switch(
                 checked = checked, onCheckedChange = onChange,
                 modifier = if (tag == null) Modifier else Modifier.testTag(tag),   // the id a UI test finds the switch by (`gherkin/ui/ids.json`)
             )
-            Spacer(Modifier.width(6.dp))
-            Text(label, color = StarColors.white, fontSize = 11.sp)
+            if (widestWord <= maxWidth - SWITCH_WIDTH - 6.dp) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    switch()
+                    Spacer(Modifier.width(6.dp))
+                    Text(label, color = StarColors.white, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                }
+            } else {
+                // A word of the label is wider than what is left beside the switch (a 150dp panel, a long German word): the label goes under the
+                // switch, in the panel's whole width, rather than breaking inside the word.
+                Column { switch(); Text(label, color = StarColors.white, fontSize = 11.sp) }
+            }
         }
     }
     if (help != null) HoverTip(help, row) else row()
@@ -360,7 +386,7 @@ private fun SwitchRow(label: String, help: String?, checked: Boolean, onChange: 
  * field, sets it if it is a whole number from 1 to [max]; anything else puts the number back.
  */
 @Composable
-private fun NeighborCountEditor(
+internal fun NeighborCountEditor(
     prefixKey: String, suffixKey: String, count: Int, overridden: Boolean, max: Int, frame: Int,
     onCommit: (Int) -> Unit, onReset: () -> Unit,
     /** The id a UI test finds the field by (`gherkin/ui/ids.json`). */
@@ -397,14 +423,14 @@ private fun NeighborCountEditor(
                     .then(tag?.let { Modifier.testTag(it) } ?: Modifier)
                     .numberFieldRules(commit = { commit() }, revert = { text = count.toString() }),
             )
-            Text(localized(suffixKey), color = color, fontSize = 11.sp)
+            Text(localized(suffixKey), color = color, fontSize = 11.sp, modifier = Modifier.weight(1f))
         }
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BulkButton(label: String, color: Color, help: String? = null, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun BulkButton(label: String, color: Color, help: String? = null, enabled: Boolean = true, onClick: () -> Unit) {
     val button = @Composable {
         androidx.compose.material3.OutlinedButton(
             onClick = onClick,
@@ -419,7 +445,7 @@ private fun BulkButton(label: String, color: Color, help: String? = null, enable
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ToolRow(tool: ToolType, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
+internal fun ToolRow(tool: ToolType, selected: Boolean, enabled: Boolean = true, onClick: () -> Unit) {
     val accent = StarColors.toolColor(tool)
     val alpha = if (enabled) 1f else 0.35f
     HoverTip(if (enabled) tool.helpText else localized("tool.help.disabled")) {
@@ -441,7 +467,7 @@ private fun ToolRow(tool: ToolType, selected: Boolean, enabled: Boolean = true, 
             tint = Color.Unspecified,
             modifier = Modifier.size(28.dp),
         )
-        Text(tool.displayName, color = StarColors.textPrimary, fontSize = 11.sp)
+        Text(tool.displayName, color = StarColors.textPrimary, fontSize = 11.sp, modifier = Modifier.weight(1f))
     }
     }
 }
@@ -463,6 +489,37 @@ private fun ToolHelpButton(onClick: () -> Unit) {
 }
 
 /**
+ * "Zoom" and its editable maximum. They share a line while both fit the panel's width; when the maximum's label is too wide for the room that
+ * is left it goes under "Zoom" whole, and the label never breaks inside a word.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+internal fun ZoomHeader(maxText: String, valid: Boolean, onChange: (String) -> Unit, commit: () -> Unit, revert: () -> Unit) {
+    androidx.compose.foundation.layout.FlowRow(
+        Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(localized("ui.zoom"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(localized("ui.slider.max_zoom_prefix"), color = StarColors.textSecondary, fontSize = 11.sp)
+            androidx.compose.foundation.text.BasicTextField(
+                value = maxText,
+                onValueChange = onChange,
+                singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = if (valid) StarColors.white else StarColors.red, fontSize = 11.sp),
+                cursorBrush = SolidColor(StarColors.white),
+                modifier = Modifier
+                    .width(40.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(StarColors.cellDefault)
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                    // Applied on Return or leaving the field, not on each key (the gui's rule): a number is not the user's answer until it is done.
+                    .numberFieldRules(commit = commit, revert = revert),
+            )
+        }
+    }
+}
+
+/**
  * Zoom (macOS RightPanel): a slider from fit up to the maximum, and the maximum itself, editable ("Max: 1" = 100%, up to
  * 10). The same transform the wheel, Ctrl-wheel and double-click change, so the slider follows them.
  */
@@ -477,32 +534,14 @@ private fun ZoomControls(vm: SequenceViewModel) {
     val parsed = maxText.toFloatOrNull()
     val valid = parsed != null && parsed >= fit.coerceAtLeast(FrameTransform.MIN_MAX_SCALE) && parsed <= FrameTransform.MAX_SCALE_LIMIT
 
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(localized("ui.zoom"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(localized("ui.slider.max_zoom_prefix"), color = StarColors.textSecondary, fontSize = 11.sp)
-            androidx.compose.foundation.text.BasicTextField(
-                value = maxText,
-                onValueChange = { maxText = it },
-                singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(color = if (valid) StarColors.white else StarColors.red, fontSize = 11.sp),
-                cursorBrush = SolidColor(StarColors.white),
-                modifier = Modifier
-                    .width(40.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(StarColors.cellDefault)
-                    .padding(horizontal = 4.dp, vertical = 2.dp)
-                    // Applied on Return or leaving the field, not on each key (the gui's rule): a number is not the user's answer until it is done.
-                    .numberFieldRules(
-                        commit = {
-                            if (valid && parsed != null) { if (parsed != t.maxScale) t.setMaxScale(parsed, canvas) }
-                            else maxText = formatScale(t.maxScale)
-                        },
-                        revert = { maxText = formatScale(t.maxScale) },
-                    ),
-            )
-        }
-    }
+    ZoomHeader(
+        maxText, valid, onChange = { maxText = it },
+        commit = {
+            if (valid && parsed != null) { if (parsed != t.maxScale) t.setMaxScale(parsed, canvas) }
+            else maxText = formatScale(t.maxScale)
+        },
+        revert = { maxText = formatScale(t.maxScale) },
+    )
     androidx.compose.material3.Slider(
         value = scale,
         onValueChange = { t.setScale(it, canvas) },
@@ -514,7 +553,7 @@ private fun ZoomControls(vm: SequenceViewModel) {
 
 /** One of the opacity sliders: its name, and 0 to 1. */
 @Composable
-private fun OpacitySlider(label: String, help: String, value: Float, onChange: (Float) -> Unit) {
+internal fun OpacitySlider(label: String, help: String, value: Float, onChange: (Float) -> Unit) {
     HoverTip(help) {
         Column {
             Text(label, color = StarColors.textPrimary, fontSize = 11.sp)

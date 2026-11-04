@@ -33,6 +33,12 @@ colours, buttons, estimates, dialogs — is made to the other in the same change
 behaviour and the same catalogue keys, and each side's tests updated. Don't ship one and leave
 the other "for later"; if a platform genuinely cannot do something, say so in the change.
 
+## No pull requests for internal work
+
+We don't use PRs for our own changes. PRs are only for work coming in from other people. Normal work is
+merged straight into `develop`, and the automated testing (the pipeline's checks and CI) is what makes sure
+nothing broke: don't open a PR to get a change reviewed or checked first, and don't wait for one.
+
 ## The development pipeline
 
 `pipeline/` is developer tooling (`starpipe`, plans/PIPELINE.md), not part of star. The localization
@@ -46,3 +52,18 @@ apply to it: don't translate it and don't build a Kotlin twin.
 - `pipeline/bin/starpipe check --explain` says which builds and tests a change needs;
   `starpipe check` runs them and proves each from its own output.
 - To queue work for the pipeline, use the file-tickets skill (`.claude/skills/file-tickets`).
+- **Every ticket you file carries a `## Plan`** so the pipeline skips its EXPLORE agent: the agent filing the
+  ticket *is* the exploration agent. Open the files you name, settle the approach, and write the plan into the
+  ticket (format and checks: "Carrying a plan" in `.claude/skills/file-tickets/SKILL.md`; `starpipe ticket lint`
+  verifies it). Omit it only when you genuinely haven't explored the code. A guessed plan is worse than none.
+
+## This machine cannot run the GPU median merge
+
+The GPU version of the median merge logic (`Config.useGPUForMerge`, the Metal merge path) crashes
+this Mac roughly 60% of the time or more. It can get through part of a run, then the window
+service is locked out and stops responding, and the machine has to be recovered.
+
+**Whenever a test (or any star run) is executed on this machine, ALWAYS use the CPU version of the
+median merge logic**: set `useGPUForMerge = false` (config / `~/.star.userprefs.json` / test
+setup) and don't rely on the default, which is on whenever a GPU is detected. Don't run GPU merge
+tests or GPU-vs-CPU comparisons here; leave those to CI or another machine.
