@@ -94,7 +94,7 @@ def nightly_local_checks() -> list[str]:
 IGNORED_TOP_LEVEL = {
     ".claude", ".git", ".github", "docs", "plans", "demo_videos", "test_data", "ffmpeg", "opencv",
     "wgpu", "external_binaries", "logging-objc", "StarDecisionTrees", "removal_tools", "blobber",
-    "c++_test", "horizon_test_bench", "horizon_tester", "outlier_feature_data_classifier",
+    "c++_test", "horizon_test_bench","outlier_feature_data_classifier",
     "tile_classifier_tester", "tile_extractor", "tools", "emacs_load_swift.sh", "packaging",
 }
 
