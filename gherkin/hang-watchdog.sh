@@ -14,7 +14,13 @@
 # one-line note.  The stacks tell the two suspects apart: threads parked in DecodedFrameStore.load / FrameSource.waitUntilAvailableBlocking
 # (pool starvation) versus stard blocked in write(2) to a full stderr pipe with the client's reader thread stuck.
 #
+# On Windows (Git Bash: uname says MINGW/MSYS/CYGWIN) there is no pgrep, /proc or gdb, and MSYS cannot signal Windows pids.  stard.exe is
+# found with powershell's Win32_Process (pid and command line, which carries `--scratch <dir>`), and the dump is Get-Process rows for
+# stard/java/gradle, a table of stard's threads (state and wait reason: all in Wait/UserRequest is pool starvation or a blocked pipe,
+# one spinning is not), the tail of stard.log and the same jstack of every JVM.  No native stacks of stard there.
+#
 # HANG_WATCHDOG_PGREP (default "-x stard") is the pgrep argument list that finds the process; the tests use it (macOS has no stard).
+# HANG_WATCHDOG_OUT, when set, is a file every dump is also appended to (CI uploads it with the reports; a cancelled job's log is lost).
 
 set -u
 
@@ -25,6 +31,9 @@ fi
 limit=$1
 poll=${2:-15}
 pgrep_args=${HANG_WATCHDOG_PGREP:--x stard}
+out=${HANG_WATCHDOG_OUT:-}
+windows=0
+case "$(uname -s 2>/dev/null)" in MINGW* | MSYS* | CYGWIN*) windows=1 ;; esac
 second=$((limit / 2))   # the second dump comes this long after the first
 [ "$second" -ge 1 ] || second=1
 
@@ -59,14 +68,68 @@ scratch_of() {
     ps -ww -o args= -p "$1" 2>/dev/null | awk '{ for (i = 1; i < NF; i++) if ($i == "--scratch") { print $(i + 1); exit } }'
 }
 
+# Windows only: "<pid><TAB><command line>" of the first stard.exe, CRs removed.
+windows_stard() {
+    powershell -NoProfile -NonInteractive -Command \
+        "Get-CimInstance Win32_Process -Filter \"Name='stard.exe'\" | ForEach-Object { \"\$(\$_.ProcessId)\`t\$(\$_.CommandLine)\" }" \
+        2>/dev/null | tr -d '\r' | head -n 1
+}
+
+# Windows only: the scratch dir out of that command line, as an MSYS path.
+windows_scratch() {
+    local dir
+    dir=$(printf '%s\n' "$1" | tr -d '"' | awk '{ for (i = 1; i < NF; i++) if ($i == "--scratch") { print $(i + 1); exit } }')
+    [ -n "$dir" ] || return 0
+    cygpath -u "$dir" 2>/dev/null || echo "$dir"
+}
+
+# Windows only: what is running and what each stard thread is waiting for.
+windows_sections() {
+    local pid=$1
+    echo "--- processes (stard, java, gradle)"
+    bounded 60 powershell -NoProfile -NonInteractive -Command \
+        "Get-Process | Where-Object { \$_.Name -match 'stard|java|gradle' } | Format-Table Id,Name,CPU,WS,HandleCount -AutoSize | Out-String -Width 200" 2>&1 | tr -d '\r' | head -n 40
+    echo "--- threads of $pid (state, wait reason, cpu)"
+    bounded 60 powershell -NoProfile -NonInteractive -Command \
+        "(Get-Process -Id $pid).Threads | Format-Table Id,ThreadState,WaitReason,TotalProcessorTime -AutoSize | Out-String -Width 200" 2>&1 | tr -d '\r' | head -n 200
+}
+
 dump() {
-    local pid=$1 log=$2 n=$3 task tid
+    local pid=$1 log=$2 n=$3
     echo "::group::stard hang watchdog: dump $n for pid $pid ($(date -u +%H:%M:%S)), $log quiet for at least $((limit + (n - 1) * second))s"
     date -u
     uptime || true
     free -m 2>/dev/null || true
     df -h . 2>/dev/null || true
 
+    if [ "$windows" -eq 1 ]; then
+        windows_sections "$pid"
+    else
+        linux_sections "$pid"
+    fi
+
+    echo "--- tail of $log"
+    tail -n 60 "$log" 2>/dev/null || echo "($log unreadable)"
+
+    echo "--- jstack of every JVM"
+    if command -v jps >/dev/null 2>&1; then
+        local jp
+        for jp in $(jps -q 2>/dev/null); do
+            # jps lists itself, already exited; jstack of a dead pid spends ~6 s on macOS before giving up.
+            # (Not on Windows: jps prints Windows pids, which MSYS's kill cannot see.)
+            [ "$windows" -eq 1 ] || kill -0 "$jp" 2>/dev/null || continue
+            echo "== jvm $jp"
+            if command -v jstack >/dev/null 2>&1; then bounded "$jvm_seconds" jstack "$jp" 2>&1 | head -n 800 || true
+            else bounded "$jvm_seconds" jcmd "$jp" Thread.print 2>&1 | head -n 800 || true; fi
+        done
+    else
+        echo "(jps not installed)"
+    fi
+    echo "::endgroup::"
+}
+
+linux_sections() {
+    local pid=$1 task tid
     echo "--- ps"
     t ps -eo pid,ppid,stat,pcpu,etime,args --sort=-pcpu 2>/dev/null | head -40 || t ps -eo pid,ppid,stat,pcpu,etime,args | head -40 || true
 
@@ -95,24 +158,6 @@ dump() {
     else
         echo "(gdb not installed)"
     fi
-
-    echo "--- tail of $log"
-    tail -n 60 "$log" 2>/dev/null || echo "($log unreadable)"
-
-    echo "--- jstack of every JVM"
-    if command -v jps >/dev/null 2>&1; then
-        local jp
-        for jp in $(jps -q 2>/dev/null); do
-            # jps lists itself, already exited; jstack of a dead pid spends ~6 s on macOS before giving up.
-            kill -0 "$jp" 2>/dev/null || continue
-            echo "== jvm $jp"
-            if command -v jstack >/dev/null 2>&1; then bounded "$jvm_seconds" jstack "$jp" 2>&1 | head -n 800 || true
-            else bounded "$jvm_seconds" jcmd "$jp" Thread.print 2>&1 | head -n 800 || true; fi
-        done
-    else
-        echo "(jps not installed)"
-    fi
-    echo "::endgroup::"
 }
 
 watched=""   # pid being watched
@@ -123,12 +168,20 @@ dumped=0     # dumps made for this pid
 trap 'exit 0' TERM INT
 
 while :; do
-    # shellcheck disable=SC2086  # word splitting of the argument list is the point
-    pid=$(pgrep $pgrep_args 2>/dev/null | head -n 1)
+    scratch=""
+    if [ "$windows" -eq 1 ]; then
+        row=$(windows_stard)
+        pid=${row%%$'\t'*}
+        [ "$pid" != "$row" ] || pid=""
+        [ -z "$pid" ] || scratch=$(windows_scratch "${row#*$'\t'}")
+    else
+        # shellcheck disable=SC2086  # word splitting of the argument list is the point
+        pid=$(pgrep $pgrep_args 2>/dev/null | head -n 1)
+        [ -z "$pid" ] || scratch=$(scratch_of "$pid")
+    fi
     if [ -z "$pid" ]; then
         watched=""
     else
-        scratch=$(scratch_of "$pid")
         log="$scratch/logs/stard.log"
         now=$(date +%s)
         cur=$(wc -c <"$log" 2>/dev/null | tr -d ' ')
@@ -140,7 +193,7 @@ while :; do
             dumped=0
         elif [ "$dumped" -lt 2 ] && [ $((now - since)) -ge $((limit + dumped * second)) ]; then
             dumped=$((dumped + 1))
-            dump "$pid" "$log" "$dumped"
+            if [ -n "$out" ]; then dump "$pid" "$log" "$dumped" 2>&1 | tee -a "$out"; else dump "$pid" "$log" "$dumped"; fi
         fi
     fi
     sleep "$poll" &
