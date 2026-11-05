@@ -479,6 +479,13 @@ def allow_opus(number: int) -> None:
     _post(f"/v1/tickets/{number}/allow-opus", {})
 
 
+@main.command("skip-features")
+@click.argument("number", type=_num)
+def skip_features(number: int) -> None:
+    """Don't run this ticket's Gherkin features in the batch it lands in (its CI still runs). Needs a ticket in ready, ci or landing."""
+    _post(f"/v1/tickets/{number}/skip-features", {})
+
+
 @main.command()
 @click.argument("number", type=_num)
 @click.argument("priority", type=click.Choice(["p0", "p1", "p2", "p3"]))

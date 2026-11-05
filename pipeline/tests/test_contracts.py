@@ -176,7 +176,10 @@ def _red_contract(tmp: Path, monkeypatch: pytest.MonkeyPatch, head: list[str], b
     sha = gitutil.head_sha(c.worktree)
     red = ledger.Result("test:StarCpp", "fail", sha, 0.0, executed=10, failed=len(head) if failed is None else failed, failures=head)
     ledger.record(red)
-    c.check_runner = lambda _w, _b: [red]
+    def red_runner(_w: Path, _b: str, _t: set[str] | None = None, /) -> list[ledger.Result]:
+        return [red]
+
+    c.check_runner = red_runner
     c.baseline_runner = lambda _w, _b, _c: base
     pages: list[str] = []
     c.notifier = Notifier(c.db, lambda _t, text: pages.append(text))
@@ -220,3 +223,64 @@ def test_known_red_is_alerted_once_and_named(tmp_path: Path, monkeypatch: pytest
     assert [a["key"] for a in alerts] == [f"known-red:test:StarCpp:{'b' * 12}"] and QOS in alerts[0]["text"]
     body = ship.pr_body(SimpleNamespace(db=c.db), c.ticket)  # type: ignore[arg-type]
     assert "## Known red on develop" in body and QOS in body
+
+
+def _tiered_contract(tmp: Path, monkeypatch: pytest.MonkeyPatch, stage: str, land_now: bool) -> tuple[Contract, list[set[str] | None]]:
+    """A diff that needs a t1 test check; the runner records which tiers it was asked for and records only those."""
+    c = contract(tmp)
+    c.stage = stage
+    if land_now:
+        c.db.put("land_now:7", "1")
+    (c.worktree / "docs" / "a.md").write_text(f"changed in {tmp.name} {stage} {land_now}\n")  # a sha of its own: the ledger is keyed by sha
+    sh(c.worktree, "git", "add", "-A")
+    sh(c.worktree, "git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", f"c {tmp.name}")
+
+    def plan_with_t1(_paths: list[str]) -> impact.Plan:
+        return impact.Plan(t0=["t0:diff-check"], tests=["test:StarCpp"])
+
+    monkeypatch.setattr(impact, "plan_for", plan_with_t1)
+    asked: list[set[str] | None] = []
+
+    def runner(worktree: Path, _base: str, tiers: set[str] | None = None, /) -> list[ledger.Result]:
+        asked.append(tiers)
+        sha = gitutil.head_sha(worktree)
+        ids = ["t0:diff-check"] if tiers == {"t0"} else ["t0:diff-check", "test:StarCpp"]
+        out = [ledger.Result(i, "pass", sha, 0.0, executed=1) for i in ids]
+        for r in out:
+            ledger.record(r)
+        return out
+
+    c.check_runner = runner
+    return c, asked
+
+
+def test_a_land_now_conflict_stage_needs_only_the_cheap_checks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    c, _ = _tiered_contract(tmp_path, monkeypatch, "conflict", True)
+    sha = gitutil.head_sha(c.worktree)
+    ledger.record(ledger.Result("t0:diff-check", "pass", sha, 0.0, executed=1))
+    assert "accepted" in c.submit_change({"summary": "x"})
+
+
+def test_a_conflict_stage_without_land_now_still_needs_every_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    c, _ = _tiered_contract(tmp_path, monkeypatch, "conflict", False)
+    sha = gitutil.head_sha(c.worktree)
+    ledger.record(ledger.Result("t0:diff-check", "pass", sha, 0.0, executed=1))
+    assert "test:StarCpp" in c.submit_change({"summary": "x"})
+
+
+def test_run_checks_in_a_land_now_conflict_stage_runs_only_t0(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    c, asked = _tiered_contract(tmp_path, monkeypatch, "conflict", True)
+    told = c.run_checks({})
+    assert asked == [{"t0"}]
+    assert "test:StarCpp" not in told and "only the cheap checks" in told
+    assert "accepted" in c.submit_change({"summary": "x"})
+
+
+def test_other_stages_of_a_land_now_ticket_keep_the_full_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    c, asked = _tiered_contract(tmp_path, monkeypatch, "develop", True)
+    assert not c.lenient()
+    ledger.record(ledger.Result("t0:diff-check", "pass", gitutil.head_sha(c.worktree), 0.0, executed=1))
+    assert "test:StarCpp" in c.submit_change({"summary": "x"})  # t0 alone is not enough outside a conflict stage
+    assert "only the cheap checks" not in c.run_checks({})
+    assert asked == [None]
+    assert "accepted" in c.submit_change({"summary": "x"})

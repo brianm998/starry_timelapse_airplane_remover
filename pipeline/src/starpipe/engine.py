@@ -145,6 +145,7 @@ class Engine:
         self.db.put(f"held_retry:{n}", None)
         self.db.intervention(n, "retry", stage)
         self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
+        self.db.put(f"skip_features:{n}", None)
         self.parked.discard(n)
         if RETRY_STATE[stage] in CATCH_UP_STATES:
             self.db.put(f"catch_up:{n}", "1")  # drive merges develop in before the stage resumes
@@ -517,13 +518,18 @@ class Engine:
         result, _ = await self.model_stage(t, stage, prompt)
         return result
 
-    def _escalate(self, t: Ticket, stage: str, qid: int, q: dict[str, Any]) -> StageResult:
+    def post_question(self, ticket: int, stage: str, qid: int, q: dict[str, Any]) -> int:
+        """Put the question on the ticket's issue and remember the comment, so its replies can be read back. Does not park anything."""
         options = "\n".join(f"- {o}" for o in q.get("options", []))
-        cid = self.gh.comment(t.number, f"{trust.marker('question', qid)}\n**Question ({stage})**: {q['question']}\n\n"
-                                        f"{q['why']}\n\n{options}\n\nRecommendation: {q.get('recommendation') or 'none'}\n\n"
-                                        "Reply on this issue, or `starpipe answer "
-                                        f"{t.number} \"…\"`.")
+        cid = self.gh.comment(ticket, f"{trust.marker('question', qid)}\n**Question ({stage})**: {q['question']}\n\n"
+                                      f"{q['why']}\n\n{options}\n\nRecommendation: {q.get('recommendation') or 'none'}\n\n"
+                                      "Reply on this issue, or `starpipe answer "
+                                      f"{ticket} \"…\"`.")
         self.db.set_question_comment(qid, cid)
+        return cid
+
+    def _escalate(self, t: Ticket, stage: str, qid: int, q: dict[str, Any]) -> StageResult:
+        self.post_question(t.number, stage, qid, q)
         return self.park(t, f"waiting on the owner: {q['question'][:120]}", state="needs-input")
 
     def escalate_orphaned_questions(self) -> list[int]:
@@ -815,9 +821,9 @@ def check_runner_for(say: Callable[[str], None] = lambda _m: None) -> CheckRunne
     """The real T0+T1 runner, used by the daemon and by the run_checks tool."""
     from .checks import runner
 
-    def run(worktree: Path, base: str) -> list[ledger.Result]:
+    def run(worktree: Path, base: str, tiers: set[str] | None = None, /) -> list[ledger.Result]:
         changed = gitutil.changed_paths(worktree, base)
         plan = impact.plan_for(changed)
-        return runner.run_plan(plan, worktree, base, {"t0", "t1"}, say=say)
+        return runner.run_plan(plan, worktree, base, tiers or {"t0", "t1"}, say=say)
 
     return run
