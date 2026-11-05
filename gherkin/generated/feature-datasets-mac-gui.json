@@ -42,6 +42,7 @@
   "uiOutlierInformationClick": [],
   "uiOutlierMultiClick": [],
   "uiPainterOpensInEditMode": [],
+  "uiProcessingModalPlanning": [],
   "uiRecentsRemove": [],
   "uiRemovalSelectiveChoice": [],
   "uiReprocessNonContiguous": [],
@@ -62,5 +63,6 @@
   "uiStartupReturnStarts": [],
   "uiStartupSpeedSharpness": [],
   "uiTranslatedScreen": [],
+  "uiUpdateSettingsMidRun": [],
   "uiViewPickerNeedsAnImage": []
 }

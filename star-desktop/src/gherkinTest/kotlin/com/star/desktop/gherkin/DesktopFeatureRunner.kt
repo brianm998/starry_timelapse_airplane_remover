@@ -492,11 +492,14 @@ class DesktopFeatureRunner {
     }
 
     private fun expectShown(t: ComposeUiTest, id: String, shown: Boolean) {
-        waitFor(t, "\"$id\" ${if (shown) "shown" else "not shown"}", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) == shown }
+        // A tag on a text inside a node that merges its descendants (the processing screen's scrim) is only in the unmerged tree, so a control
+        // that is up counts whichever tree it is in; one is gone only when neither has it.
+        waitFor(t, "\"$id\" ${if (shown) "shown" else "not shown"}", UI_TIMEOUT_MS) { (t.onAllNodesWithTagExists(id) || (shown && t.onAllNodesWithTagExists(id, unmerged = true))) == shown }
     }
 
+    /** The control's semantics: from the merged tree, else (a text under a merging parent) from the unmerged one. */
     private fun semanticsOf(t: ComposeUiTest, id: String) =
-        t.onAllNodes(hasTestTag(id)).fetchSemanticsNodes().firstOrNull()?.config
+        (t.onAllNodes(hasTestTag(id)).fetchSemanticsNodes().firstOrNull() ?: t.onAllNodes(hasTestTag(id), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull())?.config
 
     private fun expectSelected(t: ComposeUiTest, id: String, selected: Boolean) {
         expectShown(t, id, shown = true)
@@ -1203,8 +1206,8 @@ class DesktopFeatureRunner {
 
     // ---- waiting ----
 
-    private fun ComposeUiTest.onAllNodesWithTagExists(tag: String): Boolean =
-        onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().isNotEmpty()
+    private fun ComposeUiTest.onAllNodesWithTagExists(tag: String, unmerged: Boolean = false): Boolean =
+        onAllNodes(hasTestTag(tag), useUnmergedTree = unmerged).fetchSemanticsNodes().isNotEmpty()
 
     /**
      * Waits in real time. Processing runs in `stard` on real threads, not on the test clock, so this is `waitUntil` (which keeps
