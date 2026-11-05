@@ -158,6 +158,37 @@ async def test_a_landing_stage_takes_a_session_over_the_limit_and_new_work_waits
     await asyncio.wait_for(new_work, 2)
 
 
+async def test_a_free_session_goes_to_the_ticket_furthest_along_in_the_pipeline(rig: Rig) -> None:
+    rig.engine.config.max_llm_sessions = 1
+    for n in (1, 2, 3, 4):
+        rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p1" if n == 4 else "p2"))
+    rig.engine.sync_issues()
+    t1, t2, t3, t4 = (rig.db.ticket(n) for n in (1, 2, 3, 4))
+    assert t1 and t2 and t3 and t4
+    busy = rig.db.begin_stage(1, "develop", 1, "sonnet")  # the one allowed session is busy
+    async def sleep(_: float) -> None:
+        await asyncio.sleep(0.01)
+
+    rig.engine.sleep = sleep
+    begin = rig.engine._begin_when_room  # pyright: ignore[reportPrivateUsage]
+    explore = asyncio.create_task(begin(t4, "explore", 1, "sonnet"))  # p1, but the newest stage
+    develop = asyncio.create_task(begin(t3, "develop", 1, "sonnet"))
+    review = asyncio.create_task(begin(t2, "review", 1, "sonnet"))
+    await asyncio.sleep(0.05)
+    assert not (explore.done() or develop.done() or review.done())
+    rig.db.end_stage(busy, "accepted", 0.0, "")
+    await asyncio.wait_for(review, 2)
+    await asyncio.sleep(0.05)
+    assert not explore.done() and not develop.done(), "one slot, one start: review went first"
+    rig.db.end_stage(2, "accepted", 0.0, "")  # stage rows: 1 develop (ended), 2 the review
+    await asyncio.wait_for(develop, 2)
+    await asyncio.sleep(0.05)
+    assert not explore.done()
+    rig.db.end_stage(3, "accepted", 0.0, "")
+    await asyncio.wait_for(explore, 2)
+    assert rig.engine.llm_waiting == {}
+
+
 async def test_nothing_new_is_claimed_while_a_landing_stage_waits_for_a_session(rig: Rig) -> None:
     rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
     rig.engine.sync_issues()
@@ -172,8 +203,8 @@ async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
     rig.db.begin_stage(5, "develop", 1, "sonnet")
     rig.db.put("self_update_pending", "e3c559f6aabb")
     rig.db.put("self_update_pending_since", str(rig.now))
-    drain = rig.engine.config.self_update_drain_s
-    assert drain == 600
+    drain = rig.engine.config.self_update_max_wait_s
+    assert drain == 1800
 
     assert rig.engine.claimable() is None, "nothing new is claimed inside the window"
     hold = rig.engine.update_hold()
@@ -188,6 +219,35 @@ async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
     assert rig.engine.claimable() is None
     rig.db.put("self_update_pending", None)
     assert rig.engine.claimable() is not None, "no pending update, no hold"
+
+
+async def test_a_landing_stage_is_not_held_by_a_pending_self_update(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    rig.db.put("self_update_pending", "e3c559f6aabb")
+    rig.db.put("self_update_pending_since", str(rig.now))
+    assert rig.engine.update_hold() is not None
+    rig.agent.on("conflict", lambda r: StageOutcome("no-result"))
+
+    await rig.engine.model_stage(t, "conflict", "resolve", fresh=True)
+    assert [r.stage for r in rig.agent.requests] == ["conflict"] * 3 and rig.slept == [], "a landing stage starts at once, no hold"
+
+
+async def test_a_develop_stage_is_still_held_by_a_pending_self_update(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    rig.db.put("self_update_pending", "e3c559f6aabb")
+    rig.db.put("self_update_pending_since", str(rig.now))
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    drain = rig.engine.config.self_update_drain_s
+
+    await rig.engine.model_stage(t, "develop", "go")
+    assert rig.slept and sum(rig.slept) >= drain, "the stage waited out the drain window"
+    assert rig.engine.update_hold() is None
 
 
 async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Rig) -> None:

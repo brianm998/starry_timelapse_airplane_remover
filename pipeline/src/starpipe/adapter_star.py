@@ -119,6 +119,7 @@ class CheckSpec:
     # parser="xctest" run as concurrent shards (starpipe.shards): one log per shard ({log_dir} allowed), each parsed on its own and
     # the counts summed, since parse_xctest takes the largest banner of one log. A missing log or one without a banner is red.
     shard_logs: tuple[str, ...] = ()
+    lock: str = ""  # the heavy lock's job class when the command alone does not say (job_class); empty: from the command
 
 
 def _swift_build(pkg: str, *extra: str) -> CheckSpec:
@@ -201,31 +202,79 @@ def _sharded(check_id: str, pkg: str, plan: ShardPlan) -> CheckSpec:
     return CheckSpec(check_id, f"swift test {pkg} (sharded)", tuple(argv), parser="xctest", shard_logs=logs)
 
 
-# Test classes and features that need the machine to themselves, so a `swift test` naming one is never a light job.
+# Test classes and features that need the machine to themselves, so a `swift test` naming one is exclusive.
 EXCLUSIVE_TEST_MARKERS = ("Gherkin", *(cls for classes in SERIAL_CLASSES.values() for cls in classes))
 
+# The heavy lock's job classes (heavy.py): builds share the machine, test suites run one at a time beside builds, exclusive jobs
+# have it to themselves. The order is how demanding each is, for a shell command running several.
+BUILD, TEST, EXCLUSIVE = "build", "test", "exclusive"
+_DEMAND = {BUILD: 0, TEST: 1, EXCLUSIVE: 2}
+_SHELLS = ("bash", "sh", "zsh")
+_SEGMENT = re.compile(r"&&|\|\||[;|&\n()`]")
+_ENV_WORD = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+_PREFIXES = {"time", "env", "exec", "nice", "command"}
 
-def job_class(cmd: str) -> str:
-    """`light` for the jobs that may share the machine with another light job (a swift package build or test, a gradle compile),
-    `exclusive` for everything else: star/stard runs, star-gherkin, xcodebuild, gradle tests, and any command not recognised."""
-    try:
-        words = shlex.split(cmd)
-    except ValueError:
-        return "exclusive"
+
+def _class_of(words: list[str]) -> str | None:
+    """The class of one command, or None when it is not a heavy tool at all (cd, echo, tee, grep...)."""
     for wrapper in (LIVE_LOG, ("script", "-q", "/dev/null")):  # the pty wrapper around xctest, as built here or on macOS
         if words[:3] == list(wrapper):
             words = words[3:]
             break
+    while words and (_ENV_WORD.match(words[0]) or words[0] in _PREFIXES):
+        words = words[1:]
+    if words[:1] == ["caffeinate"]:
+        return EXCLUSIVE  # keeping the display awake: a UI run
     if not words:
-        return "exclusive"
+        return None
     tool = words[0].rsplit("/", 1)[-1]
-    if tool == "swift" and len(words) > 1 and words[1] in ("build", "test"):
-        filters = [words[i + 1] for i, w in enumerate(words[:-1]) if w == "--filter"]  # `--skip X` is the parallel pass: light
-        return "exclusive" if any(m in f for f in filters for m in EXCLUSIVE_TEST_MARKERS) else "light"
+    if tool in _SHELLS and len(words) > 2 and words[1] in ("-c", "-lc", "-ec"):
+        return _class_of_script(words[2])
+    if tool == "swift" and len(words) > 1:
+        if words[1] == "build":
+            return BUILD
+        if words[1] == "test":
+            filters = [words[i + 1] for i, w in enumerate(words[:-1]) if w == "--filter"]  # `--skip X` is the parallel pass
+            return EXCLUSIVE if any(m in f for f in filters for m in EXCLUSIVE_TEST_MARKERS) else TEST
+        return EXCLUSIVE  # swift run: may be star itself
+    if tool.startswith("python") and words[1:3] == ["-m", "starpipe.shards"]:
+        return TEST  # a sharded suite: its serial classes inject what they measure; measured green beside other work (#250)
     if tool in ("gradle", "gradlew"):
         tasks = [w for w in words[1:] if not w.startswith("-")]
-        return "light" if tasks and all(t.startswith("compile") for t in tasks) else "exclusive"
-    return "exclusive"
+        return BUILD if tasks and all(t.startswith(("compile", "assemble", "checkProtoSync")) for t in tasks) else EXCLUSIVE
+    if tool == "xcodebuild":
+        actions = {w for w in words[1:] if w in ("build", "build-for-testing", "test", "test-without-building", "archive")}
+        return BUILD if actions and actions <= {"build", "build-for-testing"} else EXCLUSIVE  # a gui test needs the display
+    if tool in ("star", "stard") or "gherkin" in tool:
+        return EXCLUSIVE
+    return EXCLUSIVE if words[0].startswith(("./", "/", ".build")) else None
+
+
+def _class_of_script(script: str) -> str:
+    """The most demanding class among a shell script's commands; exclusive when none of them is recognised."""
+    found: str | None = None
+    for part in _SEGMENT.split(script):
+        try:
+            words = shlex.split(part)
+        except ValueError:
+            return EXCLUSIVE
+        kind = _class_of(words) if words else None
+        if kind is not None and (found is None or _DEMAND[kind] > _DEMAND[found]):
+            found = kind
+    return found or EXCLUSIVE
+
+
+def job_class(cmd: str) -> str:
+    """`build` for a compile (swift build, xcodebuild build, a gradle compile), `test` for a test suite that only needs not to
+    share the machine with another suite, `exclusive` for everything else: star/stard runs, Gherkin, xcodebuild test (the
+    display), gradle test, the EXCLUSIVE_TEST_MARKERS classes, and any command not recognised. `bash -c "<script>"` (how the
+    PreToolUse hook wraps a session's Bash) is classed by the most demanding command in the script: before, every hooked
+    command was `bash` and so exclusive."""
+    try:
+        words = shlex.split(cmd)
+    except ValueError:
+        return EXCLUSIVE
+    return _class_of(words) or EXCLUSIVE
 
 
 def swift_test(pkg: str, *extra: str, tid: str | None = None) -> CheckSpec:
@@ -317,7 +366,8 @@ CHECKS: dict[str, CheckSpec] = {
             "t0:proto-sync", "gradle checkProtoSync",
             ("./gradlew", "checkProtoSync", "--no-daemon"), cwd="star-desktop",
         ),
-        CheckSpec("t0:gherkin-generated", "gherkin/generate.sh output unchanged", ("gherkin/generate.sh",)),
+        CheckSpec("t0:gherkin-generated", "gherkin/generate.sh output unchanged", ("gherkin/generate.sh",),
+                  lock=BUILD),  # `swift run` of the generator: a build and a few seconds of codegen, never star
     ]
 }
 

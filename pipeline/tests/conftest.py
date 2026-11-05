@@ -13,4 +13,6 @@ def state_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path
     monkeypatch.setenv("STARPIPE_HOME", str(home))
     monkeypatch.delenv("STARPIPE_TICKET", raising=False)
     monkeypatch.delenv("STARPIPE_NIGHTLY", raising=False)
+    monkeypatch.delenv("STARPIPE_STAGE", raising=False)
+    monkeypatch.delenv("STARPIPE_TICKET_PRIORITY", raising=False)
     yield home

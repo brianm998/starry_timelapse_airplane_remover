@@ -30,6 +30,9 @@ object ViewModes {
     fun gridShown(available: Collection<FrameViewMode>): List<FrameViewMode> =
         all.filter { it == FrameViewMode.VIEW_ORIGINAL || it == FrameViewMode.VIEW_PROCESSED || it in available }
 
+    /** The mode's macOS case name (`FrameViewMode.rawValue`), which the grid's `grid.show.<name>` test tags use. */
+    internal fun name(mode: FrameViewMode): String? = key(mode)
+
     /** The catalogue entry for the mode's name (`view_mode.<macOS case name>`). */
     private fun key(mode: FrameViewMode): String? = when (mode) {
         FrameViewMode.VIEW_ORIGINAL -> "original"

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-from . import gitutil, guards, landing, load, negctl, ship, tickets, trust, worktrees
+from . import gitutil, guards, heavy, landing, load, negctl, ship, tickets, trust, worktrees
 from .agent import READ_ONLY_STAGES, STAGE_TOOLS, AgentRunner, StageOutcome, StageRequest
 from .announce import Announcer, Kind, SilentAnnouncer
 from .checks import baseline, impact, ledger
@@ -35,6 +35,10 @@ CATCH_UP_STATES = frozenset({"exploring", "developing", "verifying", "review"}) 
 RETRY_STATE = {**STAGE_STATE, "publish": "ready", "ci": "ci", "land": "landing"}  # what `starpipe retry <n> <stage>` re-enters
 HOLDABLE_STATES = ("failed", "cancelled")  # where `retry --when-unblocked` may park a retry
 LANDING_STAGES = frozenset({"conflict", "ci-fix"})  # stages a ticket in the landing train waits on: they outrank new work for an LLM slot
+# How far along the pipeline a stage is: of the stages waiting for an LLM slot, the furthest along starts first (a ticket that has
+# already cost an explore, a develop and a fix is worth finishing before a new one starts), then the lower priority number, then the
+# older ticket.  Landing stages are handled apart (they take a slot over the limit).
+STAGE_DEPTH = {"explore": 0, "develop": 1, "fix": 2, "review": 3, "resolve": 4}
 MAX_FIX_CYCLES, MAX_REVIEW_ROUNDS, MAX_CRASH_RESUMES = 2, 2, 3
 PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
 PRIORITY = {"p0": 0, "p1": 1, "p2": 2, "p3": 3}
@@ -94,6 +98,7 @@ class Engine:
     land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
     publish_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-publish is one step
     landing_waiting: set[int] = field(default_factory=lambda: set[int]())  # tickets whose landing stage is waiting for an LLM slot
+    llm_waiting: dict[int, tuple[int, int, int]] = field(default_factory=lambda: dict[int, tuple[int, int, int]]())  # other waiters' rank
     announcer: Announcer = field(default_factory=SilentAnnouncer)  # spoken alerts; the daemon injects the real one
 
     # intake --------------------------------------------------------------------------------------------------------
@@ -215,7 +220,6 @@ class Engine:
 
     def llm_active(self) -> int:
         """Sessions in the middle of work. One whose ticket is only waiting for the heavy lock is not generating anything."""
-        from . import heavy
 
         waiting = {w.ticket for w in heavy.status().queue}
         return len([s for s in self.db.running_stages() if str(s["ticket"]) not in waiting])
@@ -225,22 +229,23 @@ class Engine:
         return load.room(self.llm_active(), self.cpu(), sessions + extra, cpu_limit)
 
     def update_hold(self) -> dict[str, Any] | None:
-        """The self-update holding new work, while its drain window is open: {sha, left_s, waiting_on}; None otherwise.
+        """The self-update holding new work, until it swaps: {sha, left_s, waiting_on}; None otherwise.
 
-        The window runs from `self_update_pending_since` (missing counts as just started). Once it has passed the daemon swaps
-        regardless of running stages, so the hold ends here too."""
+        The daemon swaps as soon as no stage is running. `left_s` counts down the cap (`self_update_max_wait_s`) from
+        `self_update_pending_since` (missing counts as just started); once it has passed the daemon swaps regardless of running
+        stages, so the hold ends here too."""
         sha = self.db.get("self_update_pending")
         if not sha:
             return None
         since = self.db.get("self_update_pending_since")
-        left = self.config.self_update_drain_s - (self.clock() - float(since)) if since else float(self.config.self_update_drain_s)
+        left = self.config.self_update_max_wait_s - (self.clock() - float(since)) if since else float(self.config.self_update_max_wait_s)
         if left <= 0:
             return None
         return {"sha": sha, "left_s": left, "waiting_on": [s["ticket"] for s in self.db.running_stages()]}
 
     def claimable(self) -> Ticket | None:
         if self.db.get("pause") in ("all", "claims") or self.update_hold():
-            return None  # the second is the daemon waiting to swap to new code: nothing new starts for at most the drain window
+            return None  # the second is the daemon waiting to swap to new code: nothing new starts until it swaps, at most the cap
         if self.landing_waiting:
             return None  # a ticket in the landing train needs the next LLM slot
         if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
@@ -373,7 +378,8 @@ class Engine:
                           allow_resolve: bool = True, as_landing: bool | None = None) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
         contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db, self.gh, self.check_runner,
-                            self.notifier, owner_filed=self._owner_filed(t), baseline_runner=self.baseline_runner)
+                            self.notifier, owner_filed=self._owner_filed(t), baseline_runner=self.baseline_runner,
+                            stage=stage)
         resume = None if fresh else self._last_session(t, stage)
         note = self.db.get(f"catch_up_note:{t.number}")
         if note:  # develop was merged into the branch while the ticket was stopped: the resumed session did not make those commits
@@ -391,15 +397,17 @@ class Engine:
                 opening = f"{note}\n\n{opening}"
             if pending:
                 opening = f"The owner's answer to your question:\n\n{pending['answer']}\n\nContinue the stage.\n\n{opening}"
+        landing = stage in LANDING_STAGES if as_landing is None else as_landing  # same decision as _begin_when_room
         attempt, crashes = 1, 0
         summary = ""
         nudge: str | None = None  # set to send the nudge in place of the prompt
         nudged = False
         while attempt <= 3:
             await self._wait_for_usage()
-            await self._wait_for_update_hold()
+            if not landing:  # the landing train waits on a landing stage: a pending self-update must not hold it
+                await self._wait_for_update_hold()
             model, effort = self._stage_choice(t, stage, attempt)
-            stage_id = await self._begin_when_room(t, stage, attempt, model, landing=as_landing)
+            stage_id = await self._begin_when_room(t, stage, attempt, model, landing=landing)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
             if nudge:
                 body, nudge = nudge, None
@@ -449,19 +457,24 @@ class Engine:
             landing = stage in LANDING_STAGES
         if landing:
             self.landing_waiting.add(t.number)
+        else:  # rank: furthest along first, then priority (p0 first), then the older ticket
+            self.llm_waiting[t.number] = (-STAGE_DEPTH.get(stage, 0), t.priority, t.number)
         try:
             while True:
                 async with self.llm_lock:
                     # A landing stage may take one session over the limit, at once; everything else waits while one is waiting.
                     room = self.llm_room(extra=1 if landing else 0)
-                    if room.ok and (landing or not self.landing_waiting):
+                    first = landing or t.number == min(self.llm_waiting, key=lambda n: self.llm_waiting[n])
+                    if room.ok and (landing or not self.landing_waiting) and first:
                         self.db.put(f"llm_wait:{t.number}", None)
                         return self.db.begin_stage(t.number, stage, attempt, model)
-                reason = room.reason if not room.ok else "a landing stage is waiting for a session"
+                reason = (room.reason if not room.ok else "a landing stage is waiting for a session" if self.landing_waiting
+                          else "a ticket further along is waiting for the session first")
                 self.db.put(f"llm_wait:{t.number}", reason)
                 await self.sleep(15)
         finally:
             self.landing_waiting.discard(t.number)
+            self.llm_waiting.pop(t.number, None)
 
     def _undelivered_answer(self, t: Ticket) -> dict[str, Any] | None:
         rows = self.db._all("SELECT * FROM questions WHERE ticket=? AND answer IS NOT NULL ORDER BY id DESC LIMIT 1",  # pyright: ignore[reportPrivateUsage]
@@ -745,6 +758,10 @@ class Engine:
 
     def _run_verification(self, t: Ticket, wt: Path) -> str:
         """The daemon's own run of T0+T1 at HEAD and the negative control. Empty string means green."""
+        with heavy.requester(t.number, "verify", t.priority):  # the heavy lock serves the ticket furthest along first
+            return self._verification(t, wt)
+
+    def _verification(self, t: Ticket, wt: Path) -> str:
         sha = gitutil.head_sha(wt)
         if not gitutil.is_clean(wt):
             return "the tree is not clean"
