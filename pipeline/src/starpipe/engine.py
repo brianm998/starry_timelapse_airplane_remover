@@ -810,9 +810,9 @@ def check_runner_for(say: Callable[[str], None] = lambda _m: None) -> CheckRunne
     """The real T0+T1 runner, used by the daemon and by the run_checks tool."""
     from .checks import runner
 
-    def run(worktree: Path, base: str) -> list[ledger.Result]:
+    def run(worktree: Path, base: str, tiers: set[str] | None = None) -> list[ledger.Result]:
         changed = gitutil.changed_paths(worktree, base)
         plan = impact.plan_for(changed)
-        return runner.run_plan(plan, worktree, base, {"t0", "t1"}, say=say)
+        return runner.run_plan(plan, worktree, base, tiers or {"t0", "t1"}, say=say)
 
     return run

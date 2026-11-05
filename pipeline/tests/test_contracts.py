@@ -220,3 +220,59 @@ def test_known_red_is_alerted_once_and_named(tmp_path: Path, monkeypatch: pytest
     assert [a["key"] for a in alerts] == [f"known-red:test:StarCpp:{'b' * 12}"] and QOS in alerts[0]["text"]
     body = ship.pr_body(SimpleNamespace(db=c.db), c.ticket)  # type: ignore[arg-type]
     assert "## Known red on develop" in body and QOS in body
+
+
+def _tiered_contract(tmp: Path, monkeypatch: pytest.MonkeyPatch, stage: str, land_now: bool) -> tuple[Contract, list[set[str] | None]]:
+    """A diff that needs a t1 test check; the runner records which tiers it was asked for and records only those."""
+    c = contract(tmp)
+    c.stage = stage
+    if land_now:
+        c.db.put("land_now:7", "1")
+    commit_change_for(c)
+    monkeypatch.setattr(impact, "plan_for", lambda _paths: impact.Plan(t0=["t0:diff-check"], tests=["test:StarCpp"]))
+    asked: list[set[str] | None] = []
+
+    def runner(worktree: Path, _base: str, tiers: set[str] | None = None) -> list[ledger.Result]:
+        asked.append(tiers)
+        sha = gitutil.head_sha(worktree)
+        ids = ["t0:diff-check"] if tiers == {"t0"} else ["t0:diff-check", "test:StarCpp"]
+        out = [ledger.Result(i, "pass", sha, 0.0, executed=1) for i in ids]
+        for r in out:
+            ledger.record(r)
+        return out
+
+    c.check_runner = runner
+    return c, asked
+
+
+def test_a_land_now_conflict_stage_needs_only_the_cheap_checks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    c, _ = _tiered_contract(tmp_path, monkeypatch, "conflict", True)
+    sha = gitutil.head_sha(c.worktree)
+    ledger.record(ledger.Result("t0:diff-check", "pass", sha, 0.0, executed=1))
+    assert "accepted" in c.submit_change({"summary": "x"})
+
+
+def test_a_conflict_stage_without_land_now_still_needs_every_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    c, _ = _tiered_contract(tmp_path, monkeypatch, "conflict", False)
+    sha = gitutil.head_sha(c.worktree)
+    ledger.record(ledger.Result("t0:diff-check", "pass", sha, 0.0, executed=1))
+    assert "test:StarCpp" in c.submit_change({"summary": "x"})
+
+
+def test_run_checks_in_a_land_now_conflict_stage_runs_only_t0(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    c, asked = _tiered_contract(tmp_path, monkeypatch, "conflict", True)
+    told = c.run_checks({})
+    assert asked == [{"t0"}]
+    assert "test:StarCpp" not in told and "only the cheap checks" in told
+    assert "accepted" in c.submit_change({"summary": "x"})
+
+
+def test_other_stages_of_a_land_now_ticket_keep_the_full_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    c, asked = _tiered_contract(tmp_path, monkeypatch, "develop", True)
+    assert "only the cheap checks" not in c.run_checks({})
+    assert asked == [None]
+    sha = gitutil.head_sha(c.worktree)
+    assert ledger.latest(sha, "test:StarCpp")  # the full runner ran it, so the gate was satisfied by running it
+    c2, _ = _tiered_contract(tmp_path / "second", monkeypatch, "develop", True)
+    ledger.record(ledger.Result("t0:diff-check", "pass", gitutil.head_sha(c2.worktree), 0.0, executed=1))
+    assert "test:StarCpp" in c2.submit_change({"summary": "x"})
