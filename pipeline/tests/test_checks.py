@@ -131,7 +131,10 @@ def test_hung_check_is_reported_as_hung(tmp_path: Path, monkeypatch: pytest.Monk
     assert "made no progress" in result.detail and "time.sleep(60)" in result.detail and "rerun run_checks" in result.detail
     assert heavy.status().holders == [], "the lock was released"
 
-    told = Contract(ticket, wt, "origin/develop", db, check_runner=lambda _w, _b: [result]).run_checks({})
+    def hung_runner(_w: Path, _b: str) -> list[ledger.Result]:
+        return [result]
+
+    told = Contract(ticket, wt, "origin/develop", db, check_runner=hung_runner).run_checks({})
     assert told.startswith("HUNG test:wedged") and "rerun run_checks" in told
     assert db.checks(7)[0]["result"] == "hung"
 

@@ -176,7 +176,10 @@ def _red_contract(tmp: Path, monkeypatch: pytest.MonkeyPatch, head: list[str], b
     sha = gitutil.head_sha(c.worktree)
     red = ledger.Result("test:StarCpp", "fail", sha, 0.0, executed=10, failed=len(head) if failed is None else failed, failures=head)
     ledger.record(red)
-    c.check_runner = lambda _w, _b: [red]
+    def red_runner(_w: Path, _b: str) -> list[ledger.Result]:
+        return [red]
+
+    c.check_runner = red_runner
     c.baseline_runner = lambda _w, _b, _c: base
     pages: list[str] = []
     c.notifier = Notifier(c.db, lambda _t, text: pages.append(text))
@@ -229,7 +232,10 @@ def _tiered_contract(tmp: Path, monkeypatch: pytest.MonkeyPatch, stage: str, lan
     if land_now:
         c.db.put("land_now:7", "1")
     commit_change_for(c)
-    monkeypatch.setattr(impact, "plan_for", lambda _paths: impact.Plan(t0=["t0:diff-check"], tests=["test:StarCpp"]))
+    def plan_with_t1(_paths: list[str]) -> impact.Plan:
+        return impact.Plan(t0=["t0:diff-check"], tests=["test:StarCpp"])
+
+    monkeypatch.setattr(impact, "plan_for", plan_with_t1)
     asked: list[set[str] | None] = []
 
     def runner(worktree: Path, _base: str, tiers: set[str] | None = None) -> list[ledger.Result]:
