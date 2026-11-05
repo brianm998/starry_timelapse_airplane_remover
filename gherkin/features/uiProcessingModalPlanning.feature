@@ -8,8 +8,11 @@ Feature: The processing screen stops saying it is planning once the plan is buil
 
   What this does not check is that the planning line was ever up: on these ten frames the plan is built in well under a second, and the desktop's
   first look at the headline (measured, a poll every 5 ms from the click's return) already read "Working on: ...", so `is still saying` on the planning
-  line cannot hold there. The planning line itself is held by the headline's unit tests on both sides (`ProcessingHeadline`, and the gui's
-  `starTests` copy check); no delay was added to planning to catch it. What it does check is that the headline is there and moves on from it.
+  line cannot hold there, and no delay was added to planning to catch it. The planning line itself is held by the headline's unit tests on both sides
+  (`ProcessingHeadlineTests`, `ProcessingHeadlineTest`, `ProcessingModalPlanTest`). What this does check: the headline is there, it does not stay on
+  the planning line once the plan is built (a headline stuck on planning fails `stops saying`), and what it moves to is the steps' work ("Working on",
+  from the step rows, not a blank or the finishing line). A headline that never said planning at all would still pass: that is the gap, and a ticket
+  for a sequence on which planning lasts long enough to catch is filed with this change.
 
   Scenario: Process All's headline moves on from planning, and Return is Preview
     Given a fresh copy of the sequence {sequence}
@@ -21,6 +24,7 @@ Feature: The processing screen stops saying it is planning once the plan is buil
     Then  "processing.modal" is shown
       And "processing.headline" is shown
       And "processing.headline" stops saying "Planning the run: working out which steps each frame still needs."
+      And "processing.headline" says something with "Working on"
     When  I press "return"
     Then  "processing.modal" is not shown
     When  I click "mode.edit"

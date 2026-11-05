@@ -69,6 +69,7 @@ are different: they stay literal in the feature and the runner supplies their va
 | `I make the window large` | the gui zooms its main window through the Window menu (it opens at 900 by 450 points, where the grid is one cell tall and its lower rows are not built); the desktop's test window is large already |
 | `"<id>" is still saying "<text>"` | the element says it now, with no waiting for it to: for a state that must have been there all along, which `says` would let a frame pass by getting there late |
 | `"<id>" stops saying "<text>"` | waits (up to 90 s) until the element says something else: for a count that moves off a value it is known to start on, without the feature pinning the new one |
+| `"<id>" says something with "<text>"` | waits (up to 90 s) until the element's text has the words in it: for a line whose rest the feature does not pin, such as the processing headline's "Working on" |
 | `"<id>" is shown` / `is not shown` | the id is in the window (waited for, in both directions; the desktop looks in the unmerged semantics tree, so a control a merging parent takes in, such as the badge on a grid cell, has its own id) |
 | `"<id>" is above "<id>"` | the first element's top edge is higher on the screen than the second's: the order of a list (gui: `frame.minY`; desktop: `boundsInRoot.top`) |
 | `"<id>" is selected` / `is not selected` | a radio choice (gui: the selected trait; desktop: `selectable`) |
