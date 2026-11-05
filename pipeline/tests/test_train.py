@@ -650,28 +650,6 @@ async def test_abandoning_a_batch_cancels_its_queued_ci_runs_too(rig: Rig) -> No
     assert rig.gh.closed_prs and rig.state(1) == "landed"
 
 
-async def test_a_feature_run_happens_per_ticket_before_batching_not_per_batch(rig: Rig) -> None:
-    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
-    ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoHorizonJpeg"))
-    rig.gh.feature_pending_polls = 2
-    t1, t2 = rig.db.ticket(1), rig.db.ticket(2)
-    assert t1 and t2
-    at_publish: list[list[tuple[str, str, dict[str, str]]]] = []
-    real_create = rig.gh.create_pr
-
-    def create_pr(title: str, body: str, head: str, base: str) -> dict[str, Any]:
-        at_publish.append(list(rig.gh.dispatches))
-        return real_create(title, body, head, base)
-
-    rig.gh.create_pr = create_pr  # type: ignore[method-assign]
-    await train_of(rig).run_until_idle()
-    assert sorted((ref, inputs["features"]) for _, ref, inputs in rig.gh.dispatches) == sorted(
-        [(t1.branch, "autoMovingTiff16"), (t2.branch, "autoHorizonJpeg")]), "one run per ticket, each on its own branch"
-    assert len(at_publish) == 1 and len(at_publish[0]) == 2, "both feature runs were done before the one batch was published"
-    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2 and len(rig.gh.prs) == 1, "still one PR and one CI for the two"
-    assert rig.gh.cancelled_runs == []
-
-
 def test_jobs_carry_their_runner_labels() -> None:
     runs = [{"id": 5, "name": "pr-gate"}]
     jobs = ci_mod.parse_jobs(runs, {5: [{"name": "mac", "status": "queued", "conclusion": None, "labels": ["macos-15"]},
@@ -691,62 +669,81 @@ async def test_a_batch_lands_with_an_unscheduled_job_noted(rig: Rig) -> None:
     assert [(e["data"]["batch"], e["data"]["job"]) for e in events] == [(1, "macos")]
 
 
-async def test_feature_gates_wait_while_batch_macos_jobs_are_queued(rig: Rig) -> None:
-    ready_ticket(rig, 1, "b1.md", "1\n")
-    rig.gh.job_labels["macos"] = ["macos-15"]
-    polls: list[int] = []  # feature runs dispatched so far, at each poll of the batch's CI
+async def test_gherkin_ticket_joins_batch_without_own_gate(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    t = train_of(rig)
+    assert t._pick() == [1], "no feature run on its own branch is owed before it may be batched"  # pyright: ignore[reportPrivateUsage]
+    t1 = rig.db.ticket(1)
+    assert t1 is not None
+    await t.step()
+    assert rig.db.batch_of(1) == 1
+    assert all(ref != t1.branch for _, ref, _ in rig.gh.dispatches), "nothing was dispatched on the ticket's own branch"
 
-    def hook(_sha: str) -> Ci:
-        polls.append(len(rig.gh.dispatches))
-        linux: Ci = [("pr-gate", "linux", "completed", "success")]
-        if len(polls) <= 3:  # a macOS job still waiting for a runner
-            return [*linux, ("pr-gate", "macos", "queued", None)]
-        if len(polls) <= 5:  # running now: no longer queued
-            return [*linux, ("pr-gate", "macos", "in_progress", None)]
-        return PASS
 
-    rig.gh.ci_hook = hook
-    real_sleep = rig.engine.sleep
-    added: list[int] = []
-
-    async def sleep(s: float) -> None:
-        if not added:  # the batch is in CI: a ticket that owes a feature run becomes ready meanwhile
-            added.append(2)
-            ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoMovingTiff16"))
-        await real_sleep(s)
-
-    rig.engine.sleep = sleep
+async def test_batch_dispatches_one_feature_run_for_all_members(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoHorizonJpeg, autoMovingTiff16"))
+    ready_ticket(rig, 3, "f3.md", "3\n")  # no features: adds nothing to the union and is not failed by it
+    rig.gh.feature_pending_polls = 2
     await train_of(rig).run_until_idle()
-    assert polls[:4] == [0, 0, 0, 0], f"no feature run started while a macOS job was queued: {polls}"
-    assert polls[-1] == 1, f"it started once nothing was queued, while the batch was still in CI: {polls}"
-    assert len(rig.gh.dispatches) == 1 and rig.gh.cancelled_runs == [], "dispatched once, never cancelled or redone"
-    deferred = [e for e in rig.db.events_since() if e["kind"] == "gate-deferred"]
-    assert [(e["ticket"], e["data"]["batch"], e["data"]["queued_macos"]) for e in deferred] == [(2, 1, 1)], "reported once"
-    assert [rig.state(n) for n in (1, 2)] == ["landed", "landed"]
+    assert [(f, ref, inputs["features"]) for f, ref, inputs in rig.gh.dispatches] == [
+        ("gherkin.yml", "pipe/batch-1", "autoMovingTiff16,autoHorizonJpeg")], "one run, on the batch branch, with the union"
+    assert [rig.state(n) for n in (1, 2, 3)] == ["landed"] * 3 and len(rig.gh.prs) == 1
+    assert rig.gh.cancelled_runs == [], "the batch's CI judge neither counted nor cancelled the feature run"
 
 
-async def test_a_feature_run_already_going_is_left_alone_while_macos_jobs_are_queued(rig: Rig) -> None:
+async def test_batch_waits_for_feature_run(rig: Rig) -> None:
     ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
-    train = train_of(rig)
-    batch = rig.db.batch_create("base")
-    train._macos_queued[batch] = 2  # pyright: ignore[reportPrivateUsage]
-    going = asyncio.get_running_loop().create_future()
-    train._gates[1] = going  # type: ignore[assignment]  # pyright: ignore[reportPrivateUsage]
-    train._start_gates()  # pyright: ignore[reportPrivateUsage]
-    assert train._gates[1] is going and not going.cancelled() and rig.gh.dispatches == []  # pyright: ignore[reportPrivateUsage]
-    del train._gates[1]  # pyright: ignore[reportPrivateUsage]
-    rig.db.batch_update(batch, state="abandoned")  # no batch active: nothing holds the run back
-    train._start_gates()  # pyright: ignore[reportPrivateUsage]
-    assert 1 in train._gates  # pyright: ignore[reportPrivateUsage]
-    await asyncio.wait(list(train._gates.values()))  # pyright: ignore[reportPrivateUsage]
+    ready_ticket(rig, 2, "f2.md", "2\n")
+    rig.gh.feature_pending_polls = 3  # CI is green at once; the feature run is not
+    at_merge: list[int] = []
+    real_merge = rig.gh.merge_pr
+
+    def merge_pr(number: int, sha: str) -> None:
+        at_merge.append(max(r["polls"] for r in rig.gh.feature_runs.values()))
+        real_merge(number, sha)
+
+    rig.gh.merge_pr = merge_pr  # type: ignore[method-assign]
+    await train_of(rig).run_until_idle()
+    assert at_merge and at_merge[0] <= 0, f"the batch merged before its feature run had finished: {at_merge}"
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2
+    assert any(e["kind"] == "gherkin-proven" and e["data"]["batch"] == 1 for e in rig.db.events_since())
 
 
-async def test_a_ticket_still_owing_a_feature_run_is_not_batched(rig: Rig) -> None:
+async def test_a_red_batch_feature_run_goes_through_the_red_handling(rig: Rig) -> None:
     ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
-    train = train_of(rig)
-    assert train._gated(rig.db.ticket(1)) and train._pick() == []  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
-    rig.db.put("gherkin_ok:1", "x")
-    assert train._pick() == [1]  # pyright: ignore[reportPrivateUsage]
+    ready_ticket(rig, 2, "f2.md", "2\n")
+    rig.gh.feature_attempts = [[("cli (macos-15) · a", "failure")]]
+    t = train_of(rig)
+    await t.step()
+    await t.drain()
+    batch = rig.db.batch(1)
+    assert batch and batch["state"] == "failed" and "CI red" in batch["note"]
+    assert json.loads(rig.db.get("train_groups") or "[]") == [[1], [2]], "split in halves, as any red batch is"
+    assert rig.state(1) != "landed" and rig.state(2) != "landed"
+
+
+async def test_skip_features_dispatches_nothing(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoHorizonJpeg"))
+    rig.db.put("skip_features:1", "1")
+    rig.db.put("land_now:2", "1")  # land-now alone would take its own batch, but here it is only about the feature list
+    t = train_of(rig)
+    assert t._batch_features([1, 2]) == []  # pyright: ignore[reportPrivateUsage]
+    rig.db.put("land_now:2", None)
+    rig.db.put("skip_features:2", "1")
+    await t.run_until_idle()
+    assert rig.gh.dispatches == [], "every member skips features: no run, the batch lands on its CI alone"
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2
+
+
+async def test_skip_features_on_some_members_runs_only_the_others_features(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoHorizonJpeg"))
+    rig.db.put("skip_features:1", "1")
+    await train_of(rig).run_until_idle()
+    assert [inputs["features"] for _, _, inputs in rig.gh.dispatches] == ["autoHorizonJpeg"]
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2
 
 
 def _land_one(rig: Rig, ci: Ci) -> None:

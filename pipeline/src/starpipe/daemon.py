@@ -87,9 +87,6 @@ def ready_activity(db: Database, t: Ticket, config: Config, now: float) -> str:
     if (member := db.batch_of(t.number)) is not None:
         row = db.batch(member)
         return f"ready · in batch {member} ({row['state'] if row else 'building'})"
-    if (features := tickets.gherkin_features(t.body, t.plan)) and not db.get(f"gherkin_ok:{t.number}"):
-        err = json.loads(db.get(f"gherkin_err:{t.number}") or "null")
-        return f"ready · proving Gherkin features ({', '.join(features)})" + (f" · last poll failed: {err['error']}" if err else "")
     if active := db.active_batches():
         return f"ready · waiting for the next batch ({', '.join(f'batch {b['id']} is {b['state']}' for b in active)})"
     left = train.window_left(db, config, now)
@@ -757,6 +754,7 @@ class Daemon:
                 task.cancel()
             self.db.intervention(n, "cancel", t.state)
             self.db.put(f"land_now:{n}", None)
+            self.db.put(f"skip_features:{n}", None)
             self.db.put(f"held_retry:{n}", None)
             self.engine._to_state(n, "cancelled", str(body.get("reason") or "cancelled by the owner"))  # pyright: ignore[reportPrivateUsage]
         elif action == "requeue":
@@ -775,6 +773,11 @@ class Daemon:
                     self.engine.gh.update_pr(t.pr_number, ship.pr_body(self.engine, t))
                 except (GitHubError, RuntimeError):
                     pass
+        elif action == "skip-features":
+            if t.state not in LAND_NOW_STATES:
+                raise web.HTTPConflict(text=f"#{n} is {t.state}: skip-features needs a ticket in {', '.join(LAND_NOW_STATES)}")
+            self.db.put(f"skip_features:{n}", "1")  # the batch it lands in does not run this ticket's Gherkin features
+            self.db.intervention(n, "skip-features", t.state)
         elif action == "prio":
             prio = int(str(body["priority"]))
             self.db.set_fields(n, priority=prio)
