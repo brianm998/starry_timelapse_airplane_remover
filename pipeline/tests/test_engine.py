@@ -221,6 +221,35 @@ async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
     assert rig.engine.claimable() is not None, "no pending update, no hold"
 
 
+async def test_a_landing_stage_is_not_held_by_a_pending_self_update(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    rig.db.put("self_update_pending", "e3c559f6aabb")
+    rig.db.put("self_update_pending_since", str(rig.now))
+    assert rig.engine.update_hold() is not None
+    rig.agent.on("conflict", lambda r: StageOutcome("no-result"))
+
+    await rig.engine.model_stage(t, "conflict", "resolve", fresh=True)
+    assert [r.stage for r in rig.agent.requests] == ["conflict"] * 3 and rig.slept == [], "a landing stage starts at once, no hold"
+
+
+async def test_a_develop_stage_is_still_held_by_a_pending_self_update(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    rig.db.put("self_update_pending", "e3c559f6aabb")
+    rig.db.put("self_update_pending_since", str(rig.now))
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    drain = rig.engine.config.self_update_drain_s
+
+    await rig.engine.model_stage(t, "develop", "go")
+    assert rig.slept and sum(rig.slept) >= drain, "the stage waited out the drain window"
+    assert rig.engine.update_hold() is None
+
+
 async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Rig) -> None:
     assert rig.engine.max_active() == rig.engine.config.max_llm_sessions
     rig.db.put("max_active", "2")
