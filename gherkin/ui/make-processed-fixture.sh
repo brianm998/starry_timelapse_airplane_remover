@@ -14,6 +14,9 @@
 # The fixture is kept under STAR_UI_FIXTURES (default <repo>/.test-data/ui-processed), in a directory named for the sequence and for the cli that made
 # it, so a new build of the cli makes a new one and a second feature of the same run finds the first's. The cli is STAR_CLI_PATH, else the release
 # build in cli/.build; with STAR_CLI_BUILD=1 a missing one is built first (swift build -c release --package-path cli), which takes a while.
+# CI (the `ui` shard of gherkin.yml) makes the fixture once in a step of its own, with the cli that desktop-linux and desktop-windows build in a step
+# and the macOS legs take from build-macos, and exports STAR_CLI_PATH, STAR_UI_FIXTURES and STAR_CLI_BUILD=0, so every feature's call finds that
+# directory and its READY; a cli that is missing is then exit 2, never a build inside a feature.
 
 set -eu
 
@@ -39,12 +42,13 @@ stamp=$(stat -c '%Y-%s' "$star" 2>/dev/null || stat -f '%m-%z' "$star")
 fixtures=${STAR_UI_FIXTURES:-$root/.test-data/ui-processed}
 dest="$fixtures/$name-$stamp"
 
-# What is printed, and handed to the cli, is the path in the form the runner's own language reads: on Windows (Git Bash) a JVM wants C:/..., not /d/a/...
-shown=$dest
-if command -v cygpath >/dev/null 2>&1; then shown=$(cygpath -m "$dest"); fi
+# What is printed is for the caller: on Windows (Git Bash) the desktop runner's JVM wants C:/..., not /d/a/...
+print_dest() {
+    if command -v cygpath >/dev/null 2>&1; then cygpath -m "$dest"; else echo "$dest"; fi
+}
 
 if [ -f "$dest/READY" ]; then
-    echo "$shown"
+    print_dest
     exit 0
 fi
 
@@ -52,7 +56,7 @@ fi
 rm -rf "$dest"
 mkdir -p "$dest/input"
 cp -R "$sequence" "$dest/input/$name"
-if ! "$star" --language en -l info --keep-temp-files --no-horizon -c selective "$shown/input/$name" "$shown/output" > "$dest/star.log" 2>&1; then
+if ! "$star" --language en -l info --keep-temp-files --no-horizon -c selective "$dest/input/$name" "$dest/output" > "$dest/star.log" 2>&1; then
     echo "star exited with an error; last output:" >&2
     tail -40 "$dest/star.log" >&2
     rm -rf "$dest"
@@ -76,4 +80,4 @@ if [ ! -s "$outliers/0/outliers.bin" ]; then
 fi
 echo "fixture: $(ls "$outliers" | wc -l | tr -d ' ') frames with outlier files, frame 0's outliers.bin is $(wc -c < "$outliers/0/outliers.bin" | tr -d ' ') bytes" >&2
 date -u +%Y-%m-%dT%H:%M:%SZ > "$dest/READY"
-echo "$shown"
+print_dest

@@ -156,6 +156,9 @@
     "uiMultiSelectSheet": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiMultiSheetChoices": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiFrameModeChange": {
       "sequence": "test_data/test_a7sii_10"
     },
@@ -171,6 +174,15 @@
     "uiStartDuringRun": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiRenderAllFrames": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiAutoSelectiveEnds": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiRestartNow": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiMultiChoiceSheet": {
       "sequence": "test_data/test_a7sii_10"
     },
@@ -184,6 +196,9 @@
       "sequence": "test_data/test_a7sii_10"
     },
     "uiGalleryProcessed": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGridShowList": {
       "sequence": "test_data/test_a7sii_10"
     },
     "uiGalleryMultiSelect": {

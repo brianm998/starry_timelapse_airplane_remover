@@ -96,6 +96,64 @@ async def test_a_job_develop_also_fails_does_not_block_and_is_listed(rig: Rig) -
     assert "known red on develop (not blocking): cli/windows" in rig.gh.prs[101]["body"]
 
 
+NO_RUNNER = "no runner, left to the post-merge watch and the nightly"
+
+
+async def test_a_ticket_lands_with_an_unscheduled_job_noted(rig: Rig) -> None:
+    ready_ticket(rig, 1, "one.md", "one\n")
+    t = rig.db.ticket(1)
+    assert t
+    rig.gh.ci[gitutil.head_sha(Path(t.worktree or ""))] = [("pr-gate", "linux", "completed", "success"),
+                                                          ("pr-gate", "macos", "completed", "cancelled")]
+    rig.gh.job_steps["macos"] = []  # GitHub never gave it a runner: no step ran
+    await rig.engine.drive(1)
+    assert rig.state(1) == "landed" and rig.gh.reruns == [], "not blocking and not rerun"
+    assert f"{NO_RUNNER}: pr-gate/macos" in rig.gh.prs[101]["body"]
+    events = [e for e in rig.db.events_since() if e["kind"] == "ci-no-runner"]
+    assert [(e["ticket"], e["data"]["workflow"], e["data"]["job"]) for e in events] == [(1, "pr-gate", "macos")]
+
+
+def test_an_unscheduled_gate_job_passes_with_a_warning() -> None:
+    unscheduled = ci.Job("pr-gate", "OpenCV (macOS)", "completed", "cancelled", 1, unscheduled=True)
+    v = judged([job("pr-gate", "l"), unscheduled])
+    assert v.kind == "pass" and v.warnings == [unscheduled] and v.rerun == [] and v.blocking == []
+    # it is not a gate failure however often it was rerun before, and a real red beside it still blocks
+    assert judged([job("pr-gate", "l"), unscheduled], reran={unscheduled.key}).kind == "pass"
+    assert judged([job("pr-gate", "l", conclusion="failure"), unscheduled]).kind == "fail"
+
+
+def test_an_unscheduled_job_outside_the_gate_passes_with_a_warning() -> None:
+    unscheduled = ci.Job("cli", "macos", "completed", "cancelled", 2, unscheduled=True)
+    base = {("cli", "macos"): "success"}  # green on develop: a plain red here would be rerun, then block
+    v = judged([job("pr-gate", "l"), unscheduled], base)
+    assert v.kind == "pass" and v.warnings == [unscheduled] and v.rerun == [] and v.known_red == []
+    assert judged([job("pr-gate", "l"), unscheduled], base, reran={unscheduled.key}).kind == "pass"
+
+
+def test_a_job_cancelled_after_running_steps_is_still_rerun_then_blocks() -> None:
+    ran = ci.Job("pr-gate", "OpenCV (macOS)", "completed", "cancelled", 1)  # steps ran: not unscheduled
+    v = judged([ran])
+    assert v.kind == "rerun" and v.rerun == [ran] and v.warnings == []
+    v = judged([ran], reran={ran.key})
+    assert v.kind == "fail" and v.blocking == [ran] and v.warnings == []
+
+
+def test_parse_jobs_marks_a_cancelled_job_with_no_steps_unscheduled_unless_its_run_was_cancelled() -> None:
+    ran = [{"name": "build", "conclusion": "success", "started_at": "2026-11-04T10:00:00Z"}]
+    cancelled = {"status": "completed", "conclusion": "cancelled"}
+
+    def parse(run_conclusion: str, job: dict[str, Any]) -> bool:
+        runs = [{"id": 5, "name": "pr-gate", "conclusion": run_conclusion}]
+        return ci.parse_jobs(runs, {5: [{"name": "m", **job}]})[0].unscheduled
+
+    assert parse("failure", {**cancelled, "steps": []})
+    assert parse("failure", {**cancelled, "steps": [{"name": "Set up job", "conclusion": None, "started_at": None}]})
+    assert not parse("failure", {**cancelled, "steps": ran}), "it ran steps"
+    assert not parse("cancelled", {**cancelled, "steps": []}), "a newer push cancelled the whole run"
+    assert not parse("failure", cancelled), "no steps key: unknown, so scheduled"
+    assert not parse("failure", {"status": "completed", "conclusion": "failure", "steps": []})
+
+
 async def test_a_new_failure_in_another_workflow_blocks(rig: Rig) -> None:
     ready_ticket(rig, 1, "one.md", "one\n")
     rig.db.set_baseline("cli", "windows", "abc", "success")
@@ -607,6 +665,59 @@ def test_a_gherkin_job_going_red_files_no_regression_ticket_but_updates_the_base
     assert rig.gh.issues == {}
     assert rig.db.baseline("Gherkin", "desktop (ubuntu-24.04) · a") == "failure"
     assert rig.db.get("red_pending:Gherkin/desktop (ubuntu-24.04) · a") is None
+
+
+def _red_for(rig: Rig, workflow: str, name: str, hours: float, *, shas: tuple[str, ...] = ("d2",)) -> None:
+    """The job was already red (baseline `failure`) when watching started; `hours` later it is still red."""
+    rig.gh.develop_sha = "d1"
+    rig.gh.develop_ci = [(workflow, name, "completed", "failure")]
+    ship.watch_develop(rig.engine)  # seeding: the known-red ledger
+    for sha in shas:
+        rig.gh.develop_sha = sha
+        ship.watch_develop(rig.engine)
+    rig.now += hours * 3600
+    rig.gh.develop_sha = shas[-1]
+    ship.watch_develop(rig.engine)
+
+
+def test_a_job_red_for_long_with_no_open_ticket_gets_one(rig: Rig) -> None:
+    _red_for(rig, "Kotlin Client", "ubuntu-latest", 0.5)
+    assert rig.gh.issues == {}, "red for half an hour: not yet"
+    rig.now += 3 * 3600
+    ship.watch_develop(rig.engine)
+    (issue,) = rig.gh.issues.values()
+    assert issue["title"] == "regression on develop: Kotlin Client/ubuntu-latest"
+    assert "red on develop since" in issue["body"] and "was green and is now red" not in issue["body"]
+    rig.now += 4 * 3600
+    ship.watch_develop(rig.engine)
+    assert len(rig.gh.issues) == 1, "an open ticket now covers it"
+
+
+def test_a_long_red_job_with_an_open_ticket_gets_no_second_one(rig: Rig) -> None:
+    rig.gh.add_issue(7, "WholeWordsTest fails on Kotlin Client/ubuntu-latest", labels=("pipeline",))
+    _red_for(rig, "Kotlin Client", "ubuntu-latest", 5)
+    assert sorted(rig.gh.issues) == [7]
+    assert any(e["kind"] == "red-already-ticketed" for e in rig.db.events_since())
+
+
+def test_gherkin_reds_are_never_ticketed_by_the_watcher(rig: Rig) -> None:
+    _red_for(rig, "Gherkin", "desktop (ubuntu-24.04) · a", 24)
+    assert rig.gh.issues == {}
+    assert rig.db.get("red_since:Gherkin/desktop (ubuntu-24.04) · a") is None
+
+
+def test_a_green_run_clears_the_red_since_mark(rig: Rig) -> None:
+    _red_for(rig, "cli", "desktop", 1)
+    assert rig.db.get("red_since:cli/desktop") is not None
+    rig.gh.develop_sha = "d3"
+    rig.gh.develop_ci = [("cli", "desktop", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    assert rig.db.get("red_since:cli/desktop") is None
+    rig.now += 5 * 3600
+    rig.gh.develop_sha = "d4"
+    rig.gh.develop_ci = [("cli", "desktop", "completed", "failure")]
+    ship.watch_develop(rig.engine)
+    assert rig.gh.issues == {}, "the clock restarted at the new red"
 
 
 def test_a_red_gate_still_stops_the_line_on_the_first_red_run(rig: Rig) -> None:

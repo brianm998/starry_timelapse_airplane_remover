@@ -42,9 +42,15 @@ def watch(seconds: float, limit: int = 2, path_prefix: str = "") -> str:
     return out
 
 
-def testWatchdogDumpsWhenStardLogGoesQuiet(fake_stard: tuple[subprocess.Popen[bytes], Path]) -> None:
+def testWatchdogDumpsWhenStardLogGoesQuiet(fake_stard: tuple[subprocess.Popen[bytes], Path], tmp_path: Path) -> None:
     proc, _log = fake_stard
-    out = watch(9)
+    # The machine's real JVMs (Gradle daemons, Android Studio, another job's test worker) would make this timing depend on how many are
+    # running; a jps that lists none keeps it deterministic.  testWatchdogBoundsEachJvmDump covers the jstack loop.
+    shims = tmp_path / "nojvms"
+    shims.mkdir()
+    (shims / "jps").write_text("#!/bin/bash\nexit 0\n")
+    (shims / "jps").chmod(0o755)
+    out = watch(9, path_prefix=str(shims))
     assert out.count(BANNER) >= 1, out
     assert out.count(BANNER) <= 2, out  # a first dump and one more, then silence for that pid
     assert f"pid {proc.pid}" in out
@@ -53,6 +59,27 @@ def testWatchdogDumpsWhenStardLogGoesQuiet(fake_stard: tuple[subprocess.Popen[by
     assert "ResourceGovernor: CPU gate 2/2" in out  # the log tail
     assert "--- jstack of every JVM" in out  # tools that are absent degrade to a note, the dump still completes
     assert "::endgroup::" in out
+
+
+def testWatchdogBoundsEachJvmDump(fake_stard: tuple[subprocess.Popen[bytes], Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """macOS has no `timeout`, so a jstack of a big JVM (Android Studio, Gradle daemons) used to be unbounded and the dump never
+    reached ::endgroup::.  Shims for jps (three live "JVMs") and a jstack that never answers: each is cut off after HANG_WATCHDOG_JVM_SECONDS."""
+    jvms = [subprocess.Popen(["sleep", "60"]) for _ in range(3)]
+    try:
+        shims = tmp_path / "jvmshims"
+        shims.mkdir()
+        for name, body in {"jps": "".join(f"echo {j.pid}\n" for j in jvms), "jstack": "exec sleep 30\n"}.items():
+            shim = shims / name
+            shim.write_text("#!/bin/bash\n" + body)
+            shim.chmod(0o755)
+        monkeypatch.setenv("HANG_WATCHDOG_JVM_SECONDS", "1")
+        out = watch(9, path_prefix=str(shims))
+    finally:
+        for j in jvms:
+            j.kill()
+            j.wait()
+    assert out.count("== jvm") >= 3, out
+    assert "::endgroup::" in out, out
 
 
 def testWatchdogRunsGdbAndStacksThroughTimeout(fake_stard: tuple[subprocess.Popen[bytes], Path], tmp_path: Path) -> None:
@@ -84,3 +111,62 @@ def testWatchdogStaysSilentWhileStardLogGrows(fake_stard: tuple[subprocess.Popen
         grower.kill()
         grower.wait()
     assert BANNER not in out, out
+
+
+def testWatchdogWritesDumpsToOutFile(fake_stard: tuple[subprocess.Popen[bytes], Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """HANG_WATCHDOG_OUT: the dump also lands in a file (CI uploads it; a cancelled job's log is lost).  Unset, nothing is written."""
+    shims = tmp_path / "nojvms"
+    shims.mkdir()
+    (shims / "jps").write_text("#!/bin/bash\nexit 0\n")
+    (shims / "jps").chmod(0o755)
+    dumps = tmp_path / "out" / "hang-watchdog.log"
+    dumps.parent.mkdir()
+    monkeypatch.setenv("HANG_WATCHDOG_OUT", str(dumps))
+    out = watch(7, path_prefix=str(shims))
+    assert BANNER in out, out
+    text = dumps.read_text()
+    assert BANNER in text
+    assert "--- ps" in text
+    assert "ResourceGovernor: CPU gate 2/2" in text  # the log tail
+    assert text.count(BANNER) == out.count(BANNER)
+
+    monkeypatch.delenv("HANG_WATCHDOG_OUT")
+    dumps.unlink()
+    assert BANNER in watch(7, path_prefix=str(shims))
+    assert not dumps.exists()
+
+
+def testWatchdogDumpsStardOnWindows(fake_stard: tuple[subprocess.Popen[bytes], Path], tmp_path: Path) -> None:
+    """Git Bash has no pgrep and MSYS cannot signal Windows pids.  Shims for uname (MINGW64), powershell (a stard.exe row with
+    `--scratch <dir>`, a thread table), cygpath and a jps printing a pid no MSYS `kill -0` can see: stard is found without pgrep, the dump
+    has the thread table, the stard.log tail and the JVM (so the kill -0 guard is skipped)."""
+    proc, log = fake_stard
+    scratch = log.parent.parent
+    shims = tmp_path / "winshims"
+    shims.mkdir()
+    for name, body in {
+        "uname": 'echo MINGW64_NT-10.0-20348\n',
+        "powershell": (
+            'case "$*" in\n'
+            f'  *Win32_Process*) printf \'{proc.pid}\\t"C:\\\\x\\\\stard.exe" --scratch "{scratch}"\\r\\n\' ;;\n'
+            '  *Threads*) echo "THREAD-TABLE-SHIM Wait UserRequest" ;;\n'
+            '  *) echo "PROCESS-TABLE-SHIM" ;;\n'
+            'esac\n'
+        ),
+        "cygpath": 'for a; do :; done\necho "$a"\n',
+        "pgrep": "exit 1\n",  # stard must not be found through pgrep
+        "jps": "echo 4999999\n",
+        "jstack": 'echo "JSTACK-SHIM $1"\n',
+    }.items():
+        shim = shims / name
+        shim.write_text("#!/bin/bash\n" + body)
+        shim.chmod(0o755)
+    out = watch(9, path_prefix=str(shims))
+    assert BANNER in out, out
+    assert f"pid {proc.pid}" in out
+    assert "THREAD-TABLE-SHIM" in out, out
+    assert "PROCESS-TABLE-SHIM" in out, out
+    assert "ResourceGovernor: CPU gate 2/2" in out  # the log tail, found through the --scratch of the command line
+    assert "== jvm 4999999" in out, out
+    assert "JSTACK-SHIM 4999999" in out, out
+    assert "--- gdb backtrace" not in out
