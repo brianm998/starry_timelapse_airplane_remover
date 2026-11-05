@@ -7,6 +7,7 @@ GitHub, clock and sleep, so this runs under fakes and a local bare origin.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import re
 from datetime import datetime
@@ -112,11 +113,15 @@ def _infra(eng: Engine, job: ci.Job) -> bool:
 
 
 def _judge_jobs(eng: Engine, key: int | str, sha: str, reran: set[tuple[str, str]],
-                keep_titles: tuple[str, ...] = ()) -> tuple[list[ci.Job], ci.Verdict]:
-    """Fetch the PR's jobs and judge them; the jobs come back too, for callers that look at more than the verdict. Network calls:
-    runs in a worker thread, never on the event loop."""
+                keep_titles: tuple[str, ...] = (), bypassed: frozenset[tuple[str, str]] = frozenset()) -> tuple[list[ci.Job], ci.Verdict]:
+    """Fetch the PR's jobs and judge them; the jobs come back too (as GitHub reported them), for callers that look at more than the
+    verdict. Network calls: runs in a worker thread, never on the event loop.
+
+    `bypassed` (the owner chose to land past them) are finished red jobs judged as green; a job still running stays as it is,
+    and the gate still has to report."""
     jobs = fetch_jobs(eng, sha, keep_titles)
-    return jobs, ci.judge(jobs, eng.db.baseline, now=eng.clock(),
+    judged = [dataclasses.replace(j, conclusion="success") if j.red and j.key in bypassed else j for j in jobs] if bypassed else jobs
+    return jobs, ci.judge(judged, eng.db.baseline, now=eng.clock(),
                           head_pushed_at=float(eng.db.get(f"pushed_at:{key}") or eng.clock()),
                           settle_s=eng.config.ci_settle_s, blocking_wait_s=eng.config.ci_blocking_wait_s,
                           reran=reran, infra=lambda j: _infra(eng, j))

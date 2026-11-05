@@ -518,13 +518,18 @@ class Engine:
         result, _ = await self.model_stage(t, stage, prompt)
         return result
 
-    def _escalate(self, t: Ticket, stage: str, qid: int, q: dict[str, Any]) -> StageResult:
+    def post_question(self, ticket: int, stage: str, qid: int, q: dict[str, Any]) -> int:
+        """Put the question on the ticket's issue and remember the comment, so its replies can be read back. Does not park anything."""
         options = "\n".join(f"- {o}" for o in q.get("options", []))
-        cid = self.gh.comment(t.number, f"{trust.marker('question', qid)}\n**Question ({stage})**: {q['question']}\n\n"
-                                        f"{q['why']}\n\n{options}\n\nRecommendation: {q.get('recommendation') or 'none'}\n\n"
-                                        "Reply on this issue, or `starpipe answer "
-                                        f"{t.number} \"…\"`.")
+        cid = self.gh.comment(ticket, f"{trust.marker('question', qid)}\n**Question ({stage})**: {q['question']}\n\n"
+                                      f"{q['why']}\n\n{options}\n\nRecommendation: {q.get('recommendation') or 'none'}\n\n"
+                                      "Reply on this issue, or `starpipe answer "
+                                      f"{ticket} \"…\"`.")
         self.db.set_question_comment(qid, cid)
+        return cid
+
+    def _escalate(self, t: Ticket, stage: str, qid: int, q: dict[str, Any]) -> StageResult:
+        self.post_question(t.number, stage, qid, q)
         return self.park(t, f"waiting on the owner: {q['question'][:120]}", state="needs-input")
 
     def escalate_orphaned_questions(self) -> list[int]:
