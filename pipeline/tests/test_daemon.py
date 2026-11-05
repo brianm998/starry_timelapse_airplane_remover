@@ -1286,3 +1286,40 @@ def test_train_info_lists_every_active_batch(rig: Rig) -> None:
         assert [line.split(":")[0] for line in lines] == [f"batch {first}", f"batch {second}"]
     assert activity_of(d, 3) == f"ready · waiting for the next batch (batch {first} is ci, batch {second} is building)"
     assert activity_of(d, 2) == f"ready · in batch {second} (building)"
+
+
+async def test_asking_batch_in_needs_you(rig: Rig) -> None:
+    for n in (7, 8):
+        rig.gh.add_issue(n, f"ticket {n}")
+    rig.engine.sync_issues()
+    rig.gh.add_issue(9, "another")
+    rig.engine.sync_issues()
+    bid = rig.db.batch_create("0" * 40)
+    for position, n in enumerate((7, 8)):
+        rig.db.batch_add(bid, n, position)
+        rig.db.set_state(n, "ci")
+    rig.db.set_state(9, "ci")
+    rig.db.batch_update(bid, state="ci", pr_number=5, head_sha="a" * 40)
+    qid = rig.db.add_question(7, "batch-ci", "Batch #1 is red on pr-gate/linux: fix it or bypass?",
+                              {"why": "boom", "options": ["fix", "bypass"], "recommendation": "fix"})
+    rig.db.batch_update(bid, state="asking", question=qid)
+    client, _ = await api(rig)
+    try:
+        data = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        shown = {t["number"]: t for t in data["tickets"]}
+        for n in (7, 8):
+            assert shown[n]["group"] == "needs_you" and shown[n]["activity"].startswith("needs you · batch #1 CI red · asked ")
+            assert shown[n]["question"].startswith("Batch #1 is red")
+        assert shown[9]["group"] == "waiting", "a ticket outside the batch is not asked"
+        assert [(b["number"], b["phase"]) for b in data["landing"]["batches"]] == [(1, "asking")]
+        view = await (await client.get("/v1/tickets/8", headers=AUTH)).json()
+        assert view["question"] == {"text": "Batch #1 is red on pr-gate/linux: fix it or bypass?", "why": "boom",
+                                    "options": ["fix", "bypass"], "recommendation": "fix"}
+        r = await client.post("/v1/tickets/8/answer", json={"text": "bypass"}, headers=AUTH)  # answered through a non-anchor member
+        assert r.status == 200 and rig.db.batch_question(bid)["answer"] == "bypass"  # type: ignore[index]
+        assert rig.state(7) == "ci" and rig.state(8) == "ci", "answering moves the batch, not its tickets"
+        assert (await client.post("/v1/tickets/8/answer", json={"text": "again"}, headers=AUTH)).status == 409
+        again = {t["number"]: t for t in (await (await client.get("/v1/snapshot", headers=AUTH)).json())["tickets"]}
+        assert again[7]["group"] == "waiting"
+    finally:
+        await client.close()
