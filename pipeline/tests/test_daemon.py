@@ -989,7 +989,7 @@ async def test_restart_finishes_an_escalation_it_cut_short(rig: Rig) -> None:
 async def test_hung_heavy_job_raises_an_alert(rig: Rig) -> None:
     from starpipe.checks import ledger
 
-    def hung_runner(worktree: Path, base: str) -> list[ledger.Result]:
+    def hung_runner(worktree: Path, base: str, tiers: set[str] | None = None, /) -> list[ledger.Result]:
         return [ledger.Result("test:daemon", "hung", "abc", 1.0,
                               detail="hung: `swift test --package-path daemon` made no progress for 900s and was killed")]
 

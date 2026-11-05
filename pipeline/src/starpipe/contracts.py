@@ -10,7 +10,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ValidationError
 
@@ -25,10 +25,14 @@ ACCEPTED = "accepted. End your turn now."
 CLOSE_REASONS = ("duplicate-of", "already-done", "no-defect", "not-this-repo")
 GUI_PREFIX, DESKTOP_PREFIX = "gui/star/", "star-desktop/src/main/"
 
-# (worktree, base) runs every tier of the plan; a runner is also called with a third argument, the set of tiers, only when
-# the stage is lenient (a land-now conflict catch-up wants the cheap t0 checks alone).
-CheckRunner = Callable[..., list[ledger.Result]]
 LENIENT_TIERS = {"t0"}
+
+
+class CheckRunner(Protocol):
+    """Runs the checks a diff needs. `tiers` None means every tier of the plan; a land-now conflict catch-up asks for the
+    cheap t0 checks alone."""
+
+    def __call__(self, worktree: Path, base: str, tiers: set[str] | None = None, /) -> list[ledger.Result]: ...
 
 
 class ChangeSubmission(BaseModel):
@@ -135,8 +139,7 @@ class Contract:
             return "run_checks is not available in this stage"
         lenient = self.lenient()
         with heavy.requester(self.ticket.number, self.stage, self.ticket.priority):
-            results = (self.check_runner(self.worktree, self.base_ref, LENIENT_TIERS) if lenient
-                       else self.check_runner(self.worktree, self.base_ref))
+            results = self.check_runner(self.worktree, self.base_ref, LENIENT_TIERS if lenient else None)
         sha = gitutil.head_sha(self.worktree)
         self.lock_wait_s += sum(r.lock_wait for r in results)
         for r in results:
