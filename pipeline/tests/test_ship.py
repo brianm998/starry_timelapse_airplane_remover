@@ -667,6 +667,59 @@ def test_a_gherkin_job_going_red_files_no_regression_ticket_but_updates_the_base
     assert rig.db.get("red_pending:Gherkin/desktop (ubuntu-24.04) · a") is None
 
 
+def _red_for(rig: Rig, workflow: str, name: str, hours: float, *, shas: tuple[str, ...] = ("d2",)) -> None:
+    """The job was already red (baseline `failure`) when watching started; `hours` later it is still red."""
+    rig.gh.develop_sha = "d1"
+    rig.gh.develop_ci = [(workflow, name, "completed", "failure")]
+    ship.watch_develop(rig.engine)  # seeding: the known-red ledger
+    for sha in shas:
+        rig.gh.develop_sha = sha
+        ship.watch_develop(rig.engine)
+    rig.now += hours * 3600
+    rig.gh.develop_sha = shas[-1]
+    ship.watch_develop(rig.engine)
+
+
+def test_a_job_red_for_long_with_no_open_ticket_gets_one(rig: Rig) -> None:
+    _red_for(rig, "Kotlin Client", "ubuntu-latest", 0.5)
+    assert rig.gh.issues == {}, "red for half an hour: not yet"
+    rig.now += 3 * 3600
+    ship.watch_develop(rig.engine)
+    (issue,) = rig.gh.issues.values()
+    assert issue["title"] == "regression on develop: Kotlin Client/ubuntu-latest"
+    assert "red on develop since" in issue["body"] and "was green and is now red" not in issue["body"]
+    rig.now += 4 * 3600
+    ship.watch_develop(rig.engine)
+    assert len(rig.gh.issues) == 1, "an open ticket now covers it"
+
+
+def test_a_long_red_job_with_an_open_ticket_gets_no_second_one(rig: Rig) -> None:
+    rig.gh.add_issue(7, "WholeWordsTest fails on Kotlin Client/ubuntu-latest", labels=("pipeline",))
+    _red_for(rig, "Kotlin Client", "ubuntu-latest", 5)
+    assert sorted(rig.gh.issues) == [7]
+    assert any(e["kind"] == "red-already-ticketed" for e in rig.db.events_since())
+
+
+def test_gherkin_reds_are_never_ticketed_by_the_watcher(rig: Rig) -> None:
+    _red_for(rig, "Gherkin", "desktop (ubuntu-24.04) · a", 24)
+    assert rig.gh.issues == {}
+    assert rig.db.get("red_since:Gherkin/desktop (ubuntu-24.04) · a") is None
+
+
+def test_a_green_run_clears_the_red_since_mark(rig: Rig) -> None:
+    _red_for(rig, "cli", "desktop", 1)
+    assert rig.db.get("red_since:cli/desktop") is not None
+    rig.gh.develop_sha = "d3"
+    rig.gh.develop_ci = [("cli", "desktop", "completed", "success")]
+    ship.watch_develop(rig.engine)
+    assert rig.db.get("red_since:cli/desktop") is None
+    rig.now += 5 * 3600
+    rig.gh.develop_sha = "d4"
+    rig.gh.develop_ci = [("cli", "desktop", "completed", "failure")]
+    ship.watch_develop(rig.engine)
+    assert rig.gh.issues == {}, "the clock restarted at the new red"
+
+
 def test_a_red_gate_still_stops_the_line_on_the_first_red_run(rig: Rig) -> None:
     rig.gh.develop_sha = "d1"
     rig.gh.develop_ci = [("pr-gate", "linux", "completed", "success")]
