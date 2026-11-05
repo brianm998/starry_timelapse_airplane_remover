@@ -24,33 +24,49 @@ class ResolveDropTest {
         }
     }
 
+    /** Runs [block] with [names] created as real files in a fresh temp folder, which is removed afterwards. */
+    private fun withFiles(vararg names: String, block: (File, List<File>) -> Unit) {
+        val dir = Files.createTempDirectory("drop").toFile()
+        try {
+            block(dir, names.map { File(dir, it).apply { createNewFile() } })
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
     @Test
-    fun singleConfigJsonResumes() {
-        val f = File("/tmp/some-session/config.json")
-        assertEquals(OpenAction(OpenKind.CONFIG, f.absolutePath), resolveDrop(listOf(f)))
+    fun singleConfigJsonResumes() = withFiles("config.json") { _, files ->
+        assertEquals(OpenAction(OpenKind.CONFIG, files[0].absolutePath), resolveDrop(files))
+    }
+
+    @Test
+    fun aMissingFileIsReportedNotImported() {
+        for (name in listOf("clip.mov", "config.json", "frame_001.jpg", "notes.txt")) {
+            val f = File("/tmp/star-no-such-dir/$name")
+            assertEquals(MissingFile(f.absolutePath), resolveDrop(listOf(f)), "$name does not exist")
+        }
     }
 
     @Test
     fun singleImageOpensContainingFolderAsSequence() {
-        for (name in listOf("frame_001.jpg", "frame_001.JPEG", "frame_001.tif", "frame_001.tiff", "frame_001.png")) {
-            val f = File("/tmp/my-seq/$name")
-            assertEquals(
-                OpenAction(OpenKind.SEQUENCE, File("/tmp/my-seq").absolutePath),
-                resolveDrop(listOf(f)),
-                "image $name should open its parent folder as a sequence",
-            )
+        val names = listOf("frame_001.jpg", "frame_001.JPEG", "frame_001.tif", "frame_001.tiff", "frame_001.png")
+        withFiles(*names.toTypedArray()) { dir, files ->
+            for (f in files) {
+                assertEquals(
+                    OpenAction(OpenKind.SEQUENCE, dir.absolutePath),
+                    resolveDrop(listOf(f)),
+                    "image ${f.name} should open its parent folder as a sequence",
+                )
+            }
         }
     }
 
     @Test
     fun singleVideoImportsAsVideo() {
-        for (name in listOf("clip.mov", "clip.MP4", "clip.m4v")) {
-            val f = File("/tmp/videos/$name")
-            assertEquals(
-                OpenAction(OpenKind.VIDEO, f.absolutePath),
-                resolveDrop(listOf(f)),
-                "video $name should import as a video",
-            )
+        withFiles("clip.mov", "clip.MP4", "clip.m4v") { _, files ->
+            for (f in files) {
+                assertEquals(OpenAction(OpenKind.VIDEO, f.absolutePath), resolveDrop(listOf(f)), "video ${f.name} should import as a video")
+            }
         }
     }
 

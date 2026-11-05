@@ -46,8 +46,10 @@ rule and "Swift and Kotlin clients change together" above are about star's produ
 apply to it: don't translate it and don't build a Kotlin twin.
 
 - **Heavy jobs go through `pipeline/bin/starpipe heavy -- <cmd>`**: every `swift build|test`,
-  `xcodebuild`, `gradlew` and star run. One at a time on this Mac, shared with the pipeline; an
-  interactive caller goes before queued pipeline work. `.claude/settings.json` wraps them for
+  `xcodebuild`, `gradlew` and star run. The lock is shared with the pipeline and keeps apart only
+  what conflicts: compiles run side by side, test suites one at a time, and star runs, UI, Gherkin and
+  unrecognised commands get the machine to themselves (`pipeline/src/starpipe/heavy.py`). An
+  interactive caller goes first; then the ticket furthest along the pipeline. `.claude/settings.json` wraps them for
   interactive sessions automatically (`STARPIPE_NO_WRAP=1` turns that off).
 - `pipeline/bin/starpipe check --explain` says which builds and tests a change needs;
   `starpipe check` runs them and proves each from its own output.
