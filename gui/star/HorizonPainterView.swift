@@ -67,6 +67,9 @@ struct HorizonPainterView: View {
         // Brush-adjustment shortcuts stay here so they fire whenever the
         // mouse is over the canvas.
         .background(brushKeyboardHandlers)
+        // The paint surface, for the UI tests (gherkin/ui/ids.json).
+        .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("painter.canvas")
     }
 
     // MARK: - Paint canvas
@@ -709,6 +712,7 @@ struct HorizonPainterToolbarView: View {
               systemImage: "mountain.2")
             .foregroundColor(.yellow)
             .font(.caption)
+            .accessibilityIdentifier("painter.band")
 
         Spacer()
 
@@ -718,6 +722,7 @@ struct HorizonPainterToolbarView: View {
             Label(localized("ui.reset"), systemImage: "arrow.counterclockwise")
         }
         .buttonStyle(.bordered)
+        .accessibilityIdentifier("painter.reset")
         .disabled(!paintState.hasStrokes)
         .help(localized("ui.reset_and_start_over_r"))
 
@@ -736,6 +741,8 @@ struct HorizonPainterToolbarView: View {
                 .foregroundColor(.secondary)
                 .font(.caption)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("painter.computing")
         Spacer()
         Button(localized("ui.cancel")) { handleCancel() }
         .help(localized("ui.discard_and_close_esc"))
@@ -759,6 +766,7 @@ struct HorizonPainterToolbarView: View {
             Label(localized("ui.reset"), systemImage: "arrow.counterclockwise")
         }
         .buttonStyle(.bordered)
+        .accessibilityIdentifier("painter.reset")
         .help(localized("ui.reset_and_start_over_from_band_selection_r"))
 
         Divider().frame(height: 24)
@@ -813,6 +821,7 @@ struct HorizonPainterToolbarView: View {
             }
         }
         .buttonStyle(.borderedProminent)
+        .accessibilityIdentifier("painter.save")
         .disabled(!canSave)
         .help(viewModel.horizonPainterMode == .startup
               ? localized("ui.save_horizon_continue")
@@ -838,6 +847,7 @@ struct HorizonPainterToolbarView: View {
             }
             .buttonStyle(.bordered)
             .help(localized("ui.paint_sky_adds_to_the_selection_p"))
+            .accessibilityIdentifier("painter.sky")
 
             Button {
                 paintState.isErasing = true
@@ -847,6 +857,8 @@ struct HorizonPainterToolbarView: View {
             }
             .buttonStyle(.borderedProminent)
             .help(localized("ui.erase_sky_removes_from_the_selection_e"))
+            .accessibilityIdentifier("painter.ground")
+            .accessibilityAddTraits(.isSelected)
         } else {
             Button {
                 paintState.isErasing = false
@@ -856,6 +868,8 @@ struct HorizonPainterToolbarView: View {
             }
             .buttonStyle(.borderedProminent)
             .help(localized("ui.paint_sky_adds_to_the_selection_p"))
+            .accessibilityIdentifier("painter.sky")
+            .accessibilityAddTraits(.isSelected)
 
             Button {
                 paintState.isErasing = true
@@ -865,6 +879,7 @@ struct HorizonPainterToolbarView: View {
             }
             .buttonStyle(.bordered)
             .help(localized("ui.erase_sky_removes_from_the_selection_e"))
+            .accessibilityIdentifier("painter.ground")
         }
     }
 
