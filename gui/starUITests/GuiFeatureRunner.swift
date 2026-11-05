@@ -83,6 +83,7 @@ final class GuiFeatureRunner {
         .pressKey: { try $0.press($0.args[0]) },
         .idShown: { try $0.expectShown($0.args[0], shown: true) },
         .idNotShown: { try $0.expectShown($0.args[0], shown: false) },
+        .idAbove: { try $0.expectAbove($0.args[0], above: $0.args[1]) },
         .idSelected: { try $0.expectSelected($0.args[0], selected: true) },
         .idNotSelected: { try $0.expectSelected($0.args[0], selected: false) },
         .idOn: { try $0.expectOn($0.args[0], on: true) },
@@ -452,7 +453,9 @@ final class GuiFeatureRunner {
     /// the fold of a panel in a small window; each step takes the app seconds to settle, so it is not taken in small ones.
     private func scroll(towards element: XCUIElement, _ identifier: String, _ scroller: inout Scroller) {
         let holder = app.scrollViews.containing(NSPredicate(format: "identifier == %@", identifier)).firstMatch
-        guard holder.exists else { return }
+        // a scroll view with no hit point yet (the screen is still settling after a screenshot or a click) makes XCTest fail the whole test
+        // ("Unable to find hit point for ScrollView"); skip this step and let the caller's wait try again
+        guard holder.exists, holder.isHittable else { return }
         let gap = element.frame.midY - holder.frame.midY
         if let last = scroller.lastGap, abs(gap) >= abs(last) { scroller.direction = -scroller.direction }
         scroller.lastGap = gap
@@ -470,6 +473,14 @@ final class GuiFeatureRunner {
                 throw RunnerError("\(identifier) is still shown\n\(app.debugDescription)")
             }
         }
+    }
+
+    /// The element is higher on the screen than [other]: its top edge is above the other's (screen coordinates, y grows down), for the order of a list.
+    private func expectAbove(_ identifier: String, above other: String) throws {
+        try expectShown(identifier, shown: true)
+        try expectShown(other, shown: true)
+        let a = element(identifier), b = element(other)
+        try waitFor("\(identifier) above \(other)", timeout: 20, detail: { "(tops \(a.frame.minY) and \(b.frame.minY))" }) { a.frame.minY < b.frame.minY }
     }
 
     private func expectSelected(_ identifier: String, selected: Bool) throws {

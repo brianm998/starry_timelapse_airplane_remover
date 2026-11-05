@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-from . import gitutil, guards, landing, load, negctl, ship, tickets, trust, worktrees
+from . import gitutil, guards, heavy, landing, load, negctl, ship, tickets, trust, worktrees
 from .agent import READ_ONLY_STAGES, STAGE_TOOLS, AgentRunner, StageOutcome, StageRequest
 from .announce import Announcer, Kind, SilentAnnouncer
 from .checks import baseline, impact, ledger
@@ -220,7 +220,6 @@ class Engine:
 
     def llm_active(self) -> int:
         """Sessions in the middle of work. One whose ticket is only waiting for the heavy lock is not generating anything."""
-        from . import heavy
 
         waiting = {w.ticket for w in heavy.status().queue}
         return len([s for s in self.db.running_stages() if str(s["ticket"]) not in waiting])
@@ -378,7 +377,8 @@ class Engine:
                           allow_resolve: bool = True, as_landing: bool | None = None) -> tuple[StageResult, Contract]:
         """Run a model stage through the attempt ladder (§7.5). Returns once a contract call is accepted or it parks."""
         contract = Contract(t, Path(t.worktree or ""), self.base_ref, self.db, self.gh, self.check_runner,
-                            self.notifier, owner_filed=self._owner_filed(t), baseline_runner=self.baseline_runner)
+                            self.notifier, owner_filed=self._owner_filed(t), baseline_runner=self.baseline_runner,
+                            stage=stage)
         resume = None if fresh else self._last_session(t, stage)
         note = self.db.get(f"catch_up_note:{t.number}")
         if note:  # develop was merged into the branch while the ticket was stopped: the resumed session did not make those commits
@@ -396,15 +396,17 @@ class Engine:
                 opening = f"{note}\n\n{opening}"
             if pending:
                 opening = f"The owner's answer to your question:\n\n{pending['answer']}\n\nContinue the stage.\n\n{opening}"
+        landing = stage in LANDING_STAGES if as_landing is None else as_landing  # same decision as _begin_when_room
         attempt, crashes = 1, 0
         summary = ""
         nudge: str | None = None  # set to send the nudge in place of the prompt
         nudged = False
         while attempt <= 3:
             await self._wait_for_usage()
-            await self._wait_for_update_hold()
+            if not landing:  # the landing train waits on a landing stage: a pending self-update must not hold it
+                await self._wait_for_update_hold()
             model, effort = self._stage_choice(t, stage, attempt)
-            stage_id = await self._begin_when_room(t, stage, attempt, model, landing=as_landing)
+            stage_id = await self._begin_when_room(t, stage, attempt, model, landing=landing)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
             if nudge:
                 body, nudge = nudge, None
@@ -755,6 +757,10 @@ class Engine:
 
     def _run_verification(self, t: Ticket, wt: Path) -> str:
         """The daemon's own run of T0+T1 at HEAD and the negative control. Empty string means green."""
+        with heavy.requester(t.number, "verify", t.priority):  # the heavy lock serves the ticket furthest along first
+            return self._verification(t, wt)
+
+    def _verification(self, t: Ticket, wt: Path) -> str:
         sha = gitutil.head_sha(wt)
         if not gitutil.is_clean(wt):
             return "the tree is not clean"
