@@ -34,9 +34,24 @@ java {
     targetCompatibility = JavaVersion.VERSION_21
 }
 
+// The client's own build version, for the start screen's heading before the engine reports its own: a resource written from
+// starVersion, so it is on the app's and the tests' classpaths alike (read by com.star.desktop.util.BuildInfo).
+val generateBuildInfo by tasks.registering {
+    val outDir = layout.buildDirectory.dir("generated/buildinfo")
+    val version = starVersion
+    inputs.property("version", version)
+    outputs.dir(outDir)
+    doLast {
+        val dir = outDir.get().asFile
+        dir.mkdirs()
+        File(dir, "star-version.txt").writeText(version)
+    }
+}
+
 sourceSets {
     main {
         proto.srcDir("proto")
+        resources.srcDir(generateBuildInfo)
     }
 }
 
