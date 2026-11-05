@@ -158,6 +158,37 @@ async def test_a_landing_stage_takes_a_session_over_the_limit_and_new_work_waits
     await asyncio.wait_for(new_work, 2)
 
 
+async def test_a_free_session_goes_to_the_ticket_furthest_along_in_the_pipeline(rig: Rig) -> None:
+    rig.engine.config.max_llm_sessions = 1
+    for n in (1, 2, 3, 4):
+        rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p1" if n == 4 else "p2"))
+    rig.engine.sync_issues()
+    t1, t2, t3, t4 = (rig.db.ticket(n) for n in (1, 2, 3, 4))
+    assert t1 and t2 and t3 and t4
+    busy = rig.db.begin_stage(1, "develop", 1, "sonnet")  # the one allowed session is busy
+    async def sleep(_: float) -> None:
+        await asyncio.sleep(0.01)
+
+    rig.engine.sleep = sleep
+    begin = rig.engine._begin_when_room  # pyright: ignore[reportPrivateUsage]
+    explore = asyncio.create_task(begin(t4, "explore", 1, "sonnet"))  # p1, but the newest stage
+    develop = asyncio.create_task(begin(t3, "develop", 1, "sonnet"))
+    review = asyncio.create_task(begin(t2, "review", 1, "sonnet"))
+    await asyncio.sleep(0.05)
+    assert not (explore.done() or develop.done() or review.done())
+    rig.db.end_stage(busy, "accepted", 0.0, "")
+    await asyncio.wait_for(review, 2)
+    await asyncio.sleep(0.05)
+    assert not explore.done() and not develop.done(), "one slot, one start: review went first"
+    rig.db.end_stage(2, "accepted", 0.0, "")  # stage rows: 1 develop (ended), 2 the review
+    await asyncio.wait_for(develop, 2)
+    await asyncio.sleep(0.05)
+    assert not explore.done()
+    rig.db.end_stage(3, "accepted", 0.0, "")
+    await asyncio.wait_for(explore, 2)
+    assert rig.engine.llm_waiting == {}
+
+
 async def test_nothing_new_is_claimed_while_a_landing_stage_waits_for_a_session(rig: Rig) -> None:
     rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
     rig.engine.sync_issues()
@@ -172,8 +203,8 @@ async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
     rig.db.begin_stage(5, "develop", 1, "sonnet")
     rig.db.put("self_update_pending", "e3c559f6aabb")
     rig.db.put("self_update_pending_since", str(rig.now))
-    drain = rig.engine.config.self_update_drain_s
-    assert drain == 600
+    drain = rig.engine.config.self_update_max_wait_s
+    assert drain == 1800
 
     assert rig.engine.claimable() is None, "nothing new is claimed inside the window"
     hold = rig.engine.update_hold()
@@ -188,6 +219,35 @@ async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
     assert rig.engine.claimable() is None
     rig.db.put("self_update_pending", None)
     assert rig.engine.claimable() is not None, "no pending update, no hold"
+
+
+async def test_a_landing_stage_is_not_held_by_a_pending_self_update(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    rig.db.put("self_update_pending", "e3c559f6aabb")
+    rig.db.put("self_update_pending_since", str(rig.now))
+    assert rig.engine.update_hold() is not None
+    rig.agent.on("conflict", lambda r: StageOutcome("no-result"))
+
+    await rig.engine.model_stage(t, "conflict", "resolve", fresh=True)
+    assert [r.stage for r in rig.agent.requests] == ["conflict"] * 3 and rig.slept == [], "a landing stage starts at once, no hold"
+
+
+async def test_a_develop_stage_is_still_held_by_a_pending_self_update(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    rig.db.put("self_update_pending", "e3c559f6aabb")
+    rig.db.put("self_update_pending_since", str(rig.now))
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    drain = rig.engine.config.self_update_drain_s
+
+    await rig.engine.model_stage(t, "develop", "go")
+    assert rig.slept and sum(rig.slept) >= drain, "the stage waited out the drain window"
+    assert rig.engine.update_hold() is None
 
 
 async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Rig) -> None:
@@ -277,6 +337,45 @@ async def test_a_timeout_resumes_the_same_session(rig: Rig) -> None:
     explores = [r for r in rig.agent.requests if r.stage == "explore"]
     assert explores[1].resume == "S1"
     assert rig.state(7) == "failed"  # develop never produced a result
+
+
+async def test_an_interrupted_stage_resumes_with_a_resume_note(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.engine.claim(rig.engine.claimable() or rig.db.tickets()[0])
+    sid = rig.db.begin_stage(7, "explore", 1, "opus")
+    rig.db.set_session(sid, "S-old")
+    rig.db.end_stage(sid, "interrupted", detail="daemon restarted")
+    rig.agent.on("explore", explore_ok)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    first = next(r for r in rig.agent.requests if r.stage == "explore")
+    assert first.resume == "S-old"
+    assert "daemon restarted" in first.prompt and "submit_plan" in first.prompt and "not kept" in first.prompt
+    assert "Ticket #7" not in first.prompt  # the ticket prompt is not sent a second time
+
+    # a fresh start after an interrupted row (nothing to resume) still gets the full prompt
+    other = rig.agent.requests[-1]
+    assert other.stage == "develop" and other.resume is None and "daemon restarted" not in other.prompt
+
+
+async def test_no_result_gets_one_nudge_in_the_same_session(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.agent.on("explore", lambda r: StageOutcome("no-result", session_id="S1"), explore_ok)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result", session_id="D1"),
+                 lambda r: StageOutcome("no-result", session_id="D1"),
+                 lambda r: StageOutcome("timeout", session_id="D2"),
+                 lambda r: StageOutcome("no-result"), lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    explores = [r for r in rig.agent.requests if r.stage == "explore"]
+    assert [(r.attempt, r.resume) for r in explores] == [(1, None), (1, "S1")]  # the nudge does not count an attempt
+    assert "submit_plan" in explores[1].prompt and "Ticket #7" not in explores[1].prompt
+    develops = [r for r in rig.agent.requests if r.stage == "develop"]
+    # attempt 1: no-result, nudge (no-result again) -> attempt 2 fresh; attempt 2 times out and attempt 3 resumes it with the ordinary prompt: no nudge
+    assert [(r.attempt, r.resume) for r in develops[:3]] == [(1, None), (1, "D1"), (2, None)]
+    assert "submit_change" in develops[1].prompt
+    assert develops[3].attempt == 3 and develops[3].resume == "D2" and "submit_change" not in develops[3].prompt
 
 
 async def test_crashes_resume_without_counting_an_attempt(rig: Rig) -> None:
@@ -438,6 +537,25 @@ async def test_review_parks_after_two_rounds_of_changes(rig: Rig) -> None:
     await rig.engine.drive(7)
     assert rig.state(7) == "failed"
     assert len(rig.db.stages(7, "review")) == 3
+
+
+async def test_interrupted_reviews_do_not_spend_review_rounds(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.agent.on("explore", explore_ok)
+    rig.agent.on("develop", develop_ok, develop_with("a\n"))
+    # Two earlier reviews were cut short by a restart and a usage limit; neither returned a verdict.
+    for outcome in ("interrupted", "usage-limit"):
+        rig.db.end_stage(rig.db.begin_stage(7, "review", 1, "sonnet"), outcome)
+
+    def changes(req: StageRequest) -> StageOutcome:
+        req.contract.submit_review({"verdict": "changes", "findings": [
+            {"file": "x", "line": 1, "severity": "major", "issue": "no"}]})
+        return accepted(req)
+
+    rig.agent.on("review", changes, review_ok)
+    await rig.engine.drive(7)
+    assert rig.state(7) == "landed"
 
 
 async def test_a_red_verification_runs_fix_then_parks_after_two(rig: Rig) -> None:

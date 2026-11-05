@@ -34,8 +34,9 @@ import kotlin.test.assertTrue
  *
  * `STAR_UI_SNAPSHOT_MODES` (comma separated) picks the screens: edit, grid, settings, progress, prerender, startup, removal, and those reached by
  * one more step: customlimits and rendervideo (a call on the view model), settingsgpu, settingsalignment, settingshorizon and settingsmemory (the
- * settings sheet's other tabs, which `settings` leaves on the first, by a click on the tab). The start screen is not
- * among them: it plays a video background through ffmpeg, which a test host should not spawn. The window is 1400 x 1100, as the Gherkin runner's.
+ * settings sheet's other tabs, which `settings` leaves on the first, by a click on the tab). The start screen is not among them here (the
+ * Gherkin runner's `-Dstar.ui.noIntroVideo` turns its ffmpeg video off, and the parity gallery's `uiGalleryStart` saves it; see
+ * `gherkin/ui/README.md`). The window is 1400 x 1100, as the Gherkin runner's.
  */
 @OptIn(ExperimentalTestApi::class)
 class UiSnapshotTest {

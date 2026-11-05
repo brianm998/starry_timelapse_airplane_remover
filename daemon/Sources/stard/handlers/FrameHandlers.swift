@@ -251,13 +251,7 @@ enum FrameHandlers {
             guard let frame = await session.frame(at: Int(req.frameIndex)) else {
                 await transport.sendError(id: id, message: "frame index out of range", code: 404); return
             }
-            let cm: CleanMethod
-            switch req.cleanMethod {
-            case .cleanSelective:     cm = .selective
-            case .cleanAutomaticTrue: cm = .automatic(true)
-            default:                  cm = .automatic(false)
-            }
-            await session.setCleanMethod(cm, of: frame)
+            await session.setCleanMethod(Mapping.cleanMethod(fromProto: req.cleanMethod), of: frame)
             let groups = await frame.getOutlierGroups()
             let fi = await session.frameInfo(frame, outlierGroups: groups)
             try await transport.respond(id: id, payload: fi.serializedData())

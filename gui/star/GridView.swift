@@ -127,6 +127,11 @@ struct GridCellView: View {
                 case .selective:
                     SelectiveIcon()
                         .foregroundColor(.white)
+                case .dirtySky, .dirtyEarth:
+                    // the dirty methods reuse the automatic icon
+                    AutoIcon()
+                        .font(.system(size: 8))
+                        .foregroundColor(.white)
                 }
 
                 Spacer().frame(width: 4)
@@ -150,7 +155,8 @@ struct GridCellView: View {
                     .frame(width: imageWidth, height: imageHeight)
                 }
 
-                if let frameState = frameView.frameState {
+                // A finished frame has no badge (its text is empty): nothing is drawn for it, so "grid.badge.*" is there only for a frame doing something.
+                if let frameState = frameView.frameState, !frameState.badgeText.isEmpty {
                     Text(frameState.badgeText)
                         .font(.system(size: 10))
                         .lineLimit(1)
@@ -158,6 +164,7 @@ struct GridCellView: View {
                         .foregroundColor(frameState.color)
                         .padding(.leading, 4)
                         .padding(.bottom, 2)
+                        .accessibilityIdentifier("grid.badge.\(frameIndex)")
                 }
             }
             .frame(width: imageWidth, height: imageHeight)

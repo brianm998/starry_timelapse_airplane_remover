@@ -24,6 +24,10 @@ class Result:
     detail: str = ""
     at: float = 0.0
     failures: list[str] = field(default_factory=list[str])  # names of the failing tests (old rows have none)
+    # What the check's heavy jobs used of the machine (old rows have none): cores averaged over the hold, the busiest sample, peak RSS
+    cpu_mean: float = 0.0
+    cpu_peak: float = 0.0
+    rss_peak_mb: float = 0.0
 
     @property
     def green(self) -> bool:

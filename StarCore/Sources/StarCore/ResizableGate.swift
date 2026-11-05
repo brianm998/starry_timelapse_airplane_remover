@@ -153,13 +153,6 @@ public final class ResizableGate: @unchecked Sendable {
         for wake in resumable { wake.fire() }
     }
 
-    /// Run `body` holding a slot.
-    public func withSlot<T: Sendable>(_ body: () async throws -> T) async rethrows -> T {
-        await acquire()
-        defer { release() }
-        return try await body()
-    }
-
     /// Caller holds `lock` and resumes the result after dropping it.
     private func grantLocked() -> [Wake] {
         var resumable: [Wake] = []

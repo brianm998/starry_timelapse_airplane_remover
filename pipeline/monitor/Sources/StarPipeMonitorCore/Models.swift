@@ -26,14 +26,76 @@ public struct Snapshot: Codable, Sendable, Equatable {
     public var version: String
     public var repo: String
     public var nightly: NightlyInfo?
+    /// Open `pipe:proposed` issues awaiting the owner's go-ahead; absent from an older daemon's snapshot.
+    public var proposalList: [ProposalSnap]?
+
+    /// `proposalList` without the optional: empty for a daemon that does not send proposals.
+    public var proposals: [ProposalSnap] { proposalList ?? [] }
 
     enum CodingKeys: String, CodingKey {
         case daemon, pause, muted, heavy, tickets, groups, runtime, landing, develop, now, version, repo, nightly
+        case proposalList = "proposals"
         case usagePauseUntil = "usage_pause_until"
         case usageWindows = "usage_windows"
         case maxActive = "max_active"
         case interventionsWeek = "interventions_week"
         case eventsCursor = "events_cursor"
+    }
+}
+
+/// A proposed issue: filed by `by` (an agent or "interactive") when it carries a marker, else opened on GitHub by `author`.
+public struct ProposalSnap: Codable, Sendable, Equatable, Identifiable {
+    public var number: Int
+    public var title: String
+    /// The starpipe filed-by marker's name; nil when there is none (missing, empty and the legacy "unknown" all mean that).
+    public var by: String?
+    public var author: String?
+    public var createdAt: String?
+    public var id: Int { number }
+
+    public init(number: Int, title: String, by: String? = nil, author: String? = nil, createdAt: String? = nil) {
+        self.number = number
+        self.title = title
+        self.by = ProposalSnap.filer(by)
+        self.author = author
+        self.createdAt = createdAt
+    }
+
+    enum CodingKeys: String, CodingKey { case number, title, by, author, createdAt = "created_at" }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(number: try c.decode(Int.self, forKey: .number), title: try c.decode(String.self, forKey: .title),
+                  by: try c.decodeIfPresent(String.self, forKey: .by),
+                  author: try c.decodeIfPresent(String.self, forKey: .author),
+                  createdAt: try c.decodeIfPresent(String.self, forKey: .createdAt))
+    }
+
+    private static func filer(_ by: String?) -> String? {
+        guard let by, !by.isEmpty, by != "unknown" else { return nil }
+        return by
+    }
+
+    private var authorName: String? { (author?.isEmpty == false) ? author : nil }
+
+    /// The row's second line: "review agent · 3d ago", "opened by brianm998 · 3d ago", or just "3d ago".
+    public func byline(now: Double) -> String {
+        let who = by ?? authorName.map { "opened by \($0)" }
+        return [who, ProposalText.shortAge(iso: createdAt, now: now)].compactMap { $0 }.joined(separator: " · ")
+    }
+
+    /// The detail header: "Proposed by review agent 3 days ago; waiting for your go-ahead."
+    public func headerSentence(now: Double) -> String {
+        let age = ProposalText.age(iso: createdAt, now: now)
+        let lead: String
+        if let by {
+            lead = ["Proposed by \(by)", age].compactMap { $0 }.joined(separator: " ")
+        } else if let a = authorName {
+            lead = ["Opened on GitHub by \(a)", age].compactMap { $0 }.joined(separator: " ")
+        } else {
+            return "Waiting for your go-ahead."
+        }
+        return lead + "; waiting for your go-ahead."
     }
 }
 
@@ -133,9 +195,11 @@ public struct BatchInfo: Codable, Sendable, Equatable {
     public var members: [Int]
     public var prNumber: Int?
     public var slow: Bool
+    /// The batch's CI result: `running`, `success` or `failure`; nil from a daemon that predates the field.
+    public var ci: String?
 
     enum CodingKeys: String, CodingKey {
-        case number, phase, members, slow
+        case number, phase, members, slow, ci
         case ageS = "age_s"
         case prNumber = "pr_number"
     }
@@ -174,14 +238,35 @@ public struct TicketSnap: Codable, Sendable, Equatable, Identifiable {
     public var parkReason: String?
     public var question: String?
     public var stages: [StageSnap]
+    /// The GitHub issue body, for the sidebar search; empty from a daemon that predates the field.
+    public var body: String
 
     public var id: Int { number }
 
     enum CodingKeys: String, CodingKey {
-        case number, title, state, priority, group, activity, model, branch, worktree, question, stages
+        case number, title, state, priority, group, activity, model, branch, worktree, question, stages, body
         case blockedBy = "blocked_by"
         case prNumber = "pr_number"
         case parkReason = "park_reason"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        number = try c.decode(Int.self, forKey: .number)
+        title = try c.decode(String.self, forKey: .title)
+        state = try c.decode(String.self, forKey: .state)
+        priority = try c.decode(Int.self, forKey: .priority)
+        group = try c.decode(String.self, forKey: .group)
+        activity = try c.decode(String.self, forKey: .activity)
+        model = try c.decodeIfPresent(String.self, forKey: .model)
+        blockedBy = try c.decode([Int].self, forKey: .blockedBy)
+        prNumber = try c.decodeIfPresent(Int.self, forKey: .prNumber)
+        branch = try c.decodeIfPresent(String.self, forKey: .branch)
+        worktree = try c.decodeIfPresent(String.self, forKey: .worktree)
+        parkReason = try c.decodeIfPresent(String.self, forKey: .parkReason)
+        question = try c.decodeIfPresent(String.self, forKey: .question)
+        stages = try c.decode([StageSnap].self, forKey: .stages)
+        body = try c.decodeIfPresent(String.self, forKey: .body) ?? ""
     }
 }
 
@@ -227,6 +312,115 @@ public struct TicketDetail: Codable, Sendable, Equatable {
     }
 }
 
+/// `GET /v1/proposals/{n}`: a proposed issue in full, with what the owner needs to decide on it.
+public struct ProposalDetail: Codable, Sendable, Equatable {
+    public var number: Int
+    public var title: String
+    public var author: String?
+    public var createdAt: String?
+    public var updatedAt: String?
+    public var labels: [String]
+    /// Who filed it (an agent or "interactive"), from the body's `starpipe:filed-by` marker.
+    public var by: String?
+    public var body: String
+    /// The most recent comments the daemon sent (it caps them), oldest first.
+    public var comments: [ProposalComment]
+    /// How many comments the issue has in all; more than `comments.count` when the daemon capped them.
+    public var commentCount: Int
+    public var blockers: [BlockerRef]
+    public var readiness: ProposalReadiness?
+
+    enum CodingKeys: String, CodingKey {
+        case number, title, author, labels, by, body, comments, blockers, readiness
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+        case commentCount = "comment_count"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        number = try c.decode(Int.self, forKey: .number)
+        title = try c.decode(String.self, forKey: .title)
+        author = try c.decodeIfPresent(String.self, forKey: .author)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+        updatedAt = try c.decodeIfPresent(String.self, forKey: .updatedAt)
+        labels = try c.decodeIfPresent([String].self, forKey: .labels) ?? []
+        by = try c.decodeIfPresent(String.self, forKey: .by)
+        body = try c.decodeIfPresent(String.self, forKey: .body) ?? ""
+        comments = try c.decodeIfPresent([ProposalComment].self, forKey: .comments) ?? []
+        commentCount = try c.decodeIfPresent(Int.self, forKey: .commentCount) ?? comments.count
+        blockers = try c.decodeIfPresent([BlockerRef].self, forKey: .blockers) ?? []
+        readiness = try c.decodeIfPresent(ProposalReadiness.self, forKey: .readiness)
+    }
+}
+
+public struct ProposalComment: Codable, Sendable, Equatable {
+    public var author: String?
+    public var createdAt: String?
+    public var body: String
+
+    enum CodingKeys: String, CodingKey { case author, body; case createdAt = "created_at" }
+
+    public init(author: String?, createdAt: String?, body: String) {
+        self.author = author
+        self.createdAt = createdAt
+        self.body = body
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        author = try c.decodeIfPresent(String.self, forKey: .author)
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+        body = try c.decodeIfPresent(String.self, forKey: .body) ?? ""
+    }
+}
+
+/// Whether the proposal is ready to approve: the ticket lint's verdict, the plan, the `## Pipeline` overrides and the queue.
+public struct ProposalReadiness: Codable, Sendable, Equatable {
+    public var lintOk: Bool
+    public var errors: [String]
+    public var warnings: [String]
+    public var hasPlan: Bool
+    public var pipeline: [String: String]
+    public var queue: Queue
+
+    public struct Queue: Codable, Sendable, Equatable {
+        public var open: Int
+        public var max: Int
+
+        public init(open: Int, max: Int) {
+            self.open = open
+            self.max = max
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case errors, warnings, pipeline, queue
+        case lintOk = "lint_ok"
+        case hasPlan = "has_plan"
+    }
+
+    public init(lintOk: Bool, errors: [String] = [], warnings: [String] = [], hasPlan: Bool,
+                pipeline: [String: String] = [:], queue: Queue) {
+        self.lintOk = lintOk
+        self.errors = errors
+        self.warnings = warnings
+        self.hasPlan = hasPlan
+        self.pipeline = pipeline
+        self.queue = queue
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        lintOk = try c.decode(Bool.self, forKey: .lintOk)
+        errors = try c.decodeIfPresent([String].self, forKey: .errors) ?? []
+        warnings = try c.decodeIfPresent([String].self, forKey: .warnings) ?? []
+        hasPlan = try c.decodeIfPresent(Bool.self, forKey: .hasPlan) ?? false
+        pipeline = try c.decodeIfPresent([String: String].self, forKey: .pipeline) ?? [:]
+        queue = try c.decode(Queue.self, forKey: .queue)
+    }
+}
+
 /// An open issue a ticket is blocked by. The title is empty when the daemon could not look it up.
 public struct BlockerRef: Codable, Sendable, Equatable, Identifiable {
     public var number: Int
@@ -257,8 +451,30 @@ public struct CheckRow: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey { case result; case checkId = "check_id" }
 }
 
+/// The open question a ticket waits on. Only `text` comes from a daemon that predates the structured fields.
 public struct QuestionRow: Codable, Sendable, Equatable {
     public var text: String
+    /// Why the agent could not settle it from the repo; empty or nil when none was given.
+    public var why: String?
+    /// The concrete answers on offer, in the order the agent gave them; empty when it asked an open question.
+    public var options: [String]
+    /// The option the agent recommends, when it named one.
+    public var recommendation: String?
+
+    public init(text: String, why: String? = nil, options: [String] = [], recommendation: String? = nil) {
+        self.text = text
+        self.why = why
+        self.options = options
+        self.recommendation = recommendation
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        text = try c.decode(String.self, forKey: .text)
+        why = try c.decodeIfPresent(String.self, forKey: .why)
+        options = try c.decodeIfPresent([String].self, forKey: .options) ?? []
+        recommendation = try c.decodeIfPresent(String.self, forKey: .recommendation)
+    }
 }
 
 /// One line of the event stream (`GET /v1/events` as server-sent events).
@@ -307,8 +523,12 @@ public enum Overview {
     public struct StageCount: Equatable, Sendable, Identifiable {
         public var label: String
         public var states: [String]
+        public var help: String
         public var count: Int
         public var id: String { label }
+
+        /// The hover text: what the stage does, then which daemon states the tile counts.
+        public var tooltip: String { Overview.tooltip(help: help, states: states) }
 
         /// How loudly the tile draws: the owner's queue when it is non-empty, a muted tile for zero, otherwise normal.
         public var emphasis: TileEmphasis {
@@ -319,24 +539,58 @@ public enum Overview {
 
     public enum TileEmphasis: Equatable, Sendable { case attention, active, idle }
 
+    /// One top-bar bucket: its tile label, the daemon states it counts, and what the stage means (the hover help).
+    public struct TopBarBucket: Sendable {
+        public var label: String
+        public var states: [String]
+        public var help: String
+
+        /// The hover text: what the stage does, then which daemon states the tile counts.
+        public var tooltip: String { Overview.tooltip(help: help, states: states) }
+    }
+
+    static func tooltip(help: String, states: [String]) -> String {
+        help + "\nCounts tickets in: " + states.joined(separator: ", ")
+    }
+
     /// The top bar's seven buckets, in display order. `paused` and terminal states belong to none.
     /// Labels are short and lowercase so they fit a tile on one line.
-    public static let topBarBuckets: [(label: String, states: [String])] = [
-        ("need you", ["needs-input"]), ("queued", ["queued"]), ("exploring", ["exploring"]),
-        ("developing", ["developing"]), ("testing", ["verifying"]), ("review", ["review"]),
-        ("landing", landingStates),
+    public static let topBarBuckets: [TopBarBucket] = [
+        TopBarBucket(label: "need you", states: ["needs-input"],
+                     help: "An agent stopped and asked a question, or parked the ticket. It waits for your answer and does nothing until you give one."),
+        TopBarBucket(label: "queued", states: ["queued"],
+                     help: "Approved tickets waiting for a free slot (max_active). No agent has started on them."),
+        TopBarBucket(label: "exploring", states: ["exploring"],
+                     help: "An agent is reading the code and writing the plan for the ticket. Skipped when the ticket carries its own ## Plan."),
+        TopBarBucket(label: "developing", states: ["developing"],
+                     help: "An agent is writing the change in the ticket's own worktree, including rework after review findings."),
+        TopBarBucket(label: "testing", states: ["verifying"],
+                     help: "The builds and tests the change needs are running. A failure goes to a fix agent and back here."),
+        TopBarBucket(label: "review", states: ["review"],
+                     help: "A fresh reviewer is checking the diff against the acceptance criteria. It either approves or sends the ticket back to developing."),
+        TopBarBucket(label: "landing", states: landingStates,
+                     help: "Approved changes on their way into develop: ready (waiting for a CI slot), ci (checks running on the PR or batch), landing (merging, resolving conflicts)."),
     ]
 
     /// Tickets per top-bar bucket, zeros included.
     public static func topBarCounts(_ tickets: [TicketSnap]) -> [StageCount] {
         topBarBuckets.map { bucket in
-            StageCount(label: bucket.label, states: bucket.states, count: tickets.filter { bucket.states.contains($0.state) }.count)
+            StageCount(label: bucket.label, states: bucket.states, help: bucket.help,
+                       count: tickets.filter { bucket.states.contains($0.state) }.count)
         }
     }
 
     public struct LandingLine: Equatable, Sendable {
         public var text: String
         public var slow: Bool
+        /// `running`, `success` or `failure`; nil for a line that says nothing about CI (so it keeps its plain look).
+        public var ci: String? = nil
+    }
+
+    /// The CI result the chip of a landing-queue ticket takes: its batch's, when it is a member of the batch on show.
+    public static func chipCI(_ ticket: TicketSnap, _ landing: Landing?) -> String? {
+        guard let b = landing?.batch, b.members.contains(ticket.number) else { return nil }
+        return b.ci
     }
 
     static func span(_ seconds: Int) -> String { seconds >= 60 ? "\(seconds / 60)m" : "\(seconds)s" }
@@ -350,13 +604,13 @@ public enum Overview {
             let members = b.members.map { "#\($0)" }.joined(separator: " ")
             let text = "batch \(b.number): \(b.phase) · age \(span(b.ageS))" + (members.isEmpty ? "" : " · \(members)")
                 + (b.slow ? " · SLOW" : "")
-            lines.append(LandingLine(text: text, slow: b.slow))
+            lines.append(LandingLine(text: text, slow: b.slow, ci: b.ci))
         } else if let next = landing.nextBatchInS {
             lines.append(LandingLine(text: "no batch yet: the next one starts in \(next)s", slow: false))
         }
         if let a = landing.lastAbandoned {
             let verb = a.state == "failed" ? "failed" : "abandoned"
-            lines.append(LandingLine(text: "batch \(a.number) \(verb) \(span(a.agoS)) ago: \(a.reason)", slow: false))
+            lines.append(LandingLine(text: "batch \(a.number) \(verb) \(span(a.agoS)) ago: \(a.reason)", slow: false, ci: "failure"))
         }
         return lines
     }
@@ -437,7 +691,7 @@ public enum GroupTitle {
         case "running": "Running"
         case "waiting": "Waiting"
         case "queued": "Queued"
-        case "landed_today": "Landed today"
+        case "landed_today": "Landed"
         case "failed": "Failed"
         default: group
         }

@@ -49,7 +49,7 @@ class ExportEndToEndTestCase: XCTestCase {
     // MARK: - the tools
 
     /// Runs one of the shipped tools and returns what it wrote to stdout.
-    func runBinary(_ tool: String, _ arguments: [String]) throws -> Data {
+    func runBinary(_ tool: String, _ arguments: [String], timeout: TimeInterval = 180) throws -> Data {
         let process = Process()
         process.executableURL = tools.appendingPathComponent(tool)
         process.arguments = arguments
@@ -58,9 +58,32 @@ class ExportEndToEndTestCase: XCTestCase {
         process.standardOutput = out
         process.standardError = err
         try process.run()
+        // The reads below end only when the tool closes its output, so a hung tool is killed from here.
+        let timedOut = Locked(false)
+        let watchdog = DispatchWorkItem {
+            timedOut.withLock { $0 = true }
+            process.terminate()
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) { if process.isRunning { kill(process.processIdentifier, SIGKILL) } }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: watchdog)
+        defer { watchdog.cancel() }
+        // stderr is drained alongside, so a tool that fills it cannot stall on a full pipe.
+        let errorsTask = Locked(Data())
+        let errorsDone = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            let data = err.fileHandleForReading.readDataToEndOfFile()
+            errorsTask.withLock { $0 = data }
+            errorsDone.signal()
+        }
         let output = out.fileHandleForReading.readDataToEndOfFile()
-        let errors = err.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        _ = errorsDone.wait(timeout: .now() + 10)
+        let errors = errorsTask.withLock { $0 }
+        if timedOut.withLock({ $0 }) {
+            throw NSError(domain: "ExportEndToEndTestCase", code: -1, userInfo: [NSLocalizedDescriptionKey:
+                "\(tool) \(arguments.joined(separator: " ")) timed out after \(timeout)s and was killed: "
+                + String(decoding: errors, as: UTF8.self)])
+        }
         guard process.terminationStatus == 0 else {
             var message = "\(tool) \(arguments.joined(separator: " ")) failed: "
             message += String(decoding: errors, as: UTF8.self)

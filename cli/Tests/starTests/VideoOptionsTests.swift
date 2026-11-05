@@ -21,7 +21,13 @@ final class VideoOptionsTests: XCTestCase {
     }
 
     func testParsesTheVideoOptions() throws {
-        let cli = try StarCli.parse(["--frame-format", "jpeg:90", "--render-video", "--video-path", "/tmp/x.mov", "in.mp4"])
+        // isVideoFile needs the input to exist, so the video input is a real (empty) file
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("VideoOptionsTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let input = dir.appendingPathComponent("in.mp4")
+        XCTAssertTrue(FileManager.default.createFile(atPath: input.path, contents: Data()))
+        let cli = try StarCli.parse(["--frame-format", "jpeg:90", "--render-video", "--video-path", "/tmp/x.mov", input.path])
         XCTAssertEqual(cli.frameFormat, FrameDecodeFormat(kind: .jpeg, jpegQuality: 90))
         XCTAssertTrue(cli.renderVideo)
         XCTAssertEqual(cli.videoPath, "/tmp/x.mov")

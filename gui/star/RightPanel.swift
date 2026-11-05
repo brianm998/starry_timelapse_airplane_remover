@@ -375,6 +375,10 @@ extension CleanMethod {
             localized(usesOutliers ? "ui.frame_mode_auto_selective" : "ui.frame_mode_automatic")
         case .selective:
             localized("ui.frame_mode_selective")
+        case .dirtySky:
+            localized("ui.dirty_sky")
+        case .dirtyEarth:
+            localized("ui.dirty_earth")
         }
     }
 
@@ -384,6 +388,10 @@ extension CleanMethod {
             localized(usesOutliers ? "ui.frame_mode_desc_auto_selective" : "ui.frame_mode_desc_automatic")
         case .selective:
             localized("ui.frame_mode_desc_selective")
+        case .dirtySky:
+            localized("ui.frame_mode_desc_dirty_sky")
+        case .dirtyEarth:
+            localized("ui.frame_mode_desc_dirty_earth")
         }
     }
 }
@@ -426,13 +434,25 @@ struct ChangeProcessingModeView: View {
                         switch value {
                         case .automatic: AutoIcon()
                         case .selective: SelectiveIcon()
+                        case .dirtySky, .dirtyEarth: AutoIcon()
                         }
-                        Text(localized(value == .automatic ? "ui.automatic" : "ui.selective"))
+                        Text(value.titleText)
                     }
+                      .disabled(!value.isAvailable(horizonDetectionEnabled: viewModel.horizonDetectionEnabled))
                 }
             }
               .pickerStyle(.inline)
               .help(localized("ui.clean_method_help"))
+
+            // Why dirty earth is switched off, when it is
+            if let why = HighLevelCleanMethod.dirtyEarth.unavailableText(
+                 horizonDetectionEnabled: viewModel.horizonDetectionEnabled)
+            {
+                Text(why)
+                  .font(.caption)
+                  .foregroundColor(.secondary)
+                  .fixedSize(horizontal: false, vertical: true)
+            }
 
             Picker(localized("ui.auto_select"), selection: $autoSelect) {
                 ForEach(AutoPreservationMode.allCases, id: \.id) { value in
@@ -446,7 +466,7 @@ struct ChangeProcessingModeView: View {
                 }
             }
               .pickerStyle(.inline)
-              .disabled(clean != .automatic)
+              .disabled(!clean.usesAutoPreservation)
               .help(localized("ui.auto_select_help"))
 
             Group {
@@ -486,12 +506,10 @@ struct ChangeProcessingModeView: View {
           .onAppear {
               guard !loaded else { return }
               loaded = true
-              switch currentMethod {
-              case .automatic(let usesOutliers):
-                  clean = .automatic
+              clean = HighLevelCleanMethod(currentMethod)
+              if case .automatic(let usesOutliers) = currentMethod {
                   autoSelect = usesOutliers ? .yes : .no
-              case .selective:
-                  clean = .selective
+              } else {
                   autoSelect = .no
               }
           }
@@ -569,81 +587,6 @@ struct EditableMaxZoomView: View {
           .onChange(of: viewModel.maxZoomScale) {
               zoomDouble = Double(viewModel.maxZoomScale)
           }
-    }
-}
-
-// "Pixel Threshold"
-struct EditablePixelThresholdView: View {
-    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    let focusedField: FocusState<FocusedField?>.Binding
-    let textColor: Color
-    let alwaysOpen: Bool
-    
-    var body: some View {
-        @Bindable var viewModel = viewModel
-        return EditableNumberView(
-          value: $viewModel.pixelThreshold,
-          minValue: 0.001,
-          maxValue: 10,
-          fullTextProvider: { localized("ui.slider.pixel_threshold", $0) },
-          prefixText: localized("ui.slider.pixel_threshold_prefix"),
-          suffixTextProvider: { _ in "" },
-          textColor: textColor,
-          focusedField: focusedField,
-          focusField: .pixelThreshold,
-          alwaysOpen: alwaysOpen            
-          // no extra commit side‐effects here
-        )
-    }
-}
-
-// “Number of Neighbor Frames”
-struct EditableNumberOfNeighborFrames: View {
-    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    let focusedField: FocusState<FocusedField?>.Binding
-    let textColor: Color
-    let alwaysOpen: Bool
-
-    var body: some View {
-        @Bindable var viewModel = viewModel
-        return EditableNumberView(
-          value: $viewModel.numberOfAlignedNeighborFrames,
-          minValue: 1,
-          maxValue: viewModel.imageSequenceSize - 1,
-          fullTextProvider: { localized("ui.slider.align_neighbors", $0) },
-          prefixText: localized("ui.slider.process_with"),
-          suffixTextProvider: { _ in localized("ui.slider.neighbor_frames") },
-          textColor: textColor,
-          focusedField: focusedField,
-          focusField: .numberOfNeighborFrames,
-          alwaysOpen: alwaysOpen
-          // no extra commit side‐effects here
-        )
-    }
-}
-
-// “Number of Frames To Process”
-struct EditableNumberOfFramesToProcessView: View {
-    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    let focusedField: FocusState<FocusedField?>.Binding
-    let textColor: Color
-    let alwaysOpen: Bool
-
-    var body: some View {
-        @Bindable var viewModel = viewModel
-        return EditableNumberView(
-            value: $viewModel.numberOfFramesToProcess,
-            minValue: 1,
-            maxValue: viewModel.imageSequenceSize,
-            fullTextProvider: { localized("ui.slider.n_frames_as", $0) },
-            // no prefix, so TextField is first
-            suffixTextProvider: { $0 == 1 ? localized("ui.slider.frame_as") : localized("ui.slider.frames_as") },
-            textColor: textColor,
-            focusedField: focusedField,
-            focusField: .numberOfFramesToProcess,
-            alwaysOpen: alwaysOpen
-            // no extra commit side‐effects here
-        )
     }
 }
 
@@ -833,141 +776,5 @@ struct ResourceCustomLimitsView: View {
         }
         .padding()
         .frame(width: 420)
-    }
-}
-
-struct EditableNumberOfFramesToProcessConcurrentlyView: View {
-    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    let focusedField: FocusState<FocusedField?>.Binding
-    let textColor: Color
-    let alwaysOpen: Bool
-
-    var body: some View {
-        @Bindable var viewModel = viewModel
-        return EditableNumberView(
-            value: $viewModel.numberOfFramesToProcessConcurrently,
-            minValue: 1,
-            maxValue: ProcessInfo.processInfo.processorCount,
-            fullTextProvider: { localized("ui.slider.process_at_once", $0) },
-            prefixText: localized("ui.slider.process"),
-            suffixTextProvider: { _ in localized("ui.slider.frames_at_once") },
-            textColor: textColor,
-            focusedField: focusedField,
-            focusField: .numberOfFramesToProcessConcurrently,
-            alwaysOpen: alwaysOpen,
-            commitAction: { newVal in
-                viewModel.numberOfFramesToProcessConcurrently = newVal
-            }
-        )
-    }
-}
-
-struct MemoryMultiplierView: View {
-    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
-    let focusedField: FocusState<FocusedField?>.Binding
-    let textColor: Color
-    let alwaysOpen: Bool
-
-    var body: some View {
-        @Bindable var viewModel = viewModel
-        VStack(alignment: .leading, spacing: 4) {
-            EditableNumberView(
-                value: $viewModel.keypointMemoryMultiplier,
-                minValue: 1,
-                maxValue: 200,
-                fullTextProvider: { localized("ui.slider.kp_mem", $0) },
-                prefixText: localized("ui.slider.kp_mem_prefix"),
-                suffixTextProvider: { _ in "" },
-                textColor: textColor,
-                focusedField: focusedField,
-                focusField: .keypointMemoryMultiplier,
-                alwaysOpen: alwaysOpen,
-                commitAction: { newVal in
-                    viewModel.keypointMemoryMultiplier = newVal
-                }
-            )
-            // Separate from kp mem on purpose: kp mem is the *estimate* of one op's
-            // memory, this is how many may run at once.  Raising kp mem to calm a big
-            // sequence used to be the only lever, and it inflated every reservation as
-            // a side effect.  0 = no explicit cap.
-            EditableNumberView(
-                value: $viewModel.maxConcurrentKeypointOps,
-                minValue: 0,
-                maxValue: 256,
-                fullTextProvider: { $0 == 0 ? localized("ui.slider.max_kp_ops_auto") : localized("ui.slider.max_kp_ops", $0) },
-                prefixText: localized("ui.slider.max_kp_ops_prefix"),
-                suffixTextProvider: { _ in "" },
-                textColor: textColor,
-                focusedField: focusedField,
-                focusField: .maxConcurrentKeypointOps,
-                alwaysOpen: alwaysOpen,
-                commitAction: { newVal in
-                    viewModel.maxConcurrentKeypointOps = newVal
-                }
-            )
-            EditableNumberView(
-                value: $viewModel.outlierMemoryMultiplier,
-                minValue: 1,
-                maxValue: 50,
-                fullTextProvider: { localized("ui.slider.outlier_mem", $0) },
-                prefixText: localized("ui.slider.outlier_mem_prefix"),
-                suffixTextProvider: { _ in "" },
-                textColor: textColor,
-                focusedField: focusedField,
-                focusField: .outlierMemoryMultiplier,
-                alwaysOpen: alwaysOpen,
-                commitAction: { newVal in
-                    viewModel.outlierMemoryMultiplier = newVal
-                }
-            )
-            EditableNumberView(
-                value: $viewModel.mergeMemoryMultiplier,
-                minValue: 1,
-                maxValue: 50,
-                fullTextProvider: { localized("ui.slider.merge_mem", $0) },
-                prefixText: localized("ui.slider.merge_mem_prefix"),
-                suffixTextProvider: { _ in "" },
-                textColor: textColor,
-                focusedField: focusedField,
-                focusField: .mergeMemoryMultiplier,
-                alwaysOpen: alwaysOpen,
-                commitAction: { newVal in
-                    viewModel.mergeMemoryMultiplier = newVal
-                }
-            )
-            EditableNumberView(
-                value: $viewModel.horizonMemoryMultiplier,
-                minValue: 1,
-                maxValue: 50,
-                fullTextProvider: { localized("ui.slider.horizon_mem", $0) },
-                prefixText: localized("ui.slider.horizon_mem_prefix"),
-                suffixTextProvider: { _ in "" },
-                textColor: textColor,
-                focusedField: focusedField,
-                focusField: .horizonMemoryMultiplier,
-                alwaysOpen: alwaysOpen,
-                commitAction: { newVal in
-                    viewModel.horizonMemoryMultiplier = newVal
-                }
-            )
-            // Paired with horizon mem on purpose, and the more useful of the two: a
-            // horizon op's cost barely tracks the frame size, so the multiplier alone
-            // under-reserves on small frames and this is what covers them.  0 = no floor.
-            EditableNumberView(
-                value: $viewModel.horizonReservationFloorMB,
-                minValue: 0,
-                maxValue: 16384,
-                fullTextProvider: { $0 == 0 ? localized("ui.slider.horizon_floor_none") : localized("ui.slider.horizon_floor", $0) },
-                prefixText: localized("ui.slider.horizon_floor_prefix"),
-                suffixTextProvider: { _ in "MB" },
-                textColor: textColor,
-                focusedField: focusedField,
-                focusField: .horizonReservationFloorMB,
-                alwaysOpen: alwaysOpen,
-                commitAction: { newVal in
-                    viewModel.horizonReservationFloorMB = newVal
-                }
-            )
-        }
     }
 }

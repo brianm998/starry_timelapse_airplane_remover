@@ -25,10 +25,6 @@
 #define S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
 #endif
 
-OCVFeatureSetRef ocv_feature_set_create_empty(void) {
-    return new OCVFeatureSetImpl();
-}
-
 OCVFeatureSetRef ocv_feature_set_load(const char *filename, const char **errorMsg) {
     struct stat sb;
     if (stat(filename, &sb) != 0 || S_ISDIR(sb.st_mode)) {

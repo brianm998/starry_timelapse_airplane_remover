@@ -3,14 +3,51 @@ package com.star.desktop.ui.initial
 import com.star.desktop.i18n.localized
 import java.awt.FileDialog
 import java.awt.Frame
+import java.awt.datatransfer.DataFlavor
+import java.awt.datatransfer.Transferable
 import java.io.File
+import java.io.IOException
+import java.net.URI
 import javax.swing.JFileChooser
 
 /** How a chosen path should be opened. */
 enum class OpenKind { SEQUENCE, VIDEO, CONFIG }
 
+/** What a drop resolves to: an [OpenAction], or a [MissingFile] to report. */
+sealed interface DropOutcome
+
 /** A resolved drop/open: which action to take and the path it applies to. */
-data class OpenAction(val kind: OpenKind, val path: String)
+data class OpenAction(val kind: OpenKind, val path: String) : DropOutcome
+
+/** A single dropped path that does not exist (the gui's `ui.file_does_not_exist`). */
+data class MissingFile(val path: String) : DropOutcome
+
+/** What some Linux file managers (and XWayland bridges) offer instead of Java's file list: CRLF-separated URIs. */
+private val URI_LIST_FLAVOR = DataFlavor("text/uri-list;class=java.lang.String")
+
+/** Whether [t] carries files: a Java file list or a `text/uri-list`. Anything else (selected text, a link) is not a file drag. */
+fun isFileDrag(t: Transferable): Boolean =
+    t.isDataFlavorSupported(DataFlavor.javaFileListFlavor) || t.isDataFlavorSupported(URI_LIST_FLAVOR)
+
+/**
+ * The files a drop carries: the Java file list when there is one, else the `file:` URIs of a `text/uri-list`
+ * (blank lines, `#` comments, other schemes and malformed URIs are skipped). Empty when it carries none.
+ */
+fun droppedFiles(t: Transferable): List<File> = try {
+    if (t.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+        (t.getTransferData(DataFlavor.javaFileListFlavor) as? List<*>).orEmpty().filterIsInstance<File>()
+    } else if (t.isDataFlavorSupported(URI_LIST_FLAVOR)) {
+        (t.getTransferData(URI_LIST_FLAVOR) as? String).orEmpty().lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("#") }
+            .mapNotNull { line -> runCatching { URI(line).takeIf { it.scheme.equals("file", ignoreCase = true) }?.let { File(it) } }.getOrNull() }
+            .toList()
+    } else {
+        emptyList()
+    }
+} catch (_: Exception) {
+    emptyList()
+}
 
 private val VIDEO_EXTS = setOf("mov", "mp4", "m4v", "avi", "mkv", "mpg", "mpeg")
 private val IMAGE_EXTS = setOf("jpg", "jpeg", "tif", "tiff", "png")
@@ -29,15 +66,17 @@ fun inferOpenKind(path: String): OpenKind = when {
  * Decide how to open files dropped onto the start screen, mirroring macOS `InitialView.handleDrop`:
  * several files, or a single loose image → open the containing folder as an image sequence;
  * a folder → open it as a sequence; a single `.json` → resume; anything else → import as a video.
+ * A single path that does not exist is a [MissingFile], as in the gui, which checks that first.
  * Returns null when there is nothing actionable (empty drop, or a loose file with no parent folder).
  */
-fun resolveDrop(files: List<File>): OpenAction? {
+fun resolveDrop(files: List<File>): DropOutcome? {
     val first = files.firstOrNull() ?: return null
     // Multiple files dropped: assume they're frames of one sequence, open their containing folder.
     if (files.size > 1) {
         return first.parentFile?.let { OpenAction(OpenKind.SEQUENCE, it.absolutePath) }
     }
     return when {
+        !first.exists() -> MissingFile(first.absolutePath)
         first.isDirectory -> OpenAction(OpenKind.SEQUENCE, first.absolutePath)
         first.name.endsWith(".json", ignoreCase = true) -> OpenAction(OpenKind.CONFIG, first.absolutePath)
         // A single loose image is neither a video nor a sequence by itself: open its folder.
@@ -51,22 +90,35 @@ private const val DIRECTORIES_PROPERTY = "apple.awt.fileDialogForDirectories"
 
 /**
  * Folder chooser (image sequence by default, or a folder for [title]). Opens at [startAt] when that is a folder. Blocks on the EDT.
- * On a Mac it is the native Finder panel, as the gui's `NSOpenPanel` is; elsewhere Swing's `JFileChooser`.
+ * It is the platform's own: the Finder panel on a Mac, Explorer's folder picker on Windows, the desktop's chooser (zenity or kdialog) on
+ * Linux, as the gui's `NSOpenPanel` is on a Mac. Swing's `JFileChooser` is the fallback where no native one is available.
  */
 fun chooseDirectory(title: String = localized("ui.open_image_sequence").trimEnd('…', '.'), startAt: String? = null): String? =
-    chooseDirectory(System.getProperty("os.name").orEmpty(), title, startAt, ::nativeFolderDialog, ::swingFolderDialog)
+    chooseDirectory(
+        System.getProperty("os.name").orEmpty(), title, startAt,
+        FolderDialogs(::nativeFolderDialog, ::windowsFolderDialog, ::linuxFolderDialog, ::swingFolderDialog),
+    )
 
-/** The platform choice behind [chooseDirectory], with the two dialogs passed in so it can be tested without showing one. */
-internal fun chooseDirectory(
-    osName: String,
-    title: String,
-    startAt: String?,
-    native: (String, File?) -> File?,
-    swing: (String, File?) -> File?,
-): String? {
+/** The platform choice behind [chooseDirectory], with the dialogs passed in so it can be tested without showing one. */
+internal fun chooseDirectory(osName: String, title: String, startAt: String?, dialogs: FolderDialogs): String? {
     val start = startAt?.let { File(it) }?.takeIf { it.isDirectory }
-    val chosen = if (osName.lowercase().contains("mac")) withFolderDialogProperty { native(title, start) } else swing(title, start)
+    val chosen = when (folderPickerFor(osName)) {
+        FolderPicker.MAC_PANEL -> withFolderDialogProperty { dialogs.mac(title, start) }
+        FolderPicker.WINDOWS_EXPLORER -> orSwing(dialogs.windows, dialogs.swing, title, start)
+        FolderPicker.LINUX_NATIVE -> orSwing(dialogs.linux, dialogs.swing, title, start)
+        FolderPicker.SWING -> dialogs.swing(title, start)
+    }
     return chosen?.absolutePath
+}
+
+/** Shows [native]; Swing's chooser takes over only when the native one is unavailable (not when the user cancelled it). */
+private fun orSwing(native: (String, File?) -> FolderResult, swing: (String, File?) -> File?, title: String, start: File?): File? {
+    val result = try { native(title, start) } catch (_: IOException) { FolderResult.Unavailable }
+    return when (result) {
+        is FolderResult.Chosen -> result.folder
+        FolderResult.Cancelled -> null
+        FolderResult.Unavailable -> swing(title, start)
+    }
 }
 
 /**

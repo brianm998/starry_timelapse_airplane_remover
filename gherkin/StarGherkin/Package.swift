@@ -13,5 +13,7 @@ let package = Package(
     targets: [
         .target(name: "StarGherkinKernel"),
         .executableTarget(name: "star-gherkin-gen"),
+        // Reads the three runners' sources (it does not link them): every step a client's features use is in its dispatch table.
+        .testTarget(name: "StarGherkinTests", dependencies: ["StarGherkinKernel"]),
     ]
 )

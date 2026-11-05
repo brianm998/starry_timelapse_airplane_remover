@@ -1,5 +1,7 @@
 package com.star.desktop.ui.dialogs
 
+import com.star.desktop.domain.CleanMethodTexts
+import com.star.desktop.domain.HighLevelClean
 import com.star.desktop.domain.SettingsEdit
 import com.star.desktop.i18n.localized
 import com.star.proto.CleanMethod
@@ -97,6 +99,49 @@ class SettingsRulesTest {
         assertFalse(edit(clean = CleanMethod.CLEAN_AUTOMATIC).usesOutliers)
         assertTrue(edit(clean = CleanMethod.CLEAN_AUTOMATIC_TRUE).usesOutliers)
         assertTrue(edit(clean = CleanMethod.CLEAN_SELECTIVE).usesOutliers, "Selective always uses them, whatever auto-preservation was left at")
+    }
+
+    private val constants = com.google.gson.JsonParser.parseString(
+        listOf(java.io.File("../gherkin/ui/vectors/constants.json"), java.io.File("gherkin/ui/vectors/constants.json")).first { it.isFile }.readText(),
+    ).asJsonObject.getAsJsonObject("cleanMethod")
+
+    private fun choiceNamed(name: String) = when (name) {
+        "automatic" -> HighLevelClean.AUTOMATIC
+        "selective" -> HighLevelClean.SELECTIVE
+        "dirtySky" -> HighLevelClean.DIRTY_SKY
+        "dirtyEarth" -> HighLevelClean.DIRTY_EARTH
+        else -> error("no clean method choice named $name")
+    }
+
+    /** A2: only Automatic has a Selective Auto Clean row to answer; Selective always reviews outliers and the dirty methods never do. */
+    @Test fun aDirtyMethodHasNoSelectiveAutoCleanChoice() {
+        val rows = constants.getAsJsonArray("usesAutoPreservation")
+        assertEquals(HighLevelClean.values().size, rows.size())
+        for (element in rows) {
+            val c = element.asJsonObject
+            assertEquals(c["expected"].asBoolean, choiceNamed(c["highLevel"].asString).usesAutoPreservation, c.toString())
+        }
+        assertFalse(edit(clean = CleanMethod.CLEAN_DIRTY_SKY).usesOutliers)
+        assertFalse(edit(clean = CleanMethod.CLEAN_DIRTY_EARTH).usesOutliers)
+    }
+
+    /** A3: Dirty earth keeps only the ground, so it is off while horizon detection is off, with the needs-horizon tip, and falls back to Automatic. */
+    @Test fun dirtyEarthNeedsAHorizon() {
+        val cases = constants.getAsJsonArray("availability")
+        assertTrue(cases.size() > 0)
+        for (element in cases) {
+            val c = element.asJsonObject
+            val choice = choiceNamed(c["highLevel"].asString)
+            val horizon = c["horizonDetection"].asBoolean
+            assertEquals(c["available"].asBoolean, choice.isAvailable(horizon), c.toString())
+            assertEquals(choiceNamed(c["coerced"].asString), choice.coerced(horizon), c.toString())
+            val tip = CleanMethodTexts.unavailableTipKey(choice, horizon)
+            assertEquals(!c["available"].asBoolean, tip != null, c.toString())
+            if (tip != null) {
+                assertEquals(constants.getAsJsonObject("texts")["dirtyEarthNeedsHorizon"].asString, tip)
+                assertTrue(localized(tip) != tip, "$tip is not in the catalogue")
+            }
+        }
     }
 
     // ---- the ranges

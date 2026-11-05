@@ -83,7 +83,8 @@ class AgentRunner(Protocol):
     async def run(self, req: StageRequest) -> StageOutcome: ...
 
 
-def sanitized_env(ticket: int, nightly: bool = False, budget_s: float = 4 * 3600) -> dict[str, str]:
+def sanitized_env(ticket: int, nightly: bool = False, budget_s: float = 4 * 3600, stage: str = "",
+                  ticket_priority: int | None = None) -> dict[str, str]:
     """The session's environment: no inherited Claude session variables, the OAuth token from claude.env.
 
     Bash gets the stage budget as its default and maximum timeout: at Claude Code's 120 s default a long foreground
@@ -96,6 +97,10 @@ def sanitized_env(ticket: int, nightly: bool = False, budget_s: float = 4 * 3600
             if sep and key and not key.startswith("#"):
                 env[key.removeprefix("export ").strip()] = value.strip().strip("\"'")
     env["STARPIPE_TICKET"] = str(ticket)
+    if stage:  # the heavy lock serves the ticket furthest along first (heavy.PROGRESS)
+        env["STARPIPE_STAGE"] = stage
+    if ticket_priority is not None:
+        env["STARPIPE_TICKET_PRIORITY"] = str(ticket_priority)
     env["MCP_TOOL_TIMEOUT"] = str(4 * 3600 * 1000)
     env["BASH_DEFAULT_TIMEOUT_MS"] = env["BASH_MAX_TIMEOUT_MS"] = str(int(budget_s * 1000))
     if nightly:
@@ -203,7 +208,8 @@ class SdkRunner:
             model=req.model, effort=cast(Any, req.effort), cwd=str(req.fence.worktree), permission_mode="bypassPermissions",
             setting_sources=["project"], resume=req.resume,
             system_prompt={"type": "preset", "preset": "claude_code", "append": req.system_append},
-            mcp_servers={"star": server}, env=sanitized_env(req.ticket, budget_s=req.budget_s),
+            mcp_servers={"star": server}, env=sanitized_env(req.ticket, budget_s=req.budget_s, stage=req.stage,
+                                                                ticket_priority=req.contract.ticket.priority),
             hooks={"PreToolUse": [HookMatcher(hooks=[self._hook(req.fence)])]},
             disallowed_tools=sorted(guards.FORBIDDEN_TOOLS | ({"Write", "Edit", "NotebookEdit"} if req.fence.read_only else set())),
         )

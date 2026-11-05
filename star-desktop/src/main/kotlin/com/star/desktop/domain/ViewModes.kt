@@ -12,6 +12,7 @@ object ViewModes {
         FrameViewMode.VIEW_STAR_ALIGNED, FrameViewMode.VIEW_FAILED_STAR_ALIGNED, FrameViewMode.VIEW_EARTH_ALIGNED, FrameViewMode.VIEW_FAILED_EARTH_ALIGNED,
         FrameViewMode.VIEW_SUBTRACTION, FrameViewMode.VIEW_BLOBS, FrameViewMode.VIEW_VALIDATION, FrameViewMode.VIEW_REMOVE_MASK,
         FrameViewMode.VIEW_AUTO_PROCESSED, FrameViewMode.VIEW_AUTO_SELECTIVE_PROCESSED, FrameViewMode.VIEW_SELECTIVE_PROCESSED,
+        FrameViewMode.VIEW_DIRTY_SKY_PROCESSED, FrameViewMode.VIEW_DIRTY_EARTH_PROCESSED,
         FrameViewMode.VIEW_PROCESSED,
     )
 
@@ -28,6 +29,9 @@ object ViewModes {
      */
     fun gridShown(available: Collection<FrameViewMode>): List<FrameViewMode> =
         all.filter { it == FrameViewMode.VIEW_ORIGINAL || it == FrameViewMode.VIEW_PROCESSED || it in available }
+
+    /** The mode's macOS case name (`FrameViewMode.rawValue`), which the grid's `grid.show.<name>` test tags use. */
+    internal fun name(mode: FrameViewMode): String? = key(mode)
 
     /** The catalogue entry for the mode's name (`view_mode.<macOS case name>`). */
     private fun key(mode: FrameViewMode): String? = when (mode) {
@@ -47,6 +51,8 @@ object ViewModes {
         FrameViewMode.VIEW_AUTO_PROCESSED -> "autoProcessed"
         FrameViewMode.VIEW_AUTO_SELECTIVE_PROCESSED -> "autoSelectiveProcessed"
         FrameViewMode.VIEW_SELECTIVE_PROCESSED -> "selectiveProcessed"
+        FrameViewMode.VIEW_DIRTY_SKY_PROCESSED -> "dirtySkyProcessed"
+        FrameViewMode.VIEW_DIRTY_EARTH_PROCESSED -> "dirtyEarthProcessed"
         FrameViewMode.VIEW_PROCESSED -> "final"
         FrameViewMode.UNRECOGNIZED -> null
     }

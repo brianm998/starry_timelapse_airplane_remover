@@ -24,3 +24,10 @@ magick "$SRC/icon_16x16.png" "$SRC/icon_32x32.png" "$SRC/icon_128x128.png" \
 # Linux: jpackage on Linux just wants a single PNG
 cp "$SRC/icon_512x512@2x.png" star.png
 ```
+
+# Folder choosers need no bundled native library
+
+On Windows the folder picker is Explorer's own (`IFileOpenDialog`), reached by running the
+`folder-picker.ps1` resource through `powershell.exe`, which ships with Windows. On Linux it is
+`zenity` (else `kdialog`) from the system, so the `.deb` does not bundle or depend on a chooser:
+a machine without either falls back to Swing's `JFileChooser`. See `ui/initial/FolderPickers.kt`.

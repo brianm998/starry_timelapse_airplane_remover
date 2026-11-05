@@ -91,8 +91,6 @@ func readFrame() -> Data? {
 /// Set once a write to the client has failed (it closed the pipe); nothing further is written.
 nonisolated(unsafe) private var outputClosed = false
 
-var protocolOutputClosed: Bool { outputClosed }
-
 // writeFrame must only be called from the single writer task.
 func writeFrame(_ data: Data) {
     guard !outputClosed else { return }

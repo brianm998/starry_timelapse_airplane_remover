@@ -443,53 +443,6 @@ public actor OutlierGroup: CustomStringConvertible,
     }
     #endif
 
-    // how many pixels actually overlap between the groups ?  returns 0-1 value of overlap amount
-    func pixelOverlap(with group2: OutlierGroup) -> Double // 1 means total overlap, 0 means none
-    {
-        let group1 = self
-        // throw out non-overlapping frames, do any slip through?
-        if group1.bounds.min.x > group2.bounds.max.x || group1.bounds.min.y > group2.bounds.max.y { return 0 }
-        if group2.bounds.min.x > group1.bounds.max.x || group2.bounds.min.y > group1.bounds.max.y { return 0 }
-
-        var minX = group1.bounds.min.x
-        var minY = group1.bounds.min.y
-        var maxX = group1.bounds.max.x
-        var maxY = group1.bounds.max.y
-        
-        if group2.bounds.min.x > minX { minX = group2.bounds.min.x }
-        if group2.bounds.min.y > minY { minY = group2.bounds.min.y }
-        
-        if group2.bounds.max.x < maxX { maxX = group2.bounds.max.x }
-        if group2.bounds.max.y < maxY { maxY = group2.bounds.max.y }
-        
-        // XXX could search a smaller space probably
-
-        var overlapPixelAmount = 0;
-        
-        for x in minX ... maxX {
-            for y in minY ... maxY {
-                let outlier1Index = (y - group1.bounds.min.y) * group1.bounds.width + (x - group1.bounds.min.x)
-                let outlier2Index = (y - group2.bounds.min.y) * group2.bounds.width + (x - group2.bounds.min.x)
-                if outlier1Index > 0,
-                   outlier1Index < group1.pixels.count,
-                   group1.pixels[outlier1Index] != 0,
-                   outlier2Index > 0,
-                   outlier2Index < group2.pixels.count,
-                   group2.pixels[outlier2Index] != 0
-                {
-                    overlapPixelAmount += 1
-                }
-            }
-        }
-
-        if overlapPixelAmount > 0 {
-            let avgGroupSize = (Double(group1.size) + Double(group2.size)) / 2
-            return Double(overlapPixelAmount)/avgGroupSize
-        }
-        
-        return 0
-    }
-
     // decision code moved from extension because of swift bug:
     // https://forums.swift.org/t/actor-isolation-delegates-in-extensions/60571/6
 
@@ -594,8 +547,6 @@ public actor OutlierGroup: CustomStringConvertible,
     fileprivate var _medianIntensity: UInt16?
     fileprivate var _neighborLineScores: NeighborLineScores?
 
-    public var exisitingNeighborLineScores: NeighborLineScores? { _neighborLineScores }
-    
     public func set(neighborLineScores: NeighborLineScores) {
         _neighborLineScores = neighborLineScores
     }
