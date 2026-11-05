@@ -6,6 +6,8 @@ struct TicketDetailView: View {
     let store: MonitorStore
     let ticket: TicketSnap
     @State private var answer = ""
+    /// Whether the "Other" row of an option question is open for typing.
+    @State private var otherOpen = false
 
     private var repo: String { store.snapshot?.repo ?? "" }
 
@@ -14,7 +16,7 @@ struct TicketDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 titleBar
                 StageTimeline(stages: ticket.stages, now: store.snapshot?.now ?? Date().timeIntervalSince1970)
-                if let q = ticket.question ?? store.detail?.question?.text { questionBox(q) }
+                if let q = question { questionBox(q) }
                 if let reason = ticket.parkReason, ticket.question == nil { Label(reason, systemImage: "exclamationmark.triangle").foregroundStyle(.orange) }
                 blockedBy
                 if let plan = store.detail?.plan { planBox(plan) }
@@ -61,22 +63,74 @@ struct TicketDetailView: View {
         }
     }
 
-    private func questionBox(_ text: String) -> some View {
+    /// The open question: the daemon's structured one when its detail is this ticket's, else the snapshot's text alone.
+    private var question: QuestionRow? {
+        let current = store.detail.flatMap { $0.number == ticket.number ? $0 : nil }
+        return current?.question ?? ticket.question.map { QuestionRow(text: $0) }
+    }
+
+    private func send(_ text: String) {
+        answer = ""
+        otherOpen = false
+        Task { await store.answer(ticket.number, text) }
+    }
+
+    private func questionBox(_ q: QuestionRow) -> some View {
         GroupBox("Question") {
             VStack(alignment: .leading, spacing: 8) {
-                Text(text).textSelection(.enabled)
-                HStack {
-                    TextField("Your answer", text: $answer, axis: .vertical).textFieldStyle(.roundedBorder)
-                    Button("Answer") {
-                        let text = answer
-                        answer = ""
-                        Task { await store.answer(ticket.number, text) }
+                Text(q.text).textSelection(.enabled)
+                if let why = q.why, !why.isEmpty {
+                    Text(why).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                let rows = QuestionChoices.rows(for: q)
+                if rows.isEmpty {
+                    answerField
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in choiceRow(row) }
                     }
-                    .disabled(answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .keyboardShortcut(.return, modifiers: .command)
+                    if otherOpen { answerField }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func choiceRow(_ row: QuestionChoices.Choice) -> some View {
+        Button {
+            switch row {
+            case .option(let text, _): send(text)
+            case .other: otherOpen.toggle()
+            }
+        } label: {
+            HStack {
+                switch row {
+                case .option(let text, let recommended):
+                    Text(text).multilineTextAlignment(.leading)
+                    Spacer()
+                    if recommended { Chip(text: "Recommended", color: .green) }
+                case .other:
+                    Text("Other\u{2026}").foregroundStyle(.secondary)
+                    Spacer()
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.35)))
+    }
+
+    private var answerField: some View {
+        HStack {
+            TextField("Your answer", text: $answer, axis: .vertical).textFieldStyle(.roundedBorder)
+            Button("Answer") {
+                if let text = QuestionChoices.answerText(for: .other, typed: answer) { send(text) }
+            }
+            .disabled(QuestionChoices.answerText(for: .other, typed: answer) == nil)
+            .keyboardShortcut(.return, modifiers: .command)
         }
     }
 

@@ -35,6 +35,10 @@ CATCH_UP_STATES = frozenset({"exploring", "developing", "verifying", "review"}) 
 RETRY_STATE = {**STAGE_STATE, "publish": "ready", "ci": "ci", "land": "landing"}  # what `starpipe retry <n> <stage>` re-enters
 HOLDABLE_STATES = ("failed", "cancelled")  # where `retry --when-unblocked` may park a retry
 LANDING_STAGES = frozenset({"conflict", "ci-fix"})  # stages a ticket in the landing train waits on: they outrank new work for an LLM slot
+# How far along the pipeline a stage is: of the stages waiting for an LLM slot, the furthest along starts first (a ticket that has
+# already cost an explore, a develop and a fix is worth finishing before a new one starts), then the lower priority number, then the
+# older ticket.  Landing stages are handled apart (they take a slot over the limit).
+STAGE_DEPTH = {"explore": 0, "develop": 1, "fix": 2, "review": 3, "resolve": 4}
 MAX_FIX_CYCLES, MAX_REVIEW_ROUNDS, MAX_CRASH_RESUMES = 2, 2, 3
 PROMPTS = Path(__file__).resolve().parents[2] / "prompts"
 PRIORITY = {"p0": 0, "p1": 1, "p2": 2, "p3": 3}
@@ -94,6 +98,7 @@ class Engine:
     land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
     publish_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-publish is one step
     landing_waiting: set[int] = field(default_factory=lambda: set[int]())  # tickets whose landing stage is waiting for an LLM slot
+    llm_waiting: dict[int, tuple[int, int, int]] = field(default_factory=lambda: dict[int, tuple[int, int, int]]())  # other waiters' rank
     announcer: Announcer = field(default_factory=SilentAnnouncer)  # spoken alerts; the daemon injects the real one
 
     # intake --------------------------------------------------------------------------------------------------------
@@ -449,19 +454,24 @@ class Engine:
             landing = stage in LANDING_STAGES
         if landing:
             self.landing_waiting.add(t.number)
+        else:  # rank: furthest along first, then priority (p0 first), then the older ticket
+            self.llm_waiting[t.number] = (-STAGE_DEPTH.get(stage, 0), t.priority, t.number)
         try:
             while True:
                 async with self.llm_lock:
                     # A landing stage may take one session over the limit, at once; everything else waits while one is waiting.
                     room = self.llm_room(extra=1 if landing else 0)
-                    if room.ok and (landing or not self.landing_waiting):
+                    first = landing or t.number == min(self.llm_waiting, key=lambda n: self.llm_waiting[n])
+                    if room.ok and (landing or not self.landing_waiting) and first:
                         self.db.put(f"llm_wait:{t.number}", None)
                         return self.db.begin_stage(t.number, stage, attempt, model)
-                reason = room.reason if not room.ok else "a landing stage is waiting for a session"
+                reason = (room.reason if not room.ok else "a landing stage is waiting for a session" if self.landing_waiting
+                          else "a ticket further along is waiting for the session first")
                 self.db.put(f"llm_wait:{t.number}", reason)
                 await self.sleep(15)
         finally:
             self.landing_waiting.discard(t.number)
+            self.llm_waiting.pop(t.number, None)
 
     def _undelivered_answer(self, t: Ticket) -> dict[str, Any] | None:
         rows = self.db._all("SELECT * FROM questions WHERE ticket=? AND answer IS NOT NULL ORDER BY id DESC LIMIT 1",  # pyright: ignore[reportPrivateUsage]
