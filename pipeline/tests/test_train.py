@@ -17,7 +17,7 @@ from starpipe.daemon import activity
 from starpipe.db import Ticket
 from starpipe.github import GitHubError
 
-from .fakes import Ci, accepted, sh
+from .fakes import OWNER, Ci, accepted, sh
 from .test_engine import Rig
 from .test_ship import advance_develop, ready_ticket, with_gherkin
 
@@ -35,6 +35,29 @@ def rig(tmp_path: Path) -> Rig:
 
 def train_of(rig: Rig) -> train_mod.Train:
     return train_mod.Train(rig.engine)
+
+
+def asking(rig: Rig) -> list[dict[str, Any]]:
+    return [b for b in rig.db.active_batches() if b["state"] == "asking"]
+
+
+def reply(rig: Rig, bid: int, text: str) -> None:
+    """The owner answers the batch's question (what `starpipe answer` does: the answer lands in the question row)."""
+    q = rig.db.batch_question(bid)
+    assert q is not None
+    rig.db.answer_question(int(q["id"]), text, "owner")
+
+
+async def run_answering(rig: Rig, t: train_mod.Train, text: str = "fix", limit: int = 20) -> None:
+    """Run the train until idle, answering every red batch's question with `text`."""
+    for _ in range(limit):
+        await t.run_until_idle()
+        waiting = asking(rig)
+        if not waiting:
+            return
+        for b in waiting:
+            reply(rig, int(b["id"]), text)
+    raise AssertionError("the train kept asking")
 
 
 def develop_has(rig: Rig, path: str) -> bool:
@@ -300,7 +323,7 @@ async def test_a_red_batch_is_split_until_the_culprit_is_alone_and_the_rest_land
 
     rig.agent.on("ci-fix", fix)
     t = train_of(rig)
-    await t.run_until_idle()
+    await run_answering(rig, t, "fix")
     assert [rig.state(n) for n in (1, 2, 3, 4)] == ["landed"] * 4
     sizes = [len(rig.db.batch_members(b)) for b in range(1, 7)]
     assert sizes == [4, 2, 2, 1, 1, 1], f"[1,2,3,4] red -> [1,2] green, [3,4] red -> [3] red, [4] green, then the fixed [3]: {sizes}"
@@ -325,7 +348,7 @@ async def test_a_red_batchs_split_is_recorded_before_its_tickets_return_to_the_q
         seen.append(rig.db.get("train_groups"))  # the moment the tickets are back in the queue and a step() may look at them
 
     t._abandon = watched  # type: ignore[method-assign]  # pyright: ignore[reportPrivateUsage]
-    await t._on_red(bid, ci_mod.Verdict("fail", "red"))  # pyright: ignore[reportPrivateUsage]
+    await t._give_up_red(bid, ci_mod.Verdict("fail", "red"))  # pyright: ignore[reportPrivateUsage]
     assert seen == [json.dumps([[1, 2], [3, 4]])], f"the halves were not recorded yet when the tickets went back: {seen}"
 
 
@@ -650,28 +673,6 @@ async def test_abandoning_a_batch_cancels_its_queued_ci_runs_too(rig: Rig) -> No
     assert rig.gh.closed_prs and rig.state(1) == "landed"
 
 
-async def test_a_feature_run_happens_per_ticket_before_batching_not_per_batch(rig: Rig) -> None:
-    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
-    ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoHorizonJpeg"))
-    rig.gh.feature_pending_polls = 2
-    t1, t2 = rig.db.ticket(1), rig.db.ticket(2)
-    assert t1 and t2
-    at_publish: list[list[tuple[str, str, dict[str, str]]]] = []
-    real_create = rig.gh.create_pr
-
-    def create_pr(title: str, body: str, head: str, base: str) -> dict[str, Any]:
-        at_publish.append(list(rig.gh.dispatches))
-        return real_create(title, body, head, base)
-
-    rig.gh.create_pr = create_pr  # type: ignore[method-assign]
-    await train_of(rig).run_until_idle()
-    assert sorted((ref, inputs["features"]) for _, ref, inputs in rig.gh.dispatches) == sorted(
-        [(t1.branch, "autoMovingTiff16"), (t2.branch, "autoHorizonJpeg")]), "one run per ticket, each on its own branch"
-    assert len(at_publish) == 1 and len(at_publish[0]) == 2, "both feature runs were done before the one batch was published"
-    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2 and len(rig.gh.prs) == 1, "still one PR and one CI for the two"
-    assert rig.gh.cancelled_runs == []
-
-
 def test_jobs_carry_their_runner_labels() -> None:
     runs = [{"id": 5, "name": "pr-gate"}]
     jobs = ci_mod.parse_jobs(runs, {5: [{"name": "mac", "status": "queued", "conclusion": None, "labels": ["macos-15"]},
@@ -691,62 +692,82 @@ async def test_a_batch_lands_with_an_unscheduled_job_noted(rig: Rig) -> None:
     assert [(e["data"]["batch"], e["data"]["job"]) for e in events] == [(1, "macos")]
 
 
-async def test_feature_gates_wait_while_batch_macos_jobs_are_queued(rig: Rig) -> None:
-    ready_ticket(rig, 1, "b1.md", "1\n")
-    rig.gh.job_labels["macos"] = ["macos-15"]
-    polls: list[int] = []  # feature runs dispatched so far, at each poll of the batch's CI
+async def test_gherkin_ticket_joins_batch_without_own_gate(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    t = train_of(rig)
+    assert t._pick() == [1], "no feature run on its own branch is owed before it may be batched"  # pyright: ignore[reportPrivateUsage]
+    t1 = rig.db.ticket(1)
+    assert t1 is not None
+    await t.step()
+    assert rig.db.batch_of(1) == 1
+    assert all(ref != t1.branch for _, ref, _ in rig.gh.dispatches), "nothing was dispatched on the ticket's own branch"
 
-    def hook(_sha: str) -> Ci:
-        polls.append(len(rig.gh.dispatches))
-        linux: Ci = [("pr-gate", "linux", "completed", "success")]
-        if len(polls) <= 3:  # a macOS job still waiting for a runner
-            return [*linux, ("pr-gate", "macos", "queued", None)]
-        if len(polls) <= 5:  # running now: no longer queued
-            return [*linux, ("pr-gate", "macos", "in_progress", None)]
-        return PASS
 
-    rig.gh.ci_hook = hook
-    real_sleep = rig.engine.sleep
-    added: list[int] = []
-
-    async def sleep(s: float) -> None:
-        if not added:  # the batch is in CI: a ticket that owes a feature run becomes ready meanwhile
-            added.append(2)
-            ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoMovingTiff16"))
-        await real_sleep(s)
-
-    rig.engine.sleep = sleep
+async def test_batch_dispatches_one_feature_run_for_all_members(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoHorizonJpeg, autoMovingTiff16"))
+    ready_ticket(rig, 3, "f3.md", "3\n")  # no features: adds nothing to the union and is not failed by it
+    rig.gh.feature_pending_polls = 2
     await train_of(rig).run_until_idle()
-    assert polls[:4] == [0, 0, 0, 0], f"no feature run started while a macOS job was queued: {polls}"
-    assert polls[-1] == 1, f"it started once nothing was queued, while the batch was still in CI: {polls}"
-    assert len(rig.gh.dispatches) == 1 and rig.gh.cancelled_runs == [], "dispatched once, never cancelled or redone"
-    deferred = [e for e in rig.db.events_since() if e["kind"] == "gate-deferred"]
-    assert [(e["ticket"], e["data"]["batch"], e["data"]["queued_macos"]) for e in deferred] == [(2, 1, 1)], "reported once"
-    assert [rig.state(n) for n in (1, 2)] == ["landed", "landed"]
+    assert [(f, ref, inputs["features"]) for f, ref, inputs in rig.gh.dispatches] == [
+        ("gherkin.yml", "pipe/batch-1", "autoMovingTiff16,autoHorizonJpeg")], "one run, on the batch branch, with the union"
+    assert [rig.state(n) for n in (1, 2, 3)] == ["landed"] * 3 and len(rig.gh.prs) == 1
+    assert rig.gh.cancelled_runs == [], "the batch's CI judge neither counted nor cancelled the feature run"
 
 
-async def test_a_feature_run_already_going_is_left_alone_while_macos_jobs_are_queued(rig: Rig) -> None:
+async def test_batch_waits_for_feature_run(rig: Rig) -> None:
     ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
-    train = train_of(rig)
-    batch = rig.db.batch_create("base")
-    train._macos_queued[batch] = 2  # pyright: ignore[reportPrivateUsage]
-    going = asyncio.get_running_loop().create_future()
-    train._gates[1] = going  # type: ignore[assignment]  # pyright: ignore[reportPrivateUsage]
-    train._start_gates()  # pyright: ignore[reportPrivateUsage]
-    assert train._gates[1] is going and not going.cancelled() and rig.gh.dispatches == []  # pyright: ignore[reportPrivateUsage]
-    del train._gates[1]  # pyright: ignore[reportPrivateUsage]
-    rig.db.batch_update(batch, state="abandoned")  # no batch active: nothing holds the run back
-    train._start_gates()  # pyright: ignore[reportPrivateUsage]
-    assert 1 in train._gates  # pyright: ignore[reportPrivateUsage]
-    await asyncio.wait(list(train._gates.values()))  # pyright: ignore[reportPrivateUsage]
+    ready_ticket(rig, 2, "f2.md", "2\n")
+    rig.gh.feature_pending_polls = 3  # CI is green at once; the feature run is not
+    at_merge: list[int] = []
+    real_merge = rig.gh.merge_pr
+
+    def merge_pr(number: int, sha: str) -> None:
+        at_merge.append(max(r["polls"] for r in rig.gh.feature_runs.values()))
+        real_merge(number, sha)
+
+    rig.gh.merge_pr = merge_pr  # type: ignore[method-assign]
+    await train_of(rig).run_until_idle()
+    assert at_merge and at_merge[0] <= 0, f"the batch merged before its feature run had finished: {at_merge}"
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2
+    assert any(e["kind"] == "gherkin-proven" and e["data"]["batch"] == 1 for e in rig.db.events_since())
 
 
-async def test_a_ticket_still_owing_a_feature_run_is_not_batched(rig: Rig) -> None:
+async def test_a_red_batch_feature_run_goes_through_the_red_handling(rig: Rig) -> None:
     ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
-    train = train_of(rig)
-    assert train._gated(rig.db.ticket(1)) and train._pick() == []  # type: ignore[arg-type]  # pyright: ignore[reportPrivateUsage]
-    rig.db.put("gherkin_ok:1", "x")
-    assert train._pick() == [1]  # pyright: ignore[reportPrivateUsage]
+    ready_ticket(rig, 2, "f2.md", "2\n")
+    rig.gh.feature_attempts = [[("cli (macos-15) · a", "failure")]]
+    t = train_of(rig)
+    await t.step()
+    await t.drain()
+    batch = rig.db.batch(1)
+    assert batch and batch["state"] == "asking", "a red feature run holds the batch and asks, as a red CI does"
+    assert rig.db.get("train_groups") is None and rig.state(1) == "ci" and rig.state(2) == "ci"
+    question = rig.db.batch_question(1)
+    assert question and "feature" in question["payload"]
+
+
+async def test_skip_features_dispatches_nothing(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoHorizonJpeg"))
+    rig.db.put("skip_features:1", "1")
+    rig.db.put("land_now:2", "1")  # land-now alone would take its own batch, but here it is only about the feature list
+    t = train_of(rig)
+    assert t._batch_features([1, 2]) == []  # pyright: ignore[reportPrivateUsage]
+    rig.db.put("land_now:2", None)
+    rig.db.put("skip_features:2", "1")
+    await t.run_until_idle()
+    assert rig.gh.dispatches == [], "every member skips features: no run, the batch lands on its CI alone"
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2
+
+
+async def test_skip_features_on_some_members_runs_only_the_others_features(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n", body=with_gherkin("autoMovingTiff16"))
+    ready_ticket(rig, 2, "f2.md", "2\n", body=with_gherkin("autoHorizonJpeg"))
+    rig.db.put("skip_features:1", "1")
+    await train_of(rig).run_until_idle()
+    assert [inputs["features"] for _, _, inputs in rig.gh.dispatches] == ["autoHorizonJpeg"]
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2
 
 
 def _land_one(rig: Rig, ci: Ci) -> None:
@@ -956,3 +977,161 @@ async def test_restart_resumes_both_batches(rig: Rig) -> None:
     assert await second.step() is True and len(second._drivers) == 2  # pyright: ignore[reportPrivateUsage]
     await second.run_until_idle()
     assert rig.state(1) == "landed" and rig.state(2) == "landed" and len(rig.gh.prs) == 2 and rig.db.batch(3) is None
+
+
+def batch_state(rig: Rig, bid: int) -> str:
+    batch = rig.db.batch(bid)
+    assert batch is not None
+    return str(batch["state"])
+
+
+# a red batch asks the owner ------------------------------------------------------------------------------------------
+async def red_batch(rig: Rig, count: int = 2) -> train_mod.Train:
+    """`count` tickets in one batch whose CI is red: the train has asked and is idle."""
+    for n in range(1, count + 1):
+        ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
+    rig.gh.ci_hook = lambda sha: RED
+    t = train_of(rig)
+    await t.run_until_idle()
+    return t
+
+
+async def test_red_batch_asks_owner(rig: Rig) -> None:
+    await red_batch(rig)
+    batch = rig.db.batch(1)
+    assert batch and batch["state"] == "asking" and batch["pr_number"] and batch_wt(rig, 1).is_dir()
+    assert rig.db.batch_members(1) == [1, 2] and rig.state(1) == "ci" and rig.state(2) == "ci", "no member is parked"
+    assert rig.db.get("train_groups") is None and rig.agent.requests == [], "not split, not sent to CI-FIX"
+    assert not rig.gh.closed_prs, "the PR stays open while the owner decides"
+    q = rig.db.batch_question(1)
+    assert q and q["ticket"] == 1 and q["stage"] == "batch-ci" and q["answer"] is None and q["comment_id"] is not None
+    payload = json.loads(q["payload"])
+    assert payload["options"] == ["fix", "bypass"] and payload["recommendation"] == "fix"
+    assert "pr-gate/linux" in q["text"] and "#2" in payload["why"] and "boom" in payload["why"], "names the job, the members and the log"
+    posted = [c for c in rig.gh.comments(1) if "starpipe:question" in c["body"]]
+    assert len(posted) == 1 and "bypass" in posted[0]["body"] and "fix" in posted[0]["body"]
+    assert not rig.gh.comments(2), "only the anchor's issue is asked"
+    assert {a["key"] for a in rig.db.open_alerts()} == {"needs-input:1"}
+    assert ("attention", 1) in rig.announcer.calls
+    assert rig.db.question_for(2) == q, "the other member sees the batch's question too"
+
+
+async def test_bypass_lands_and_files_followup(rig: Rig) -> None:
+    t = await red_batch(rig)
+    rig.gh.say(1, OWNER, "bypass please")  # the owner replies on the issue the question was posted on
+    rig.now += 120
+    await t.run_until_idle()
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2 and develop_has(rig, "docs/f1.md")
+    assert batch_state(rig, 1) == "landed"
+    assert "Batch #1" in next(iter(rig.gh.prs.values()))["body"] and "bypassed by the owner (batch #1): pr-gate/linux" in next(iter(rig.gh.prs.values()))["body"]
+    for n in (1, 2):
+        assert any("starpipe:bypass:1" in c["body"] and "pr-gate/linux" in c["body"] for c in rig.gh.comments(n)), f"#{n} was told"
+    follow = [i for i in rig.gh.issues.values() if "pipe:proposed" in {lab["name"] for lab in i["labels"]}]
+    assert len(follow) == 1 and "pipeline" not in {lab["name"] for lab in follow[0]["labels"]}, "proposed, not queued"
+    assert "pr-gate/linux" in follow[0]["title"] and "batch #1" in follow[0]["body"] and "#1, #2" in follow[0]["body"]
+    assert "landing train batch #1" in follow[0]["body"]
+    assert rig.db.get("bypass:batch1") is None and rig.db.open_alerts() == []
+
+
+async def test_bypass_without_followup_files_nothing(rig: Rig) -> None:
+    t = await red_batch(rig)
+    reply(rig, 1, "bypass, no follow-up")
+    await t.run_until_idle()
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2
+    assert not [i for i in rig.gh.issues.values() if "pipe:proposed" in {lab["name"] for lab in i["labels"]}]
+    assert "bypassed by the owner" in next(iter(rig.gh.prs.values()))["body"]
+
+
+async def test_a_refused_followup_does_not_hold_the_landing(rig: Rig) -> None:
+    t = await red_batch(rig)
+
+    def refuse(title: str, body: str) -> int:
+        raise GitHubError("boom")
+
+    rig.gh.create_issue = refuse  # type: ignore[method-assign]
+    reply(rig, 1, "bypass")
+    await t.run_until_idle()
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2
+    assert any(e["kind"] == "bypass-followup-failed" for e in rig.db.events_since())
+
+
+async def test_fix_answer_splits_batch(rig: Rig) -> None:
+    t = await red_batch(rig)
+    reply(rig, 1, "fix")
+    rig.gh.ci_hook = lambda sha: PASS  # the culprit is not under test here: each half is green
+    await t.run_until_idle()
+    assert batch_state(rig, 1) == "failed" and "CI red" in rig.db.batch(1)["note"]  # type: ignore[index]
+    assert [rig.db.batch_members(b) for b in (2, 3)] == [[1], [2]], "split in halves, as before"
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2 and rig.db.open_alerts() == []
+    assert any(e["kind"] == "train-split" for e in rig.db.events_since())
+    assert not [i for i in rig.gh.issues.values() if "pipe:proposed" in {lab["name"] for lab in i["labels"]}]
+
+
+async def test_an_unrecognised_answer_is_a_fix(rig: Rig) -> None:
+    t = await red_batch(rig)
+    reply(rig, 1, "hmm, let me think")
+    rig.gh.ci_hook = lambda sha: PASS
+    await t.run_until_idle()
+    assert batch_state(rig, 1) == "failed"  # type: ignore[index]
+    assert any(e["kind"] == "batch-answered" and e["data"]["choice"] == "fix" and not e["data"]["recognised"] for e in rig.db.events_since())
+
+
+def test_parse_answer() -> None:
+    assert train_mod.parse_answer("bypass") == ("bypass", True, True)
+    assert train_mod.parse_answer("Fix it") == ("fix", True, True)
+    assert train_mod.parse_answer("bypass, no follow-up") == ("bypass", False, True)
+    assert train_mod.parse_answer("Bypass without followup") == ("bypass", False, True)
+    assert train_mod.parse_answer("bypass or fix? fix") == ("bypass", True, True), "the first word wins"
+    assert train_mod.parse_answer("dunno") == ("fix", True, False)
+
+
+async def test_asking_batch_does_not_block_other_batch(rig: Rig) -> None:
+    rig.engine.config.batch_parallel = 1  # the asking batch must not take the only slot
+    ready_ticket(rig, 1, "f1.md", "1\n")
+    rig.gh.ci_hook = lambda sha: RED if has_file(rig, sha, "docs/f1.md") else PASS
+    t = train_of(rig)
+    await t.run_until_idle()
+    assert [b["id"] for b in asking(rig)] == [1]
+    ready_ticket(rig, 2, "f2.md", "2\n")
+    ready_ticket(rig, 3, "f1.md", "changed again\n")  # shares a file with the batch that may still land: it waits
+    await t.run_until_idle()
+    assert rig.state(2) == "landed" and rig.db.batch_members(2) == [2], "a disjoint batch formed and landed meanwhile"
+    assert rig.state(3) == "ready" and rig.db.batch_of(3) is None
+    assert rig.state(1) == "ci" and batch_state(rig, 1) == "asking" and len(asking(rig)) == 1
+    assert len([c for c in rig.gh.comments(1) if "starpipe:question" in c["body"]]) == 1, "not asked again"
+
+
+async def test_asking_batch_survives_restart(rig: Rig) -> None:
+    await red_batch(rig)
+    before = rig.db.batch_question(1)
+    comments = len(rig.gh.comments(1))
+    second = train_of(rig)  # a new process: only the database and the worktrees remain
+    await second.run_until_idle()
+    assert batch_state(rig, 1) == "asking" and second._drivers == {}, "still waiting, nothing driving it"  # pyright: ignore[reportPrivateUsage]
+    assert rig.db.batch_question(1) == before and len(rig.gh.comments(1)) == comments, "not asked again"
+    assert rig.state(1) == "ci" and batch_wt(rig, 1).is_dir() and not rig.gh.closed_prs
+    rig.gh.ci_hook = lambda sha: PASS
+    rig.gh.say(1, OWNER, "fix")
+    rig.now += 120
+    await second.run_until_idle()
+    assert batch_state(rig, 1) == "failed" and [rig.state(n) for n in (1, 2)] == ["landed"] * 2
+
+
+async def test_a_question_never_posted_is_posted_once_after_a_restart(rig: Rig) -> None:
+    for n in (1, 2):
+        ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
+    rig.gh.ci_hook = lambda sha: RED
+    first = train_of(rig)
+
+    def lost(*_a: Any, **_k: Any) -> int:
+        raise GitHubError("down")
+
+    real = rig.engine.post_question
+    rig.engine.post_question = lost  # type: ignore[method-assign]  # the daemon dies between asking and telling the owner
+    await first.run_until_idle()
+    assert batch_state(rig, 1) == "asking" and rig.db.batch_question(1)["comment_id"] is None  # type: ignore[index]
+    rig.engine.post_question = real  # type: ignore[method-assign]
+    second = train_of(rig)
+    await second.run_until_idle()
+    await second.run_until_idle()
+    assert len([c for c in rig.gh.comments(1) if "starpipe:question" in c["body"]]) == 1
