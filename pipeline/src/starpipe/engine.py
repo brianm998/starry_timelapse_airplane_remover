@@ -786,7 +786,9 @@ class Engine:
 
     async def _review(self, t: Ticket) -> bool:
         controls = self.db.get(f"controls:{t.number}") or "[]"
-        round_no = len(self.db.stages(t.number, "review")) + 1
+        # A round is a review that returned a verdict. Reviews cut short (interrupted, usage-limit, no-result) did
+        # not ask for anything, so they must not spend the ticket's rounds.
+        round_no = len([s for s in self.db.stages(t.number, "review") if s["outcome"] == "accepted"]) + 1
         for _ in (0,):
             diffstat = gitutil.git(Path(t.worktree or ""), "diff", "--stat", f"{self.base_ref}...HEAD")
             prompt = (f"{self._ticket_text(t)}\n\nPlan:\n{json.dumps(t.plan, indent=2)}\n\nBase: {self.base_ref}\n"
