@@ -3,7 +3,9 @@
 Tickets that finish REVIEW wait in `ready`. When fewer than `batch_parallel` batches are running, the train takes what is ready (all of it:
 a batch has no size cap; with another batch in flight, only tickets whose files that batch does not touch), builds
 one integration branch (develop plus each ticket's branch, merged in order), opens ONE pull request and runs ONE CI. Green: merge it
-and land every member. Red: rerun what looks like a flake, otherwise split the batch in half and try the halves, down to one
+and land every member (a ticket's Gherkin features are not proven on its own branch first: once the batch is published, one feature run
+on the batch branch with the union of the members' features is judged beside the CI, unless every member carries skip-features or
+land-now). Red: rerun what looks like a flake, otherwise split the batch in half and try the halves, down to one
 ticket, which goes through CI-FIX and rejoins the queue. CI taking an hour is the collection window: whatever becomes ready meanwhile
 is the next batch, and when its files are disjoint from the batch in CI it goes into CI beside it (each batch has its own worktree,
 branch and driver task; merges stay one at a time, and a batch that lands after develop moved takes the overlap/catch-up path below).
@@ -84,12 +86,9 @@ class Train:
     def __init__(self, eng: Engine) -> None:
         self.eng = eng
         self._beside: dict[int, asyncio.Task[None]] = {}  # a conflicted ticket's catch-up, beside the train: it is not batched until done
-        self._gates: dict[int, asyncio.Task[None]] = {}  # a ticket's Gherkin feature run, beside the train, before it may be batched
         self._drivers: dict[int, asyncio.Task[None]] = {}  # one task per active batch, driving it through CI and landing
         self._wake = asyncio.Event()  # set when a driver ends, so the loop forms the next batch at once
         self._git_lock = threading.Lock()  # fetches and worktree add/remove from two batches' threads must not race on the shared repo
-        self._macos_queued: dict[int, int] = {}  # per active batch: CI jobs still waiting for a macOS runner, as of its last poll
-        self._deferred: set[tuple[int, int]] = set()  # (ticket, batch) pairs whose feature-run deferral was already reported
 
     # the loop ------------------------------------------------------------------------------------------------------
     async def run_forever(self) -> None:
@@ -112,8 +111,8 @@ class Train:
                 steps += 1
             elif drivers := [t for t in self._drivers.values() if not t.done()]:  # a batch is running: its end may free the train
                 await asyncio.wait(drivers, return_when=asyncio.FIRST_COMPLETED)
-            elif others := [t for t in (*self._beside.values(), *self._gates.values()) if not t.done()]:
-                await asyncio.wait(others)  # a conflicted ticket's rejoin, or the feature runs of everything now ready
+            elif others := [t for t in self._beside.values() if not t.done()]:
+                await asyncio.wait(others)  # a conflicted ticket's rejoin
             else:
                 break
         return steps
@@ -137,13 +136,12 @@ class Train:
         eng = self.eng
         if eng.config.landing_mode != "batch":
             return False
-        self._start_gates()  # feature runs cost no landing slot, so they go ahead even while the train is held or busy
         did = self._start_drivers()
         active = eng.db.active_batches()
         if len(active) >= max(1, eng.config.batch_parallel):
             return did
         flagged = [t.number for t in eng.db.tickets(("ready",))
-                   if eng.db.batch_of(t.number) is None and ship.land_now(eng, t.number) and not self._gated(t)]
+                   if eng.db.batch_of(t.number) is None and ship.land_now(eng, t.number)]
         if self._held(bypass_stop_line=bool(flagged)):
             return did
         paths = None
@@ -201,46 +199,13 @@ class Train:
         return out
 
     # forming a batch -----------------------------------------------------------------------------------------------
-    def _gated(self, t: Ticket) -> bool:
-        """True while a ticket still owes a Gherkin feature run on its own branch: it is not batched until that is green."""
-        db = self.eng.db
-        return (bool(tickets.gherkin_features(t.body, t.plan)) and not db.get(f"gherkin_ok:{t.number}")
-                and not ship.land_now(self.eng, t.number))
-
-    def _start_gates(self) -> None:
-        """Start the feature run of each ready ticket that needs one. It runs on the ticket's own branch, once per ticket: the batch
-        branch is a new merge commit, so the batch's CI never carries a feature run.
-
-        While an active batch still has macOS jobs queued, no new run starts: it would take a macOS runner ahead of them. A run already
-        going is left alone."""
-        eng = self.eng
-        active = {int(b["id"]) for b in eng.db.active_batches()}
-        waiting = sorted((bid, n) for bid, n in self._macos_queued.items() if bid in active and n > 0)
-        for t in eng.db.tickets(("ready",)):
-            if eng.db.batch_of(t.number) is None and self._gated(t) and t.number not in self._gates:
-                if waiting:
-                    bid, queued = waiting[0]
-                    if (t.number, bid) not in self._deferred:
-                        self._deferred.add((t.number, bid))
-                        eng.db.event("gate-deferred", t.number, batch=bid, queued_macos=queued)
-                    continue
-                task = asyncio.create_task(self._gate_beside(t))
-                self._gates[t.number] = task
-                task.add_done_callback(lambda _t, n=t.number: self._gates.pop(n, None))
-
-    async def _gate_beside(self, t: Ticket) -> None:
-        try:
-            await ship.feature_gate(self.eng, t, rejoin=True)
-        except Exception as exc:  # noqa: BLE001 - one ticket's feature run must not take the train down
-            self.eng.db.event("train-gate-failed", t.number, error=str(exc)[:200])
-
     def _pick(self, paths: dict[int, frozenset[str] | None] | None = None) -> list[int]:
         """The tickets for the next batch. With another batch in flight, only those sharing no file with any of its members:
         `paths` (from `_paths_of`, computed off the event loop) says which files each ticket changes."""
         eng = self.eng
         # a ticket whose catch-up is still running stays out: landing it would delete the worktree the catch-up is working in
         ready = [t for t in eng.db.tickets(("ready",))
-                 if eng.db.batch_of(t.number) is None and not self._gated(t) and t.number not in self._beside]
+                 if eng.db.batch_of(t.number) is None and t.number not in self._beside]
         ids = [t.number for t in ready]
         flying = [n for b in eng.db.active_batches() for n in eng.db.batch_members(int(b["id"]))]
         if flying and paths is None:
@@ -298,9 +263,8 @@ class Train:
             await eng.sleep(BACKOFF_S)
             return
         eng.db.batch_remove(bid, [*built.deferred, *built.catch_up])  # not in this batch after all
-        if not built.merged:
-            for n in built.catch_up:
-                await self._catch_up(n)
+        if not built.merged:  # nothing to publish: the empty batch goes at once, the catch-ups run beside the train
+            self._start_catch_ups(built.catch_up)
             await asyncio.to_thread(self._abandon, bid, "nothing merged cleanly")
             return
         try:
@@ -309,7 +273,11 @@ class Train:
             await asyncio.to_thread(self._abandon, bid, f"could not publish the batch: {exc}")
             await eng.sleep(BACKOFF_S)
             return
-        for n in built.catch_up:  # conflicts with develop itself: the CONFLICT stage runs beside the batch, then back in the queue
+        self._start_catch_ups(built.catch_up)  # conflicts with develop itself: the CONFLICT stage runs beside the batch
+
+    def _start_catch_ups(self, numbers: list[int]) -> None:
+        """Each conflicted ticket's catch-up as a task of its own; the ticket is back in the queue when it is done."""
+        for n in numbers:
             task = asyncio.create_task(self._catch_up_beside(n))
             self._beside[n] = task
             task.add_done_callback(lambda _t, n=n: self._beside.pop(n, None))
@@ -393,10 +361,7 @@ class Train:
         if batch["state"] == "landing":  # died between the merge and the bookkeeping
             await asyncio.to_thread(self._resume_landing, bid)
             return
-        try:
-            outcome = await self._ci(bid)
-        finally:
-            self._macos_queued.pop(bid, None)
+        outcome = await self._ci(bid)
         if outcome[0] == "abandon":
             await asyncio.to_thread(self._abandon, bid, str(outcome[1]))
         elif outcome[0] == "red" and isinstance(outcome[1], ci.Verdict):
@@ -404,11 +369,66 @@ class Train:
         else:
             await self._land(bid, str(outcome[1]))
 
+    def _batch_features(self, members: list[int]) -> list[str]:
+        """The Gherkin features the batch must prove: the ordered union over the members that carry neither skip-features nor
+        land-now. Empty means the batch dispatches no feature run."""
+        eng = self.eng
+        out: list[str] = []
+        for n in members:
+            t = eng.db.ticket(n)
+            if t is None or ship.skip_features(eng, n) or ship.land_now(eng, n):
+                continue
+            out += [f for f in tickets.gherkin_features(t.body, t.plan) if f not in out]
+        return out
+
+    async def _feature_step(self, bid: int, head: str, features: list[str]) -> tuple[str, ci.Verdict | None]:
+        """One look at the batch's feature run, dispatching it first when this head has none. ('pass'|'pending'|'fail'|'abandon', verdict).
+
+        The run is on the batch branch (already on origin), keyed `batch<bid>` in kv: gherkin_run (sha, title, time), gherkin_reran,
+        and gherkin_ok (the head sha it passed on)."""
+        eng = self.eng
+        key = f"batch{bid}"
+        if eng.db.get(f"gherkin_ok:{key}") == head:
+            return ("pass", None)
+        title = tickets.feature_title(features)
+        rec = json.loads(eng.db.get(f"gherkin_run:{key}") or "null")
+        try:
+            if not rec or rec["sha"] != head or rec["title"] != title:
+                await asyncio.to_thread(ship.dispatch_features_on, eng, key, batch_branch(bid), head, title, features)
+                eng.db.put(f"gherkin_err:{key}", None)
+                return ("pending", None)
+            reran = {tuple(k) for k in json.loads(eng.db.get(f"gherkin_reran:{key}") or "[]")}
+            verdict = await asyncio.to_thread(ship.feature_verdict_on, eng, batch_branch(bid), head, title, float(rec["at"]) - 60, reran)
+        except (GitHubError, RuntimeError) as exc:
+            message = str(exc)
+            eng.db.event("gherkin-poll-failed", None, batch=bid, error=message[:200])
+            err = json.loads(eng.db.get(f"gherkin_err:{key}") or "null")
+            count = err["count"] + 1 if err and err["sha"] == head and err["error"] == message else 1
+            eng.db.put(f"gherkin_err:{key}", json.dumps({"sha": head, "error": message, "count": count}))
+            if count >= ship.GATE_ERROR_LIMIT and not ship._is_transient(message):  # pyright: ignore[reportPrivateUsage]
+                eng.db.put(f"gherkin_err:{key}", None)
+                return ("abandon", None)
+            return ("pending", None)
+        eng.db.put(f"gherkin_err:{key}", None)
+        if verdict is None:
+            if eng.clock() - float(rec["at"]) > ship.FEATURE_RUN_WAIT_S:  # dispatched, but no such run ever showed up: dispatch again
+                eng.db.put(f"gherkin_run:{key}", None)
+            return ("pending", None)
+        if verdict.kind == "rerun":
+            ready = await asyncio.to_thread(ship._rerun, eng, None, [j for j in verdict.rerun if j.run_done])  # pyright: ignore[reportPrivateUsage]
+            reran |= {j.key for j in ready}
+            eng.db.put(f"gherkin_reran:{key}", json.dumps(sorted(reran)))
+            return ("pending", None)
+        if verdict.kind == "pass":
+            eng.db.put(f"gherkin_ok:{key}", head)
+            eng.db.event("gherkin-proven", None, batch=bid, sha=head, features=features)
+            return ("pass", verdict)
+        return ("fail" if verdict.kind == "fail" else "pending", verdict)
+
     async def _ci(self, bid: int) -> tuple[str, ci.Verdict | str]:
-        """Judge the batch's CI until it passes, is red, or must be given up on."""
+        """Judge the batch's CI, and its Gherkin feature run beside it, until both pass, one is red, or the batch must be given up on."""
         eng = self.eng
         while True:
-            self._start_gates()  # a ticket that became ready while this batch is in CI proves its features meanwhile
             batch = eng.db.batch(bid)
             assert batch is not None
             members = eng.db.batch_members(bid)
@@ -419,28 +439,37 @@ class Train:
                 return ("pass", "- tests bypassed by the owner (land-now)")
             if any(ship.land_now(eng, n) for n in members):  # a flagged ticket must not wait on its unflagged batch-mates' CI
                 return ("abandon", "a land-now ticket is in a batch with tickets that still need CI: rebuilding without the wait")
+            head = str(batch["head_sha"])
+            features = self._batch_features(members)
+            feature_state: tuple[str, ci.Verdict | None] = ("pass", None)
+            if features:  # dispatched on the first pass, then judged beside the normal CI
+                feature_state = await self._feature_step(bid, head, features)
+                if feature_state[0] == "abandon":
+                    return ("abandon", f"the Gherkin feature run could not be dispatched or polled {ship.GATE_ERROR_LIMIT} times in a row")
             reran = {tuple(k) for k in json.loads(eng.db.get(f"reran:batch{bid}") or "[]")}
+            keep = (tickets.feature_title(features),) if features else ()
             try:
-                jobs, verdict = await asyncio.to_thread(ship._judge_jobs, eng, f"batch{bid}", batch["head_sha"], reran)  # pyright: ignore[reportPrivateUsage]
+                _, verdict = await asyncio.to_thread(ship._judge_jobs, eng, f"batch{bid}", head, reran, keep)  # pyright: ignore[reportPrivateUsage]
             except GitHubError as exc:
                 eng.db.event("ci-poll-failed", None, batch=bid, error=str(exc)[:200])
                 await eng.sleep(eng.config.ci_poll_s)
                 continue
-            self._macos_queued[bid] = sum(1 for j in jobs if j.queued_for_macos)
-            eng.db.record_ci(0, batch["head_sha"], verdict.kind, {"batch": bid, "reason": verdict.reason})
-            if verdict.kind == "pending":
-                age = eng.clock() - float(eng.db.get(f"pushed_at:batch{bid}") or eng.clock())
-                await eng.sleep(ci.poll_delay(age, eng.config.ci_poll_s))
-            elif verdict.kind == "rerun":
+            eng.db.record_ci(0, head, verdict.kind, {"batch": bid, "reason": verdict.reason})
+            if verdict.kind == "fail":
+                return ("red", verdict)
+            if feature_state[0] == "fail" and feature_state[1] is not None:
+                return ("red", feature_state[1])
+            age = eng.clock() - float(eng.db.get(f"pushed_at:batch{bid}") or eng.clock())
+            if verdict.kind == "rerun":
                 ready = await asyncio.to_thread(ship._rerun, eng, None, [j for j in verdict.rerun if j.run_done])  # pyright: ignore[reportPrivateUsage]
                 reran |= {j.key for j in ready}
                 eng.db.put(f"reran:batch{bid}", json.dumps(sorted(reran)))
                 await eng.sleep(eng.config.ci_poll_s)
-            elif verdict.kind == "pass":
+            elif verdict.kind == "pending" or feature_state[0] != "pass":
+                await eng.sleep(ci.poll_delay(age, eng.config.ci_poll_s))
+            else:
                 notes = ship.pass_notes(eng, verdict, batch=bid)
                 return ("pass", "\n".join(f"- {n}" for n in notes))
-            else:
-                return ("red", verdict)
 
     async def _land(self, bid: int, notes: str) -> None:
         eng = self.eng
@@ -522,6 +551,7 @@ class Train:
         eng.db.batch_update(bid, head_sha=new, ci_started=eng.clock())
         eng.db.put(f"pushed_at:batch{bid}", str(eng.clock()))
         eng.db.put(f"reran:batch{bid}", None)
+        eng.db.put(f"gherkin_reran:batch{bid}", None)  # the old head's feature run is void; _ci dispatches one for the new head
         eng.db.event("batch-caught-up", None, batch=bid, files=ov.files[:MAX_NOTED], head=new)
         return True
 
@@ -568,6 +598,8 @@ class Train:
         if batch and batch["branch"]:
             eng.gh.delete_branch(str(batch["branch"]))
         self._remove_worktree(bid)
+        for prefix in ("gherkin_run", "gherkin_ok", "gherkin_reran", "gherkin_err"):
+            eng.db.put(f"{prefix}:batch{bid}", None)
         eng.db.batch_update(bid, state="landed", ended=eng.clock())
 
     def _seed_baseline(self, bid: int, sha: str, wt: Path) -> None:

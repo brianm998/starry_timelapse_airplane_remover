@@ -416,8 +416,8 @@ class AppViewModel(
 
     /**
      * Render the video with [settings] into [fileName] (which only says what to call it in the dialog: the daemon names the file and says where it
-     * put it). Ends in [RenderState.Succeeded] with where it went, or [RenderState.Failed]; cancelling ([cancelRender]) goes back to choosing, with
-     * the daemon having stopped ffmpeg and removed the partial file.
+     * put it). Ends in [RenderState.Succeeded] with where it went, or [RenderState.Failed]; cancelling ([cancelRender]) closes the dialog (as the
+     * macOS sheet does), with the daemon having stopped ffmpeg and removed the partial file.
      */
     fun startRender(settings: com.star.proto.VideoEncodeSettings, fileName: String) {
         val sessionId = sessions.sessionId ?: return
@@ -442,7 +442,10 @@ class AppViewModel(
                 _renderState.value = RenderState.Succeeded(path?.let { RenderVideo.fileName(it) } ?: fileName, path)
                 endRun(RunOutcome.FINISHED)
             } catch (e: CancellationException) {
-                _renderState.value = RenderState.Choosing   // the user stopped it
+                // The user stopped it: put the dialog away, as the macOS sheet does, and not back at the choices. The state is no longer
+                // Rendering, so the close goes through.
+                _renderState.value = RenderState.Choosing
+                closeRenderVideo()
                 throw e
             } catch (e: Throwable) {
                 Log.w("App") { "render failed: ${e.message}" }

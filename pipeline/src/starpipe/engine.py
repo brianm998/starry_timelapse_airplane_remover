@@ -145,6 +145,7 @@ class Engine:
         self.db.put(f"held_retry:{n}", None)
         self.db.intervention(n, "retry", stage)
         self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
+        self.db.put(f"skip_features:{n}", None)
         self.parked.discard(n)
         if RETRY_STATE[stage] in CATCH_UP_STATES:
             self.db.put(f"catch_up:{n}", "1")  # drive merges develop in before the stage resumes
@@ -229,22 +230,23 @@ class Engine:
         return load.room(self.llm_active(), self.cpu(), sessions + extra, cpu_limit)
 
     def update_hold(self) -> dict[str, Any] | None:
-        """The self-update holding new work, while its drain window is open: {sha, left_s, waiting_on}; None otherwise.
+        """The self-update holding new work, until it swaps: {sha, left_s, waiting_on}; None otherwise.
 
-        The window runs from `self_update_pending_since` (missing counts as just started). Once it has passed the daemon swaps
-        regardless of running stages, so the hold ends here too."""
+        The daemon swaps as soon as no stage is running. `left_s` counts down the cap (`self_update_max_wait_s`) from
+        `self_update_pending_since` (missing counts as just started); once it has passed the daemon swaps regardless of running
+        stages, so the hold ends here too."""
         sha = self.db.get("self_update_pending")
         if not sha:
             return None
         since = self.db.get("self_update_pending_since")
-        left = self.config.self_update_drain_s - (self.clock() - float(since)) if since else float(self.config.self_update_drain_s)
+        left = self.config.self_update_max_wait_s - (self.clock() - float(since)) if since else float(self.config.self_update_max_wait_s)
         if left <= 0:
             return None
         return {"sha": sha, "left_s": left, "waiting_on": [s["ticket"] for s in self.db.running_stages()]}
 
     def claimable(self) -> Ticket | None:
         if self.db.get("pause") in ("all", "claims") or self.update_hold():
-            return None  # the second is the daemon waiting to swap to new code: nothing new starts for at most the drain window
+            return None  # the second is the daemon waiting to swap to new code: nothing new starts until it swaps, at most the cap
         if self.landing_waiting:
             return None  # a ticket in the landing train needs the next LLM slot
         if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
@@ -396,15 +398,17 @@ class Engine:
                 opening = f"{note}\n\n{opening}"
             if pending:
                 opening = f"The owner's answer to your question:\n\n{pending['answer']}\n\nContinue the stage.\n\n{opening}"
+        landing = stage in LANDING_STAGES if as_landing is None else as_landing  # same decision as _begin_when_room
         attempt, crashes = 1, 0
         summary = ""
         nudge: str | None = None  # set to send the nudge in place of the prompt
         nudged = False
         while attempt <= 3:
             await self._wait_for_usage()
-            await self._wait_for_update_hold()
+            if not landing:  # the landing train waits on a landing stage: a pending self-update must not hold it
+                await self._wait_for_update_hold()
             model, effort = self._stage_choice(t, stage, attempt)
-            stage_id = await self._begin_when_room(t, stage, attempt, model, landing=as_landing)
+            stage_id = await self._begin_when_room(t, stage, attempt, model, landing=landing)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
             if nudge:
                 body, nudge = nudge, None
@@ -783,7 +787,9 @@ class Engine:
 
     async def _review(self, t: Ticket) -> bool:
         controls = self.db.get(f"controls:{t.number}") or "[]"
-        round_no = len(self.db.stages(t.number, "review")) + 1
+        # A round is a review that returned a verdict. Reviews cut short (interrupted, usage-limit, no-result) did
+        # not ask for anything, so they must not spend the ticket's rounds.
+        round_no = len([s for s in self.db.stages(t.number, "review") if s["outcome"] == "accepted"]) + 1
         for _ in (0,):
             diffstat = gitutil.git(Path(t.worktree or ""), "diff", "--stat", f"{self.base_ref}...HEAD")
             prompt = (f"{self._ticket_text(t)}\n\nPlan:\n{json.dumps(t.plan, indent=2)}\n\nBase: {self.base_ref}\n"
@@ -810,9 +816,9 @@ def check_runner_for(say: Callable[[str], None] = lambda _m: None) -> CheckRunne
     """The real T0+T1 runner, used by the daemon and by the run_checks tool."""
     from .checks import runner
 
-    def run(worktree: Path, base: str) -> list[ledger.Result]:
+    def run(worktree: Path, base: str, tiers: set[str] | None = None, /) -> list[ledger.Result]:
         changed = gitutil.changed_paths(worktree, base)
         plan = impact.plan_for(changed)
-        return runner.run_plan(plan, worktree, base, {"t0", "t1"}, say=say)
+        return runner.run_plan(plan, worktree, base, tiers or {"t0", "t1"}, say=say)
 
     return run
