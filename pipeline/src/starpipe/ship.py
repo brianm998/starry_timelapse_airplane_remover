@@ -38,6 +38,15 @@ def land_now(eng: Engine, n: int) -> bool:
     return land_now_mark(eng.db, n)
 
 
+def skip_features_mark(db: Database, n: int) -> bool:
+    return bool(db.get(f"skip_features:{n}"))
+
+
+def skip_features(eng: Engine, n: int) -> bool:
+    """The owner's skip-features mark: the ticket's Gherkin features are not run for the batch it lands in (CI still is)."""
+    return skip_features_mark(eng.db, n)
+
+
 def pr_body(eng: Engine, t: Ticket) -> str:
     plan = t.plan or {}
     checks = eng.db.checks(t.number, gitutil.head_sha(Path(t.worktree or "")))
@@ -149,15 +158,21 @@ def _finish_ci(eng: Engine, cur: Ticket, notes: list[str]) -> None:
     eng._to_state(cur.number, "landing")  # pyright: ignore[reportPrivateUsage]
 
 
+def dispatch_features_on(eng: Engine, key: int | str, branch: str, sha: str, title: str, features: list[str]) -> None:
+    """Dispatch gherkin.yml on `branch` (already on origin) with the features, and remember it under kv gherkin_run:<key>. Worker thread."""
+    eng.gh.dispatch_workflow(gherkin_nightly.WORKFLOW_FILE, branch, {"features": ",".join(features)})
+    eng.db.put(f"gherkin_run:{key}", json.dumps({"sha": sha, "title": title, "at": eng.clock()}))
+    eng.db.put(f"gherkin_reran:{key}", None)
+    eng.db.event("gherkin-dispatched", key if isinstance(key, int) else None, sha=sha, features=features,
+                 **({} if isinstance(key, int) else {"key": key}))
+
+
 def _dispatch_features(eng: Engine, t: Ticket, sha: str, title: str, features: list[str]) -> None:
     """Make the ticket's head exist on origin, then dispatch gherkin.yml there with the features. Worker thread."""
     pushed = push(eng, t)
     if pushed != sha:
         raise RuntimeError(f"the branch head moved from {sha[:10]} to {pushed[:10]} while it was being pushed")
-    eng.gh.dispatch_workflow(gherkin_nightly.WORKFLOW_FILE, t.branch or "", {"features": ",".join(features)})
-    eng.db.put(f"gherkin_run:{t.number}", json.dumps({"sha": sha, "title": title, "at": eng.clock()}))
-    eng.db.put(f"gherkin_reran:{t.number}", None)
-    eng.db.event("gherkin-dispatched", t.number, sha=sha, features=features)
+    dispatch_features_on(eng, t.number, t.branch or "", sha, title, features)
 
 
 def _is_feature_run(run: dict[str, Any], sha: str, title: str, since: float) -> bool:
@@ -173,9 +188,9 @@ def _is_feature_run(run: dict[str, Any], sha: str, title: str, since: float) -> 
             and datetime.fromisoformat(created).timestamp() >= since)
 
 
-def _feature_verdict(eng: Engine, t: Ticket, sha: str, title: str, since: float, reran: set[tuple[str, str]]) -> ci.Verdict | None:
-    """Judge the newest dispatched run for this head and title; None when GitHub does not list one yet. Worker thread."""
-    runs = [r for r in eng.gh.workflow_file_runs(gherkin_nightly.WORKFLOW_FILE, t.branch or "") if _is_feature_run(r, sha, title, since)]
+def feature_verdict_on(eng: Engine, branch: str, sha: str, title: str, since: float, reran: set[tuple[str, str]]) -> ci.Verdict | None:
+    """Judge the newest dispatched run on `branch` for this head and title; None when GitHub does not list one yet. Worker thread."""
+    runs = [r for r in eng.gh.workflow_file_runs(gherkin_nightly.WORKFLOW_FILE, branch) if _is_feature_run(r, sha, title, since)]
     if not runs:
         return None
     run = max(runs, key=lambda r: int(r["id"]))
@@ -183,6 +198,10 @@ def _feature_verdict(eng: Engine, t: Ticket, sha: str, title: str, since: float,
     jobs = ci.parse_jobs([run], {rid: eng.gh.run_jobs(rid, ci.run_version(run))})
     return ci.judge_feature_run(jobs, reran, run_completed=run.get("status") == "completed",
                                 run_conclusion=run.get("conclusion"), run_id=rid)
+
+
+def _feature_verdict(eng: Engine, t: Ticket, sha: str, title: str, since: float, reran: set[tuple[str, str]]) -> ci.Verdict | None:
+    return feature_verdict_on(eng, t.branch or "", sha, title, since, reran)
 
 
 def _is_transient(message: str) -> bool:
