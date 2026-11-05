@@ -31,6 +31,34 @@ def test_two_jobs_run_one_after_the_other(tmp_path: Path) -> None:
     assert log.read_text().split() == ["s", "e", "s", "e"]
 
 
+def test_concurrent_holder_writes_for_one_pid_do_not_collide() -> None:
+    import json
+    import threading
+
+    n_threads, rounds = 16, 50
+    barrier = threading.Barrier(n_threads)
+    errors: list[BaseException] = []
+
+    def work(i: int) -> None:
+        barrier.wait()
+        try:
+            for r in range(rounds):
+                heavy._write_holder(4242, {"writer": i, "round": r, "pad": "x" * 200})
+        except BaseException as e:  # noqa: BLE001
+            errors.append(e)
+
+    threads = [threading.Thread(target=work, args=(i,)) for i in range(n_threads)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+    rec = json.loads(heavy._holder_file(4242).read_text())
+    assert rec["pad"] == "x" * 200 and 0 <= rec["writer"] < n_threads
+    assert list(heavy.locks_dir().glob("*.tmp")) == []
+
+
 def test_exit_code_is_preserved() -> None:
     p = starpipe("heavy", "--", sys.executable, "-c", "raise SystemExit(7)")
     assert p.wait(30) == 7
