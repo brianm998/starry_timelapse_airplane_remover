@@ -16,6 +16,9 @@ enum class MultiFrameRange(private val labelKey: String) {
 
     val label: String get() = localized(labelKey)
 
+    /** The choice's name in the gui's enum (`allAfter`), the tail of its catalogue key and of the id a UI test finds its row by. */
+    val key: String get() = labelKey.substringAfter('.')
+
     val needsCount: Boolean get() = this == SOME_AFTER || this == SOME_BEFORE
 
     fun indices(current: Int, count: Int, n: Int): Pair<Int, Int> = when (this) {

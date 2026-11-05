@@ -83,6 +83,7 @@ final class GuiFeatureRunner {
         .pressKey: { try $0.press($0.args[0]) },
         .idShown: { try $0.expectShown($0.args[0], shown: true) },
         .idNotShown: { try $0.expectShown($0.args[0], shown: false) },
+        .idAbove: { try $0.expectAbove($0.args[0], above: $0.args[1]) },
         .idSelected: { try $0.expectSelected($0.args[0], selected: true) },
         .idNotSelected: { try $0.expectSelected($0.args[0], selected: false) },
         .idOn: { try $0.expectOn($0.args[0], on: true) },
@@ -113,6 +114,7 @@ final class GuiFeatureRunner {
         .idStillSays: { try $0.expectStillSays($0.args[0], text: $0.args[1]) },
         .idStopsSaying: { try $0.expectStopsSaying($0.args[0], text: $0.args[1]) },
         .processedCopy: { try $0.makeProcessedCopy() },
+        .plantRunMarker: { try $0.plantRunMarker() },
         .openProcessed: { try $0.openProcessedCopy() },
         .confirmCloseIfAsked: { try $0.confirmClosingIfAsked() },
         .windowOpen: { try $0.expectWindow($0.args[0], open: true) },
@@ -338,7 +340,7 @@ final class GuiFeatureRunner {
         let home = scratch.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         app.launchEnvironment["HOME"] = home.path
-        if savesScreenshots { try keepGPUMergeOff() }
+        if savesScreenshots || feature?.id == "uiRestartNow" { try keepGPUMergeOff() }
         // Ignore the windows the last run of the app left open (macOS restores them): a feature starts from the app as it opens, not from where an earlier one quit.
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"] + arguments
         // The parity gallery's window is 1400 by 1100 points, as the desktop client's test window is: XCUITest cannot size a window, so the app does (`ViewModel.uiTestWindowSize`).
@@ -451,7 +453,9 @@ final class GuiFeatureRunner {
     /// the fold of a panel in a small window; each step takes the app seconds to settle, so it is not taken in small ones.
     private func scroll(towards element: XCUIElement, _ identifier: String, _ scroller: inout Scroller) {
         let holder = app.scrollViews.containing(NSPredicate(format: "identifier == %@", identifier)).firstMatch
-        guard holder.exists else { return }
+        // a scroll view with no hit point yet (the screen is still settling after a screenshot or a click) makes XCTest fail the whole test
+        // ("Unable to find hit point for ScrollView"); skip this step and let the caller's wait try again
+        guard holder.exists, holder.isHittable else { return }
         let gap = element.frame.midY - holder.frame.midY
         if let last = scroller.lastGap, abs(gap) >= abs(last) { scroller.direction = -scroller.direction }
         scroller.lastGap = gap
@@ -469,6 +473,14 @@ final class GuiFeatureRunner {
                 throw RunnerError("\(identifier) is still shown\n\(app.debugDescription)")
             }
         }
+    }
+
+    /// The element is higher on the screen than [other]: its top edge is above the other's (screen coordinates, y grows down), for the order of a list.
+    private func expectAbove(_ identifier: String, above other: String) throws {
+        try expectShown(identifier, shown: true)
+        try expectShown(other, shown: true)
+        let a = element(identifier), b = element(other)
+        try waitFor("\(identifier) above \(other)", timeout: 20, detail: { "(tops \(a.frame.minY) and \(b.frame.minY))" }) { a.frame.minY < b.frame.minY }
     }
 
     private func expectSelected(_ identifier: String, selected: Bool) throws {
@@ -610,6 +622,22 @@ final class GuiFeatureRunner {
             }
         }
         processedConfig = target.appendingPathComponent("input/star_temp_\(source.lastPathComponent)/config.json")
+    }
+
+    /// A run marker for the processed copy, as a run that was killed leaves one: a pid no process has and a heartbeat long past, so the app's
+    /// next start finds it abandoned, reports it, and offers Restart Now (its config.json exists). It goes in the directory `launch` hands the
+    /// app as STAR_RUN_MARKER_DIR, which is under `scratch`: `run()` removes that whatever the result, and the app clears the marker at startup.
+    private func plantRunMarker() throws {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        let markers = scratch.appendingPathComponent("run-markers")
+        try FileManager.default.createDirectory(at: markers, withIntermediateDirectories: true)
+        let marker: [String: Any] = [
+            "formatVersion": 1, "id": "star-999999-uiRestartNow", "client": "Star", "starVersion": "1.0.0", "pid": 999999,
+            "startedAt": "2026-10-13T10:00:00Z", "heartbeatAt": "2026-10-13T10:05:00Z", "hostPhysicalMemoryBytes": 17_179_869_184,
+            "sequenceName": config.deletingLastPathComponent().lastPathComponent, "sequencePath": config.deletingLastPathComponent().path,
+            "resumeConfigPath": config.path, "frameCount": 10, "framesCompleted": 4, "peakFootprintBytes": 0,
+        ]
+        try JSONSerialization.data(withJSONObject: marker).write(to: markers.appendingPathComponent("star-999999-uiRestartNow.json"))
     }
 
     /// Opens the processed copy as Load Config does, with the views a test finds one outlier group by labelled.
