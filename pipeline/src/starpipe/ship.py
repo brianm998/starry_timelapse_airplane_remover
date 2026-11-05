@@ -500,11 +500,10 @@ def watch_develop(eng: Engine) -> None:
                     eng.db.put(pending, None)
                     if not _new_red(eng, job, sha):
                         eng.db.put(pending, old)  # nowhere to file it yet: the next poll tries again
-                elif _red_long_enough(eng, since, checked):
-                    # still red from before (a ticket for another failure, or the ledger's red): a job that stays red with no
-                    # open ticket naming it gets one. `_new_red` finds an existing ticket and files nothing.
-                    if _new_red(eng, job, sha, red_since=float(eng.db.get(since) or 0)):
-                        eng.db.put(checked, str(eng.clock()))  # looked at: ask GitHub again only after another threshold
+                elif _red_long_enough(eng, since, checked) and _new_red(eng, job, sha, red_since=float(eng.db.get(since) or 0)):
+                    # still red from before (a ticket for another failure, or the ledger's red) and no open ticket names it: it
+                    # is filed now, or `_new_red` found one. Ask GitHub again only after another threshold.
+                    eng.db.put(checked, str(eng.clock()))
             elif not job.red:
                 eng.db.put(pending, None)  # green again: that was a flake
             if job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line") == f"{job.workflow}/{job.job}":
