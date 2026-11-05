@@ -311,10 +311,6 @@ class Engine:
             self.db.put("credit_exhausted", None)  # the credit window has reset; the next event says whether it is still out
         self.db.put("usage_pause_window", None)
 
-    def _credits_usable(self) -> bool:
-        """Credits can carry a stage past a rejected base window: the account supports them and they are not exhausted."""
-        return self.db.get("credit_support") == "supported" and not self.db.get("credit_exhausted")
-
     def _record_credits(self, report: dict[str, Any]) -> None:
         """Keep what a rate-limit event says about usage credits: `credit_support` (supported / none; absent = unknown),
         `credit_exhausted`, and `credit_use` while they are being spent (logging `credits-in-use` when the spend starts).
@@ -462,8 +458,6 @@ class Engine:
                                on_session=lambda sid, sid_row=stage_id: self.db.set_session(sid_row, sid),
                                on_usage=self._record_usage_windows, on_credits=self._record_credits)
             out: StageOutcome = await self.agent.run(req)
-            if out.status == "usage-limit" and out.window not in (None, "overage") and self._credits_usable():
-                out.status, out.summary = "crash", out.summary or f"{out.window} limit rejected while credits were usable"
             if out.session_id:
                 self.db.set_session(stage_id, out.session_id)
             self.db.end_stage(stage_id, out.status, contract.lock_wait_s, out.summary[:500])

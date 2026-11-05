@@ -519,28 +519,43 @@ async def test_no_credits_pause_resumes_at_the_reset(rig: Rig) -> None:
     assert [e["data"]["window"] for e in pauses] == ["seven_day"]
 
 
-async def test_credits_keep_stages_running_until_exhausted(rig: Rig) -> None:
+async def test_exhausted_credits_pause_the_stages_until_the_reset(rig: Rig) -> None:
+    """The pause decision is the runner's (`parse_usage_limit`, tested in test_agent); the engine pauses on whatever
+    `usage-limit` outcome it is given and never turns it into a counted crash."""
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
     reset = rig.now + 900
-
-    def credits_carry_on(req: StageRequest) -> StageOutcome:
-        req.on_credits(_credit_report(status="rejected", window="five_hour", overage_status="allowed"))
-        return StageOutcome("usage-limit", session_id="S1", resets_at=reset, window="five_hour")
 
     def credits_run_out(req: StageRequest) -> StageOutcome:
         req.on_credits(_credit_report(status="rejected", window="overage", overage_status="rejected"))
         return StageOutcome("usage-limit", session_id="S1", resets_at=reset, window="overage")
 
-    rig.agent.on("explore", credits_carry_on, credits_run_out, explore_ok)
+    rig.agent.on("explore", credits_run_out, explore_ok)
     rig.agent.on("develop", lambda r: StageOutcome("no-result"))
     await rig.engine.drive(7)
     explores = [r for r in rig.agent.requests if r.stage == "explore"]
-    assert [r.attempt for r in explores] == [1, 1, 1], "neither limit counts an attempt"
+    assert [r.attempt for r in explores] == [1, 1], "a usage limit does not count an attempt, or a crash"
     pauses = [e for e in rig.db.events_since() if e["kind"] == "usage-pause"]
-    assert [e["data"]["window"] for e in pauses] == ["overage"], "only the exhausted credits paused the stages"
+    assert [e["data"]["window"] for e in pauses] == ["overage"]
     assert sum(rig.slept) >= 900
     assert rig.db.get("credit_exhausted") is None, "cleared when the credit pause ended"
+
+
+async def test_a_usage_limit_with_no_credit_info_pauses_even_when_credits_were_supported(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    reset = rig.now + 900
+
+    def supported_then_limit(req: StageRequest) -> StageOutcome:
+        req.on_credits(_credit_report(overage_status="allowed"))
+        return StageOutcome("usage-limit", session_id="S1", resets_at=reset, window="five_hour")
+
+    rig.agent.on("explore", supported_then_limit, explore_ok)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    pauses = [e for e in rig.db.events_since() if e["kind"] == "usage-pause"]
+    assert [e["data"]["window"] for e in pauses] == ["five_hour"], "paused, not resumed at once as a crash"
+    assert sum(rig.slept) >= 900
 
 
 async def test_a_question_the_resolver_can_answer_resumes_the_session(rig: Rig) -> None:
