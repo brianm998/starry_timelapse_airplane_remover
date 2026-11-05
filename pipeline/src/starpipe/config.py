@@ -53,7 +53,7 @@ class Config(BaseModel):
     # `swift test --parallel --num-workers N` for the big suites (StarCore, StarCpp, daemon): they used one core of 18 (sampled 2026-11-03)
     heavy_test_workers: int = 8
     auto_self_update: bool = True  # switch the daemon to a new pinned runtime when origin/develop has newer pipeline/ code; the kill switch
-    self_update_drain_s: int = 600  # a pending self-update holds new claims at most this long; then it swaps, interrupting running stages (they resume by session id)
+    self_update_max_wait_s: int = 1800  # a pending self-update holds new claims and waits for running stages to end, swapping the moment none runs; at this cap it swaps anyway, interrupting them (they resume by session id)
     nightly_start: str = "03:00"
     digest_weekday: int = 6  # Monday is 0
     digest_hour: int = 8

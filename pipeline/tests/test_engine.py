@@ -203,8 +203,8 @@ async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
     rig.db.begin_stage(5, "develop", 1, "sonnet")
     rig.db.put("self_update_pending", "e3c559f6aabb")
     rig.db.put("self_update_pending_since", str(rig.now))
-    drain = rig.engine.config.self_update_drain_s
-    assert drain == 600
+    drain = rig.engine.config.self_update_max_wait_s
+    assert drain == 1800
 
     assert rig.engine.claimable() is None, "nothing new is claimed inside the window"
     hold = rig.engine.update_hold()

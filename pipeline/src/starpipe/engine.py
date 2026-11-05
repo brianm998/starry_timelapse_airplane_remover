@@ -229,22 +229,23 @@ class Engine:
         return load.room(self.llm_active(), self.cpu(), sessions + extra, cpu_limit)
 
     def update_hold(self) -> dict[str, Any] | None:
-        """The self-update holding new work, while its drain window is open: {sha, left_s, waiting_on}; None otherwise.
+        """The self-update holding new work, until it swaps: {sha, left_s, waiting_on}; None otherwise.
 
-        The window runs from `self_update_pending_since` (missing counts as just started). Once it has passed the daemon swaps
-        regardless of running stages, so the hold ends here too."""
+        The daemon swaps as soon as no stage is running. `left_s` counts down the cap (`self_update_max_wait_s`) from
+        `self_update_pending_since` (missing counts as just started); once it has passed the daemon swaps regardless of running
+        stages, so the hold ends here too."""
         sha = self.db.get("self_update_pending")
         if not sha:
             return None
         since = self.db.get("self_update_pending_since")
-        left = self.config.self_update_drain_s - (self.clock() - float(since)) if since else float(self.config.self_update_drain_s)
+        left = self.config.self_update_max_wait_s - (self.clock() - float(since)) if since else float(self.config.self_update_max_wait_s)
         if left <= 0:
             return None
         return {"sha": sha, "left_s": left, "waiting_on": [s["ticket"] for s in self.db.running_stages()]}
 
     def claimable(self) -> Ticket | None:
         if self.db.get("pause") in ("all", "claims") or self.update_hold():
-            return None  # the second is the daemon waiting to swap to new code: nothing new starts for at most the drain window
+            return None  # the second is the daemon waiting to swap to new code: nothing new starts until it swaps, at most the cap
         if self.landing_waiting:
             return None  # a ticket in the landing train needs the next LLM slot
         if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
