@@ -20,7 +20,8 @@ Feature: Changing a setting during a run and choosing Process Now restarts it, a
       And I click the label "ui.re_process_everything"
     Then  "processing.modal" is shown
     When  I press "return"
-      And I click "mode.edit"
+    Then  "processing.modal" is not shown
+    When  I click "mode.edit"
       And I choose the menu command "processingSettings"
       And I click "settings.tab.alignment"
       And I type "50" into "settings.alignment.maxkeypoints"
