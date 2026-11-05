@@ -48,6 +48,7 @@ fun GridLeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
                 selected = viewMode,
                 label = { ViewModes.longName(it) },
                 onSelect = { vm.setViewMode(it) },
+                tag = { mode -> ViewModes.name(mode)?.let { name -> "grid.show.${name}" } },
                 modifier = Modifier.fillMaxWidth(),
             )
         }

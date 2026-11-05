@@ -353,7 +353,7 @@ class Daemon:
                 self.db.put("self_update_pending_since", str(self.engine.clock()))  # a pending set by an older daemon
             running = [s["ticket"] for s in self.db.running_stages()]
             if running and self.engine.update_hold():
-                return "pending"  # inside the drain window: let the running stages finish
+                return "pending"  # before the cap: let the running stages finish; the swap comes the moment none runs
             try:
                 selfupdate.switch(selfupdate.runtime_dir(target), plist, restart=False)
             except RuntimeError as exc:

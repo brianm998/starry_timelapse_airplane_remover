@@ -41,6 +41,7 @@
   { "case": "idStopsSaying"         , "text": "\"<id>\" stops saying \"<text>\"" },
   { "case": "idShown"               , "text": "\"<id>\" is shown" },
   { "case": "idNotShown"            , "text": "\"<id>\" is not shown" },
+  { "case": "idAbove"               , "text": "\"<id>\" is above \"<id>\"" },
   { "case": "idSelected"            , "text": "\"<id>\" is selected" },
   { "case": "idNotSelected"         , "text": "\"<id>\" is not selected" },
   { "case": "idOn"                  , "text": "\"<id>\" is on" },

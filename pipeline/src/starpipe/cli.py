@@ -42,9 +42,11 @@ def heavy_cmd(priority: int | None, show_status: bool, command: tuple[str, ...])
         st = heavy.status()
         for h in st.holders:
             use = f"  [{h.job_class or '?'}, cpu {h.cpu_mean:.1f} mean / {h.cpu_peak:.1f} peak cores, rss peak {h.rss_peak_mb:.0f} MB]"
-            click.echo(f"holder  {h.ticket or 'interactive'}  {h.cmd}{use}")
+            where = f" {h.stage}" if h.stage else ""
+            click.echo(f"holder  {h.ticket or 'interactive'}{where}  {h.cmd}{use}  slots {','.join(h.slots) or '?'}")
         for i, w in enumerate(st.queue, 1):
-            click.echo(f"queue {i}  p{w.priority}  {w.ticket or 'interactive'}  {w.cmd}")
+            where = f" {w.stage}" if w.stage else ""
+            click.echo(f"queue {i}  p{w.priority}  {w.ticket or 'interactive'}{where}  [{w.job_class}]  {w.cmd}")
         if not st.holders and not st.queue:
             click.echo("idle")
         return

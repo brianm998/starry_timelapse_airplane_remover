@@ -204,8 +204,8 @@ async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
     rig.db.begin_stage(5, "develop", 1, "sonnet")
     rig.db.put("self_update_pending", "e3c559f6aabb")
     rig.db.put("self_update_pending_since", str(rig.now))
-    drain = rig.engine.config.self_update_drain_s
-    assert drain == 600
+    drain = rig.engine.config.self_update_max_wait_s
+    assert drain == 1800
 
     assert rig.engine.claimable() is None, "nothing new is claimed inside the window"
     hold = rig.engine.update_hold()
@@ -220,6 +220,35 @@ async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
     assert rig.engine.claimable() is None
     rig.db.put("self_update_pending", None)
     assert rig.engine.claimable() is not None, "no pending update, no hold"
+
+
+async def test_a_landing_stage_is_not_held_by_a_pending_self_update(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    rig.db.put("self_update_pending", "e3c559f6aabb")
+    rig.db.put("self_update_pending_since", str(rig.now))
+    assert rig.engine.update_hold() is not None
+    rig.agent.on("conflict", lambda r: StageOutcome("no-result"))
+
+    await rig.engine.model_stage(t, "conflict", "resolve", fresh=True)
+    assert [r.stage for r in rig.agent.requests] == ["conflict"] * 3 and rig.slept == [], "a landing stage starts at once, no hold"
+
+
+async def test_a_develop_stage_is_still_held_by_a_pending_self_update(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    rig.db.put("self_update_pending", "e3c559f6aabb")
+    rig.db.put("self_update_pending_since", str(rig.now))
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    drain = rig.engine.config.self_update_drain_s
+
+    await rig.engine.model_stage(t, "develop", "go")
+    assert rig.slept and sum(rig.slept) >= drain, "the stage waited out the drain window"
+    assert rig.engine.update_hold() is None
 
 
 async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Rig) -> None:
@@ -625,6 +654,25 @@ async def test_review_parks_after_two_rounds_of_changes(rig: Rig) -> None:
     await rig.engine.drive(7)
     assert rig.state(7) == "failed"
     assert len(rig.db.stages(7, "review")) == 3
+
+
+async def test_interrupted_reviews_do_not_spend_review_rounds(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.agent.on("explore", explore_ok)
+    rig.agent.on("develop", develop_ok, develop_with("a\n"))
+    # Two earlier reviews were cut short by a restart and a usage limit; neither returned a verdict.
+    for outcome in ("interrupted", "usage-limit"):
+        rig.db.end_stage(rig.db.begin_stage(7, "review", 1, "sonnet"), outcome)
+
+    def changes(req: StageRequest) -> StageOutcome:
+        req.contract.submit_review({"verdict": "changes", "findings": [
+            {"file": "x", "line": 1, "severity": "major", "issue": "no"}]})
+        return accepted(req)
+
+    rig.agent.on("review", changes, review_ok)
+    await rig.engine.drive(7)
+    assert rig.state(7) == "landed"
 
 
 async def test_a_red_verification_runs_fix_then_parks_after_two(rig: Rig) -> None:
