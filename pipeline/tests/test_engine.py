@@ -10,6 +10,7 @@ import pytest
 
 from starpipe import gitutil, guards, negctl, worktrees
 from starpipe.agent import StageOutcome, StageRequest
+from starpipe.checks import ledger
 from starpipe.config import Config
 from starpipe.db import Database
 from starpipe.engine import Engine
@@ -244,7 +245,7 @@ async def test_a_develop_stage_is_still_held_by_a_pending_self_update(rig: Rig) 
     rig.db.put("self_update_pending", "e3c559f6aabb")
     rig.db.put("self_update_pending_since", str(rig.now))
     rig.agent.on("develop", lambda r: StageOutcome("no-result"))
-    drain = rig.engine.config.self_update_drain_s
+    drain = rig.engine.config.self_update_max_wait_s
 
     await rig.engine.model_stage(t, "develop", "go")
     assert rig.slept and sum(rig.slept) >= drain, "the stage waited out the drain window"
@@ -683,8 +684,8 @@ async def test_a_red_verification_runs_fix_then_parks_after_two(rig: Rig) -> Non
     calls = {"n": 0}
     real = rig.engine.check_runner
 
-    def flaky(worktree: Path, base: str):  # type: ignore[no-untyped-def]
-        results = real(worktree, base)
+    def flaky(worktree: Path, base: str, tiers: set[str] | None = None, /) -> list[ledger.Result]:
+        results = real(worktree, base, tiers)
         calls["n"] += 1
         if calls["n"] > 1 and results:  # DEVELOP's own run is green; the daemon's runs are not
             results[0].status = "fail"
@@ -796,8 +797,6 @@ async def test_verification_does_not_block_the_event_loop(rig: Rig) -> None:
     import asyncio
     import threading
 
-    from starpipe.checks import ledger
-
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
     rig.engine.claim(rig.db.tickets()[0])
@@ -805,9 +804,9 @@ async def test_verification_does_not_block_the_event_loop(rig: Rig) -> None:
     loop_ran = threading.Event()
     waited_out: list[bool] = []
 
-    def blocking_runner(worktree: Path, base: str) -> list[ledger.Result]:
+    def blocking_runner(worktree: Path, base: str, tiers: set[str] | None = None, /) -> list[ledger.Result]:
         waited_out.append(not loop_ran.wait(5))  # True would mean the event loop never got to run
-        return green_runner(worktree, base)
+        return green_runner(worktree, base, tiers)
 
     async def ticker() -> None:
         await asyncio.sleep(0.2)

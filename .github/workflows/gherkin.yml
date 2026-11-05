@@ -1119,7 +1119,8 @@ jobs:
       # 8-13 minutes, so cut an attempt off at 25 and try once more; the retry kills any stard left behind.
       # Root cause (ticket #54): gherkin/hang-watchdog.sh runs beside the features and, after 6 minutes of a silent stard.log (before the
       # 10 minute ProgressStall and the 25 minute cut), prints ps, stard's thread stacks and a jstack of the test JVM into this step's log.
-      # Read that dump in the next hung run; it is what the fix is built from.
+      # Read that dump in the next hung run; it is what the fix is built from. It is also in the reports artifact
+      # (star-desktop/build/gherkin-each/hang-watchdog.log), which survives a cancelled job.
       - name: Run the Gherkin features in the Compose UI
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
@@ -1370,9 +1371,13 @@ jobs:
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
       # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.
+      # Ticket #53: autoMovingTiff16 hung here silently after `frame 4 findFeatures input`. STAR_HANG_WATCHDOG_SECONDS makes
+      # gherkin/hang-watchdog.sh dump stard's threads (powershell, no gdb on Windows) and a jstack of the test JVM at 6 and 9 minutes of
+      # a silent stard.log, before the 10 minute ProgressStall; the dump is also in the reports artifact (gherkin-each/hang-watchdog.log).
       - name: Run the Gherkin features in the Compose UI
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
+          STAR_HANG_WATCHDOG_SECONDS: '360'
         # cygpath -m: the JVM wants C:/... , not Git Bash's /d/a/...
         run: gherkin/run-desktop-features.sh "$(cygpath -m "$GITHUB_WORKSPACE/daemon/.build/release/stard.exe")" ${{ matrix.shard.features }}
 

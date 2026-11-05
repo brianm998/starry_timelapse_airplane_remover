@@ -354,10 +354,10 @@ def commit_change(req: StageRequest, text: str = "two\n") -> None:
     sh(wt, "git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "change")
 
 
-def green_runner(worktree: Path, base: str) -> list[ledger.Result]:
+def green_runner(worktree: Path, base: str, tiers: set[str] | None = None, /) -> list[ledger.Result]:
     sha = gitutil.head_sha(worktree)
     plan = impact.plan_for(gitutil.changed_paths(worktree, base))
-    out = [ledger.Result(c, "pass", sha, 0.0, executed=1) for c in [*plan.t0, *plan.t1()]]
+    out = [ledger.Result(c, "pass", sha, 0.0, executed=1) for c in [*plan.t0, *(plan.t1() if tiers is None or "t1" in tiers else [])]]
     for r in out:
         ledger.record(r)
     return out
