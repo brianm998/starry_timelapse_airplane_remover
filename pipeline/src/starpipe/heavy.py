@@ -1,25 +1,37 @@
-"""The machine-wide heavy-job lock (plan §9.1): one build / test suite / star run at a time.
+"""The machine-wide heavy-job lock (plan §9.1), split by what each job actually needs of the machine.
 
-With `heavy_light_slots` above 1, a light job (adapter_star.job_class) may take a second slot beside a light holder while the
-machine has room. Every hold records its CPU and memory use (_Activity), so the owner can decide per job from evidence.
+Why there is a lock at all: on 2026-10-23 two star runs (~20 GB and most cores each) beside test suites wedged this Mac and
+logged the owner out. What has to be kept apart is narrower than "everything heavy":
 
-Slots are flock()ed files, which the kernel releases when the holder dies, so there are no stale
-locks to guess about. Waiters queue in locks/queue/; the head of the queue (lowest priority number,
-then oldest) takes the next free slot. It counts jobs and never reads the load average.
+- `exclusive` jobs need the machine to themselves: star/stard runs, Gherkin, UI tests (the display), test classes that read the
+  whole machine or hang beside others (adapter_star.EXCLUSIVE_TEST_MARKERS), and any command not recognised.
+- `test` jobs (test suites) run one at a time, so one suite's timing never depends on another suite.
+- `build` jobs (compiles) share the machine with each other and with a test, up to `heavy_build_slots` at once. They used a few
+  cores and under 9 GB of this 18-core, 128 GB machine (results.jsonl, 2026-10-30..11-04).
+
+Slots are flock()ed files, which the kernel releases when the holder dies, so there are no stale locks to guess about: one `test`
+slot and `heavy_build_slots` build slots; an exclusive job takes all of them. Waiters queue in locks/queue/ and are served in
+order: interactive callers first, then the ticket furthest along the pipeline (PROGRESS: a landing ticket before a develop
+one), then the higher-priority and older ticket, then arrival. A waiter that cannot start yet keeps the slots it needs from
+everyone behind it, so a later job can pass it only by using slots it does not need: a build may pass a waiting test suite,
+nothing passes a waiting exclusive job. A job that would start beside another also needs `heavy_free_mem_pct` of memory free.
+It counts jobs and never reads the load average.
 """
 
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import fcntl
 import json
+import math
 import os
 import signal
 import subprocess
 import threading
 import time
 from collections.abc import Callable, Generator
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +41,14 @@ from . import adapter_star
 from .config import Config, home, load
 
 INTERACTIVE, PIPELINE, NIGHTLY = 0, 1, 2
-LIGHT, EXCLUSIVE = "light", "exclusive"
+BUILD, TEST, EXCLUSIVE = adapter_star.BUILD, adapter_star.TEST, adapter_star.EXCLUSIVE
+TEST_SLOT = "test"
+
+# How far along the pipeline a stage is: further along goes first, so a ticket that is about to land is never queued behind a
+# ticket that has only started developing. "verify" is the daemon's own check run after develop submits.
+PROGRESS = {"explore": 0, "develop": 1, "fix": 2, "verify": 3, "review": 3, "resolve": 4, "ci-fix": 5, "conflict": 5,
+            "landing": 6}
+NO_TICKET_PRIORITY = 9
 
 
 def locks_dir() -> Path:
@@ -45,6 +64,40 @@ def default_priority() -> int:
     return PIPELINE if env.get("STARPIPE_TICKET") else INTERACTIVE
 
 
+@dataclass(frozen=True)
+class Requester:
+    """Which ticket, in which stage, a job is for. The daemon runs many tickets' checks on worker threads of one process, so its
+    environment cannot say; the engine sets this around each one (asyncio.to_thread carries it into the thread)."""
+    ticket: str
+    stage: str = ""
+    ticket_priority: int = NO_TICKET_PRIORITY
+
+
+_requester: contextvars.ContextVar[Requester | None] = contextvars.ContextVar("heavy_requester", default=None)
+
+
+@contextlib.contextmanager
+def requester(ticket: int | str, stage: str, ticket_priority: int = NO_TICKET_PRIORITY) -> Generator[None]:
+    token = _requester.set(Requester(str(ticket), stage, ticket_priority))
+    try:
+        yield
+    finally:
+        _requester.reset(token)
+
+
+def current_requester() -> Requester:
+    """The engine's context if set, else the environment a stage session's Bash runs with (agent.sanitized_env)."""
+    found = _requester.get()
+    if found is not None:
+        return found
+    env = os.environ
+    try:
+        prio = int(env.get("STARPIPE_TICKET_PRIORITY", NO_TICKET_PRIORITY))
+    except ValueError:
+        prio = NO_TICKET_PRIORITY
+    return Requester(env.get("STARPIPE_TICKET", ""), env.get("STARPIPE_STAGE", ""), prio)
+
+
 @dataclass
 class Waiter:
     priority: int
@@ -54,9 +107,12 @@ class Waiter:
     ticket: str
     cmd: str
     job_class: str = EXCLUSIVE
+    stage: str = ""
+    ticket_priority: int = NO_TICKET_PRIORITY
 
-    def key(self) -> tuple[int, float, int]:
-        return (self.priority, self.enqueued_at, self.pid)
+    def key(self) -> tuple[int, int, int, float, float, int]:
+        number = float(self.ticket) if self.ticket.isdigit() else math.inf
+        return (self.priority, -PROGRESS.get(self.stage, 0), self.ticket_priority, number, self.enqueued_at, self.pid)
 
 
 def _alive(pid: int, started: float) -> bool:
@@ -90,8 +146,14 @@ def _grant_lock() -> Generator[None]:
             fcntl.flock(handle, fcntl.LOCK_UN)
 
 
-def _try_slot(index: int) -> int | None:
-    fd = os.open(locks_dir() / f"heavy.slot{index}", os.O_RDWR | os.O_CREAT, 0o644)
+def _slot_file(name: str) -> Path:
+    """The test slot is the file the one-slot lock used, so a worktree still running that code (a branch cut before the split)
+    and this one exclude each other: its jobs wait for a test suite or an exclusive job here, and theirs hold off ours."""
+    return locks_dir() / ("heavy.slot0" if name == TEST_SLOT else f"slot.{name}")
+
+
+def _try_slot(name: str) -> int | None:
+    fd = os.open(_slot_file(name), os.O_RDWR | os.O_CREAT, 0o644)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         return fd
@@ -100,76 +162,93 @@ def _try_slot(index: int) -> int | None:
         return None
 
 
-def _free_slots(slots: int) -> int:
-    free = 0
-    for i in range(slots):
-        fd = _try_slot(i)
+def _build_slots(cfg: Config) -> list[str]:
+    return [f"build{i}" for i in range(max(0, cfg.heavy_build_slots))]
+
+
+def _all_slots(cfg: Config) -> list[str]:
+    return [TEST_SLOT, *_build_slots(cfg)]
+
+
+def _free(names: list[str]) -> set[str]:
+    out: set[str] = set()
+    for name in names:
+        fd = _try_slot(name)
         if fd is not None:
-            free += 1
+            out.add(name)
             os.close(fd)  # closing releases the probe lock
-    return free
+    return out
+
+
+def _needs(cfg: Config, kind: str) -> list[str]:
+    """Every slot this class could use. A build needs any one of the build slots; a test, the test slot; anything else, all."""
+    if kind == BUILD and cfg.heavy_build_slots > 0:
+        return _build_slots(cfg)
+    if kind == TEST:
+        return [TEST_SLOT]
+    return _all_slots(cfg)
+
+
+def _pick(cfg: Config, kind: str, free: set[str]) -> list[str] | None:
+    needs = _needs(cfg, kind)
+    if kind == BUILD and cfg.heavy_build_slots > 0:
+        return next(([n] for n in needs if n in free), None)
+    return needs if all(n in free for n in needs) else None
+
+
+def _memory_ok(cfg: Config) -> bool:
+    mem = psutil.virtual_memory()
+    return mem.available / mem.total * 100 >= cfg.heavy_free_mem_pct
+
+
+def _grant(cfg: Config, queue: list[Waiter], me: int, kind_of: Callable[[Waiter], str]) -> list[str] | None:
+    """The slots `me` may take now, or None. Walks the queue in order handing out the free slots: a waiter ahead that can start
+    is given its slots (it takes them on its next poll), one that cannot keeps the slots it needs from everyone behind it."""
+    all_slots = _all_slots(cfg)
+    free = _free(all_slots)
+    busy = len(free) < len(all_slots)
+    memory: bool | None = None
+    for w in queue:
+        kind = kind_of(w)
+        take = _pick(cfg, kind, free)
+        if take is not None and busy:  # it would start beside another job: only with memory to spare
+            memory = _memory_ok(cfg) if memory is None else memory
+            if not memory:
+                take = None
+        if take is None:
+            free -= set(_needs(cfg, kind))
+            if w.pid == me:
+                return None
+            continue
+        if w.pid == me:
+            return take
+        free -= set(take)
+        busy = True
+    return None
 
 
 @dataclass
 class Held:
-    fd: int
-    slot: int
+    fds: list[int]
+    slots: list[str]
     waited: float
+    pid: int = field(default_factory=os.getpid)
 
 
-def _holder_file(slot: int) -> Path:
-    return locks_dir() / f"holder.{slot}.json"
+def _holder_file(pid: int) -> Path:
+    return locks_dir() / f"holder.{pid}.json"
 
 
-def _write_holder(slot: int, record: dict[str, Any]) -> None:
+def _write_holder(pid: int, record: dict[str, Any]) -> None:
     """Atomically, so a reader never sees half a record."""
-    path = _holder_file(slot)
+    path = _holder_file(pid)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(record))
     os.replace(tmp, path)
 
 
-def _read_holder(slot: int) -> dict[str, Any] | None:
-    try:
-        data: dict[str, Any] = json.loads(_holder_file(slot).read_text())
-        if psutil.pid_exists(int(data["pid"])):
-            return data
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
-        pass
-    return None
-
-
-def _room_to_share(cfg: Config, total: int) -> bool:
-    """Every job holding a slot is light and under the RSS limit, and the machine has free memory."""
-    for slot in range(total):
-        fd = _try_slot(slot)
-        if fd is not None:
-            os.close(fd)  # free: nothing to judge
-            continue
-        info = _read_holder(slot)
-        if info is None or info.get("job_class") != LIGHT or info.get("rss_peak_mb", 0.0) >= cfg.heavy_light_rss_gb * 1024:
-            return False
-    mem = psutil.virtual_memory()
-    return mem.available / mem.total * 100 >= cfg.heavy_free_mem_pct
-
-
-def _slots_for(cfg: Config, queue: list[Waiter], rank: int, kind: str) -> range | None:
-    """The slots this waiter may take now, or None. With heavy_light_slots == heavy_slots this is the plain rule: the head of the
-    queue takes a free slot. Slots from heavy_slots up are sharing slots, only ever held by light jobs."""
-    base = cfg.heavy_slots
-    total = max(base, cfg.heavy_light_slots)
-    sharing = total > base
-    if kind != LIGHT:
-        if sharing and _free_slots(total) < total:  # an exclusive job needs the whole machine
-            return None
-        return range(base) if rank < _free_slots(base) else None
-    exclusive_ahead = sharing and any(w.job_class != LIGHT for w in queue[:rank])
-    if rank < _free_slots(base) and not exclusive_ahead:
-        return range(base)
-    # sharing: only the head of the queue, and never while any exclusive job waits (it would starve)
-    if sharing and rank == 0 and all(w.job_class == LIGHT for w in queue) and _room_to_share(cfg, total):
-        return range(base, total)
-    return None
+def _effective_class(cfg: Config, kind: str) -> str:
+    return kind if cfg.heavy_split else EXCLUSIVE
 
 
 def acquire(
@@ -183,10 +262,10 @@ def acquire(
 ) -> Held:
     cfg = config or load()
     prio = default_priority() if priority is None else priority
-    kind = job_class or adapter_star.job_class(cmd)
+    kind = _effective_class(cfg, job_class or adapter_star.job_class(cmd))
+    who = current_requester()
     me = psutil.Process()
-    waiter = Waiter(prio, time.time(), os.getpid(), me.create_time(),
-                    os.environ.get("STARPIPE_TICKET", ""), cmd, kind)
+    waiter = Waiter(prio, time.time(), os.getpid(), me.create_time(), who.ticket, cmd, kind, who.stage, who.ticket_priority)
     entry = locks_dir() / "queue" / f"{waiter.pid}.json"
     entry.write_text(json.dumps(asdict(waiter)))
     started, last_report = time.monotonic(), 0.0
@@ -194,30 +273,37 @@ def acquire(
         while True:
             with _grant_lock():
                 queue = _queue()
-                rank = next((i for i, w in enumerate(queue) if w.pid == waiter.pid), 0)
-                slots = _slots_for(cfg, queue, rank, kind)
-                for i in slots or ():
-                    fd = _try_slot(i)
-                    if fd is not None:
+                if not any(w.pid == waiter.pid for w in queue):  # our entry was removed from outside: put it back
+                    entry.write_text(json.dumps(asdict(waiter)))
+                    queue = sorted([*queue, waiter], key=Waiter.key)
+                rank = next(i for i, w in enumerate(queue) if w.pid == waiter.pid)
+                slots = _grant(cfg, queue, waiter.pid, lambda w: _effective_class(cfg, w.job_class))
+                if slots is not None:
+                    fds = [_try_slot(s) for s in slots]
+                    if all(fd is not None for fd in fds):
                         entry.unlink(missing_ok=True)
-                        # written under the grant lock, so a sharer never finds a held slot without its class
-                        _write_holder(i, {"pid": waiter.pid, "ticket": waiter.ticket, "cmd": cmd, "since": time.time(),
-                                          "job_class": kind})
-                        return Held(fd, i, time.monotonic() - started)
+                        # written under the grant lock, so the status never shows a held slot without its holder
+                        _write_holder(waiter.pid, {"pid": waiter.pid, "ticket": waiter.ticket, "cmd": cmd, "since": time.time(),
+                                                   "job_class": kind, "stage": waiter.stage, "slots": slots})
+                        return Held([fd for fd in fds if fd is not None], slots, time.monotonic() - started)
+                    for fd in fds:
+                        if fd is not None:
+                            os.close(fd)
             now = time.monotonic()
             if report and now - last_report >= cfg.heavy_wait_report_s:
                 last_report = now
                 holders = status().holders
-                who = f"{holders[0].ticket or 'interactive'} {holders[0].cmd[:60]}" if holders else "?"
-                report(f"waiting for heavy lock: {who} ({int(now - started)}s), you are #{rank + 1}")
+                busy = ", ".join(f"{h.ticket or 'interactive'} {h.job_class} {h.cmd[:40]}" for h in holders) or "?"
+                report(f"waiting for the heavy lock ({kind}): {busy} ({int(now - started)}s), you are #{rank + 1}")
             time.sleep(poll)
     finally:
         entry.unlink(missing_ok=True)
 
 
 def release(held: Held) -> None:
-    _holder_file(held.slot).unlink(missing_ok=True)
-    os.close(held.fd)
+    _holder_file(held.pid).unlink(missing_ok=True)
+    for fd in held.fds:
+        os.close(fd)
 
 
 @dataclass(frozen=True)
@@ -366,23 +452,25 @@ def run_job(
     cwd: str | None = None,
     stdout: int | None = None,
     env: dict[str, str] | None = None,
+    job_class: str | None = None,
 ) -> RunResult:
     """Wait for a slot, run argv in its own process group, release. A job idle for `heavy_idle_kill_s` is killed and
     reported as hung, so a wedged test run cannot hold the slot until the owner notices."""
     cfg = config or load()
     cmd = " ".join(argv)
-    kind = EXCLUSIVE if keep_display_awake else adapter_star.job_class(cmd)  # a UI run needs the display and the machine
+    kind = EXCLUSIVE if keep_display_awake else job_class or adapter_star.job_class(cmd)  # a UI run needs the display
     held = acquire(cmd, priority=priority, config=cfg, report=report, job_class=kind)
     try:
-        record = {"pid": os.getpid(), "ticket": os.environ.get("STARPIPE_TICKET", ""), "cmd": cmd, "since": time.time(),
-                  "job_class": kind}
-        _write_holder(held.slot, record)
+        who = current_requester()
+        record: dict[str, Any] = {"pid": held.pid, "ticket": who.ticket, "cmd": cmd, "since": time.time(),
+                                  "job_class": _effective_class(cfg, kind), "stage": who.stage, "slots": held.slots}
+        _write_holder(held.pid, record)
         if keep_display_awake:  # XCUITest / Compose UI freeze when the display sleeps
             argv = ["caffeinate", "-d", "-u", *argv]
         proc = subprocess.Popen(argv, process_group=0, cwd=cwd, stdout=stdout, env=env,
                                 stderr=subprocess.STDOUT if stdout is not None else None)
         record["job_pid"] = proc.pid  # `pid` is the caller; this is what is running
-        _write_holder(held.slot, record)
+        _write_holder(held.pid, record)
 
         def forward(signum: int, _frame: object) -> None:
             if proc.poll() is None:
@@ -405,7 +493,7 @@ def run_job(
                     pass
                 now = time.monotonic()
                 watch.sample(now)
-                _write_holder(held.slot, {**record, "cpu_mean": watch.cpu_mean, "cpu_peak": watch.cpu_peak,
+                _write_holder(held.pid, {**record, "cpu_mean": watch.cpu_mean, "cpu_peak": watch.cpu_peak,
                                           "rss_peak_mb": watch.rss_peak_mb})
                 idle = watch.idle_for(now) if cfg.heavy_idle_kill_s > 0 else None
                 if idle is not None:
@@ -440,6 +528,8 @@ class Holder:
     since: float
     job_pid: int = 0
     job_class: str = ""
+    stage: str = ""
+    slots: list[str] = field(default_factory=list[str])
     cpu_mean: float = 0.0
     cpu_peak: float = 0.0
     rss_peak_mb: float = 0.0
@@ -464,4 +554,6 @@ def status() -> Status:
             continue
         if psutil.pid_exists(holder.pid):
             holders.append(holder)
+        else:
+            path.unlink(missing_ok=True)
     return Status(holders, _queue())

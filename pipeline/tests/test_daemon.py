@@ -673,21 +673,51 @@ async def test_prune_runs_once_the_runtime_has_settled(rig: Rig, tmp_path: Path)
     assert selfupdate.runtime_dir(pin.base).is_dir() and pin.exits == []
 
 
-async def test_pending_update_swaps_after_the_drain_window_with_stages_running(rig: Rig, tmp_path: Path) -> None:
+async def test_self_update_waits_for_running_stages_up_to_the_cap(rig: Rig, tmp_path: Path) -> None:
     pin = Pinned(rig, tmp_path)
     rig.gh.add_issue(1, "running")
     rig.gh.add_issue(2, "waiting")
     rig.engine.sync_issues()
     rig.db.begin_stage(1, "develop", 1, "sonnet")
-    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
-    drain = rig.engine.config.self_update_drain_s
+    commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    cap = rig.engine.config.self_update_max_wait_s
+    assert cap > 600, "longer than the old 10-minute window: developing sessions run for an hour or more"
 
     assert pin.once() == "pending" and rig.db.get("self_update_pending_since") == str(rig.now)
-    rig.now += drain - 1
-    assert pin.once() == "pending" and pin.current_sha() == pin.base and rig.engine.claimable() is None, "inside the window"
+    rig.now += 600 + 1  # past the old drain window, with the stage still running
+    assert pin.once() == "pending" and pin.current_sha() == pin.base, "the running stage is not interrupted"
+    assert rig.engine.claimable() is None, "and nothing new is claimed meanwhile"
+    rig.now += cap - 600 - 2
+    assert pin.once() == "pending" and pin.current_sha() == pin.base and len(rig.db.running_stages()) == 1, "just inside the cap"
 
-    rig.now += 2
-    assert pin.once() == "swapped", "past the window it swaps with the stage still running"
+
+async def test_self_update_swaps_when_the_last_stage_ends(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    rig.gh.add_issue(1, "running")
+    rig.engine.sync_issues()
+    stage = rig.db.begin_stage(1, "develop", 1, "sonnet")
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    assert pin.once() == "pending"
+    rig.now += rig.engine.config.self_update_max_wait_s // 2
+    assert pin.once() == "pending" and pin.current_sha() == pin.base
+
+    rig.db.end_stage(stage, "ok")
+    assert rig.db.running_stages() == []
+    assert pin.once() == "swapped" and pin.current_sha() == target
+    events = [e for e in rig.db.events_since() if e["kind"] == "self-update"]
+    assert events[0]["data"] == {"old": pin.base, "new": target}, "nothing was interrupted"
+    assert rig.db.get("self_update_pending") is None and rig.db.get("self_update_pending_since") is None
+
+
+async def test_self_update_swaps_at_the_cap_and_interrupts(rig: Rig, tmp_path: Path) -> None:
+    pin = Pinned(rig, tmp_path)
+    rig.gh.add_issue(1, "running")
+    rig.engine.sync_issues()
+    rig.db.begin_stage(1, "develop", 1, "sonnet")
+    target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
+    assert pin.once() == "pending"
+    rig.now += rig.engine.config.self_update_max_wait_s + 1
+    assert pin.once() == "swapped", "at the cap it swaps with the stage still running"
     assert pin.current_sha() == target and len(rig.db.running_stages()) == 1
     events = [e for e in rig.db.events_since() if e["kind"] == "self-update"]
     assert events[0]["data"] == {"old": pin.base, "new": target, "interrupted": [1]}
@@ -702,7 +732,7 @@ async def test_self_update_still_waits_for_the_nightly(rig: Rig, tmp_path: Path)
     rig.db.begin_stage(1, "develop", 1, "sonnet")
     target = commit_to_origin(pin.repo, "pipeline/src/new.py", "x = 1\n")
     assert pin.once() == "pending"
-    rig.now += rig.engine.config.self_update_drain_s + 1  # past the window, with a stage running
+    rig.now += rig.engine.config.self_update_max_wait_s + 1  # past the window, with a stage running
     gate = asyncio.Event()
 
     async def nightly() -> int:
