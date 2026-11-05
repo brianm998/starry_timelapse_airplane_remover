@@ -45,7 +45,7 @@ def _run_argv(spec: star.CheckSpec, argv: list[str], root: Path, log: Path, say:
     with log.open("wb") as out:
         if spec.heavy:
             return heavy.run_job(argv, report=say, keep_display_awake=spec.ui, cwd=cwd, stdout=out.fileno(),
-                                 priority=priority, env=env)
+                                 priority=priority, env=env, job_class=spec.lock or None)
         code = subprocess.run(argv, cwd=cwd, stdout=out, stderr=subprocess.STDOUT, check=False, env=env).returncode
         return heavy.RunResult(code, 0.0)
 

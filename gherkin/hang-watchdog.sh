@@ -33,6 +33,22 @@ t() {
     if command -v timeout >/dev/null 2>&1; then timeout 60 "$@"; else "$@"; fi
 }
 
+# Run a command for at most $1 seconds without needing `timeout` (macOS has none, and a jstack of a big JVM can take very long).
+# The watcher's output goes to /dev/null so a leftover `sleep` cannot hold a caller's pipe open.
+bounded() {
+    local secs=$1 cmd watcher
+    shift
+    "$@" &
+    cmd=$!
+    { sleep "$secs"; kill -9 "$cmd" 2>/dev/null; } >/dev/null 2>&1 &
+    watcher=$!
+    wait "$cmd" 2>/dev/null
+    kill "$watcher" 2>/dev/null
+    wait "$watcher" 2>/dev/null
+    return 0
+}
+jvm_seconds=${HANG_WATCHDOG_JVM_SECONDS:-20}   # per-JVM limit for jstack / jcmd
+
 # A command prefix, not a function: `timeout` is an external program and cannot run a shell function.  `sudo -n` when it works
 # without a password (the CI runner; ptrace and /proc/<pid>/task/*/stack need it), nothing as root or when it would ask.
 priv=""
@@ -87,9 +103,11 @@ dump() {
     if command -v jps >/dev/null 2>&1; then
         local jp
         for jp in $(jps -q 2>/dev/null); do
+            # jps lists itself, already exited; jstack of a dead pid spends ~6 s on macOS before giving up.
+            kill -0 "$jp" 2>/dev/null || continue
             echo "== jvm $jp"
-            if command -v jstack >/dev/null 2>&1; then t jstack "$jp" 2>&1 | head -n 800 || true
-            else t jcmd "$jp" Thread.print 2>&1 | head -n 800 || true; fi
+            if command -v jstack >/dev/null 2>&1; then bounded "$jvm_seconds" jstack "$jp" 2>&1 | head -n 800 || true
+            else bounded "$jvm_seconds" jcmd "$jp" Thread.print 2>&1 | head -n 800 || true; fi
         done
     else
         echo "(jps not installed)"

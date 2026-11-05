@@ -298,9 +298,8 @@ class Train:
             await eng.sleep(BACKOFF_S)
             return
         eng.db.batch_remove(bid, [*built.deferred, *built.catch_up])  # not in this batch after all
-        if not built.merged:
-            for n in built.catch_up:
-                await self._catch_up(n)
+        if not built.merged:  # nothing to publish: the empty batch goes at once, the catch-ups run beside the train
+            self._start_catch_ups(built.catch_up)
             await asyncio.to_thread(self._abandon, bid, "nothing merged cleanly")
             return
         try:
@@ -309,7 +308,11 @@ class Train:
             await asyncio.to_thread(self._abandon, bid, f"could not publish the batch: {exc}")
             await eng.sleep(BACKOFF_S)
             return
-        for n in built.catch_up:  # conflicts with develop itself: the CONFLICT stage runs beside the batch, then back in the queue
+        self._start_catch_ups(built.catch_up)  # conflicts with develop itself: the CONFLICT stage runs beside the batch
+
+    def _start_catch_ups(self, numbers: list[int]) -> None:
+        """Each conflicted ticket's catch-up as a task of its own; the ticket is back in the queue when it is done."""
+        for n in numbers:
             task = asyncio.create_task(self._catch_up_beside(n))
             self._beside[n] = task
             task.add_done_callback(lambda _t, n=n: self._beside.pop(n, None))

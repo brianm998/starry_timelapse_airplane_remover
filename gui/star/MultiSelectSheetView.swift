@@ -12,6 +12,54 @@ public enum MultiSelectionType: String, Equatable, CaseIterable {
     var localizedName: String {
         localized("multi_selection.\(rawValue)")
     }
+
+    /// "some frames" has a number the user types and no sentence under the choices.
+    var takesACount: Bool { self == .someAfter || self == .someBefore }
+
+    /// The tail of the choice's id and of its catalogue key (the case name: the rawValues are sentences).
+    var idName: String {
+        switch self {
+        case .all: "all"
+        case .allAfter: "allAfter"
+        case .allBefore: "allBefore"
+        case .someAfter: "someAfter"
+        case .someBefore: "someBefore"
+        }
+    }
+}
+
+/// One choice of a picker, as a button that carries an identifier: the segments of a stock `Picker` are AppKit radio buttons, which an
+/// `accessibilityIdentifier` on the picker does not reach. The chosen one has the selected trait. `radio` draws a list row with a
+/// radio glyph (the range choices); otherwise a pill (the action choices).
+struct ChoiceButton: View {
+    let title: String
+    let selected: Bool
+    let identifier: String
+    var radio: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            if radio {
+                HStack(spacing: 6) {
+                    Image(systemName: selected ? "largecircle.fill.circle" : "circle")
+                        .foregroundColor(selected ? .accentColor : .secondary)
+                    Text(title)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            } else {
+                Text(title)
+                    .foregroundColor(selected ? .white : .primary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 5).fill(selected ? Color.accentColor : Color.gray.opacity(0.25)))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
 }
 
 public enum MultiSelectionRemovalType: String, Equatable, CaseIterable {
@@ -37,30 +85,39 @@ struct MultiSelectSheetView: View {
     @Binding var selectionEnd: CGPoint?
     @Binding var number_of_frames: Int
 
+    /// Whether the trash is part of the area: starts at the right panel's Show Trash (as the desktop's switch does) and the apply uses this.
+    @State private var includingTrash = false
+
     var body: some View {
         VStack {
             Spacer()
               .frame(minWidth: 300)
             Text(localized("ui.change_removing_in_the_selected_area_across"))
 
-            Picker("", selection: $multiSelectionRemovalType) {
+            // the ids of the choices, which a UI test presses: "multiselect.action.*" and "multiselect.range.*" (the case names)
+            HStack(spacing: 6) {
                 ForEach(MultiSelectionRemovalType.allCases, id: \.self) { value in
-                    Text(value.localizedName).tag(value)
+                    ChoiceButton(title: value.localizedName, selected: multiSelectionRemovalType == value,
+                                 identifier: "multiselect.action.\(value.rawValue)") { multiSelectionRemovalType = value }
                 }
             }
-              .pickerStyle(.segmented)
-              .frame(maxWidth: 120)
-            
+
             Text(localized("ui.what_frames_should_we_modify"))
-            Picker("", selection: $multiSelectionType) {
+            VStack(alignment: .leading, spacing: 4) {
                 ForEach(MultiSelectionType.allCases, id: \.self) { value in
-                    Text(value.localizedName).tag(value)
+                    ChoiceButton(title: value.localizedName, selected: multiSelectionType == value,
+                                 identifier: "multiselect.range.\(value.idName)", radio: true) { multiSelectionType = value }
                 }
             }
-              .pickerStyle(.inline)
               .frame(minWidth: 280)
 
+            Toggle(localized("ui.trash"), isOn: $includingTrash)
+
             // what the choices above will do, in words: the id a UI test reads the sheet's action and frames by
+            // (not there for a choice with a number, which has no sentence; the space it takes stays)
+            if multiSelectionType.takesACount {
+                Spacer().frame(minHeight: 30)
+            } else {
             Group {
                 switch multiSelectionType {
                 case .all:
@@ -76,7 +133,7 @@ struct MultiSelectSheetView: View {
                     }
                 
                 case .allAfter:
-                    let numFrames = frames.count - currentIndex + 1
+                    let numFrames = frames.count - currentIndex
                     switch multiSelectionRemovalType {
                     case .remove:
                         Text(localized("ui.area.remove.after", numFrames, currentIndex))
@@ -102,14 +159,13 @@ struct MultiSelectSheetView: View {
                         Text(localized("ui.area.keep_overlaps.before", numFrames, currentIndex))
                     }
 
-               case .someAfter:
-                    Spacer().frame(minHeight: 30)
-               case .someBefore:
-                    Spacer().frame(minHeight: 30)
+               case .someAfter, .someBefore:
+                    EmptyView()
                 }
             
             }
               .accessibilityIdentifier("multiselect.summary")
+            }
 
             HStack {
                 Button(localized("ui.cancel")) {
@@ -206,6 +262,7 @@ struct MultiSelectSheetView: View {
                         Text(localized("ui.the_next"))
                         TextField("", value: $number_of_frames, format: .number)
                           .frame(maxWidth: 40)
+                          .accessibilityIdentifier("multiselect.count")
                         Text(localized("ui.frames"))
                     }
                 case .someBefore:
@@ -236,12 +293,14 @@ struct MultiSelectSheetView: View {
                         Text(localized("ui.the_previous"))
                         TextField("", value: $number_of_frames, format: .number)
                           .frame(maxWidth: 40)
+                          .accessibilityIdentifier("multiselect.count")
                         Text(localized("ui.frames"))
                     }
                 }
             }
             Spacer()
         }.frame(minWidth: 300, idealWidth: 450, maxWidth: 800)
+          .onAppear { includingTrash = viewModel.shouldShowTrash }
     }
 
     private func updateFrames(shouldRemove: Bool,
@@ -265,7 +324,7 @@ struct MultiSelectSheetView: View {
                         await frame.userSelectAllOutliers(toShouldRemove: new_value,
                                                           between: selectionStart,
                                                           and: selectionEnd,
-                                                          includingTrash: viewModel.shouldShowTrash)
+                                                          includingTrash: includingTrash)
                         // save outlier removeability changes here
                         await frame.writeOutliersRemoveReasons()
 
@@ -310,7 +369,7 @@ struct MultiSelectSheetView: View {
                             let new_value = shouldRemove
                             await frame.foreachOutlierGroupMulti(between: selectionStart,
                                                                  and: selectionEnd,
-                                                                 includingTrash: viewModel.shouldShowTrash)
+                                                                 includingTrash: includingTrash)
                             { group, isInTrash in
                                 await frame.userSelectAllOutliers(toShouldRemove: new_value,
                                                                   overlapping: group)

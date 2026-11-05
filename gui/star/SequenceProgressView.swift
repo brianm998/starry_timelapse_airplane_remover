@@ -68,8 +68,11 @@ struct SequenceProgressPanel: View {
     }
 
     /// The same width as `ProcessingModalPanel`, and for the same reason: it holds the
-    /// longest translated step name over two lines, and the two panels stack the same rows.
-    static var width: CGFloat { ProcessingModalPanel<EmptyView, EmptyView>.width }
+    /// widest word of every translated heading and step name, and the two panels stack the
+    /// same rows.
+    static func width(for steps: [ProcessingStepProgress]) -> CGFloat {
+        ProcessingModalPanel<EmptyView, EmptyView>.width(steps: steps, extraction: false)
+    }
 
     var body: some View {
         ZStack {
@@ -97,7 +100,7 @@ struct SequenceProgressPanel: View {
               // Width fixed, height whatever the content comes to.  No `maxHeight`: that
               // stretches the panel to the height it was offered and leaves the content
               // floating in the middle of it.
-              .frame(width: Self.width)
+              .frame(width: Self.width(for: progress.steps))
               .background(Color(white: 0.18))
               .cornerRadius(14)
               .shadow(radius: 24)
