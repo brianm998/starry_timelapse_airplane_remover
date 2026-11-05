@@ -189,6 +189,9 @@
     "uiGalleryProcessed": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiGridShowList": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiGalleryMultiSelect": {
       "sequence": "test_data/test_a7sii_10"
     },
