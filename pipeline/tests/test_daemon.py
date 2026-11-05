@@ -247,6 +247,27 @@ async def test_land_now_is_refused_outside_ready_ci_landing(rig: Rig) -> None:
         await client.close()
 
 
+async def test_skip_features_action(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    client, _ = await api(rig)
+    try:
+        for state in ("queued", "exploring", "developing", "review", "needs-input", "failed", "landed", "cancelled"):
+            rig.db.set_state(7, state)
+            assert (await client.post("/v1/tickets/7/skip-features", headers=AUTH)).status == 409, state
+        assert rig.db.get("skip_features:7") is None
+        for state in ("ready", "ci", "landing"):
+            rig.db.set_state(7, state)
+            assert (await client.post("/v1/tickets/7/skip-features", headers=AUTH)).status == 200, state
+        assert rig.db.get("skip_features:7") == "1"
+        assert rig.db.get("land_now:7") is None, "lighter than land-now: CI still runs"
+        assert (await client.post("/v1/tickets/99/skip-features", headers=AUTH)).status == 404
+        await client.post("/v1/tickets/7/cancel", headers=AUTH)
+        assert rig.db.get("skip_features:7") is None
+    finally:
+        await client.close()
+
+
 async def test_land_now_records_an_intervention(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
@@ -958,21 +979,17 @@ def test_ready_ticket_reads_waiting_for_the_next_batch_with_the_countdown(rig: R
     assert d.snapshot()["landing"]["next_batch_in_s"] == 0  # type: ignore[index]
 
 
-def test_ready_activity_names_the_feature_gate(rig: Rig) -> None:
+def test_ready_activity_has_no_gate_wait(rig: Rig) -> None:
     rig.gh.add_issue(1, "t1", f"{GOOD_BODY}\n## Pipeline\ngherkin: autoMovingTiff16, uiX\n")
     ready_tickets(rig, 2)
     rig.engine.sync_issues()
     rig.engine._to_state(1, "ready")  # pyright: ignore[reportPrivateUsage]
     d = landing_daemon(rig)
     bid = rig.db.batch_create("0" * 40)
-    rig.db.batch_update(bid, state="ci")  # a batch is in CI, but #1 is owed its feature run first
-    assert activity_of(d, 1) == "ready · proving Gherkin features (autoMovingTiff16, uiX)"
-    assert activity_of(d, 2) == f"ready · waiting for the next batch (batch {bid} is ci)", "no features: nothing to prove"
-    rig.db.put("gherkin_err:1", json.dumps({"sha": "abc", "error": "gh: Bad Gateway (HTTP 502)", "count": 2}))
-    assert activity_of(d, 1) == ("ready · proving Gherkin features (autoMovingTiff16, uiX) · "
-                                 "last poll failed: gh: Bad Gateway (HTTP 502)")
-    rig.db.put("gherkin_ok:1", "abc")
-    assert activity_of(d, 1) == f"ready · waiting for the next batch (batch {bid} is ci)", "proven: it waits on the train"
+    rig.db.batch_update(bid, state="ci")
+    for n in (1, 2):  # features no longer hold a ticket out of a batch: both just wait for the next one
+        assert activity_of(d, n) == f"ready · waiting for the next batch (batch {bid} is ci)"
+        assert "proving" not in activity_of(d, n)
 
 
 def test_snapshot_remembers_the_last_abandoned_batch_for_an_hour(rig: Rig) -> None:

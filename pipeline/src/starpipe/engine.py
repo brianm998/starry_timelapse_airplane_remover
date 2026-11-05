@@ -145,6 +145,7 @@ class Engine:
         self.db.put(f"held_retry:{n}", None)
         self.db.intervention(n, "retry", stage)
         self.db.put(f"land_now:{n}", None)  # a retried ticket is tested again
+        self.db.put(f"skip_features:{n}", None)
         self.parked.discard(n)
         if RETRY_STATE[stage] in CATCH_UP_STATES:
             self.db.put(f"catch_up:{n}", "1")  # drive merges develop in before the stage resumes
