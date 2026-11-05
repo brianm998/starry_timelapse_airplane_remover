@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.TextStyle
@@ -64,6 +66,8 @@ class MultiSheetMemory {
  * entry the sentence saying what it will do to which frames is built from (`ui.overlap.paint`, `ui.area.keep_overlaps`, …).
  */
 private data class MultiAction(
+    /** The tail of the action's id and of its catalogue key (`multi_removal.<name>`, `multi_paint.<name>`): the gui's enum case names. */
+    val name: String,
     val label: String, val shouldRemove: Boolean, val overlapping: Boolean, val summaryPrefix: String,
 )
 
@@ -71,8 +75,8 @@ private data class MultiAction(
 @Composable
 fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoiceTarget) {
     val actions = listOf(
-        MultiAction(localized("multi_paint.remove"), true, false, "ui.overlap.paint"),
-        MultiAction(localized("multi_paint.keep"), false, false, "ui.overlap.clear"),
+        MultiAction("remove", localized("multi_paint.remove"), true, false, "ui.overlap.paint"),
+        MultiAction("keep", localized("multi_paint.keep"), false, false, "ui.overlap.clear"),
     )
     MultiFrameSheet(
         title = localized("ui.change_all_overlapping_outliers_in_other"),
@@ -89,6 +93,9 @@ fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoic
         summaryTag = "multichoice.summary",
         cancelTag = "multichoice.cancel",
         applyTag = "multichoice.apply",
+        actionTag = { "multichoice.paint.${it.name}" },
+        rangeTag = { "multichoice.range.${it.key}" },
+        countTag = "multichoice.count",
     )
 }
 
@@ -96,10 +103,10 @@ fun MultiChoiceSheet(vm: SequenceViewModel, target: SequenceViewModel.MultiChoic
 @Composable
 fun MultiSelectSheet(vm: SequenceViewModel, @Suppress("UNUSED_PARAMETER") sel: SequenceViewModel.RectSelection) {
     val actions = listOf(
-        MultiAction(localized("multi_removal.remove"), true, false, "ui.area.remove"),
-        MultiAction(localized("multi_removal.keep"), false, false, "ui.area.keep"),
-        MultiAction(localized("multi_removal.removeOverlaps"), true, true, "ui.area.remove_overlaps"),
-        MultiAction(localized("multi_removal.keepOverlaps"), false, true, "ui.area.keep_overlaps"),
+        MultiAction("remove", localized("multi_removal.remove"), true, false, "ui.area.remove"),
+        MultiAction("keep", localized("multi_removal.keep"), false, false, "ui.area.keep"),
+        MultiAction("removeOverlaps", localized("multi_removal.removeOverlaps"), true, true, "ui.area.remove_overlaps"),
+        MultiAction("keepOverlaps", localized("multi_removal.keepOverlaps"), false, true, "ui.area.keep_overlaps"),
     )
     MultiFrameSheet(
         title = localized("ui.change_removing_in_the_selected_area_across"),
@@ -120,6 +127,9 @@ fun MultiSelectSheet(vm: SequenceViewModel, @Suppress("UNUSED_PARAMETER") sel: S
         trashInitially = vm.showTrash.value,
         summaryTag = "multiselect.summary",
         cancelTag = "multiselect.cancel",
+        actionTag = { "multiselect.action.${it.name}" },
+        rangeTag = { "multiselect.range.${it.key}" },
+        countTag = "multiselect.count",
     )
 }
 
@@ -144,6 +154,10 @@ private fun MultiFrameSheet(
     summaryTag: String? = null,
     cancelTag: String? = null,
     applyTag: String? = null,
+    /** The ids of the action choice, of each range choice and of the number-of-frames field (the two sheets have their own, `multiselect.*` and `multichoice.*`). */
+    actionTag: (MultiAction) -> String,
+    rangeTag: (MultiFrameRange) -> String,
+    countTag: String,
 ) {
     var actionIdx by remember { mutableStateOf(defaultIndex.coerceIn(0, actions.size - 1)) }
     var range by remember { mutableStateOf(initialRange) }
@@ -166,10 +180,10 @@ private fun MultiFrameSheet(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(title, color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-            SegmentedRow(actions.map { it.label }, actionIdx) { actionIdx = it }
+            SegmentedRow(actions.map { it.label }, actions.map { actionTag(it) }, actionIdx) { actionIdx = it }
             Text(localized("ui.what_frames_should_we_modify"), color = StarColors.textSecondary, fontSize = 12.sp)
             MultiFrameRange.entries.forEach { r ->
-                RadioRow(r.label, selected = r == range) { range = r }
+                RadioRow(r.label, selected = r == range, tag = rangeTag(r)) { range = r }
             }
             // What the action will do, in words (macOS shows this under the choices; a count the user types has no sentence).
             range.summary(action.summaryPrefix, current, frameCount)?.let {
@@ -191,7 +205,7 @@ private fun MultiFrameSheet(
                 // "the next [N] frames", beside the button as in the gui
                 if (range.needsCount) {
                     Text(localized(if (range == MultiFrameRange.SOME_BEFORE) "ui.the_previous" else "ui.the_next"), color = StarColors.textPrimary, fontSize = 12.sp)
-                    CountField(nText) { nText = it }
+                    CountField(nText, countTag) { nText = it }
                     Text(localized("ui.frames"), color = StarColors.textPrimary, fontSize = 12.sp)
                 }
             }
@@ -207,7 +221,7 @@ private fun Modifier.tagged(tag: String?): Modifier = if (tag == null) this else
 
 /** The action as one row of equal segments, the selected one filled (the gui's `.segmented` picker). */
 @Composable
-private fun SegmentedRow(labels: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+private fun SegmentedRow(labels: List<String>, tags: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(StarColors.cellDefault), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
         labels.forEachIndexed { i, label ->
             Text(
@@ -218,7 +232,8 @@ private fun SegmentedRow(labels: List<String>, selected: Int, onSelect: (Int) ->
                 modifier = Modifier
                     .weight(1f)
                     .background(if (i == selected) StarColors.accent else Color.Transparent)
-                    .clickable { onSelect(i) }
+                    .tagged(tags[i])
+                    .selectable(selected = i == selected, role = Role.RadioButton, onClick = { onSelect(i) })
                     .padding(horizontal = 6.dp, vertical = 6.dp),
             )
         }
@@ -227,21 +242,21 @@ private fun SegmentedRow(labels: List<String>, selected: Int, onSelect: (Int) ->
 
 /** The number of frames of a next/previous range: a short digits-only field (the gui's 40pt `TextField`). */
 @Composable
-private fun CountField(value: String, onChange: (String) -> Unit) {
+private fun CountField(value: String, tag: String, onChange: (String) -> Unit) {
     BasicTextField(
         value = value,
         onValueChange = { onChange(it.filter(Char::isDigit)) },
         singleLine = true,
         textStyle = TextStyle(color = StarColors.textPrimary, fontSize = 12.sp, textAlign = TextAlign.Center),
         cursorBrush = SolidColor(StarColors.textPrimary),
-        modifier = Modifier.width(40.dp).clip(RoundedCornerShape(4.dp)).background(StarColors.cellDefault).padding(vertical = 5.dp),
+        modifier = Modifier.width(40.dp).clip(RoundedCornerShape(4.dp)).background(StarColors.cellDefault).tagged(tag).padding(vertical = 5.dp),
     )
 }
 
 @Composable
-private fun RadioRow(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun RadioRow(label: String, selected: Boolean, tag: String, onClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 2.dp)) {
+        modifier = Modifier.fillMaxWidth().tagged(tag).selectable(selected = selected, role = Role.RadioButton, onClick = onClick).padding(vertical = 2.dp)) {
         Text(if (selected) "◉" else "○", color = if (selected) StarColors.accent else StarColors.textSecondary, fontSize = 13.sp)
         Text(label, color = StarColors.textPrimary, fontSize = 12.sp)
     }

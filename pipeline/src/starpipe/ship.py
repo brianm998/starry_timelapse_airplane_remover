@@ -130,6 +130,18 @@ def _rerun(eng: Engine, number: int | None, jobs: list[ci.Job]) -> list[ci.Job]:
     return ready
 
 
+def pass_notes(eng: Engine, verdict: ci.Verdict, number: int | None = None, batch: int | None = None) -> list[str]:
+    """The landing notes for a passing CI verdict (shared by the per-ticket and batch paths), and a `ci-no-runner` event per job
+    that never got a runner."""
+    notes = [f"known red on develop (not blocking): {j.workflow}/{j.job}" for j in verdict.known_red]
+    notes += [f"still running after {eng.config.ci_blocking_wait_s / 3600:g} h (demoted to the post-merge watch): "
+              f"{j.workflow}/{j.job}" for j in verdict.demoted]
+    for j in verdict.warnings:
+        notes.append(f"no runner, left to the post-merge watch and the nightly: {j.workflow}/{j.job}")
+        eng.db.event("ci-no-runner", number, workflow=j.workflow, job=j.job, run=j.run_id, **({} if batch is None else {"batch": batch}))
+    return notes
+
+
 def _finish_ci(eng: Engine, cur: Ticket, notes: list[str]) -> None:
     eng.db.put(f"ci_notes:{cur.number}", "\n".join(f"- {n}" for n in notes) or None)
     if notes and cur.pr_number:
@@ -307,9 +319,7 @@ async def run_ci(eng: Engine, t: Ticket) -> bool:
             eng.db.put(f"reran:{t.number}", json.dumps(sorted(reran)))
             await eng.sleep(eng.config.ci_poll_s)
         elif verdict.kind == "pass":
-            notes = [f"known red on develop (not blocking): {j.workflow}/{j.job}" for j in verdict.known_red]
-            notes += [f"still running after {eng.config.ci_blocking_wait_s / 3600:g} h (demoted to the post-merge watch): "
-                      f"{j.workflow}/{j.job}" for j in verdict.demoted]
+            notes = pass_notes(eng, verdict, t.number)
             await asyncio.to_thread(_finish_ci, eng, cur, notes)
             return True
         else:
