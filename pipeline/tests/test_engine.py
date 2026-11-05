@@ -243,7 +243,7 @@ async def test_a_develop_stage_is_still_held_by_a_pending_self_update(rig: Rig) 
     rig.db.put("self_update_pending", "e3c559f6aabb")
     rig.db.put("self_update_pending_since", str(rig.now))
     rig.agent.on("develop", lambda r: StageOutcome("no-result"))
-    drain = rig.engine.config.self_update_drain_s
+    drain = rig.engine.config.self_update_max_wait_s
 
     await rig.engine.model_stage(t, "develop", "go")
     assert rig.slept and sum(rig.slept) >= drain, "the stage waited out the drain window"
