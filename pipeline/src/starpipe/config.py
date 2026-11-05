@@ -53,7 +53,7 @@ class Config(BaseModel):
     # `swift test --parallel --num-workers N` for the big suites (StarCore, StarCpp, daemon): they used one core of 18 (sampled 2026-11-03)
     heavy_test_workers: int = 8
     auto_self_update: bool = True  # switch the daemon to a new pinned runtime when origin/develop has newer pipeline/ code; the kill switch
-    self_update_drain_s: int = 600  # a pending self-update holds new claims at most this long; then it swaps, interrupting running stages (they resume by session id)
+    self_update_max_wait_s: int = 1800  # a pending self-update holds new claims and waits for running stages to end, swapping the moment none runs; at this cap it swaps anyway, interrupting them (they resume by session id)
     nightly_start: str = "03:00"
     digest_weekday: int = 6  # Monday is 0
     digest_hour: int = 8
@@ -89,6 +89,7 @@ class Config(BaseModel):
     ci_poll_s: float = 60.0
     ci_settle_s: float = 90.0
     max_auto_tickets: int = 2
+    red_ticket_after_s: float = 3 * 3600.0  # a non-gate job red on develop this long with no open ticket naming it is ticketed
     gherkin_nightly_max_tickets: int = 6  # new tickets one Gherkin nightly may file (red before flaky); the rest wait for the next night
     max_open_tickets: int = 30  # open issues labelled `pipeline`: `ticket new` and `approve` refuse past this
     max_proposed: int = 10  # open issues labelled `pipe:proposed`: waiting on the owner

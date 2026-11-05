@@ -1162,7 +1162,7 @@
   "view_mode.failedStarAligned": "Bild mit fehlgeschlagener Sternausrichtung",
   "view_mode.final": "fertig verarbeitetes Bild",
   "view_mode.horizon": "Horizontmaske",
-  "view_mode.mergedHorizon": "zusammengeführter Horizont",
+  "view_mode.mergedHorizon": "geglätteter Horizont",
   "view_mode.original": "Originalbild",
   "view_mode.removeMask": "berechnete Entfernungsmaske",
   "view_mode.selectiveProcessed": "selektiv verarbeitet",
