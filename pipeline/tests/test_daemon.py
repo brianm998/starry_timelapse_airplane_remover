@@ -152,6 +152,27 @@ async def test_show_lists_blockers_with_titles_and_caches_github_lookups(rig: Ri
         await client.close()
 
 
+async def test_show_returns_the_open_questions_options_and_why(rig: Rig) -> None:
+    for n in (7, 8, 9):
+        rig.gh.add_issue(n, f"t{n}")
+    rig.engine.sync_issues()
+    rig.db.add_question(7, "explore", "which way?", {"question": "which way?", "why": "the repo is silent",
+                                                     "options": ["left", " right ", "", 3, None], "recommendation": "right"})
+    rig.db.add_question(8, "explore", "anything?", {})
+    rig.db.add_question(9, "explore", "odd", {"options": "left", "why": None})
+    client, _ = await api(rig)
+    try:
+        q = (await (await client.get("/v1/tickets/7", headers=AUTH)).json())["question"]
+        assert q == {"text": "which way?", "why": "the repo is silent", "options": ["left", "right", "3"],
+                     "recommendation": "right"}
+        q = (await (await client.get("/v1/tickets/8", headers=AUTH)).json())["question"]
+        assert q == {"text": "anything?", "why": "", "options": [], "recommendation": ""}
+        q = (await (await client.get("/v1/tickets/9", headers=AUTH)).json())["question"]
+        assert q["options"] == [] and q["why"] == ""
+    finally:
+        await client.close()
+
+
 async def test_answer_retry_cancel_prio_and_pause(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
