@@ -539,6 +539,25 @@ async def test_review_parks_after_two_rounds_of_changes(rig: Rig) -> None:
     assert len(rig.db.stages(7, "review")) == 3
 
 
+async def test_interrupted_reviews_do_not_spend_review_rounds(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    rig.agent.on("explore", explore_ok)
+    rig.agent.on("develop", develop_ok, develop_with("a\n"))
+    # Two earlier reviews were cut short by a restart and a usage limit; neither returned a verdict.
+    for outcome in ("interrupted", "usage-limit"):
+        rig.db.end_stage(rig.db.begin_stage(7, "review", 1, "sonnet"), outcome)
+
+    def changes(req: StageRequest) -> StageOutcome:
+        req.contract.submit_review({"verdict": "changes", "findings": [
+            {"file": "x", "line": 1, "severity": "major", "issue": "no"}]})
+        return accepted(req)
+
+    rig.agent.on("review", changes, review_ok)
+    await rig.engine.drive(7)
+    assert rig.state(7) == "landed"
+
+
 async def test_a_red_verification_runs_fix_then_parks_after_two(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
