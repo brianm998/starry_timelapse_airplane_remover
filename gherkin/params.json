@@ -153,6 +153,9 @@
     "uiMultiSelectSheet": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiMultiSheetChoices": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiFrameModeChange": {
       "sequence": "test_data/test_a7sii_10"
     },
@@ -166,6 +169,9 @@
       "sequence": "test_data/test_a7sii_10"
     },
     "uiStartDuringRun": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiRestartNow": {
       "sequence": "test_data/test_a7sii_10"
     },
     "uiMultiChoiceSheet": {

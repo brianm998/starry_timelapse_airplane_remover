@@ -42,9 +42,15 @@ def watch(seconds: float, limit: int = 2, path_prefix: str = "") -> str:
     return out
 
 
-def testWatchdogDumpsWhenStardLogGoesQuiet(fake_stard: tuple[subprocess.Popen[bytes], Path]) -> None:
+def testWatchdogDumpsWhenStardLogGoesQuiet(fake_stard: tuple[subprocess.Popen[bytes], Path], tmp_path: Path) -> None:
     proc, _log = fake_stard
-    out = watch(9)
+    # The machine's real JVMs (Gradle daemons, Android Studio, another job's test worker) would make this timing depend on how many are
+    # running; a jps that lists none keeps it deterministic.  testWatchdogBoundsEachJvmDump covers the jstack loop.
+    shims = tmp_path / "nojvms"
+    shims.mkdir()
+    (shims / "jps").write_text("#!/bin/bash\nexit 0\n")
+    (shims / "jps").chmod(0o755)
+    out = watch(9, path_prefix=str(shims))
     assert out.count(BANNER) >= 1, out
     assert out.count(BANNER) <= 2, out  # a first dump and one more, then silence for that pid
     assert f"pid {proc.pid}" in out
@@ -53,6 +59,27 @@ def testWatchdogDumpsWhenStardLogGoesQuiet(fake_stard: tuple[subprocess.Popen[by
     assert "ResourceGovernor: CPU gate 2/2" in out  # the log tail
     assert "--- jstack of every JVM" in out  # tools that are absent degrade to a note, the dump still completes
     assert "::endgroup::" in out
+
+
+def testWatchdogBoundsEachJvmDump(fake_stard: tuple[subprocess.Popen[bytes], Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """macOS has no `timeout`, so a jstack of a big JVM (Android Studio, Gradle daemons) used to be unbounded and the dump never
+    reached ::endgroup::.  Shims for jps (three live "JVMs") and a jstack that never answers: each is cut off after HANG_WATCHDOG_JVM_SECONDS."""
+    jvms = [subprocess.Popen(["sleep", "60"]) for _ in range(3)]
+    try:
+        shims = tmp_path / "jvmshims"
+        shims.mkdir()
+        for name, body in {"jps": "".join(f"echo {j.pid}\n" for j in jvms), "jstack": "exec sleep 30\n"}.items():
+            shim = shims / name
+            shim.write_text("#!/bin/bash\n" + body)
+            shim.chmod(0o755)
+        monkeypatch.setenv("HANG_WATCHDOG_JVM_SECONDS", "1")
+        out = watch(9, path_prefix=str(shims))
+    finally:
+        for j in jvms:
+            j.kill()
+            j.wait()
+    assert out.count("== jvm") >= 3, out
+    assert "::endgroup::" in out, out
 
 
 def testWatchdogRunsGdbAndStacksThroughTimeout(fake_stard: tuple[subprocess.Popen[bytes], Path], tmp_path: Path) -> None:

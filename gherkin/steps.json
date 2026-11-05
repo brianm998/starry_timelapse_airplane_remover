@@ -69,6 +69,7 @@
   { "case": "menuThere"             , "text": "the menu \"<menu>\" is there" },
   { "case": "menuNotThere"          , "text": "the menu \"<menu>\" is not there" },
   { "case": "processedCopy"         , "text": "a processed copy of the sequence {sequence}" },
+  { "case": "plantRunMarker"        , "text": "a run was interrupted on the processed copy" },
   { "case": "openProcessed"         , "text": "I open the processed copy" },
   { "case": "confirmCloseIfAsked"   , "text": "I confirm closing if it is asked" },
   { "case": "openPreferences"       , "text": "I open the preferences" },

@@ -114,6 +114,7 @@ final class GuiFeatureRunner {
         .idStillSays: { try $0.expectStillSays($0.args[0], text: $0.args[1]) },
         .idStopsSaying: { try $0.expectStopsSaying($0.args[0], text: $0.args[1]) },
         .processedCopy: { try $0.makeProcessedCopy() },
+        .plantRunMarker: { try $0.plantRunMarker() },
         .openProcessed: { try $0.openProcessedCopy() },
         .confirmCloseIfAsked: { try $0.confirmClosingIfAsked() },
         .windowOpen: { try $0.expectWindow($0.args[0], open: true) },
@@ -339,7 +340,7 @@ final class GuiFeatureRunner {
         let home = scratch.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         app.launchEnvironment["HOME"] = home.path
-        if savesScreenshots { try keepGPUMergeOff() }
+        if savesScreenshots || feature?.id == "uiRestartNow" { try keepGPUMergeOff() }
         // Ignore the windows the last run of the app left open (macOS restores them): a feature starts from the app as it opens, not from where an earlier one quit.
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"] + arguments
         // The parity gallery's window is 1400 by 1100 points, as the desktop client's test window is: XCUITest cannot size a window, so the app does (`ViewModel.uiTestWindowSize`).
@@ -621,6 +622,22 @@ final class GuiFeatureRunner {
             }
         }
         processedConfig = target.appendingPathComponent("input/star_temp_\(source.lastPathComponent)/config.json")
+    }
+
+    /// A run marker for the processed copy, as a run that was killed leaves one: a pid no process has and a heartbeat long past, so the app's
+    /// next start finds it abandoned, reports it, and offers Restart Now (its config.json exists). It goes in the directory `launch` hands the
+    /// app as STAR_RUN_MARKER_DIR, which is under `scratch`: `run()` removes that whatever the result, and the app clears the marker at startup.
+    private func plantRunMarker() throws {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        let markers = scratch.appendingPathComponent("run-markers")
+        try FileManager.default.createDirectory(at: markers, withIntermediateDirectories: true)
+        let marker: [String: Any] = [
+            "formatVersion": 1, "id": "star-999999-uiRestartNow", "client": "Star", "starVersion": "1.0.0", "pid": 999999,
+            "startedAt": "2026-10-13T10:00:00Z", "heartbeatAt": "2026-10-13T10:05:00Z", "hostPhysicalMemoryBytes": 17_179_869_184,
+            "sequenceName": config.deletingLastPathComponent().lastPathComponent, "sequencePath": config.deletingLastPathComponent().path,
+            "resumeConfigPath": config.path, "frameCount": 10, "framesCompleted": 4, "peakFootprintBytes": 0,
+        ]
+        try JSONSerialization.data(withJSONObject: marker).write(to: markers.appendingPathComponent("star-999999-uiRestartNow.json"))
     }
 
     /// Opens the processed copy as Load Config does, with the views a test finds one outlier group by labelled.
