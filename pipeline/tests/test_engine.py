@@ -632,7 +632,6 @@ async def test_verification_does_not_block_the_event_loop(rig: Rig) -> None:
     import asyncio
     import threading
 
-
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
     rig.engine.claim(rig.db.tickets()[0])

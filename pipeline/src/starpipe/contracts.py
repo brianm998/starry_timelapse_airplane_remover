@@ -7,7 +7,6 @@ from __future__ import annotations
 import difflib
 import json
 import re
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol
