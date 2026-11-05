@@ -34,6 +34,7 @@
   "uiModePickers": [],
   "uiMultiChoiceSheet": [],
   "uiMultiSelectSheet": [],
+  "uiMultiSheetChoices": [],
   "uiNumberFieldMessage": [],
   "uiNumberFields": [],
   "uiOutlierClickKeeps": [],
