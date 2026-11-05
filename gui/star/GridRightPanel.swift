@@ -146,10 +146,13 @@ struct GridRightPanel: View {
                 Text(localized("ui.outliers"))
                     .font(.headline)
                     .foregroundColor(.white)
+                    .accessibilityIdentifier("grid.panel.outliers")
 
                 if let n = frame.frameObserver.numberOfPositiveOutliers {
                     infoRow(localized("ui.positive"), value: "\(n)")
                         .foregroundColor(n > 0 ? .red : .white)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("grid.panel.positive")
                 }
                 if let n = frame.frameObserver.numberOfNegativeOutliers {
                     infoRow(localized("ui.negative"), value: "\(n)")
