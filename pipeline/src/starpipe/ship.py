@@ -479,6 +479,13 @@ def watch_develop(eng: Engine) -> None:
             if job.workflow.lower() == "gherkin":
                 eng.db.put(pending, None)
                 continue  # the nightly owns Gherkin's tickets
+            since, checked = f"red_since:{job.workflow}/{job.job}", f"red_checked:{job.workflow}/{job.job}"
+            red_now = job.red and (job.conclusion or "failure") not in ci.INFRA_CONCLUSIONS
+            if red_now and eng.db.get(since) is None:
+                eng.db.put(since, str(eng.clock()))  # includes the reds that were there when the pipeline started
+            elif not job.red:
+                eng.db.put(since, None)
+                eng.db.put(checked, None)
             if seeding or before is None:
                 continue  # reds present when the pipeline first started are the known-red ledger, not tickets
             sha = str(run.get("head_sha"))
@@ -493,6 +500,11 @@ def watch_develop(eng: Engine) -> None:
                     eng.db.put(pending, None)
                     if not _new_red(eng, job, sha):
                         eng.db.put(pending, old)  # nowhere to file it yet: the next poll tries again
+                elif _red_long_enough(eng, since, checked):
+                    # still red from before (a ticket for another failure, or the ledger's red): a job that stays red with no
+                    # open ticket naming it gets one. `_new_red` finds an existing ticket and files nothing.
+                    if _new_red(eng, job, sha, red_since=float(eng.db.get(since) or 0)):
+                        eng.db.put(checked, str(eng.clock()))  # looked at: ask GitHub again only after another threshold
             elif not job.red:
                 eng.db.put(pending, None)  # green again: that was a flake
             if job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line") == f"{job.workflow}/{job.job}":
@@ -502,12 +514,20 @@ def watch_develop(eng: Engine) -> None:
                 eng.db.event("stop-line-cleared", None, job=job.job)
 
 
+def _red_long_enough(eng: Engine, since: str, checked: str) -> bool:
+    """True when the job has been red for `red_ticket_after_s` and was not looked at (ticketed or found covered) within it."""
+    start, last = eng.db.get(since), eng.db.get(checked)
+    after = eng.config.red_ticket_after_s
+    now = eng.clock()
+    return start is not None and now - float(start) >= after and (last is None or now - float(last) >= after)
+
+
 def _auto_open(eng: Engine) -> int:
     return len([i for i in eng.gh.paged("issues?state=open&labels=pipe:filed-by-pipeline&per_page=100")
                 if any(lab["name"] == "pipeline" for lab in i.get("labels", []))])
 
 
-def _new_red(eng: Engine, job: ci.Job, sha: str) -> bool:
+def _new_red(eng: Engine, job: ci.Job, sha: str, red_since: float | None = None) -> bool:
     """File a ticket for a red develop job. True: dealt with (filed, or an open ticket already covers it). False: could
     not file it now, so the caller keeps `red_pending` and the next poll tries again. Over the auto-ticket cap the red
     becomes a proposal (waits for `starpipe approve`) instead of being dropped."""
@@ -531,8 +551,14 @@ def _new_red(eng: Engine, job: ci.Job, sha: str) -> bool:
             log = eng.gh.failed_log(job.run_id, 4000)
         except GitHubError:
             pass
-        body = (f"## Goal\nMake {name} green on develop again.\n\n## Context\nIt was green and is now red at "
-                f"{sha}. Run {job.run_id}.\n\n```\n{log}\n```\n\n## Acceptance criteria\n- A1: {name} passes on "
+        if red_since is None:
+            happened = f"It was green and is now red at {sha}. Run {job.run_id}."
+        else:
+            when = datetime.fromtimestamp(red_since).strftime("%Y-%m-%d %H:%M")
+            happened = (f"It has been red on develop since {when} (now at {sha}, run {job.run_id}) and no open ticket names it. "
+                        f"That includes a job that was already red when the pipeline started, and a red caused by a different "
+                        f"failure than the one an earlier ticket was filed for.")
+        body = (f"## Goal\nMake {name} green on develop again.\n\n## Context\n{happened}\n\n```\n{log}\n```\n\n## Acceptance criteria\n- A1: {name} passes on "
                 f"develop — check: review: CI run on the fix PR\n\n## Tests\nnone: restores an existing check\n\n## Out of scope\n"
                 f"Unrelated failures.\n")
         if propose:
