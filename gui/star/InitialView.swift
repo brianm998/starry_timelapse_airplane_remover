@@ -474,7 +474,9 @@ struct RecentsListView: View {
               .padding(.vertical, 2)
         }
           .frame(maxWidth: .infinity)
-          .frame(height: 220)
+          // Up to 220 tall, but it gives way (down to about one row) in a short window: the start screen's other parts are
+          // fixed-height, and a list pushed past the window's edge has no rows on screen to click.
+          .frame(minHeight: 56, maxHeight: 220)
     }
 }
 
