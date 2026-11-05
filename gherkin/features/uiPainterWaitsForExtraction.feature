@@ -11,9 +11,10 @@ Feature: The horizon painter waits for a video frame that is not extracted yet
   Scenario: Open the painter on a frame that is held back, then let it arrive
     Given a fresh copy of the sequence {sequence}
     When  I open a video of the copied sequence with its extraction held
-      And I press "right"
       And I choose the menu command "paintHorizon"
-    Then  "painter.computing" is shown
+      And I press "right"
+    Then  "frame.number" says "frame 1"
+      And "painter.computing" is shown
       And "painter.band" is not shown
       And "extraction.waitpanel" is shown
     When  the video's extraction is released

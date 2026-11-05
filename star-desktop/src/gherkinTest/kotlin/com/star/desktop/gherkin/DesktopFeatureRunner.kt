@@ -1178,10 +1178,9 @@ class DesktopFeatureRunner {
         showApp(t, model)
         t.runOnUiThread { model.openVideo(video.absolutePath) }
         waitFor(t, "the video import dialog", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("videoimport.import") }
-        // the box is on or off by what the video's packets say, which arrives a moment after the dialog: put it on whichever way it starts
-        val on = { semanticsOf(t, "videoimport.background")?.getOrNull(SemanticsProperties.ToggleableState) == ToggleableState.On }
-        if (!on()) t.onNodeWithTag("videoimport.background").performClick()
-        waitFor(t, "\"videoimport.background\" on", 20_000) { on() }
+        // The box starts off for H.264 (the probe is not run here, so for every video): once, to go to the main screen while the frames are
+        // still being extracted.
+        t.onNodeWithTag("videoimport.background").performClick()
         t.onNodeWithTag("videoimport.import").performClick()
         waitFor(t, "the sequence screen", OPEN_TIMEOUT_MS) { t.onAllNodesWithTagExists("frame.number") }
     }
