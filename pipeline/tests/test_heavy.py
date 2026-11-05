@@ -43,7 +43,7 @@ def test_concurrent_holder_writes_for_one_pid_do_not_collide() -> None:
         barrier.wait()
         try:
             for r in range(rounds):
-                heavy._write_holder(4242, {"writer": i, "round": r, "pad": "x" * 200})
+                heavy._write_holder(4242, {"writer": i, "round": r, "pad": "x" * 200})  # pyright: ignore[reportPrivateUsage]
         except BaseException as e:  # noqa: BLE001
             errors.append(e)
 
@@ -54,7 +54,7 @@ def test_concurrent_holder_writes_for_one_pid_do_not_collide() -> None:
         t.join()
 
     assert errors == []
-    rec = json.loads(heavy._holder_file(4242).read_text())
+    rec = json.loads(heavy._holder_file(4242).read_text())  # pyright: ignore[reportPrivateUsage]
     assert rec["pad"] == "x" * 200 and 0 <= rec["writer"] < n_threads
     assert list(heavy.locks_dir().glob("*.tmp")) == []
 
