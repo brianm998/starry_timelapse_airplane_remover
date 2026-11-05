@@ -112,6 +112,8 @@ def activity(db: Database, t: Ticket, now: float | None = None, mode: str = "bat
     if t.state == "needs-input":
         q = db.open_question(t.number)
         return f"needs you · asked {int((now - q['asked_at']) / 60)}m ago" if q else "needs you"
+    if (asking := db.asking_batch_of(t.number)) is not None and (q := db.question_for(t.number)) is not None:
+        return f"needs you · batch #{asking} CI red · asked {int((now - q['asked_at']) / 60)}m ago"
     if t.state in HOLDABLE_STATES and (held := held_retry_line(db, t.number)):
         return f"{t.state} · {held}"
     if t.state in ("failed", "cancelled", "closed", "paused") and t.park_reason:
@@ -137,9 +139,10 @@ MAX_ACTIVE_CAP = 6
 GROUPS = ("needs_you", "running", "waiting", "queued", "landed_today", "failed")
 
 
-def group_of(t: Ticket, waiting_for_lock: bool, now: float, updated: float) -> str | None:
-    """Which sidebar group a ticket belongs in (computed here, never by a client). None: not shown."""
-    if t.state == "needs-input":
+def group_of(t: Ticket, waiting_for_lock: bool, now: float, updated: float, asked: bool = False) -> str | None:
+    """Which sidebar group a ticket belongs in (computed here, never by a client). None: not shown.
+    `asked`: the ticket is in a batch that waits for the owner's answer."""
+    if t.state == "needs-input" or asked:
         return "needs_you"
     if t.state in ACTIVE_STATES:
         return "waiting" if waiting_for_lock else "running"
@@ -634,11 +637,12 @@ class Daemon:
         tickets: list[dict[str, object]] = []
         for t in self.db.tickets():
             row = self.db._all("SELECT updated_at FROM tickets WHERE number=?", (t.number,))[0]  # pyright: ignore[reportPrivateUsage]
-            group = group_of(t, str(t.number) in lock_tickets, now, float(row["updated_at"]))
+            question = self.db.question_for(t.number)
+            group = group_of(t, str(t.number) in lock_tickets, now, float(row["updated_at"]),
+                             asked=question is not None and self.db.asking_batch_of(t.number) is not None)
             if group is None:
                 continue
             stages = self.db.stages(t.number)
-            question = self.db.open_question(t.number)
             running = [s["model"] for s in stages if s["ended"] is None]  # the open stage's model, else none
             tickets.append({"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
                             "group": group, "model": running[-1] if running else None, "activity": activity(self.db, t, now, self.config.landing_mode, self.config), "blocked_by": self.db.open_blockers(t.number),
@@ -697,7 +701,7 @@ class Daemon:
         return {"number": t.number, "title": t.title, "state": t.state, "priority": t.priority, "branch": t.branch,
                 "park_reason": t.park_reason, "plan": t.plan,
                 "activity": activity(self.db, t, self.engine.clock(), self.config.landing_mode, self.config),
-                "stages": self.db.stages(n), "checks": self.db.checks(n), "question": question_view(self.db.open_question(n)),
+                "stages": self.db.stages(n), "checks": self.db.checks(n), "question": question_view(self.db.question_for(n)),
                 "blockers": [{"number": b, "title": self.blocker_title(b)} for b in self.db.open_blockers(n)],
                 "held_retry": f"retry from {held} when unblocked" if (held := self.db.get(f"held_retry:{n}")) else None}
 
@@ -720,11 +724,14 @@ class Daemon:
         if t is None:
             raise web.HTTPNotFound(text=f"no ticket #{n}")
         if action == "answer":
-            q = self.db.open_question(n)
+            q = self.db.question_for(n)
             if q is None:
                 raise web.HTTPConflict(text="no open question")
             self.db.answer_question(q["id"], str(body["text"]), "owner")
             self.db.intervention(n, "answer", q["stage"])
+            if q["stage"] == train.BATCH_STAGE:  # a red batch's question: the train reads the answer and moves the batch, no ticket changes state
+                self.engine.notifier.clear("needs-input", int(q["ticket"]))
+                return f"answered for batch #{self.db.asking_batch_of(n)}"
             self.engine.notifier.clear("needs-input", n)
             self.engine.parked.discard(n)
             resume = STAGE_STATE.get(q["stage"], "exploring")
