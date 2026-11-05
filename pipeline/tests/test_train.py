@@ -204,6 +204,53 @@ async def test_a_caught_up_ticket_is_batched_again(rig: Rig) -> None:
     assert t._pick() == [2]  # pyright: ignore[reportPrivateUsage]
 
 
+async def _step_where_nothing_merges(rig: Rig) -> tuple[train_mod.Train, asyncio.Event]:
+    """#1 is the whole first batch and conflicts with develop itself: nothing merges cleanly, its catch-up held until the event is set."""
+    ready_ticket(rig, 1, "f1.md", "one\n")
+    release = asyncio.Event()
+    t = train_of(rig)
+
+    async def catch_up(n: int) -> None:
+        await release.wait()
+
+    t._catch_up = catch_up  # pyright: ignore[reportPrivateUsage]
+    real_build = t._build  # pyright: ignore[reportPrivateUsage]
+
+    def build(bid: int, tickets: list[Ticket], base: str) -> train_mod.Built:
+        built = real_build(bid, tickets, base)
+        if bid == 1:
+            built.catch_up, built.merged = built.merged, []
+        return built
+
+    t._build = build  # pyright: ignore[reportPrivateUsage]
+    await asyncio.wait_for(t.step(), timeout=10)  # before the fix this awaited the held catch-up, inline
+    return t, release
+
+
+async def test_a_batch_where_nothing_merges_does_not_block_the_train_on_the_catch_up(rig: Rig) -> None:
+    t, release = await _step_where_nothing_merges(rig)
+    assert set(t._beside) == {1}  # pyright: ignore[reportPrivateUsage]
+    assert rig.db.active_batches() == [], "the empty batch is dropped at once"
+    batch = rig.db.batch(1)
+    assert batch is not None and batch["state"] == "abandoned" and rig.db.batch_members(1) == []
+    ready_ticket(rig, 2, "f2.md", "two\n")
+    assert await asyncio.wait_for(t.step(), timeout=10) is True, "the catch-up is still running, and another batch forms"
+    assert rig.db.batch_members(2) == [2] and rig.state(2) == "ci"
+    release.set()
+    await asyncio.wait(list(t._beside.values()))  # pyright: ignore[reportPrivateUsage]
+
+
+async def test_the_conflicted_ticket_rejoins_the_queue_after_its_catch_up(rig: Rig) -> None:
+    t, release = await _step_where_nothing_merges(rig)
+    assert rig.state(1) == "ready" and rig.db.batch_of(1) is None
+    assert t._pick() == [], "its catch-up is still running"  # pyright: ignore[reportPrivateUsage]
+    release.set()
+    await asyncio.wait(list(t._beside.values()))  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(0)  # the done callback that forgets the ticket
+    assert t._beside == {} and rig.state(1) == "ready"  # pyright: ignore[reportPrivateUsage]
+    assert t._pick() == [1]  # pyright: ignore[reportPrivateUsage]
+
+
 async def test_a_catch_up_stops_once_its_ticket_has_landed(rig: Rig) -> None:
     ready_ticket(rig, 1, "shared.md", "from one\n")
     advance_develop(rig, "shared.md", "from develop\n")
