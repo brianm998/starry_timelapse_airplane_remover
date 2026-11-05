@@ -452,7 +452,9 @@ final class GuiFeatureRunner {
     /// the fold of a panel in a small window; each step takes the app seconds to settle, so it is not taken in small ones.
     private func scroll(towards element: XCUIElement, _ identifier: String, _ scroller: inout Scroller) {
         let holder = app.scrollViews.containing(NSPredicate(format: "identifier == %@", identifier)).firstMatch
-        guard holder.exists else { return }
+        // a scroll view with no hit point yet (the screen is still settling after a screenshot or a click) makes XCTest fail the whole test
+        // ("Unable to find hit point for ScrollView"); skip this step and let the caller's wait try again
+        guard holder.exists, holder.isHittable else { return }
         let gap = element.frame.midY - holder.frame.midY
         if let last = scroller.lastGap, abs(gap) >= abs(last) { scroller.direction = -scroller.direction }
         scroller.lastGap = gap
