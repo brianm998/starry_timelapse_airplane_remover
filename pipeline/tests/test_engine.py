@@ -159,6 +159,37 @@ async def test_a_landing_stage_takes_a_session_over_the_limit_and_new_work_waits
     await asyncio.wait_for(new_work, 2)
 
 
+async def test_a_free_session_goes_to_the_ticket_furthest_along_in_the_pipeline(rig: Rig) -> None:
+    rig.engine.config.max_llm_sessions = 1
+    for n in (1, 2, 3, 4):
+        rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p1" if n == 4 else "p2"))
+    rig.engine.sync_issues()
+    t1, t2, t3, t4 = (rig.db.ticket(n) for n in (1, 2, 3, 4))
+    assert t1 and t2 and t3 and t4
+    busy = rig.db.begin_stage(1, "develop", 1, "sonnet")  # the one allowed session is busy
+    async def sleep(_: float) -> None:
+        await asyncio.sleep(0.01)
+
+    rig.engine.sleep = sleep
+    begin = rig.engine._begin_when_room  # pyright: ignore[reportPrivateUsage]
+    explore = asyncio.create_task(begin(t4, "explore", 1, "sonnet"))  # p1, but the newest stage
+    develop = asyncio.create_task(begin(t3, "develop", 1, "sonnet"))
+    review = asyncio.create_task(begin(t2, "review", 1, "sonnet"))
+    await asyncio.sleep(0.05)
+    assert not (explore.done() or develop.done() or review.done())
+    rig.db.end_stage(busy, "accepted", 0.0, "")
+    await asyncio.wait_for(review, 2)
+    await asyncio.sleep(0.05)
+    assert not explore.done() and not develop.done(), "one slot, one start: review went first"
+    rig.db.end_stage(2, "accepted", 0.0, "")  # stage rows: 1 develop (ended), 2 the review
+    await asyncio.wait_for(develop, 2)
+    await asyncio.sleep(0.05)
+    assert not explore.done()
+    rig.db.end_stage(3, "accepted", 0.0, "")
+    await asyncio.wait_for(explore, 2)
+    assert rig.engine.llm_waiting == {}
+
+
 async def test_nothing_new_is_claimed_while_a_landing_stage_waits_for_a_session(rig: Rig) -> None:
     rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
     rig.engine.sync_issues()
