@@ -3,7 +3,8 @@ Feature: The processing screen stops saying it is planning once the plan is buil
 
   P1 and P13 of the parity plan. Process All puts up the processing screen, whose headline reads the planning line until the frame graph is built (the
   desktop's `graph_built`, the gui's `graphBuildsCompleted > processingBuildCount`) and what the steps are doing after it. Return on the screen presses
-  its default button, Preview, which puts the screen away and leaves the run going.
+  its default button, Preview, which puts the screen away and leaves the run going (the feature ends with it going, as `uiGalleryProcessing` does:
+  a fresh sequence's whole run is minutes of work that proves nothing more here).
 
   What this does not check is that the planning line was ever up: on these ten frames the plan is built in well under a second, and the desktop's
   first look at the headline (measured, a poll every 5 ms from the click's return) already read "Working on: ...", so `is still saying` on the planning
@@ -23,4 +24,3 @@ Feature: The processing screen stops saying it is planning once the plan is buil
     When  I press "return"
     Then  "processing.modal" is not shown
     When  I click "mode.edit"
-      And I wait for processing to finish
