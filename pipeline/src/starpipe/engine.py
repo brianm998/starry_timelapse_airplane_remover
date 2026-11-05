@@ -396,15 +396,17 @@ class Engine:
                 opening = f"{note}\n\n{opening}"
             if pending:
                 opening = f"The owner's answer to your question:\n\n{pending['answer']}\n\nContinue the stage.\n\n{opening}"
+        landing = stage in LANDING_STAGES if as_landing is None else as_landing  # same decision as _begin_when_room
         attempt, crashes = 1, 0
         summary = ""
         nudge: str | None = None  # set to send the nudge in place of the prompt
         nudged = False
         while attempt <= 3:
             await self._wait_for_usage()
-            await self._wait_for_update_hold()
+            if not landing:  # the landing train waits on a landing stage: a pending self-update must not hold it
+                await self._wait_for_update_hold()
             model, effort = self._stage_choice(t, stage, attempt)
-            stage_id = await self._begin_when_room(t, stage, attempt, model, landing=as_landing)
+            stage_id = await self._begin_when_room(t, stage, attempt, model, landing=landing)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
             if nudge:
                 body, nudge = nudge, None
