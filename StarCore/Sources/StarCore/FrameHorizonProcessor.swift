@@ -19,8 +19,8 @@ You should have received a copy of the GNU General Public License along with sta
 // coordinator) and holds a weak back-reference to it so it can forward state
 // updates and read cross-domain values without creating a retain cycle.
 //
-// Horizon.swift contains standalone data structures (HorizonMask, HorizonBounds,
-// HorizonStats) and extensions on PixelatedImage; those stay in Horizon.swift
+// Horizon.swift contains standalone data structures (HorizonMask, HorizonBounds)
+// and extensions on PixelatedImage; those stay in Horizon.swift
 // and are not moved here.
 
 /// Which frames of a sequence have a painted reference mask, kept per `horizonReference/`

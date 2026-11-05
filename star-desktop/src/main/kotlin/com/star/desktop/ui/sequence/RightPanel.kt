@@ -261,6 +261,7 @@ private fun ProcessingSection(app: com.star.desktop.ui.app.AppViewModel, vm: Seq
     if (showChangeMode) {
         com.star.desktop.ui.dialogs.ChangeProcessingModeDialog(
             current = activeMethod,
+            horizonDetection = app.sessions.session.value?.config?.horizonDetectionEnabled != false,
             onCancel = { showChangeMode = false },
             onConfirm = { fvm.setCleanMethod(it); showChangeMode = false },
         )

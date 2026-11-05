@@ -82,6 +82,10 @@ struct GridLeftPanel: View {
                 .onTapGesture {
                     viewModel.frameViewMode = mode
                 }
+                // the id a UI test finds this row by: the family "grid.show.*" of gherkin/ui/ids.json, one per mode (its rawValue)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("grid.show.\(mode.rawValue)")
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
     }

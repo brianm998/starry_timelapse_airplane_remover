@@ -255,6 +255,11 @@ class Database:
         self._exec("INSERT INTO ci_runs(ticket,sha,verdict,detail,at) VALUES (?,?,?,?,?)",
                    (ticket, sha, verdict, json.dumps(detail), self.clock()))
 
+    def latest_ci_verdict(self, ticket: int, sha: str) -> str | None:
+        """The verdict of the newest `ci_runs` row for this ticket (0 is a batch) and sha, or None before the first one."""
+        rows = self._all("SELECT verdict FROM ci_runs WHERE ticket=? AND sha=? ORDER BY id DESC LIMIT 1", (ticket, sha))
+        return str(rows[0]["verdict"]) if rows else None
+
     # gherkin flakes -------------------------------------------------------------------------------------------------
     def add_flake(self, feature: str, leg: str, run_id: int | str, day: str) -> None:
         """A job that failed and then passed on the rerun (once per feature, leg and run)."""

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import StarCore
 import logging
 
@@ -82,6 +83,7 @@ struct ProcessingModalView: View {
           stepEstimates: estimates,
           showAlignment: showAlignment,
           cameraMoving: viewModel.cameraMotion == .moving,
+          cleanMethod: viewModel.cleanMethod,
           openAlignmentWindow: { openWindow(id: StarApp.alignmentWindowName) },
           stop: { viewModel.stopProcessing() },
           dismiss: { viewModel.processingModalShowing = false },
@@ -173,11 +175,17 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
     /// Whether the camera moved during the sequence; picks the wording of the alignment explanation.
     var cameraMoving: Bool = false
 
+    /// The run's processing mode; named in the opening line of the steps explanation.
+    var cleanMethod: CleanMethod = .selective
+
     /// Opens the alignment window; nil leaves the button out.
     var openAlignmentWindow: (() -> Void)? = nil
 
     /// Whether the explanation of the alignment charts is up over the panel.
     @State private var showingAlignmentInfo = false
+
+    /// Whether the explanation of the steps is up over the panel.
+    @State private var showingStepsInfo = false
 
     let stop: () -> Void
     let dismiss: () -> Void
@@ -190,7 +198,26 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
 
     @ViewBuilder let alignmentContent: () -> AlignmentContent
 
-    static var width: CGFloat { 640 }
+    /// The least the panel is ever wide; a language whose headings or step names need more
+    /// makes it wider (see `width(steps:extraction:)`).
+    static var minimumWidth: CGFloat { 640 }
+
+    /// What the panel's own padding takes off its width: 20 each side of the steps' list.
+    static var contentPadding: CGFloat { 40 }
+
+    /// The panel's width for these rows: 640, or what the columns of the steps' list need in
+    /// this language with its padding, whichever is more.  English stays 640.
+    static func width(steps: [ProcessingStepProgress], extraction: Bool) -> CGFloat {
+        width(for: ProcessingColumns.measured(steps: steps, extraction: extraction))
+    }
+
+    static func width(for columns: ProcessingColumns) -> CGFloat {
+        max(minimumWidth, columns.required + contentPadding)
+    }
+
+    private var panelWidth: CGFloat {
+        Self.width(steps: steps, extraction: extraction != nil)
+    }
 
     var body: some View {
         ZStack {
@@ -220,7 +247,7 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
               // which would stretch the panel to the height it was offered and leave the
               // content floating in the middle of it — the cap on a tall run is the
               // `ScrollView` that `ViewThatFits` falls through to.
-              .frame(width: Self.width)
+              .frame(width: panelWidth)
               .background(Color(white: 0.18))
               .cornerRadius(14)
               .shadow(radius: 24)
@@ -229,12 +256,23 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
             if showingAlignmentInfo {
                 AlignmentInfoOverlay(cameraMoving: cameraMoving) { showingAlignmentInfo = false }
             }
+            if showingStepsInfo {
+                // What the Steps list below shows, in the order it stacks them: the canonical
+                // step order, which does not shuffle as steps move from Done to Processing.
+                StepsInfoOverlay(
+                  info: ProcessingStepsInfo.make(cameraMoving: cameraMoving,
+                                                 cleanMethod: cleanMethod,
+                                                 steps: steps.map(\.type),
+                                                 showsExtraction: extraction != nil)
+                ) { showingStepsInfo = false }
+            }
         }
     }
 
     private var content: some View {
         VStack(alignment: .leading, spacing: 16) {
-            ProcessingStepsView(steps: steps, extraction: extraction, estimates: stepEstimates)
+            ProcessingStepsView(steps: steps, extraction: extraction, estimates: stepEstimates,
+                                showInfo: { showingStepsInfo = true })
             Divider()
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -338,6 +376,73 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
     }
 }
 
+/// The widths of the step rows' columns, which every row shares so the numbers line up under
+/// their headings.  Each is the constant it always was, or more when a word of its text (a
+/// heading, a step name) is wider: a cell narrower than a word breaks the word in two or
+/// truncates it with an ellipsis.  The desktop's `ProcessingColumns` is the same.
+struct ProcessingColumns: Equatable {
+    static let nameWidth: CGFloat = 180
+    static let numberWidth: CGFloat = 46
+    /// The time-left column between each bar and its counts.
+    static let etaWidth: CGFloat = 56
+    static let rowGap: CGFloat = 12
+    /// The bar is the cell that gives way, but not below this.
+    static let minimumBarWidth: CGFloat = 80
+
+    let name: CGFloat
+    let number: CGFloat
+    let eta: CGFloat
+
+    /// The three number columns together: also the width of the "n of m complete" count.
+    var count: CGFloat { number * 3 }
+
+    /// Every column and the gaps between them (name, bar, time left, counts), with the bar at its least.
+    var required: CGFloat { name + eta + count + Self.rowGap * 3 + Self.minimumBarWidth }
+
+    static func measured(steps: [ProcessingStepProgress], extraction: Bool) -> ProcessingColumns {
+        measured(stepNames: steps.map { $0.type.stepName }, extraction: extraction)
+    }
+
+    static func measured(stepNames: [String], extraction: Bool) -> ProcessingColumns {
+        let caption = NSFont.monospacedDigitSystemFont(
+          ofSize: NSFont.preferredFont(forTextStyle: .caption1).pointSize, weight: .regular)
+        let callout = NSFont.preferredFont(forTextStyle: .callout)
+        let headings = TextFit.widestWord(
+          [localized("ui.queued"), localized("ui.running"), localized("ui.done")], font: caption)
+        // The count under the extraction row is three number columns wide, so the widest
+        // word of "n of m complete" sets a third of it.
+        let ofM = TextFit.widestWord([localized("ui.n_of_m_complete", 99999, 99999)], font: caption)
+        // The heading may wrap at its space; an estimate is one line, as long as the longest
+        // the column shows ("9 h 59 min").
+        let eta = max(
+          TextFit.widestWord([localized("ui.time_left")], font: caption),
+          TextFit.widestWord([ProcessingHeadline.duration(9 * 3600 + 59 * 60)], font: caption, wholeText: true))
+        let names = TextFit.widestWord(
+          stepNames + (extraction ? [localized("ui.processing_step_extracting_video")] : []), font: callout)
+        return ProcessingColumns(
+          name: max(nameWidth, names),
+          number: max(numberWidth, headings, ofM / 3),
+          eta: max(etaWidth, eta))
+    }
+}
+
+/// Measuring translated text, to size a column from what it will hold.
+enum TextFit {
+    /// Room beyond the measured width, for the rounding between measuring and drawing.
+    static let slack: CGFloat = 1
+
+    /// The width of the widest word of `texts` (split at spaces and line breaks) in `font`, or
+    /// of the widest whole text with `wholeText`.
+    static func widestWord(_ texts: [String], font: NSFont, wholeText: Bool = false) -> CGFloat {
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        func width(_ text: String) -> CGFloat {
+            (text as NSString).size(withAttributes: attributes).width
+        }
+        let pieces = wholeText ? texts : texts.flatMap { $0.split(whereSeparator: { $0 == " " || $0.isNewline }).map(String.init) }
+        return (pieces.map(width).max() ?? 0).rounded(.up) + slack
+    }
+}
+
 /// One bar per processing step, stacked in the order `ProcessingSteps.types` gives them.
 struct ProcessingStepsView: View {
     let steps: [ProcessingStepProgress]
@@ -345,6 +450,8 @@ struct ProcessingStepsView: View {
     var extraction: FrameExtractionProgress? = nil
     /// Seconds left per step, for the column beside the bars.
     var estimates: [OperationType: TimeInterval] = [:]
+    /// Opens the explanation of the steps; nil leaves the info button out.
+    var showInfo: (() -> Void)? = nil
 
     private let doneColor: Color = .green
     private let runningColor: Color = .yellow
@@ -352,27 +459,28 @@ struct ProcessingStepsView: View {
     /// For what is finished, or has nothing left: quieter than the white of what is live.
     private let settledColor = Color(white: 0.68)
 
-    /// Wide enough for the longest translated step name at this font — "Zusammengeführter
-    /// Horizont" in German — over two lines.
-    private let labelWidth: CGFloat = 180
-    private let countWidth: CGFloat = 138
-    /// One of the three queued / running / done number columns.
-    private let numberWidth: CGFloat = 46
-    /// The time-left column between each bar and its counts.
-    private let etaWidth: CGFloat = 56
+    /// Wide enough for the widest word of every translated heading and step name at its
+    /// font, shared by every row: the constants of `ProcessingColumns`, or more.
+    private var columns: ProcessingColumns {
+        ProcessingColumns.measured(steps: steps, extraction: extraction != nil)
+    }
 
     private func etaText(_ seconds: TimeInterval?) -> String {
         guard let seconds, seconds.isFinite else { return "" }
         return ProcessingHeadline.duration(seconds)
     }
 
-    private func etaColumn(_ text: String, color: Color = .white) -> some View {
+    private func etaColumn(_ text: String, color: Color = .white, columns: ProcessingColumns) -> some View {
+        // A heading wraps at its space; an estimate is one line and the column is as wide as
+        // the longest one.
         Text(text)
           .font(.caption)
           .monospacedDigit()
           .foregroundColor(color)
-          .lineLimit(1)
-          .frame(width: etaWidth, alignment: .trailing)
+          .lineLimit(2)
+          .multilineTextAlignment(.trailing)
+          .fixedSize(horizontal: false, vertical: true)
+          .frame(width: columns.eta, alignment: .trailing)
     }
 
     /// Steps with something to count and nothing left queued or running.  A step with no
@@ -386,13 +494,19 @@ struct ProcessingStepsView: View {
     }
 
     var body: some View {
+        let columns = self.columns
         VStack(alignment: .leading, spacing: 8) {
-            Text(localized("ui.steps"))
-              .font(.headline)
-              .foregroundColor(.white)
+            HStack {
+                Text(localized("ui.steps"))
+                  .font(.headline)
+                  .foregroundColor(.white)
+                if let showInfo {
+                    StepsInfoButton(action: showInfo)
+                }
+            }
 
             if let extraction {
-                extractionRow(extraction)
+                extractionRow(extraction, columns: columns)
             }
 
             if steps.isEmpty && extraction == nil {
@@ -407,15 +521,15 @@ struct ProcessingStepsView: View {
             // rows, so a finishing step moves from one list to the other, bringing the Done
             // heading with it the first time and taking the Processing one away the last.
             if !doneSteps.isEmpty {
-                columnHeader(localized("ui.done"), showsCounts: true)
+                columnHeader(localized("ui.done"), showsCounts: true, columns: columns)
                 ForEach(doneSteps) { step in
-                    stepRow(step, isDone: true)
+                    stepRow(step, isDone: true, columns: columns)
                 }
             }
             if !processingSteps.isEmpty {
-                columnHeader(localized("ui.processing"), showsCounts: doneSteps.isEmpty)
+                columnHeader(localized("ui.processing"), showsCounts: doneSteps.isEmpty, columns: columns)
                 ForEach(processingSteps) { step in
-                    stepRow(step, isDone: false)
+                    stepRow(step, isDone: false, columns: columns)
                 }
             }
         }
@@ -423,38 +537,40 @@ struct ProcessingStepsView: View {
 
     /// A sub-label over a group of rows.  The first one on screen also carries the names of
     /// the three number columns, which line up with every row beneath it.
-    private func columnHeader(_ title: String, showsCounts: Bool) -> some View {
+    private func columnHeader(_ title: String, showsCounts: Bool, columns: ProcessingColumns) -> some View {
         HStack(spacing: 12) {
             Text(title)
               .font(.subheadline)
               .foregroundColor(.gray)
-              .frame(width: labelWidth, alignment: .leading)
+              .frame(width: columns.name, alignment: .leading)
             Spacer()
             if showsCounts {
-                etaColumn(localized("ui.time_left"), color: .gray)
+                etaColumn(localized("ui.time_left"), color: .gray, columns: columns)
                 countColumns(localized("ui.queued"), localized("ui.running"), localized("ui.done"),
-                             colors: [.gray, .gray, .gray])
+                             colors: [.gray, .gray, .gray], columns: columns)
             }
         }
           .padding(.top, 4)
     }
 
     private func countColumns(_ queued: String, _ running: String, _ done: String,
-                              colors: [Color]) -> some View {
+                              colors: [Color], columns: ProcessingColumns) -> some View {
         HStack(spacing: 0) {
             ForEach(Array([queued, running, done].enumerated()), id: \.offset) { index, text in
                 Text(text)
                   .font(.caption)
                   .monospacedDigit()
                   .foregroundColor(colors[index])
-                  .lineLimit(1)
-                  .frame(width: numberWidth, alignment: .trailing)
+                  .lineLimit(2)
+                  .multilineTextAlignment(.trailing)
+                  .fixedSize(horizontal: false, vertical: true)
+                  .frame(width: columns.number, alignment: .trailing)
             }
         }
     }
 
     /// The frames the video has given up so far, in the same bar and count as the steps below.
-    private func extractionRow(_ progress: FrameExtractionProgress) -> some View {
+    private func extractionRow(_ progress: FrameExtractionProgress, columns: ProcessingColumns) -> some View {
         let total = max(1, progress.total)
         let name = localized("ui.processing_step_extracting_video")
         return HStack(spacing: 12) {
@@ -463,7 +579,7 @@ struct ProcessingStepsView: View {
               .foregroundColor(.white)
               .lineLimit(2)
               .fixedSize(horizontal: false, vertical: true)
-              .frame(width: labelWidth, alignment: .leading)
+              .frame(width: columns.name, alignment: .leading)
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Rectangle().fill(queuedColor)
@@ -473,21 +589,21 @@ struct ProcessingStepsView: View {
                   .cornerRadius(4)
             }
               .frame(height: 14)
-            etaColumn(progress.isComplete ? "" : etaText(progress.estimatedSecondsRemaining))
+            etaColumn(progress.isComplete ? "" : etaText(progress.estimatedSecondsRemaining), columns: columns)
             Text(localized("ui.n_of_m_complete", progress.extracted, progress.total))
               .font(.caption)
               .monospacedDigit()
               .foregroundColor(.white)
               .lineLimit(2)
               .fixedSize(horizontal: false, vertical: true)
-              .frame(width: countWidth, alignment: .trailing)
+              .frame(width: columns.count, alignment: .trailing)
         }
           .contentShape(Rectangle())
           .help(name)
           .accessibilityIdentifier("processing.extraction")
     }
 
-    private func stepRow(_ step: ProcessingStepProgress, isDone: Bool) -> some View {
+    private func stepRow(_ step: ProcessingStepProgress, isDone: Bool, columns: ProcessingColumns) -> some View {
         HStack(spacing: 12) {
             // Two lines because these are translated, and no single-line column this
             // panel can afford would hold every language's version of every name.
@@ -496,11 +612,11 @@ struct ProcessingStepsView: View {
               .foregroundColor(!step.hasWork ? .gray : isDone ? settledColor : .white)
               .lineLimit(2)
               .fixedSize(horizontal: false, vertical: true)
-              .frame(width: labelWidth, alignment: .leading)
+              .frame(width: columns.name, alignment: .leading)
 
             stepBar(step)
 
-            etaColumn(isDone ? "" : etaText(estimates[step.type]))
+            etaColumn(isDone ? "" : etaText(estimates[step.type]), columns: columns)
 
             // A step with no operations is only ever on screen while the plan is still
             // being worked out — once it is, `ProcessingSteps.visible` drops it — so this
@@ -512,12 +628,13 @@ struct ProcessingStepsView: View {
                 countColumns("\(step.queued)", "\(step.running)", "\(step.completed)",
                              colors: [step.queued == 0 ? settledColor : .white,
                                       step.running == 0 ? settledColor : .white,
-                                      step.completed == total ? settledColor : .white])
+                                      step.completed == total ? settledColor : .white],
+                             columns: columns)
             } else {
                 Text("—")
                   .font(.caption)
                   .foregroundColor(.gray)
-                  .frame(width: numberWidth * 3, alignment: .trailing)
+                  .frame(width: columns.count, alignment: .trailing)
             }
         }
           // Over the whole row, gaps included, rather than over the label alone: the bar
@@ -554,5 +671,83 @@ struct ProcessingStepsView: View {
               .cornerRadius(4)
         }
           .frame(height: 14)
+    }
+}
+
+/// The circled "i" that asks for the explanation of the steps; the same button as
+/// `AlignmentInfoButton`, with its own tooltip.
+struct StepsInfoButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "info.circle")
+        }
+          .buttonStyle(.borderless)
+          .foregroundColor(.gray)
+          .help(localized("ui.steps_info_help"))
+    }
+}
+
+/// What each step the panel shows does, and which earlier step's results it relies on and why.
+struct StepsInfoContent: View {
+    let info: ProcessingStepsInfo
+    let close: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(localized("ui.steps_info_title"))
+              .font(.title2)
+            Text(info.intro)
+              .fixedSize(horizontal: false, vertical: true)
+            Text(info.subtitle)
+              .fixedSize(horizontal: false, vertical: true)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    ForEach(info.entries) { entry in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(entry.name)
+                              .font(.headline)
+                            Text(entry.what)
+                              .fixedSize(horizontal: false, vertical: true)
+                            Text(entry.needs)
+                              .font(.caption)
+                              .foregroundColor(.secondary)
+                              .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                  .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            HStack {
+                Spacer()
+                Button(localized("ui.done"), action: close)
+                  .keyboardShortcut(.defaultAction)
+            }
+        }
+          .padding(24)
+    }
+}
+
+/// `StepsInfoContent` as a card over a dimmed backdrop, drawn on top of the processing modal
+/// the way `AlignmentInfoOverlay` is.
+struct StepsInfoOverlay: View {
+    let info: ProcessingStepsInfo
+    let close: () -> Void
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+              .fill(Color.black.opacity(0.5))
+              .contentShape(Rectangle())
+              .onTapGesture(perform: close)
+            StepsInfoContent(info: info, close: close)
+              .frame(width: 540)
+              .frame(maxHeight: 640)
+              .background(Color(white: 0.22))
+              .environment(\.colorScheme, .dark)
+              .cornerRadius(14)
+              .shadow(radius: 24)
+        }
     }
 }

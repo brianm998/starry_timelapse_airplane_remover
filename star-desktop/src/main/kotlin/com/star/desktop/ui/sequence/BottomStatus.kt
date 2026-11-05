@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
+import com.star.desktop.domain.usesOutliers
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.sp
@@ -55,7 +56,7 @@ fun BottomStatus(vm: SequenceViewModel) {
 
         // Counts are only the frame's once its outliers have been read; before that they are zeroes that mean nothing.
         // They only apply to frames that use outliers: selective, or automatic with auto-select.
-        info?.takeIf { it.outliersLoaded && it.cleanMethod != com.star.proto.CleanMethod.CLEAN_AUTOMATIC }?.let { i ->
+        info?.takeIf { it.outliersLoaded && it.cleanMethod.usesOutliers }?.let { i ->
             Column {
                 Line(localized("ui.n_will_remove", i.numPositiveOutliers), if (i.numPositiveOutliers == 0) StarColors.white else StarColors.red, "status.remove")
                 Line(localized("ui.n_will_keep", i.numNegativeOutliers), if (i.numNegativeOutliers == 0) StarColors.white else StarColors.green, "status.keep")

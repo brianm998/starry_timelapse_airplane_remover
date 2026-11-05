@@ -14,7 +14,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
-from . import gitutil
+from . import gitutil, heavy
 from . import plan as planmod
 from .checks import baseline, impact, ledger
 from .db import Database, Ticket
@@ -74,6 +74,7 @@ class Contract:
     followups: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
     baseline_runner: baseline.BaselineRunner = baseline.result_at_base  # a check at the branch's merge-base
     known_red: dict[tuple[str, str], baseline.KnownRed | None] = field(default_factory=dict[tuple[str, str], baseline.KnownRed | None])
+    stage: str = ""  # which stage's session this is: the heavy lock serves the ticket furthest along first
 
     def _bug(self) -> bool:
         return bool(re.search(r"\b(bug|fix|crash|regress|wrong|fails?)\b", self.ticket.title, re.IGNORECASE))
@@ -123,7 +124,8 @@ class Contract:
     def run_checks(self, args: dict[str, Any]) -> str:
         if self.check_runner is None:
             return "run_checks is not available in this stage"
-        results = self.check_runner(self.worktree, self.base_ref)
+        with heavy.requester(self.ticket.number, self.stage, self.ticket.priority):
+            results = self.check_runner(self.worktree, self.base_ref)
         sha = gitutil.head_sha(self.worktree)
         self.lock_wait_s += sum(r.lock_wait for r in results)
         for r in results:

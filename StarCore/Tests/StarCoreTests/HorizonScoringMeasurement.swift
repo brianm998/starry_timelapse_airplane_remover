@@ -111,6 +111,21 @@ final class HorizonScoringMeasurement: XCTestCase {
 
     /// Standard deviation of the column-to-column derivative, counting only adjacent pairs where both
     /// columns are defined — the quantity `smoothnessScore` is a function of.
+    /// Mean absolute Y error between two per-column horizons; only columns where both are
+    /// non-nil count.  `Double.infinity` when nothing is comparable.
+    private func meanAbsoluteError(_ algorithmY: [Int?], _ referenceY: [Int?]) -> Double {
+        let n = min(algorithmY.count, referenceY.count)
+        var totalError: Double = 0.0
+        var count = 0
+        for x in 0..<n {
+            guard let a = algorithmY[x], let r = referenceY[x] else { continue }
+            totalError += Double(abs(a - r))
+            count += 1
+        }
+        guard count > 0 else { return Double.infinity }
+        return totalError / Double(count)
+    }
+
     private func derivativeStddev(_ horizonY: [Int?]) -> Double? {
         var diffs: [Double] = []
         for i in 1..<max(1, horizonY.count) {
@@ -327,8 +342,7 @@ final class HorizonScoringMeasurement: XCTestCase {
                 }
 
                 let candidateY = CombinedHorizonDetector.extractHorizonY(from: mask.image)
-                let mae = HomographyHorizonDetector.score(algorithmY: candidateY,
-                                                          referenceY: referenceY)
+                let mae = meanAbsoluteError(candidateY, referenceY)
                 candidates.append(Candidate(cropAmount: crop,
                                             truthMAE: mae,
                                             score: score,

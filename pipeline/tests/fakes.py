@@ -80,6 +80,7 @@ class FakeGitHub(GitHub):
         self.origin = origin
         self.prs: dict[int, dict[str, Any]] = {}
         self.ci: dict[str, Ci] = {}
+        self.job_steps: dict[str, list[dict[str, Any]]] = {}  # job name -> the `steps` GitHub reports for it (absent: no key)
         self.job_labels: dict[str, list[str]] = {}  # job name -> the runner labels GitHub reports for it
         self.develop_ci: Ci = []
         self.develop_history: list[Ci] = []  # older develop runs, newest first, after develop_ci
@@ -108,15 +109,18 @@ class FakeGitHub(GitHub):
         self._feature_ids = itertools.count(5000)  # dispatches come from worker threads: a counter, not len()
 
     def add_issue(self, number: int, title: str, body: str = GOOD_BODY, author: str = OWNER,
-                  labels: tuple[str, ...] = ("pipeline",)) -> None:
+                  labels: tuple[str, ...] = ("pipeline",),
+                  created_at: str = "2026-11-01T10:00:00Z", updated_at: str = "2026-11-02T10:00:00Z") -> None:
         self.issues[number] = {"number": number, "title": title, "body": body, "state": "open",
+                               "created_at": created_at, "updated_at": updated_at,
                                "user": {"login": author}, "labels": [{"name": n} for n in labels]}
         self.timelines[number] = [{"event": "labeled", "label": {"name": "pipeline"}, "actor": {"login": OWNER}}]
         self.comment_list[number] = []
 
-    def say(self, number: int, user: str, body: str) -> int:
+    def say(self, number: int, user: str, body: str, created_at: str = "2026-11-02T12:00:00Z") -> int:
         self.next_id += 1
-        self.comment_list[number].append({"id": self.next_id, "user": {"login": user}, "body": body})
+        self.comment_list[number].append({"id": self.next_id, "user": {"login": user}, "body": body,
+                                          "created_at": created_at})
         return self.next_id
 
     def paged(self, path: str) -> list[dict[str, Any]]:
@@ -236,7 +240,9 @@ class FakeGitHub(GitHub):
                 run_id = self.run_ids.setdefault((key, wf), 1000 + len(self.run_ids))
                 mine = [(j, st, c) for w, j, st, c in jobs if w == wf]
                 self.run_jobs_by_id[run_id] = [{"name": j, "status": st, "conclusion": c, "completed_at": None,
-                                                "labels": self.job_labels.get(j, [])} for j, st, c in mine]
+                                                "labels": self.job_labels.get(j, []),
+                                                **({"steps": self.job_steps[j]} if j in self.job_steps else {})}
+                                               for j, st, c in mine]
                 done = all(st == "completed" for _, st, _ in mine)
                 conclusions = {c for _, _, c in mine}
                 # a run's own conclusion: cancelled when the runner cancelled all of it, as a newer push does

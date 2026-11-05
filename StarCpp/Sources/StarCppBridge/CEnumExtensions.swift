@@ -9,7 +9,6 @@ public extension AlignmentType {
 }
 
 public extension FeatureMatchMethod {
-    static let bruteForce = FeatureMatchMethodBruteForce
     static let knnLowes   = FeatureMatchMethodKNNLowes
     static let FLANN      = FeatureMatchMethodFLANN
 }

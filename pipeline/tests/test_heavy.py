@@ -12,7 +12,7 @@ import pytest
 from starpipe import heavy
 from starpipe.config import Config
 
-CFG = Config(heavy_slots=1)
+CFG = Config()
 
 
 def starpipe(*args: str, env: dict[str, str] | None = None) -> subprocess.Popen[str]:
@@ -145,7 +145,7 @@ def test_a_child_is_killed_if_the_wait_is_interrupted() -> None:
     assert heavy.status().holders == []
 
 
-FAST = Config(heavy_slots=1, heavy_idle_kill_s=1.5, heavy_idle_grace_s=1.0, heavy_idle_poll_s=0.2)
+FAST = Config(heavy_idle_kill_s=1.5, heavy_idle_grace_s=1.0, heavy_idle_poll_s=0.2)
 
 
 def test_idle_job_is_killed_and_lock_released() -> None:
@@ -238,3 +238,231 @@ def test_busy_job_is_not_killed(tmp_path: Path) -> None:
         assert quiet.hung is None and quiet.code == 0
     spinner = heavy.run_job([sys.executable, "-c", spin], config=FAST)
     assert spinner.hung is None and spinner.code == 0
+
+
+def test_a_hold_records_its_cpu_and_memory(state_home: Path) -> None:
+    from starpipe.checks import ledger
+
+    cfg = Config(heavy_idle_poll_s=0.2)
+    burn = "import time;ballast=bytearray(120*1024*1024);t=time.time()\nwhile time.time()-t<2.5: pass"
+    result = heavy.run_job([sys.executable, "-c", burn], config=cfg)
+    assert result.code == 0
+    assert result.cpu_mean > 0.4 and result.cpu_peak >= result.cpu_mean
+    assert result.rss_peak_mb >= 100 and result.seconds >= 2.5
+    # the ledger row keeps it, and a row from before these fields still loads
+    ledger.record(ledger.Result("c", "pass", "sha1", 1.0, cpu_mean=result.cpu_mean, cpu_peak=result.cpu_peak,
+                                rss_peak_mb=result.rss_peak_mb))
+    got = ledger.latest("sha1", "c")
+    assert got is not None and got.rss_peak_mb == result.rss_peak_mb and got.cpu_peak == result.cpu_peak
+    (state_home / "results.jsonl").write_text('{"check": "old", "status": "pass", "sha": "s0", "seconds": 1.0}\n')
+    old = ledger.latest("s0", "old")
+    assert old is not None and old.cpu_mean == 0.0 and old.rss_peak_mb == 0.0
+    # `--status` shows a running hold's numbers
+    (state_home / "config.toml").write_text("heavy_idle_poll_s = 0.2\n")
+    job = starpipe("heavy", "--", sys.executable, "-c", burn.replace("2.5", "30"))
+    try:
+        assert wait_until(lambda: any(h.rss_peak_mb >= 100 and h.cpu_peak > 0 for h in heavy.status().holders))
+        shown = starpipe("heavy", "--status")
+        out = shown.communicate(timeout=30)[0]
+        assert "exclusive" in out and "rss peak" in out and "cpu" in out
+    finally:
+        job.kill()
+        job.wait()
+
+
+def test_jobs_are_classed_build_test_or_exclusive() -> None:
+    from starpipe.adapter_star import BUILD, EXCLUSIVE, TEST, job_class
+
+    expected = {
+        "swift build --package-path cli": BUILD,
+        "./gradlew compileKotlin compileTestKotlin --no-daemon": BUILD,
+        "./gradlew checkProtoSync --no-daemon": BUILD,
+        "xcodebuild -project gui/star.xcodeproj -scheme star build": BUILD,
+        "swift test --package-path StarCore --parallel --num-workers 8 --skip OpenCVQoSTests": TEST,
+        "script -q /dev/null swift test --package-path StarCore": TEST,
+        "/usr/bin/python3 -m starpipe.shards --package-path StarCore --log-dir x": TEST,
+        "swift run star -i x": EXCLUSIVE,
+        ".build/debug/star --help": EXCLUSIVE,
+        ".build/release/stard": EXCLUSIVE,
+        "star-gherkin features/x.feature": EXCLUSIVE,
+        "xcodebuild test -project gui/star.xcodeproj -scheme star": EXCLUSIVE,
+        "./gradlew test --no-daemon": EXCLUSIVE,
+        "swift test --package-path cli --filter GherkinTests.GeneratedFeatureTests/testFooFeature": EXCLUSIVE,
+        "swift test --package-path StarCpp --parallel --num-workers 1 --filter OpenCVQoSTests": EXCLUSIVE,
+        "./gradlew": EXCLUSIVE,
+        "make all": EXCLUSIVE,
+        "": EXCLUSIVE,
+        # the PreToolUse hook wraps a session's whole Bash command: the most demanding command in it decides
+        "bash -c 'cd StarCore && swift build 2>&1 | tail -20'": BUILD,
+        "bash -c 'swift build --package-path cli && swift test --package-path cli --skip GherkinTests | tail'": TEST,
+        "bash -c 'swift build --package-path cli && .build/debug/star -i frames'": EXCLUSIVE,
+        "bash -c 'FOO=1 time xcodebuild -scheme star build; echo done'": BUILD,
+        "bash -c 'echo nothing heavy here'": EXCLUSIVE,
+        "bash -c 'unbalanced \"quote'": EXCLUSIVE,
+    }
+    got = {cmd: job_class(cmd) for cmd in expected}
+    assert {c: k for c, k in got.items() if k != expected[c]} == {}
+
+
+def split_config(home: Path, *, mem_pct: float = 0.0, builds: int = 3, split: bool = True) -> None:
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "config.toml").write_text(f"heavy_build_slots = {builds}\nheavy_free_mem_pct = {mem_pct}\n"
+                                      f"heavy_split = {'true' if split else 'false'}\nheavy_idle_poll_s = 0.2\n")
+
+
+def fake_tools(tmp_path: Path, seconds: float) -> dict[str, str]:
+    """`swift` on PATH logging `s<tag>`/`e<tag>` around a sleep: `swift build --package-path T` is a build, `swift test
+    --package-path T` a test suite; `star T` is an exclusive job. Nothing is built."""
+    import os
+    bindir = tmp_path / "bin"
+    bindir.mkdir(exist_ok=True)
+    for name in ("swift", "star"):
+        tool = bindir / name
+        tag = "$3" if name == "swift" else "$1"
+        tool.write_text(f'#!/bin/sh\necho "s{tag}" >> "{tmp_path}/jobs.log"\nsleep {seconds}\necho "e{tag}" >> "{tmp_path}/jobs.log"\n')
+        tool.chmod(0o755)
+    return {"PATH": f"{bindir}{os.pathsep}{os.environ['PATH']}"}
+
+
+def job(kind: str, tag: str, env: dict[str, str], extra: dict[str, str] | None = None) -> subprocess.Popen[str]:
+    argv = {"build": ["swift", "build", "--package-path", tag], "test": ["swift", "test", "--package-path", tag],
+            "exclusive": ["star", tag]}[kind]
+    return starpipe("heavy", "--", *argv, env={**env, **(extra or {})})
+
+
+def run_after_first(tmp_path: Path, first: str, *others: str, seconds: float = 4.0) -> list[str]:
+    """Start `first`, then (once it holds the lock) the others in turn, each once the one before is holding or queued; the log's
+    order shows what overlapped."""
+    env = fake_tools(tmp_path, seconds)
+
+    def seen(tag: str) -> bool:
+        st = heavy.status()
+        return any(x.cmd.endswith(f" {tag}") for x in [*st.holders, *st.queue])
+
+    jobs = [job(first, "1", env)]
+    assert wait_until(lambda: seen("1"))
+    for i, kind in enumerate(others, 2):
+        jobs.append(job(kind, str(i), env))
+        assert wait_until(lambda tag=str(i): seen(tag))
+    for j in jobs:
+        assert j.wait(60) == 0
+    out = (tmp_path / "jobs.log").read_text().split()
+    (tmp_path / "jobs.log").unlink()
+    return out
+
+
+def test_builds_share_and_a_test_runs_beside_them(tmp_path: Path, state_home: Path) -> None:
+    split_config(state_home)
+    assert run_after_first(tmp_path, "build", "build")[:2] == ["s1", "s2"]
+    assert run_after_first(tmp_path, "test", "build")[:2] == ["s1", "s2"]
+    assert run_after_first(tmp_path, "build", "test")[:2] == ["s1", "s2"]
+
+
+def test_conflicting_jobs_wait(tmp_path: Path, state_home: Path) -> None:
+    split_config(state_home)
+    assert run_after_first(tmp_path, "test", "test") == ["s1", "e1", "s2", "e2"]  # one test suite at a time
+    assert run_after_first(tmp_path, "build", "exclusive") == ["s1", "e1", "s2", "e2"]  # exclusive waits for every holder
+    assert run_after_first(tmp_path, "exclusive", "build") == ["s1", "e1", "s2", "e2"]  # and nothing runs beside it
+    split_config(state_home, builds=1)
+    assert run_after_first(tmp_path, "build", "build") == ["s1", "e1", "s2", "e2"]  # only as many builds as slots
+    split_config(state_home, mem_pct=101.0)  # more free memory than the machine has: nothing starts beside another job
+    assert run_after_first(tmp_path, "build", "build") == ["s1", "e1", "s2", "e2"]
+    split_config(state_home, split=False)  # the old one-at-a-time lock
+    assert run_after_first(tmp_path, "build", "build") == ["s1", "e1", "s2", "e2"]
+
+
+def test_a_waiting_exclusive_job_is_not_overtaken(tmp_path: Path, state_home: Path) -> None:
+    split_config(state_home)
+    # a build may start while a test suite waits, since it does not need the test slot...
+    assert run_after_first(tmp_path, "test", "test", "build")[:2] == ["s1", "s3"]
+    # ...but nothing starts while an exclusive job waits for the machine to drain
+    order = run_after_first(tmp_path, "build", "exclusive", "build")
+    assert order == ["s1", "e1", "s2", "e2", "s3", "e3"]
+
+
+def W(pid: int, kind: str, *, stage: str = "", ticket: str = "", at: float = 0.0, prio: int = heavy.PIPELINE,
+      tprio: int = heavy.NO_TICKET_PRIORITY) -> heavy.Waiter:
+    return heavy.Waiter(prio, at, pid, 0.0, ticket, "cmd", kind, stage, tprio)
+
+
+def granted(queue: list[heavy.Waiter], cfg: Config | None = None) -> list[int]:
+    """Which of the queued waiters the grant would let start now, with every slot free."""
+    cfg = cfg or Config(heavy_free_mem_pct=0.0)
+    order = sorted(queue, key=heavy.Waiter.key)
+    return [w.pid for w in order if heavy._grant(cfg, order, w.pid, lambda x: x.job_class) is not None]  # pyright: ignore[reportPrivateUsage]
+
+
+def test_the_ticket_furthest_along_goes_first() -> None:
+    ex = heavy.EXCLUSIVE
+    # the develop job asked first, the conflict job (a ticket in the landing train) later: the conflict job gets the machine
+    assert granted([W(1, ex, stage="develop", ticket="100", at=1.0), W(2, ex, stage="conflict", ticket="200", at=2.0)]) == [2]
+    assert granted([W(1, ex, stage="explore", ticket="5", at=1.0), W(2, ex, stage="fix", ticket="9", at=9.0),
+                    W(3, ex, stage="verify", ticket="7", at=5.0)]) == [3]
+    # same stage: the ticket's priority, then the older ticket, then arrival
+    assert granted([W(1, ex, stage="develop", ticket="100", tprio=2), W(2, ex, stage="develop", ticket="300", tprio=1)]) == [2]
+    assert granted([W(1, ex, stage="develop", ticket="300", at=1.0), W(2, ex, stage="develop", ticket="100", at=2.0)]) == [2]
+    assert granted([W(1, ex, stage="develop", ticket="100", at=2.0), W(2, ex, stage="develop", ticket="100", at=1.0)]) == [2]
+    # the owner's own commands still go before any ticket, and the nightly after all of them
+    assert granted([W(1, ex, stage="landing", ticket="1"), W(2, ex, prio=heavy.INTERACTIVE)]) == [2]
+    assert granted([W(1, ex, prio=heavy.NIGHTLY), W(2, ex, stage="explore", ticket="9")]) == [2]
+
+
+def test_progress_order_holds_across_classes() -> None:
+    b, t, ex = heavy.BUILD, heavy.TEST, heavy.EXCLUSIVE
+    cfg = Config(heavy_free_mem_pct=0.0, heavy_build_slots=2)
+    # builds fill the build slots furthest-along first; the develop build that asked first is the one left waiting
+    assert granted([W(1, b, stage="develop", ticket="1", at=1.0), W(2, b, stage="review", ticket="2", at=2.0),
+                    W(3, b, stage="ci-fix", ticket="3", at=3.0)], cfg) == [3, 2]
+    # an exclusive job further along keeps everything behind it waiting; one behind does not hold up what is ahead of it
+    assert granted([W(1, b, stage="develop", ticket="1"), W(2, ex, stage="conflict", ticket="2")], cfg) == [2]
+    assert granted([W(1, t, stage="conflict", ticket="1"), W(2, b, stage="develop", ticket="2"),
+                    W(3, ex, stage="develop", ticket="3")], cfg) == [1, 2]
+
+
+def test_the_requester_comes_from_the_engine_or_the_session_environment(monkeypatch: pytest.MonkeyPatch,
+                                                                       tmp_path: Path) -> None:
+    assert heavy.current_requester() == heavy.Requester("", "", heavy.NO_TICKET_PRIORITY)
+    monkeypatch.setenv("STARPIPE_TICKET", "42")
+    monkeypatch.setenv("STARPIPE_STAGE", "ci-fix")
+    monkeypatch.setenv("STARPIPE_TICKET_PRIORITY", "1")
+    assert heavy.current_requester() == heavy.Requester("42", "ci-fix", 1)
+    import threading
+    seen: list[heavy.Requester] = []
+    with heavy.requester(7, "verify", 2):
+        import asyncio
+        asyncio.run(asyncio.to_thread(lambda: seen.append(heavy.current_requester())))  # the daemon's check threads
+        t = threading.Thread(target=lambda: seen.append(heavy.current_requester()))  # a bare thread sees the environment
+        t.start()
+        t.join()
+    assert seen == [heavy.Requester("7", "verify", 2), heavy.Requester("42", "ci-fix", 1)]
+    # and a stage session's Bash gets the environment from agent.sanitized_env
+    from starpipe import agent
+    env = agent.sanitized_env(9, stage="conflict", ticket_priority=0)
+    assert (env["STARPIPE_TICKET"], env["STARPIPE_STAGE"], env["STARPIPE_TICKET_PRIORITY"]) == ("9", "conflict", "0")
+    # a queued job records it, and `heavy --status` shows it
+    holder = starpipe("heavy", "--", sys.executable, "-c", "import time;time.sleep(30)")
+    try:
+        assert wait_until(lambda: len(heavy.status().holders) == 1)
+        waiter = starpipe("heavy", "--", sys.executable, "-c", "pass")  # inherits STARPIPE_TICKET/STAGE from os.environ
+        assert wait_until(lambda: len(heavy.status().queue) == 1)
+        w = heavy.status().queue[0]
+        assert (w.ticket, w.stage, w.ticket_priority, w.job_class) == ("42", "ci-fix", 1, "exclusive")
+        out = starpipe("heavy", "--status").communicate(timeout=30)[0]
+        assert "42 ci-fix" in out and "[exclusive]" in out
+    finally:
+        holder.kill()
+        holder.wait()
+    waiter.wait(30)
+
+
+def test_a_holder_running_the_old_one_slot_lock_still_excludes_tests_and_exclusive_jobs() -> None:
+    import fcntl
+    import os
+    fd = os.open(heavy.locks_dir() / "heavy.slot0", os.O_RDWR | os.O_CREAT, 0o644)  # what the old acquire() flocks
+    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    try:
+        assert granted([W(1, heavy.TEST)]) == [] and granted([W(1, heavy.EXCLUSIVE)]) == []
+        assert granted([W(1, heavy.BUILD)]) == [1]
+    finally:
+        os.close(fd)
+    assert granted([W(1, heavy.TEST)]) == [1]

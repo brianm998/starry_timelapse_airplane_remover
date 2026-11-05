@@ -52,20 +52,6 @@ public enum ImageAligner {
         return r.map { MatWrapper(ref: $0) }
     }
 
-    public static func medianMergeFilenames(_ filenames: [String],
-                                             outlierThreshold: Double,
-                                             includeAll: Bool,
-                                             useGPU: Bool = true) -> MatWrapper? {
-        let cStrs = filenames.map { strdup($0) }
-        defer { cStrs.forEach { free($0) } }
-        var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
-        let r = ptrs.withUnsafeMutableBufferPointer { buf in
-            ia_median_merge_filenames(buf.baseAddress, Int32(buf.count),
-                                      outlierThreshold, includeAll, useGPU)
-        }
-        return r.map { MatWrapper(ref: $0) }
-    }
-
     public static func findFeatures(baseImage: MatWrapper, frameIndex: Int32,
                                      matchMethod: FeatureMatchMethod,
                                      mask: MatWrapper?,

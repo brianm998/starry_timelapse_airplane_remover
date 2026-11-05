@@ -35,21 +35,4 @@ public struct FrameView: View {
               }
           }
     }
-
-    // initial view for when we've not loaded images yet
-    var loadingView: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Rectangle()
-                  .foregroundColor(.yellow)
-                  .aspectRatio(CGSize(width: 4, height: 3), contentMode: .fit)
-                Text(viewModel.noImageExplainationText)
-                  .font(.system(size: geometry.size.height/6))
-                  .opacity(0.6)
-            }
-              .padding([.top])
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
-             // .transition(.moveAndFade)
-        }
-    }
 }

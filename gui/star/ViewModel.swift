@@ -457,8 +457,6 @@ public final class ViewModel {
     var showInfoDialog = false
     var currentInfoType: InfoType = .about
 
-    var labelText: String = localized("ui.started")
-
     var isLoadingImageSequence = false
 
     /// Which load is the current one. Every load takes the next number and Cancel takes one too, so
@@ -563,16 +561,6 @@ public final class ViewModel {
         }
     }
 
-    // better to push a method if possible, this assumes
-    // that no other view has changed cursor state 
-    func replaceCursor(_ cursor: NSCursor) {
-        if cursorStack.count > 0 {
-            cursorStack.removeLast()
-        }
-        cursorStack.append(.literal(cursor))
-        self.cursor = cursor
-    }
-    
     func popCursor() {
         if cursorStack.count > 0 {
             cursorStack.removeLast()

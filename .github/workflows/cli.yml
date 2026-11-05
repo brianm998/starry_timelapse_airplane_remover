@@ -203,6 +203,13 @@ jobs:
           strip .build/release/star
 
       - name: Smoke-test CLI
+        env:
+          # The 7GB hosted runner really is short on memory: the MemoryMonitor breakdown line shows
+          # ~4.0GB counted as available (free + purgeable + file cache) and ~3.4GB of runner-owned
+          # anonymous + wired + compressed pages that star cannot reclaim (star itself is ~50MB).
+          # Each op asks for ~2.2GB, so against the default 2GB floor the headroom is ~140MB short and
+          # the first op waits a minute for a forced admission. Same override as the gherkin jobs.
+          STAR_SYSTEM_FLOOR_MB: 512
         run: |
           cli/.build/release/star -l info test_data/test_a7sii_10 star-smoke-output
           ACTUAL=$(ls -1 star-smoke-output/ | wc -l | tr -d ' ')

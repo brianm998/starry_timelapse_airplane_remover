@@ -125,65 +125,6 @@ public struct BoundingBox: Codable,
         return nil
     }
     
-    // returns the number of overlapping pixels divided by the average size of the two boxes
-    public func overlapAmount(with other: BoundingBox) -> Double {
-        if let overlap = overlap(with: other) {
-            let avgSize = (self.size + other.size)/2
-            return Double(overlap.size)/Double(avgSize)
-        }
-        return 0
-    }
-
-    // theta in degrees of the line between the centers of the two bounding boxes
-    func centerTheta(with box2: BoundingBox) -> Double {
-        let box1 = self
-
-        let center1X = Double(box1.min.x) + Double(box1.width)/2
-        let center1Y = Double(box1.min.y) + Double(box1.height)/2
-
-        //Log.v("1 center [\(center1X), \(center1Y)]")
-        
-        let center2X = Double(box2.min.x) + Double(box2.width)/2
-        let center2Y = Double(box2.min.y) + Double(box2.height)/2
-        
-        //Log.v("2 center [\(center2X), \(center2Y)]")
-
-        // special case horizontal alignment, theta 0 degrees
-        if center1Y == center2Y { return 0 }
-
-        // special case vertical alignment, theta 90 degrees
-        if center1X == center2X { return 90 }
-
-        var theta: Double = 0
-
-        let width = Double(abs(center1X - center2X))
-        let height = Double(abs(center1Y - center2Y))
-
-        let ninetyDegreesInRadians = 90 * Double.pi/180
-        
-        if center1X < center2X {
-            if center1Y < center2Y {
-                // 90 + case
-                theta = ninetyDegreesInRadians + atan(height/width)
-            } else { // center1Y > center2Y
-                // 0 - 90 case
-                theta = atan(width/height)
-            }
-        } else { // center1X > center2X
-            if center1Y < center2Y {
-                // 0 - 90 case
-                theta = atan(width/height)
-            } else { // center1Y > center2Y
-                // 90 + case
-                theta = ninetyDegreesInRadians + atan(height/width)
-            }
-        }
-
-        // XXX what about rho?
-        let thetaDegrees = theta*180/Double.pi // convert from radians to degrees
-        return  thetaDegrees
-    }
-
     // XXX this method sucks
 
     /*
@@ -406,41 +347,4 @@ public struct BoundingBox: Codable,
                 DoubleCoord(x: line.x(forY: minY), y: minY),
                 DoubleCoord(x: line.x(forY: maxY), y: maxY)]
     }
-}
-
-// the distance between the center point of the box described and the exit of the line from it
-fileprivate func distanceOn(box boundingBox: BoundingBox,
-                            slope: Double, yIntercept: Double, theta: Double) -> Double
-{
-    var edge: Edge = .horizontal
-    let yMaxValue = Double(boundingBox.max.x)*slope + Double(yIntercept)
-    let xMaxValue = Double(boundingBox.max.y)-yIntercept/slope
-
-    // there is an error introduced by integer to floating point conversions
-    let mathAccuracyError: Double = 3
-    
-    if Double(boundingBox.min.y) - mathAccuracyError <= yMaxValue && yMaxValue <= Double(boundingBox.max.y) + mathAccuracyError {
-        edge = .vertical
-    } else if Double(boundingBox.min.x) - mathAccuracyError <= xMaxValue && xMaxValue <= Double(boundingBox.max.x) + mathAccuracyError {
-        edge = .horizontal
-    } else {
-        // is this really a problem? not sure
-        //Log.v("the line generated from the given slope and line does not intersect the rectangle given")
-    }
-
-    var hypotenuseLength: Double = 0
-    
-    switch edge {
-    case .vertical:
-        let halfWidth = Double(boundingBox.width)/2
-        //Log.v("vertical halfWidth \(halfWidth)")
-        hypotenuseLength = halfWidth / cos((90/180*Double.pi)-theta)
-        
-    case .horizontal:
-        let halfHeight = Double(boundingBox.height)/2
-        //Log.v("horizontal halfHeight \(halfHeight)")
-        hypotenuseLength = halfHeight / cos(theta)
-    }
-    
-    return hypotenuseLength
 }

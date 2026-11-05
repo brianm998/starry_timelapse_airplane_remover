@@ -1,5 +1,7 @@
 package com.star.desktop.ui.dialogs
 
+import com.star.desktop.domain.CleanMethodChoice
+import com.star.desktop.domain.HighLevelClean
 import com.star.desktop.domain.SettingsEdit
 import com.star.proto.CleanMethod
 import com.star.proto.Config
@@ -88,6 +90,17 @@ class SettingsLiveApplyTest {
     @Test fun theBasicChoicesAreSentWhenTheyChange() {
         val sent = proposal(clean = CleanMethod.CLEAN_AUTOMATIC_TRUE)
         assertEquals(CleanMethod.CLEAN_AUTOMATIC_TRUE, sent.cleanMethod)
+    }
+
+    /** A5: choosing a dirty method in the sheet sends the matching proto value, whatever Selective Auto Clean was left at. */
+    @Test fun aDirtyChoiceIsSentAsTheMatchingProtoValue() {
+        for (autoPreserve in listOf(true, false)) {
+            assertEquals(CleanMethod.CLEAN_DIRTY_SKY, proposal(clean = CleanMethodChoice.method(HighLevelClean.DIRTY_SKY, autoPreserve)).cleanMethod)
+            assertEquals(CleanMethod.CLEAN_DIRTY_EARTH, proposal(clean = CleanMethodChoice.method(HighLevelClean.DIRTY_EARTH, autoPreserve)).cleanMethod)
+        }
+        // nothing else changes with it
+        val sent = proposal(clean = CleanMethod.CLEAN_DIRTY_SKY)
+        assertEquals(noEditsProposal(base).toBuilder().setCleanMethod(CleanMethod.CLEAN_DIRTY_SKY).build(), sent)
     }
 
     // ---- P5 and P8: what the sheet looks like, from its source

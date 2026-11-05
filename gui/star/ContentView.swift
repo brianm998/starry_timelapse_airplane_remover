@@ -157,10 +157,6 @@ struct UserPreferencesEditingView: View {
 
     @State private var showProcessingTypeInfo = false
     @State private var showFrameRateInfo = false
-    @State private var showCodecInfo = false
-    @State private var showEncoderInfo = false
-    @State private var showPixelFormatInfo = false
-    @State private var showMuxerInfo = false
     @State private var showHorizonOnMainViewInfo = false
     @State private var showHorizonPainterInstructionsInfo = false
     @State private var showSkipRenderPromptInfo = false

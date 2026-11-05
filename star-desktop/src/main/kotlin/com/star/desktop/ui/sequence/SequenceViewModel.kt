@@ -638,8 +638,7 @@ class SequenceViewModel(
     }
 
     /**
-     * Give the current frame its own neighbour count of [kind], or with a null [count] let the sequence's apply again (macOS
-     * `set(alignedNeighborFrames:forFrame:)`). A new aligned count throws the frame's star alignment away and processes it again, so that
+     * Give the current frame its own neighbour count of [kind], or with a null [count] let the sequence's apply again. A new aligned count throws the frame's star alignment away and processes it again, so that
      * shows the processing screen like any run; a new static count rebuilds the merged horizon if there was one.
      */
     fun setNeighborOverride(kind: com.star.proto.NeighborKind, count: Int?) {

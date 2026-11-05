@@ -264,6 +264,35 @@ async def test_a_red_batch_is_split_until_the_culprit_is_alone_and_the_rest_land
     assert any("CI red" in c for _, c in rig.gh.closed_prs), "each red batch's PR was closed with the reason"
 
 
+async def test_a_red_batchs_split_is_recorded_before_its_tickets_return_to_the_queue(rig: Rig) -> None:
+    for n in (1, 2, 3, 4):
+        ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
+    t = train_of(rig)
+    await t._start([1, 2, 3, 4])  # pyright: ignore[reportPrivateUsage]
+    bid = int(rig.db.active_batch()["id"])  # type: ignore[index]
+    seen: list[str | None] = []
+    real = t._abandon  # pyright: ignore[reportPrivateUsage]
+
+    def watched(b: int, why: str, final: str = "abandoned") -> None:
+        real(b, why, final)
+        seen.append(rig.db.get("train_groups"))  # the moment the tickets are back in the queue and a step() may look at them
+
+    t._abandon = watched  # type: ignore[method-assign]  # pyright: ignore[reportPrivateUsage]
+    await t._on_red(bid, ci_mod.Verdict("fail", "red"))  # pyright: ignore[reportPrivateUsage]
+    assert seen == [json.dumps([[1, 2], [3, 4]])], f"the halves were not recorded yet when the tickets went back: {seen}"
+
+
+async def test_a_split_group_waits_while_its_members_are_still_in_the_batch_in_flight(rig: Rig) -> None:
+    for n in (1, 2):
+        ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
+    t = train_of(rig)
+    await t._start([1, 2])  # pyright: ignore[reportPrivateUsage]
+    assert rig.db.active_batch() is not None
+    rig.db.put("train_groups", json.dumps([[1, 2]]))
+    assert t._pick() == []  # pyright: ignore[reportPrivateUsage]
+    assert json.loads(rig.db.get("train_groups") or "null") == [[1, 2]], "the group is kept, not popped and lost"
+
+
 async def test_a_ticket_cancelled_while_its_batch_is_in_ci_is_left_out_and_the_others_land(rig: Rig) -> None:
     for n in (1, 2, 3):
         ready_ticket(rig, n, f"f{n}.md", f"{n}\n")
@@ -602,6 +631,17 @@ def test_jobs_carry_their_runner_labels() -> None:
                                          {"name": "linux", "status": "queued", "conclusion": None}]})
     assert [j.labels for j in jobs] == [("macos-15",), ()], "labels come from the job JSON, and are empty when it has none"
     assert [j.queued_for_macos for j in jobs] == [True, False]
+
+
+async def test_a_batch_lands_with_an_unscheduled_job_noted(rig: Rig) -> None:
+    ready_ticket(rig, 1, "b1.md", "1\n")
+    rig.gh.ci_hook = lambda _sha: [("pr-gate", "linux", "completed", "success"), ("pr-gate", "macos", "completed", "cancelled")]
+    rig.gh.job_steps["macos"] = []  # no runner ever took it; the run itself is mixed, not cancelled
+    await train_of(rig).run_until_idle()
+    assert rig.state(1) == "landed" and rig.gh.reruns == []
+    assert any("no runner, left to the post-merge watch and the nightly: pr-gate/macos" in pr["body"] for pr in rig.gh.prs.values())
+    events = [e for e in rig.db.events_since() if e["kind"] == "ci-no-runner"]
+    assert [(e["data"]["batch"], e["data"]["job"]) for e in events] == [(1, "macos")]
 
 
 async def test_feature_gates_wait_while_batch_macos_jobs_are_queued(rig: Rig) -> None:

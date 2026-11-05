@@ -1,5 +1,6 @@
 import Foundation
 import StarGherkinKernel
+import AppKit
 import XCTest
 
 /// Runs a generated `Feature` against the real `Star.app` with XCUITest. The step vocabulary is
@@ -82,6 +83,7 @@ final class GuiFeatureRunner {
         .pressKey: { try $0.press($0.args[0]) },
         .idShown: { try $0.expectShown($0.args[0], shown: true) },
         .idNotShown: { try $0.expectShown($0.args[0], shown: false) },
+        .idAbove: { try $0.expectAbove($0.args[0], above: $0.args[1]) },
         .idSelected: { try $0.expectSelected($0.args[0], selected: true) },
         .idNotSelected: { try $0.expectSelected($0.args[0], selected: false) },
         .idOn: { try $0.expectOn($0.args[0], on: true) },
@@ -112,6 +114,7 @@ final class GuiFeatureRunner {
         .idStillSays: { try $0.expectStillSays($0.args[0], text: $0.args[1]) },
         .idStopsSaying: { try $0.expectStopsSaying($0.args[0], text: $0.args[1]) },
         .processedCopy: { try $0.makeProcessedCopy() },
+        .plantRunMarker: { try $0.plantRunMarker() },
         .openProcessed: { try $0.openProcessedCopy() },
         .confirmCloseIfAsked: { try $0.confirmClosingIfAsked() },
         .windowOpen: { try $0.expectWindow($0.args[0], open: true) },
@@ -337,7 +340,7 @@ final class GuiFeatureRunner {
         let home = scratch.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         app.launchEnvironment["HOME"] = home.path
-        if savesScreenshots { try keepGPUMergeOff() }
+        if savesScreenshots || feature?.id == "uiRestartNow" { try keepGPUMergeOff() }
         // Ignore the windows the last run of the app left open (macOS restores them): a feature starts from the app as it opens, not from where an earlier one quit.
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"] + arguments
         // The parity gallery's window is 1400 by 1100 points, as the desktop client's test window is: XCUITest cannot size a window, so the app does (`ViewModel.uiTestWindowSize`).
@@ -375,10 +378,18 @@ final class GuiFeatureRunner {
     /// come up over the loading view) is not one to click, and a click on one that has gone fails the whole test.
     private enum Click { case plain, command, right }
 
+    /// What a failed wait for a click target prints before the tree: whether the element is there, how big it is on screen, whether it can be
+    /// hit and what display it is on. (A group that was 0.9 x 0.3 pt was there for the whole wait and never hittable; the tree alone did not say.)
+    private func whyNotClickable(_ e: XCUIElement, _ identifier: String) -> String {
+        let window = app.windows.firstMatch
+        let scale = NSScreen.main.map { "\($0.backingScaleFactor)" } ?? "unknown"
+        return "\n\(identifier): exists \(e.exists), hittable \(e.isHittable), frame \(e.frame), window \(window.exists ? "\(window.frame)" : "none"), backingScaleFactor \(scale), screen \(NSScreen.main?.frame ?? .zero)\n\(app.debugDescription)"
+    }
+
     private func clickId(_ identifier: String, how: Click = .plain) throws {
         let e = element(identifier)
         var scroller = Scroller()
-        try waitFor("\(identifier) to be clickable", timeout: 60, detail: { "\n\(self.app.debugDescription)" }) {
+        try waitFor("\(identifier) to be clickable", timeout: 60, detail: { self.whyNotClickable(e, identifier) }) {
             if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller) }
             return e.exists && e.isHittable
         }
@@ -442,7 +453,9 @@ final class GuiFeatureRunner {
     /// the fold of a panel in a small window; each step takes the app seconds to settle, so it is not taken in small ones.
     private func scroll(towards element: XCUIElement, _ identifier: String, _ scroller: inout Scroller) {
         let holder = app.scrollViews.containing(NSPredicate(format: "identifier == %@", identifier)).firstMatch
-        guard holder.exists else { return }
+        // a scroll view with no hit point yet (the screen is still settling after a screenshot or a click) makes XCTest fail the whole test
+        // ("Unable to find hit point for ScrollView"); skip this step and let the caller's wait try again
+        guard holder.exists, holder.isHittable else { return }
         let gap = element.frame.midY - holder.frame.midY
         if let last = scroller.lastGap, abs(gap) >= abs(last) { scroller.direction = -scroller.direction }
         scroller.lastGap = gap
@@ -460,6 +473,14 @@ final class GuiFeatureRunner {
                 throw RunnerError("\(identifier) is still shown\n\(app.debugDescription)")
             }
         }
+    }
+
+    /// The element is higher on the screen than [other]: its top edge is above the other's (screen coordinates, y grows down), for the order of a list.
+    private func expectAbove(_ identifier: String, above other: String) throws {
+        try expectShown(identifier, shown: true)
+        try expectShown(other, shown: true)
+        let a = element(identifier), b = element(other)
+        try waitFor("\(identifier) above \(other)", timeout: 20, detail: { "(tops \(a.frame.minY) and \(b.frame.minY))" }) { a.frame.minY < b.frame.minY }
     }
 
     private func expectSelected(_ identifier: String, selected: Bool) throws {
@@ -603,6 +624,22 @@ final class GuiFeatureRunner {
         processedConfig = target.appendingPathComponent("input/star_temp_\(source.lastPathComponent)/config.json")
     }
 
+    /// A run marker for the processed copy, as a run that was killed leaves one: a pid no process has and a heartbeat long past, so the app's
+    /// next start finds it abandoned, reports it, and offers Restart Now (its config.json exists). It goes in the directory `launch` hands the
+    /// app as STAR_RUN_MARKER_DIR, which is under `scratch`: `run()` removes that whatever the result, and the app clears the marker at startup.
+    private func plantRunMarker() throws {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        let markers = scratch.appendingPathComponent("run-markers")
+        try FileManager.default.createDirectory(at: markers, withIntermediateDirectories: true)
+        let marker: [String: Any] = [
+            "formatVersion": 1, "id": "star-999999-uiRestartNow", "client": "Star", "starVersion": "1.0.0", "pid": 999999,
+            "startedAt": "2026-10-13T10:00:00Z", "heartbeatAt": "2026-10-13T10:05:00Z", "hostPhysicalMemoryBytes": 17_179_869_184,
+            "sequenceName": config.deletingLastPathComponent().lastPathComponent, "sequencePath": config.deletingLastPathComponent().path,
+            "resumeConfigPath": config.path, "frameCount": 10, "framesCompleted": 4, "peakFootprintBytes": 0,
+        ]
+        try JSONSerialization.data(withJSONObject: marker).write(to: markers.appendingPathComponent("star-999999-uiRestartNow.json"))
+    }
+
     /// Opens the processed copy as Load Config does, with the views a test finds one outlier group by labelled.
     private func openProcessedCopy() throws {
         guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
@@ -707,12 +744,26 @@ final class GuiFeatureRunner {
     static let galleryWindowSize = "1400x1100"
 
     /// `<dir>/<client>/<name>.png`, where dir is `STAR_GALLERY_DIR` (`TEST_RUNNER_STAR_GALLERY_DIR` under xcodebuild; the desktop's runner reads the
-    /// same), else `<repo>/.test-data/gallery/latest`.
-    private func galleryFile(_ name: String) -> URL {
-        let dir: URL
-        if let d = ProcessInfo.processInfo.environment["STAR_GALLERY_DIR"], !d.isEmpty { dir = URL(fileURLWithPath: d) }
-        else { dir = Self.repoRoot.appendingPathComponent(".test-data/gallery/latest") }
-        return dir.appendingPathComponent(Self.client).appendingPathComponent("\(name).png")
+    /// same), else `<repo>/.test-data/gallery/latest`. The runner is sandboxed and on CI cannot write into the workspace (Code=513), so when that
+    /// directory cannot be made the gallery goes to the runner container's tmp (`NSTemporaryDirectory()/gallery/latest`, as `saveArtifacts` does).
+    /// Returns the file, with its directory made.
+    private func galleryFile(_ name: String) throws -> URL {
+        let wanted: URL
+        if let d = ProcessInfo.processInfo.environment["STAR_GALLERY_DIR"], !d.isEmpty { wanted = URL(fileURLWithPath: d) }
+        else { wanted = Self.repoRoot.appendingPathComponent(".test-data/gallery/latest") }
+        let fallback = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("gallery/latest")
+        var firstError: Error?
+        for dir in [wanted, fallback] {
+            let folder = dir.appendingPathComponent(Self.client)
+            do {
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                return folder.appendingPathComponent("\(name).png")
+            } catch {
+                firstError = firstError ?? error
+                print("GALLERY cannot use \(folder.path): \(error)")
+            }
+        }
+        throw firstError!
     }
 
     /// The window to photograph: the secondary window of that name, or the main window, which is the one that is none of the secondary ones.
@@ -749,8 +800,7 @@ final class GuiFeatureRunner {
             last = shot
             _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 0.4)
         }
-        let file = galleryFile(name)
-        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let file = try galleryFile(name)
         try shot.write(to: file)
         print("SCREENSHOT \(name) -> \(file.path) (window \(window.frame.size), \(shot.count) bytes)")
         guard shot.count > 1000 else { throw RunnerError("the screenshot \"\(name)\" is empty (\(shot.count) bytes)") }

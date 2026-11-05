@@ -30,6 +30,7 @@ import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.star.desktop.gherkin.generated.StepAction
@@ -128,6 +129,7 @@ class DesktopFeatureRunner {
         StepAction.ID_STOPS_SAYING to { t -> expectStopsSaying(t, args[0], args[1]) },
         StepAction.ID_SHOWN to { t -> expectShown(t, args[0], shown = true) },
         StepAction.ID_NOT_SHOWN to { t -> expectShown(t, args[0], shown = false) },
+        StepAction.ID_ABOVE to { t -> expectAbove(t, args[0], args[1]) },
         StepAction.ID_SELECTED to { t -> expectSelected(t, args[0], selected = true) },
         StepAction.ID_NOT_SELECTED to { t -> expectSelected(t, args[0], selected = false) },
         StepAction.ID_ON to { t -> expectOn(t, args[0], on = true) },
@@ -155,6 +157,7 @@ class DesktopFeatureRunner {
         StepAction.MENU_THERE to { t -> expectMenu(t, args[0], there = true) },
         StepAction.MENU_NOT_THERE to { t -> expectMenu(t, args[0], there = false) },
         StepAction.PROCESSED_COPY to { processedCopyStep() },
+        StepAction.PLANT_RUN_MARKER to { plantRunMarker() },
         StepAction.OPEN_PROCESSED to { t -> openProcessedCopy(t) },
         StepAction.CONFIRM_CLOSE_IF_ASKED to { t -> confirmClosingIfAsked(t) },
         StepAction.WINDOW_OPEN to { t -> expectWindow(t, args[0], open = true) },
@@ -215,6 +218,8 @@ class DesktopFeatureRunner {
             if (gap != null) throw RunnerError("${feature.id} passes on $CLIENT, and gherkin/ui/known-gaps.json still lists it as a gap ($gap): remove the entry")
         } finally {
             saveArtifacts(feature)
+            plantedMarker?.let { runCatching { it.delete() } }
+            plantedMarker = null
             // A @ui feature often stops with a run going: the engine is asked to stop, so the next feature does not share it with the run.
             if ("@ui" in feature.tags) vm?.let { m -> runCatching { kotlinx.coroutines.runBlocking { kotlinx.coroutines.withTimeoutOrNull(10_000) { m.shutdown() } } } }
             scope?.cancel()
@@ -294,7 +299,7 @@ class DesktopFeatureRunner {
         }
         // A gallery feature can start a run (the processing modal), and this Mac must never run the GPU merge (CLAUDE.md): the scratch preferences say so,
         // whatever else they hold.
-        if (feature.steps.any { it.action == StepAction.SAVE_SCREENSHOT || it.action == StepAction.SAVE_WINDOW_SCREENSHOT }) {
+        if (feature.id == "uiRestartNow" || feature.steps.any { it.action == StepAction.SAVE_SCREENSHOT || it.action == StepAction.SAVE_WINDOW_SCREENSHOT }) {
             val file = preferencesFile()
             val preferences = runCatching { JsonParser.parseString(file.readText()).asJsonObject }.getOrElse { JsonObject() }
             preferences.addProperty("useGPUForMerge", false)
@@ -492,11 +497,27 @@ class DesktopFeatureRunner {
     }
 
     private fun expectShown(t: ComposeUiTest, id: String, shown: Boolean) {
-        waitFor(t, "\"$id\" ${if (shown) "shown" else "not shown"}", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) == shown }
+        // The unmerged tree: a control inside a merging parent (the badge on a grid cell, whose text the cell's own node takes in) is drawn, and so
+        // shown, though only the unmerged tree has it under its own tag; "is not shown" of it would otherwise pass whether it was drawn or not.
+        waitFor(t, "\"$id\" ${if (shown) "shown" else "not shown"}", UI_TIMEOUT_MS) {
+            t.onAllNodes(hasTestTag(id), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() == shown
+        }
     }
 
     private fun semanticsOf(t: ComposeUiTest, id: String) =
         t.onAllNodes(hasTestTag(id)).fetchSemanticsNodes().firstOrNull()?.config
+
+    /** The element is higher in the window than [other]: its top edge is above the other's (y grows down), for the order of a list. */
+    private fun expectAbove(t: ComposeUiTest, id: String, other: String) {
+        expectShown(t, id, shown = true)
+        expectShown(t, other, shown = true)
+        fun top(tag: String) = t.onAllNodes(hasTestTag(tag)).fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.top
+        waitFor(t, "\"$id\" above \"$other\"", 20_000, { "(tops ${top(id)} and ${top(other)})" }) {
+            val a = top(id)
+            val b = top(other)
+            a != null && b != null && a < b
+        }
+    }
 
     private fun expectSelected(t: ComposeUiTest, id: String, selected: Boolean) {
         expectShown(t, id, shown = true)
@@ -1040,18 +1061,54 @@ class DesktopFeatureRunner {
         val source = resolveSequence(param("sequence"))
         val script = File(repoRoot(), "gherkin/ui/make-processed-fixture.sh")
         // A machine without a built cli builds it (the script's STAR_CLI_BUILD): the first feature of a run that needs the processed sequence waits for that.
-        val builder = ProcessBuilder("bash", script.path, source.path).redirectError(ProcessBuilder.Redirect.INHERIT)
+        val isWindows = System.getProperty("os.name").startsWith("Windows")
+        val builder = ProcessBuilder(bashExecutable(isWindows), script.path, source.path)
         builder.environment().putIfAbsent("STAR_CLI_BUILD", "1")
         val process = builder.start()
+        // The script's stderr (its own messages, the cli build) is read as it comes, passed on to the log, and its tail goes into the error: an inherited
+        // stderr never reached the CI log of the Gradle test worker, which left a script that exited at once with nothing to say why.
+        val errTail = ArrayDeque<String>()
+        val errReader = Thread {
+            process.errorStream.bufferedReader().forEachLine { line ->
+                System.out.println("processed fixture: $line")
+                synchronized(errTail) { errTail.addLast(line); if (errTail.size > 40) errTail.removeFirst() }
+            }
+        }.apply { isDaemon = true; start() }
         val printed = process.inputStream.bufferedReader().readText().lines().lastOrNull { it.isNotBlank() }?.trim()
-        if (process.waitFor() != 0 || printed == null) throw RunnerError("could not make the processed sequence (the script's own message is above)")
-        val target = File(scratch, "processed")
-        File(printed).copyRecursively(target)
-        target.walkTopDown().filter { it.isFile && it.extension == "json" && it.length() < 8_000_000 }.forEach { f ->
-            val text = f.readText()
-            if (printed in text) f.writeText(text.replace(printed, target.path))
+        val exit = process.waitFor()
+        errReader.join(5_000)
+        if (exit != 0 || printed == null) {
+            val said = synchronized(errTail) { errTail.joinToString("\n") }
+            throw RunnerError("could not make the processed sequence (the script exited $exit, printed ${printed ?: "nothing"}); its stderr:\n$said")
         }
+        val target = File(scratch, "processed")
+        val fixture = nativeFixturePath(printed, isWindows)
+        File(fixture).copyRecursively(target)
+        relocateJsonFiles(target, fixture, target.path)
         processedConfig = File(target, "input/star_temp_${source.name}/config.json")
+    }
+
+    /** The run marker `plantRunMarker` wrote, which `run()` deletes at the end whatever the result (stard may already have consumed it). */
+    private var plantedMarker: File? = null
+
+    /**
+     * A run marker for the processed copy, as a run that was killed leaves one: a pid no process has and a heartbeat long past, so stard finds it
+     * abandoned when it starts, and tells the app after Hello, with Restart Now (the config.json exists). It goes in STAR_RUN_MARKER_DIR, which the
+     * Gradle test task sets and the daemon (a child of this JVM) inherits, so it must be written before the view model starts the engine.
+     */
+    private fun plantRunMarker() {
+        val config = processedConfig ?: throw RunnerError("\"a processed copy of the sequence\" has not run")
+        val dir = System.getenv("STAR_RUN_MARKER_DIR")?.takeIf { it.isNotBlank() }
+            ?: throw RunnerError("STAR_RUN_MARKER_DIR is not set: the Gradle gherkinTest task sets it, and stard reads its run markers from there")
+        val marker = File(dir, "stard-999999-uiRestartNow.json")
+        marker.parentFile.mkdirs()
+        marker.writeText(
+            """{"formatVersion":1,"id":"stard-999999-uiRestartNow","client":"stard","starVersion":"1.0.0","pid":999999,
+               |"startedAt":"2026-10-13T10:00:00Z","heartbeatAt":"2026-10-13T10:05:00Z","hostPhysicalMemoryBytes":17179869184,
+               |"sequenceName":"${config.parentFile.name}","sequencePath":${Gson().toJson(config.parentFile.path)},
+               |"resumeConfigPath":${Gson().toJson(config.path)},"frameCount":10,"framesCompleted":4,"peakFootprintBytes":0}""".trimMargin(),
+        )
+        plantedMarker = marker
     }
 
     /** Opens the processed copy as Load Config does; the reopened sequence says where it left off, which the feature closes. */

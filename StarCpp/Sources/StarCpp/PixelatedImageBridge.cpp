@@ -611,41 +611,6 @@ MatWrapperRef pib_darken_darks(MatWrapperRef image, MatWrapperRef mask, double a
     return nullptr;
 }
 
-MatWrapperRef pib_mask_raised_by(MatWrapperRef image, MatWrapperRef mask, int borderAmount) {
-    if (!image || !mask) return nullptr;
-    try {
-        cv::Mat owned = image->mat;
-        cv::Mat ownedMask = mask->mat;
-
-        const int h = owned.rows;
-        cv::Mat keepMask = (ownedMask == 0);
-        cv::Mat dilatedMask = cv::Mat::zeros(keepMask.size(), keepMask.type());
-        int shift = std::min(borderAmount, keepMask.rows);
-        keepMask.rowRange(shift, keepMask.rows).copyTo(dilatedMask.rowRange(0, keepMask.rows - shift));
-        keepMask.rowRange(keepMask.rows - shift, keepMask.rows).copyTo(dilatedMask.rowRange(keepMask.rows - shift, keepMask.rows));
-
-        cv::Mat masked = owned.clone();
-        cv::Scalar whiteScalar;
-        switch (owned.depth()) {
-            case CV_8U:  whiteScalar = cv::Scalar(255); break;
-            case CV_16U: whiteScalar = cv::Scalar(65535); break;
-            case CV_32S: whiteScalar = cv::Scalar(std::numeric_limits<int>::max()); break;
-            default: return nullptr;
-        }
-        if (owned.channels() > 1) whiteScalar = cv::Scalar::all(whiteScalar[0]);
-        masked.setTo(whiteScalar, dilatedMask == 0);
-
-        if (borderAmount > 0) {
-            int bottomRows = std::min(borderAmount, h);
-            owned.rowRange(h - bottomRows, h).copyTo(masked.rowRange(h - bottomRows, h));
-        }
-        return wrap(masked);
-    } catch (const cv::Exception &e) {
-        Log_e("OpenCV Exception: %s", e.what());
-    }
-    return nullptr;
-}
-
 MatWrapperRef pib_warp_image(MatWrapperRef image, MatWrapperRef homography) {
     if (!image || !homography) return nullptr;
     try {
