@@ -12,10 +12,6 @@ public final class OCVFeatureSet: @unchecked Sendable {
         ocv_feature_set_release(ref)
     }
 
-    public static func createEmpty() -> OCVFeatureSet {
-        OCVFeatureSet(ref: ocv_feature_set_create_empty())
-    }
-
     public static func load(fromFilename filename: String) -> OCVFeatureSet? {
         var errMsg: UnsafePointer<CChar>?
         guard let r = ocv_feature_set_load(filename, &errMsg) else { return nil }

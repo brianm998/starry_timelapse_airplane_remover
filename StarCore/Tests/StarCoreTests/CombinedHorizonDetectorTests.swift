@@ -800,51 +800,18 @@ final class CombinedHorizonDetectorTests: XCTestCase {
         XCTAssertNotEqual(smallScore, largeScore, accuracy: 0.02)
     }
 
-    // MARK: - isPlausibleHorizon
+    // MARK: - horizonConfidence coverage
 
-    /// A centred, well-covered, reasonably steady horizon is plausible.
-    func testAGoodHorizonIsPlausible() {
-        XCTAssertTrue(CombinedHorizonDetector.isPlausibleHorizon(natural(around: 50),
-                                                                imageHeight: 100))
-    }
-
-    /// The three ways to fail: too little coverage, too near an edge, too noisy.
-    func testTheThreeWaysToBeImplausible() {
-        var sparse = [Int?](repeating: nil, count: 100)
-        for x in 0..<5 { sparse[x] = 50 }
-        XCTAssertFalse(CombinedHorizonDetector.isPlausibleHorizon(sparse, imageHeight: 100),
-                       "5% coverage is not enough")
-
-        XCTAssertFalse(CombinedHorizonDetector.isPlausibleHorizon(flat(5), imageHeight: 100),
-                       "5% down the frame is outside the 10-90% band")
-        XCTAssertFalse(CombinedHorizonDetector.isPlausibleHorizon(flat(95), imageHeight: 100))
-
-        let noisy: [Int?] = (0..<100).map { x in x % 2 == 0 ? 10 : 90 }
-        XCTAssertFalse(CombinedHorizonDetector.isPlausibleHorizon(noisy, imageHeight: 100),
-                       "a stddev of 40% of height is too noisy")
-    }
-
-    func testAnEmptyHorizonIsNotPlausible() {
-        XCTAssertFalse(CombinedHorizonDetector.isPlausibleHorizon([], imageHeight: 100))
-        XCTAssertFalse(CombinedHorizonDetector.isPlausibleHorizon(
-                         [Int?](repeating: nil, count: 100), imageHeight: 100))
-    }
-
-    /// **`isPlausibleHorizon` has no callers.**  Pinned rather than deleted so the intended gate is
-    /// still described somewhere — the pipeline currently relies on `horizonConfidence`'s inclusion
-    /// threshold instead, which has a different coverage floor (5% versus this one's 10%) and no
-    /// stddev check at all.
-    func testTheCoverageFloorsOfTheTwoGatesDiffer() {
+    /// `horizonConfidence`'s inclusion threshold accepts a horizon with only 8% coverage.
+    func testHorizonConfidenceAcceptsEightPercentCoverage() {
         var justOverFivePercent = [Int?](repeating: nil, count: 100)
         for x in 0..<8 { justOverFivePercent[x] = 50 }
 
         XCTAssertGreaterThan(CombinedHorizonDetector.horizonConfidence(justOverFivePercent,
                                                                       imageHeight: 100), 0,
                              "the live gate accepts 8% coverage")
-        XCTAssertFalse(CombinedHorizonDetector.isPlausibleHorizon(justOverFivePercent,
-                                                                 imageHeight: 100),
-                       "the unused gate would have rejected it")
     }
+
 
     // MARK: - scaleForProcessing
 

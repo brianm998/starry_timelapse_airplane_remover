@@ -48,9 +48,8 @@ public struct BlobBinaryLoader {
     private func loadMap(from filename: String,
                          with frameIndex: Int) async throws -> [Int32: Blob]
     {
-        let imageURL = NSURL(fileURLWithPath: filename, isDirectory: false)
-        let request = URLRequest(url: imageURL as URL)
-        let (data, _) = try await URLSession.shared.data(for: request)
+        // a local file: read it directly. URLSession fails these loads with NSURLErrorUnsupportedURL (-1002) on Linux.
+        let data = try Data(contentsOf: URL(fileURLWithPath: filename, isDirectory: false))
         let blobDataArray = data.uInt16Array
         var index = 0
         guard !blobDataArray.isEmpty else { return [:] }

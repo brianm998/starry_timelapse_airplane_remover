@@ -164,6 +164,16 @@ class Database:
         cols = ", ".join(f"{k}=?" for k in fields)
         self._exec(f"UPDATE tickets SET {cols}, updated_at=? WHERE number=?", (*fields.values(), self.clock(), number))
 
+    def set_blocked_by(self, number: int, blocked_by: list[int]) -> None:
+        t = self.ticket(number)
+        if t is not None and t.blocked_by != blocked_by:
+            self._exec("UPDATE tickets SET blocked_by=? WHERE number=?", (json.dumps(blocked_by), number))
+
+    def held_retries(self) -> list[tuple[int, str]]:
+        """(ticket, stage) for every `retry --when-unblocked` still waiting."""
+        return [(int(r["key"].split(":", 1)[1]), r["value"])
+                for r in self._all("SELECT key, value FROM kv WHERE key LIKE 'held_retry:%' ORDER BY key")]
+
     def open_blockers(self, number: int) -> list[int]:
         """Blockers that have not landed or closed yet."""
         t = self.ticket(number)
@@ -229,6 +239,10 @@ class Database:
         rows = self._all("SELECT conclusion FROM develop_baseline WHERE workflow=? AND job=?", (workflow, job))
         return rows[0]["conclusion"] if rows else None
 
+    def baseline_sha(self, workflow: str, job: str) -> str | None:
+        rows = self._all("SELECT sha FROM develop_baseline WHERE workflow=? AND job=?", (workflow, job))
+        return rows[0]["sha"] if rows else None
+
     def set_baseline(self, workflow: str, job: str, sha: str, conclusion: str) -> None:
         self._exec("INSERT INTO develop_baseline(workflow,job,sha,conclusion,at) VALUES (?,?,?,?,?) "
                    "ON CONFLICT(workflow,job) DO UPDATE SET sha=excluded.sha, conclusion=excluded.conclusion, at=excluded.at",
@@ -241,6 +255,20 @@ class Database:
         self._exec("INSERT INTO ci_runs(ticket,sha,verdict,detail,at) VALUES (?,?,?,?,?)",
                    (ticket, sha, verdict, json.dumps(detail), self.clock()))
 
+    def latest_ci_verdict(self, ticket: int, sha: str) -> str | None:
+        """The verdict of the newest `ci_runs` row for this ticket (0 is a batch) and sha, or None before the first one."""
+        rows = self._all("SELECT verdict FROM ci_runs WHERE ticket=? AND sha=? ORDER BY id DESC LIMIT 1", (ticket, sha))
+        return str(rows[0]["verdict"]) if rows else None
+
+    # gherkin flakes -------------------------------------------------------------------------------------------------
+    def add_flake(self, feature: str, leg: str, run_id: int | str, day: str) -> None:
+        """A job that failed and then passed on the rerun (once per feature, leg and run)."""
+        self._exec("INSERT OR IGNORE INTO gherkin_flakes(feature,leg,run_id,day,at) VALUES (?,?,?,?,?)",
+                   (feature, leg, str(run_id), day, self.clock()))
+
+    def flake_history(self, feature: str) -> list[dict[str, Any]]:
+        return [dict(r) for r in self._all("SELECT feature, leg, run_id, day FROM gherkin_flakes WHERE feature=? ORDER BY id", (feature,))]
+
     # the landing train ----------------------------------------------------------------------------------------------
     def batch_create(self, base_sha: str) -> int:
         cur = self._exec("INSERT INTO batches(state,base_sha,created) VALUES ('building',?,?)", (base_sha, self.clock()))
@@ -248,7 +276,7 @@ class Database:
         return cur.lastrowid
 
     def batch_update(self, batch: int, **fields: Any) -> None:
-        allowed = {"state", "branch", "pr_number", "head_sha", "ci_started", "ended", "note"}
+        allowed = {"state", "branch", "pr_number", "head_sha", "ci_started", "ended", "note", "question"}
         assert set(fields) <= allowed, fields
         cols = ", ".join(f"{k}=?" for k in fields)
         self._exec(f"UPDATE batches SET {cols} WHERE id=?", (*fields.values(), batch))
@@ -259,20 +287,62 @@ class Database:
         rows = self._all("SELECT * FROM batches WHERE id=?", (batch,))
         return dict(rows[0]) if rows else None
 
-    def active_batch(self) -> dict[str, Any] | None:
-        rows = self._all("SELECT * FROM batches WHERE state IN ('building','ci','landing') ORDER BY id DESC LIMIT 1")
+    def active_batches(self) -> list[dict[str, Any]]:
+        """Every batch still building, in CI, landing, or held for the owner's answer (`asking`), oldest first."""
+        return [dict(r) for r in self._all("SELECT * FROM batches WHERE state IN ('building','ci','landing','asking') ORDER BY id")]
+
+    def running_batches(self) -> list[dict[str, Any]]:
+        """The active batches that are being driven: an `asking` batch waits for the owner and takes no slot."""
+        return [b for b in self.active_batches() if b["state"] != "asking"]
+
+    def batch_question(self, batch: int) -> dict[str, Any] | None:
+        """The question the batch's `question` column points at (the questions table is per ticket, so the batch names its row)."""
+        row = self.batch(batch)
+        if row is None or row["question"] is None:
+            return None
+        rows = self._all("SELECT * FROM questions WHERE id=?", (row["question"],))
         return dict(rows[0]) if rows else None
+
+    def asking_batch_of(self, ticket: int) -> int | None:
+        """The batch this ticket is in while that batch waits for the owner's answer, if any."""
+        batch = self.batch_of(ticket)
+        row = self.batch(batch) if batch is not None else None
+        return batch if row is not None and row["state"] == "asking" else None
+
+    def question_for(self, ticket: int) -> dict[str, Any] | None:
+        """The ticket's own open question, else the unanswered question of the asking batch it is a member of."""
+        own = self.open_question(ticket)
+        if own is not None:
+            return own
+        batch = self.asking_batch_of(ticket)
+        q = self.batch_question(batch) if batch is not None else None
+        return q if q is not None and q["answer"] is None else None
+
+    def active_batch(self) -> dict[str, Any] | None:
+        """The oldest active batch (the only one when `batch_parallel` is 1)."""
+        rows = self.active_batches()
+        return rows[0] if rows else None
 
     def batch_add(self, batch: int, ticket: int, position: int) -> None:
         self._exec("INSERT OR REPLACE INTO batch_members(batch,ticket,position) VALUES (?,?,?)", (batch, ticket, position))
+
+    def batch_remove(self, batch: int, tickets: list[int]) -> None:
+        for n in tickets:
+            self._exec("DELETE FROM batch_members WHERE batch=? AND ticket=?", (batch, n))
+
+    def last_abandoned_batch(self, since: float) -> dict[str, Any] | None:
+        """The most recent batch that was given up (abandoned or red) at or after `since`; its `note` is the reason."""
+        rows = self._all("SELECT * FROM batches WHERE state IN ('abandoned','failed') AND ended >= ? ORDER BY ended DESC, id DESC LIMIT 1",
+                         (since,))
+        return dict(rows[0]) if rows else None
 
     def batch_members(self, batch: int) -> list[int]:
         return [r["ticket"] for r in self._all("SELECT ticket FROM batch_members WHERE batch=? ORDER BY position", (batch,))]
 
     def batch_of(self, ticket: int) -> int | None:
-        """The active batch (still building, in CI or landing) this ticket is in, if any."""
+        """The active batch (still building, in CI, landing or asking the owner) this ticket is in, if any."""
         rows = self._all("SELECT b.id FROM batches b JOIN batch_members m ON m.batch=b.id "
-                         "WHERE m.ticket=? AND b.state IN ('building','ci','landing') ORDER BY b.id DESC LIMIT 1", (ticket,))
+                         "WHERE m.ticket=? AND b.state IN ('building','ci','landing','asking') ORDER BY b.id DESC LIMIT 1", (ticket,))
         return int(rows[0]["id"]) if rows else None
 
     # nightly --------------------------------------------------------------------------------------------------------
@@ -337,6 +407,9 @@ class Database:
                    (key, text, self.clock()))
         self.event("alert", None, key=key, text=text)
         return True
+
+    def open_alerts(self) -> list[dict[str, Any]]:
+        return [dict(r) for r in self._all("SELECT key,text,opened FROM alerts WHERE closed IS NULL ORDER BY opened")]
 
     def close_alert(self, key: str) -> None:
         self._exec("UPDATE alerts SET closed=? WHERE key=? AND closed IS NULL", (self.clock(), key))

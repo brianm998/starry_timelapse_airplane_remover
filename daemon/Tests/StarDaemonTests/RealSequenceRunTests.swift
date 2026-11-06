@@ -69,7 +69,7 @@ final class RealSequenceRunTests: XCTestCase {
         await ProcessingHandlers.begin(session, startIndex: 0, endIndex: nil, force: false)
         var ended: String?
         let deadline = Date().addingTimeInterval(25 * 60)
-        loop: for await event in stream {
+        loop: for await event in boundedStream(stream, seconds: 26 * 60, what: "the run to end (done, error or cancelled)") {
             if case .sequenceState(let s) = event.kind, ["done", "error", "cancelled"].contains(s.state) {
                 ended = s.state
                 break loop

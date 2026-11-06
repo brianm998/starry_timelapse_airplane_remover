@@ -40,6 +40,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.HorizonBandMethod
@@ -326,6 +330,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     Column(modifier.fillMaxSize().background(StarColors.appBackground).focusRequester(keyFocus).focusable().then(keyHandler)) {
         Box(
             Modifier.weight(1f).fillMaxSize()
+                .testTag("painter.canvas")
                 .clipToBounds()
                 .onSizeChanged { canvasSize = it.toSize(); transform.canvasChanged(canvasSize) }
                 // Scroll pans, Ctrl/Cmd-scroll zooms, middle- or Alt-drag pans (as in the edit view): the horizon can be
@@ -648,7 +653,7 @@ private fun HorizonControlBar(
 
         if (phase == HorizonPhase.COMPUTING) {
             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = StarColors.accent)
-            Text(localized("ui.computing_horizon"), color = StarColors.textSecondary, fontSize = 12.sp)
+            Text(localized("ui.computing_horizon"), color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.testTag("painter.computing"))
             Spacer(Modifier.weight(1f))
             OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
             return@Row
@@ -661,7 +666,7 @@ private fun HorizonControlBar(
             SkyGroundToggle(state)
         } else {
             DividerDot()
-            Text(localized("ui.paint_across_horizon", coverage), color = StarColors.yellow, fontSize = 12.sp)
+            Text(localized("ui.paint_across_horizon", coverage), color = StarColors.yellow, fontSize = 12.sp, modifier = Modifier.testTag("painter.band"))
         }
 
         if (phase == HorizonPhase.REFINEMENT) {
@@ -671,15 +676,19 @@ private fun HorizonControlBar(
 
         if (!startup && phase == HorizonPhase.REFINEMENT) {
             DividerDot()
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.material3.Switch(checked = applyToNearby, onCheckedChange = onApplyToNearbyChange)
-                Spacer(Modifier.size(6.dp))
-                Text(localized("ui.apply_to_nearby_frames"), color = StarColors.textSecondary, fontSize = 11.sp)
+            HoverTip(localized("ui.when_on_saving_this_reference_will_trigger")) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.compose.material3.Switch(checked = applyToNearby, onCheckedChange = onApplyToNearbyChange)
+                    Spacer(Modifier.size(6.dp))
+                    Text(localized("ui.apply_to_nearby_frames"), color = StarColors.textSecondary, fontSize = 11.sp)
+                }
             }
         }
 
         // Nothing to start over from until something is painted (macOS disables Reset in band selection until then).
-        OutlinedButton(onClick = onReset, enabled = phase == HorizonPhase.REFINEMENT || v.let { state.hasBand() }) { Text(localized("ui.reset")) }
+        HoverTip(localized(if (phase == HorizonPhase.REFINEMENT) "ui.reset_and_start_over_r" else "ui.reset_and_start_over_from_band_selection_r")) {
+            OutlinedButton(onClick = onReset, modifier = Modifier.testTag("painter.reset"), enabled = phase == HorizonPhase.REFINEMENT || v.let { state.hasBand() }) { Text(localized("ui.reset")) }
+        }
 
         Spacer(Modifier.weight(1f))
 
@@ -690,39 +699,49 @@ private fun HorizonControlBar(
         errorText?.let { Text(it, color = StarColors.red, fontSize = 11.sp) }
 
         if (phase == HorizonPhase.REFINEMENT) {
-            if (startup) {
+            HoverTip(localized(if (startup) "ui.save_horizon_continue" else "ui.save_horizon_reference")) {
                 Button(
+                    modifier = Modifier.testTag("painter.save"),
                     enabled = canSave,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                    onClick = onContinue,
-                ) { Text(localized(if (hasMore) "ui.next" else "ui.continue")) }
-            } else {
-                Button(
-                    enabled = canSave,
-                    colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                    onClick = onSave,
-                ) { Text(localized("ui.save")) }
+                    onClick = if (startup) onContinue else onSave,
+                ) {
+                    // the gui's order: saving first, then the startup Next/Continue, else the save label; the last two lead with a checkmark
+                    if (saving) {
+                        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = Color.White)
+                        Spacer(Modifier.size(6.dp))
+                        Text(localized("ui.saving"))
+                    } else {
+                        Text("\u2713 " + localized(if (!startup) "ui.save_reference_horizon" else if (hasMore) "ui.next" else "ui.continue"))
+                    }
+                }
             }
         }
 
-        OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
+        HoverTip(localized("ui.discard_and_close_esc")) {
+            OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
+        }
     }
 }
 
 @Composable
 private fun BrushSizeControl(state: HorizonPaintState) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        OutlinedButton(
-            onClick = { state.shrinkBrush() },
-            enabled = state.brushRadius > state.minBrush,
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        ) { Text("−") }
+        HoverTip(localized("ui.shrink_brush")) {
+            OutlinedButton(
+                onClick = { state.shrinkBrush() },
+                enabled = state.brushRadius > state.minBrush,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            ) { Text("−") }
+        }
         Text("${state.brushRadius}px", color = StarColors.textSecondary, fontSize = 11.sp)
-        OutlinedButton(
-            onClick = { state.growBrush() },
-            enabled = state.brushRadius < state.maxBrush,
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        ) { Text("+") }
+        HoverTip(localized("ui.grow_brush")) {
+            OutlinedButton(
+                onClick = { state.growBrush() },
+                enabled = state.brushRadius < state.maxBrush,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            ) { Text("+") }
+        }
     }
 }
 
@@ -742,20 +761,26 @@ internal fun nextMaxDownwardExtension(current: MaxDownward, delta: Int): Int {
 @Composable
 private fun MaxDownwardExtensionControl(value: MaxDownward, onStep: (Int) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        OutlinedButton(
-            onClick = { onStep(-MAX_DOWNWARD_STEP) },
-            enabled = value.configured > 0,
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        ) { Text("−") }
-        Text(
-            "↓${value.effective}px",
-            color = if (value.configured > 0) StarColors.textSecondary else StarColors.textDisabled,
-            fontSize = 11.sp,
-        )
-        OutlinedButton(
-            onClick = { onStep(MAX_DOWNWARD_STEP) },
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-        ) { Text("+") }
+        HoverTip(localized("ui.decrease_max_downward_extension_by_10px")) {
+            OutlinedButton(
+                onClick = { onStep(-MAX_DOWNWARD_STEP) },
+                enabled = value.configured > 0,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            ) { Text("−") }
+        }
+        HoverTip(localized("ui.max_pixels_the_refined_horizon_may_go_below")) {
+            Text(
+                "↓${value.effective}px",
+                color = if (value.configured > 0) StarColors.textSecondary else StarColors.textDisabled,
+                fontSize = 11.sp,
+            )
+        }
+        HoverTip(localized("ui.increase_max_downward_extension_by_10px")) {
+            OutlinedButton(
+                onClick = { onStep(MAX_DOWNWARD_STEP) },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            ) { Text("+") }
+        }
     }
 }
 
@@ -765,11 +790,19 @@ private const val MAX_DOWNWARD_STEP = 10
 private fun SkyGroundToggle(state: HorizonPaintState) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         if (!state.isErasing) {
-            Button(onClick = { state.isErasing = false }, colors = ButtonDefaults.buttonColors(containerColor = StarColors.green)) { Text(localized("ui.sky"), color = Color.White) }
-            OutlinedButton(onClick = { state.isErasing = true }) { Text(localized("ui.ground")) }
+            HoverTip(localized("ui.paint_sky_adds_to_the_selection_p")) {
+                Button(onClick = { state.isErasing = false }, modifier = Modifier.testTag("painter.sky").semantics { selected = true }, colors = ButtonDefaults.buttonColors(containerColor = StarColors.green)) { Text(localized("ui.sky"), color = Color.White) }
+            }
+            HoverTip(localized("ui.erase_sky_removes_from_the_selection_e")) {
+                OutlinedButton(onClick = { state.isErasing = true }, modifier = Modifier.testTag("painter.ground").semantics { selected = false }) { Text(localized("ui.ground")) }
+            }
         } else {
-            OutlinedButton(onClick = { state.isErasing = false }) { Text(localized("ui.sky")) }
-            Button(onClick = { state.isErasing = true }, colors = ButtonDefaults.buttonColors(containerColor = StarColors.red)) { Text(localized("ui.ground"), color = Color.White) }
+            HoverTip(localized("ui.paint_sky_adds_to_the_selection_p")) {
+                OutlinedButton(onClick = { state.isErasing = false }, modifier = Modifier.testTag("painter.sky").semantics { selected = false }) { Text(localized("ui.sky")) }
+            }
+            HoverTip(localized("ui.erase_sky_removes_from_the_selection_e")) {
+                Button(onClick = { state.isErasing = true }, modifier = Modifier.testTag("painter.ground").semantics { selected = true }, colors = ButtonDefaults.buttonColors(containerColor = StarColors.red)) { Text(localized("ui.ground"), color = Color.White) }
+            }
         }
     }
 }

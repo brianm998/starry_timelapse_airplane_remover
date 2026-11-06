@@ -36,8 +36,10 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.widestWord
 import com.star.desktop.domain.BlobStepFormat
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.theme.StarColors
@@ -131,25 +133,47 @@ private fun StepCard(index: Int, step: BlobStep, editable: Boolean, model: BlobP
             Text(step.description, color = StarColors.textSecondary, fontSize = 12.sp)
             Text(localized("ui.parameters_which_can_affect_how_this_step"), color = StarColors.textSecondary, fontSize = 12.sp)
             Column(Modifier.alpha(if (step.disabled) 0.5f else 1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HeaderCell(localized("ui.name"), 200)
-                    HeaderCell(localized("ui.value"), 90)
-                    Text(localized("ui.description"), color = StarColors.textPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                }
-                step.argsList.forEach { arg -> ArgRow(index, arg, editable && !step.disabled, model) }
+                val nameWidth = blobNameColumnWidth(step.argsList.map { it.name })
+                val valueWidth = blobValueColumnWidth()
+                BlobArgsHeader(nameWidth, valueWidth)
+                step.argsList.forEach { arg -> ArgRow(index, arg, editable && !step.disabled, model, nameWidth, valueWidth) }
             }
         }
     }
 }
 
+/**
+ * The name column: 200dp, or as wide as the longest parameter name when that is more. A name is an identifier with no space in it to wrap at, so a
+ * narrower column breaks it in the middle.
+ */
 @Composable
-private fun HeaderCell(text: String, width: Int) = Text(text, color = StarColors.textPrimary, fontSize = 12.sp, modifier = Modifier.width(width.dp))
+internal fun blobNameColumnWidth(names: List<String>): Dp =
+    maxOf(200.dp, widestWord(names + localized("ui.name"), 12.sp, wholeText = true))
+
+/** The value column: 90dp, or as wide as its heading's longest word. */
+@Composable
+internal fun blobValueColumnWidth(): Dp = maxOf(90.dp, widestWord(listOf(localized("ui.value")), 12.sp))
 
 @Composable
-private fun ArgRow(stepIndex: Int, arg: BlobStepArg, editable: Boolean, model: BlobProcessingModel) {
+internal fun BlobArgsHeader(nameWidth: Dp, valueWidth: Dp) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(localized("ui.name"), color = StarColors.textPrimary, fontSize = 12.sp, modifier = Modifier.width(nameWidth))
+        Text(localized("ui.value"), color = StarColors.textPrimary, fontSize = 12.sp, modifier = Modifier.width(valueWidth))
+        Text(localized("ui.description"), color = StarColors.textPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+    }
+}
+
+/** A parameter's name, in the column [blobNameColumnWidth] sized for it: an identifier, so one line, with no space to wrap at. */
+@Composable
+internal fun ArgName(name: String, width: Dp) {
+    Text(name, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.width(width))
+}
+
+@Composable
+private fun ArgRow(stepIndex: Int, arg: BlobStepArg, editable: Boolean, model: BlobProcessingModel, nameWidth: Dp, valueWidth: Dp) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        Text(arg.name, color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.width(200.dp))
-        Box(Modifier.width(90.dp)) {
+        ArgName(arg.name, nameWidth)
+        Box(Modifier.width(valueWidth)) {
             val shown = if (arg.valuePresent) BlobStepFormat.show(arg.value, arg.isInteger) else ""
             if (editable) {
                 ValueField(shown, arg.isInteger) { model.setArg(stepIndex, arg.name, it) }

@@ -26,6 +26,8 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
     let alwaysOpen: Bool
     /// The id a UI test finds the field by (`gherkin/ui/ids.json`), on the text and on the field it becomes
     let identifier: String?
+    /// The id of the line that says what the field takes, while the typed text is not that
+    let messageIdentifier: String?
     /// Extra action upon commit
     let commitAction: (Value) -> Void
     
@@ -44,6 +46,7 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
          focusField: FocusedField,
          alwaysOpen: Bool = false,
          identifier: String? = nil,
+         messageIdentifier: String? = nil,
          commitAction: @escaping (Value) -> Void = { _ in })
     {
         self._value = value
@@ -58,6 +61,7 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
         self.focusField = focusField
         self.alwaysOpen = alwaysOpen
         self.identifier = identifier
+        self.messageIdentifier = messageIdentifier
         self.commitAction = commitAction
         _isEditing = State(initialValue: alwaysOpen)
         if alwaysOpen {
@@ -113,6 +117,7 @@ where Value: Numeric & Comparable & LosslessStringConvertible {
                 Text(problem)
                   .font(.caption)
                   .foregroundColor(.red)
+                  .tagged(messageIdentifier)
             }
           }
         } else {

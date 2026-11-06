@@ -65,21 +65,6 @@ extern "C" GPUWarpFunc gpu_ops_get_warp(void);
 extern "C" GPUMedianMergeFunc gpu_ops_get_median_merge(void);
 extern "C" GPUAlignedMergeFunc gpu_ops_get_aligned_merge(void);
 
-static cv::Mat ensure8U(const cv::Mat& input) {
-    if (input.depth() == CV_8U) return input;
-    cv::Mat output;
-    double minVal, maxVal;
-    cv::minMaxLoc(input, &minVal, &maxVal);
-    if (minVal == maxVal) {
-        output = cv::Mat::zeros(input.size(), CV_MAKETYPE(CV_8U, input.channels()));
-    } else {
-        input.convertTo(output, CV_MAKETYPE(CV_8U, input.channels()),
-                        255.0 / (maxVal - minVal),
-                        -minVal * 255.0 / (maxVal - minVal));
-    }
-    return output;
-}
-
 // The median merge kernels (sorting network, Welford and exact-statistics block kernels,
 // run-time choice between them) live in MedianMerge.hpp.
 
@@ -789,22 +774,6 @@ static std::vector<cv::Point2f> findStarCentroids(const cv::Mat &image, const cv
 }
 
 // --- Public API ---
-
-MatWrapperRef ia_median_merge_filenames(const char **filenames, int count,
-                                         double outlierThreshold, bool includeAll,
-                                         bool useGPU) {
-    try {
-        std::vector<cv::Mat> mats;
-        for (int i = 0; i < count; i++) {
-            MatWrapperRef img = image_cache_load(filenames[i]);
-            // Shallow push: the vector's cv::Mat holds a reference, so the buffer
-            // outlives the release below. medianImageFromMats only reads its inputs.
-            if (img) { mats.push_back(img->mat); mat_wrapper_release(img); }
-        }
-        return medianImageFromMats(mats, outlierThreshold, includeAll, cv::Mat(), useGPU);
-    } KHT_CATCH_LOG("ia_median_merge_filenames")
-    return nullptr;
-}
 
 // No coverage plane goes to the kernel from here, and that is the whole of what
 // this entry point has to say about it: nothing is warped on the way in, so every
@@ -4381,10 +4350,6 @@ extern "C" bool ia_debug_exact_warp_is_available(void) {
 
 extern "C" void ia_debug_set_pair_match(bool enabled) {
     pairmatch::gDisabled.store(enabled ? 0 : 1);
-}
-
-extern "C" bool ia_debug_pair_match_is_enabled(void) {
-    return pairmatch::enabled();
 }
 
 extern "C" int ia_debug_pair_match_waiting(bool clear) {

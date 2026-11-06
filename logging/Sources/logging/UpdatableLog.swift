@@ -119,10 +119,6 @@ public actor UpdatableLog {
     /// How many times the display has been drawn, for tests.
     public private(set) var drawCount = 0
 
-    func setScreenWidth(_ width: UInt16) {
-        screen_width = width
-    }
-
     public init(redrawInterval: TimeInterval = UpdatableLog.defaultRedrawInterval,
                 maxEventRows: Int = UpdatableLog.defaultMaxEventRows,
                 output: @escaping @Sendable (String) -> Void = { print($0, terminator: "") })

@@ -101,7 +101,7 @@ struct RenderVideoSheetView: View {
         } errorCallback: { error in
             Task { @MainActor in
                 self.isRendering = false
-                // Cancel put the sheet away already; a stopped render is not an error to report.
+                // A cancelled render puts the sheet away here (the desktop dialog closes too); a stopped render is not an error to report.
                 if error is CancellationError {
                     self.isVisible = false
                 } else {
@@ -204,6 +204,7 @@ struct RenderVideoSheetView: View {
                         startRender()
                     }
                       .disabled(draft.hasRateProblem)
+                      .accessibilityIdentifier("render.start")
                 }
                 Spacer()
             }

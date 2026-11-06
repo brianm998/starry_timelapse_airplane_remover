@@ -113,8 +113,10 @@ final public actor FrameOutlierProcessor {
                 // newer file format, default to this
                 return try await loadOutliersFromBinaryFile()
             } catch {
-                //Log.i("frame \(frameIndex) failed to load outliers: \(error)")
-                // XXX log here
+                // say why, so "file missing" and "present but unreadable" can be told apart
+                let path = await blobBinaryFilename
+                let exists = FileManager.default.fileExists(atPath: path)
+                Log.i("frame \(frameIndex) failed to load outliers from \(path) (file \(exists ? "exists" : "is missing")): \(error)")
             }
 
             return nil

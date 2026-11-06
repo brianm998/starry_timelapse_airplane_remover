@@ -10,8 +10,11 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.app.SecondaryWindow
+import com.star.desktop.ui.app.SecondaryWindowContent
 import com.star.desktop.ui.app.StarApp
 import com.star.desktop.ui.app.StarMenuBar
+import com.star.desktop.ui.app.StatusTray
 import com.star.desktop.ui.app.handleGlobalKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -95,49 +98,47 @@ private fun runApp(args: Array<String>) = application {
         onKeyEvent = { handleGlobalKey(it, vm) },
     ) {
         StarMenuBar(vm)
+        // Fallback for the tray icon's finished/failed badge where the tray gives no mouse events: looking at the main window clears it too.
+        androidx.compose.runtime.DisposableEffect(window) {
+            val l = object : java.awt.event.WindowAdapter() {
+                override fun windowGainedFocus(e: java.awt.event.WindowEvent) = vm.menuOpened()
+            }
+            window.addWindowFocusListener(l)
+            onDispose { window.removeWindowFocusListener(l) }
+        }
         StarApp(vm)
     }
+
+    // The tray icon: live run status, readable from any app (the gui's menu-bar wand).
+    StatusTray(vm)
 
     // Secondary Outlier table window (macOS multi-window behavior), toggled from the Window menu.
     val showOutlier by vm.showOutlierWindow.collectAsState()
     val screen by vm.screen.collectAsState()
     val svm = (screen as? com.star.desktop.ui.app.AppScreen.Sequence)?.vm
     if (showOutlier && svm != null) {
-        // "Outliers for frame N", for the frame the table lists (0-based, like everywhere else in the app).
-        val listed by svm.infoRows.collectAsState()
-        val looking by svm.currentIndex.collectAsState()
         Window(
             onCloseRequest = vm::closeOutlierWindow,
-            title = localized("ui.outliers_for_frame", listed?.frameIndex ?: looking),
-            state = rememberWindowState(size = DpSize(960.dp, 720.dp)),
+            title = localized("ui.star_outlier_info_window"),
+            state = rememberWindowState(size = SecondaryWindow.OUTLIER.size),
         ) {
             // The menu and its shortcuts follow the focused window, as the macOS menu bar does (M9).
             StarMenuBar(vm)
-            com.star.desktop.ui.theme.StarTheme {
-                com.star.desktop.ui.windows.OutlierWindowView(svm)
-            }
+            SecondaryWindowContent(SecondaryWindow.OUTLIER, vm, svm)
         }
     }
 
     // The Blob Processing window (a developer tool): the steps each detection type takes a frame's blobs through.
     val showBlob by vm.showBlobWindow.collectAsState()
     if (showBlob) {
-        val blobSession by vm.sessions.session.collectAsState()
         Window(
             onCloseRequest = vm::closeBlobWindow,
             title = localized("ui.star_blob_processing"),
-            state = rememberWindowState(size = DpSize(1100.dp, 800.dp)),
+            state = rememberWindowState(size = SecondaryWindow.BLOB.size),
         ) {
             // The menu and its shortcuts follow the focused window, as the macOS menu bar does (M9).
             StarMenuBar(vm)
-            com.star.desktop.ui.theme.StarTheme {
-                com.star.desktop.ui.windows.BlobProcessingWindowView(
-                    session = svm != null,
-                    current = blobSession?.config?.detectionType ?: com.star.proto.DetectionType.DETECTION_STRONG,
-                    onSelectType = vm::setDetectionType,
-                    model = vm.blobProcessing,
-                )
-            }
+            SecondaryWindowContent(SecondaryWindow.BLOB, vm, svm)
         }
     }
 
@@ -147,13 +148,11 @@ private fun runApp(args: Array<String>) = application {
         Window(
             onCloseRequest = vm::closeDebugWindow,
             title = localized("ui.star_debug"),
-            state = rememberWindowState(size = DpSize(1100.dp, 600.dp)),
+            state = rememberWindowState(size = SecondaryWindow.DEBUG.size),
         ) {
             // The menu and its shortcuts follow the focused window, as the macOS menu bar does (M9).
             StarMenuBar(vm)
-            com.star.desktop.ui.theme.StarTheme {
-                com.star.desktop.ui.windows.DebugWindowView(vm.debugLog, vm.engineLogPath)
-            }
+            SecondaryWindowContent(SecondaryWindow.DEBUG, vm, svm)
         }
     }
 
@@ -162,14 +161,12 @@ private fun runApp(args: Array<String>) = application {
     if (showAlign && svm != null) {
         Window(
             onCloseRequest = vm::closeAlignmentWindow,
-            title = localized("ui.alignment_2"),
-            state = rememberWindowState(size = DpSize(720.dp, 560.dp)),
+            title = localized("ui.star_alignment_info"),
+            state = rememberWindowState(size = SecondaryWindow.ALIGNMENT.size),
         ) {
             // The menu and its shortcuts follow the focused window, as the macOS menu bar does (M9).
             StarMenuBar(vm)
-            com.star.desktop.ui.theme.StarTheme {
-                com.star.desktop.ui.windows.AlignmentWindowView(vm, svm)
-            }
+            SecondaryWindowContent(SecondaryWindow.ALIGNMENT, vm, svm)
         }
     }
 }

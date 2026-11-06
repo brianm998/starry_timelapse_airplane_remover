@@ -72,6 +72,25 @@ final class StarWarningsTests: XCTestCase {
         XCTAssertEqual(box.values.count, 1)
     }
 
+    /// A suppressed post must not reach the log either: the poll loop re-posts every 0.5 s per
+    /// waiter, and logging each one wrote ~90,000 lines in a single CI smoke test.
+    func testSuppressedWarningsAreNotLoggedEachTime() async {
+        let relay = await self.relay(minimumInterval: 30)
+        let lines = StringBox()
+        await relay.set(logSink: { _, line in lines.append(line) })
+
+        let start = Date()
+        for i in 0..<100 {
+            await relay.post(warning(.lowSystemMemory, .warning,
+                                     at: start.addingTimeInterval(Double(i) * 0.1)))
+        }
+        XCTAssertEqual(lines.values.count, 1, "only the delivered warning is logged")
+
+        // After the interval the next one is delivered, and logged.
+        await relay.post(warning(.lowSystemMemory, .warning, at: start.addingTimeInterval(31)))
+        XCTAssertEqual(lines.values.count, 2)
+    }
+
     func testTheSameKindIsDeliveredAgainAfterTheInterval() async {
         let relay = await self.relay(minimumInterval: 30)
         let box = Box()
@@ -271,6 +290,21 @@ private final class Box: @unchecked Sendable {
     }
 
     var values: [StarWarning] {
+        lock.lock(); defer { lock.unlock() }
+        return storage
+    }
+}
+
+private final class StringBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [String] = []
+
+    func append(_ line: String) {
+        lock.lock(); defer { lock.unlock() }
+        storage.append(line)
+    }
+
+    var values: [String] {
         lock.lock(); defer { lock.unlock() }
         return storage
     }

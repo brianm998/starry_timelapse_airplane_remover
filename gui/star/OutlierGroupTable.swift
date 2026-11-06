@@ -15,7 +15,7 @@ enum WillRemoveType: Comparable {
 
 struct OutlierGroupTableRow: Identifiable {
   
-    let id = UUID()
+    var id = UUID()
     
     let name: UInt16
     let size: UInt
@@ -193,12 +193,49 @@ struct OutlierGroupTable: View {
     
     var willRemoveColumn: TableColumn<OutlierGroupTableRow,
                                      KeyPathComparator<OutlierGroupTableRow>,
-                                     Image,
+                                     some View,
                                      Text> {
         TableColumn(Self.header(for: "remove"),
                     value: \OutlierGroupTableRow.willRemoveType) { (row: OutlierGroupTableRow) in
-            image(for: row.willRemoveType)
+            // a click on the decision toggles the group, as the desktop's DecisionCell does
+            Button { toggleDecision(of: row) } label: {
+                image(for: row.willRemoveType)
+            }.buttonStyle(.plain)
         }.width(min: 10, ideal: 20, max: 80)
+    }
+
+    /// What a click on a decision cell does to its group: the decision the Remove tool leaves (`OutlierGroupView.decisionAfterClick`,
+    /// the rule a click on the group itself follows): undecided is removed, a decided group flips.  Returns the new decision.
+    @discardableResult
+    static func toggleDecision(of group: OutlierGroup, tool: ToolType = .remove) async -> RemoveReason {
+        let decision = OutlierGroupView.decisionAfterClick(await group.shouldRemove(), tool: tool)
+        _ = await group.shouldRemove(decision)
+        return decision
+    }
+
+    /// The click on `row`'s decision cell: toggle that group in the current frame, queue the frame for its save, and show the new
+    /// decision in the row.  Does not touch the table's selection.
+    func toggleDecision(of row: OutlierGroupTableRow) {
+        guard let sequence = viewModel.imageSequence else { return }
+        let frameView = sequence.currentFrameView
+        guard let outlierView = frameView.outlierViews?.first(where: { $0.name == row.name }) else { return }
+        let group = outlierView.group
+        let name = row.name
+        Task {
+            let decision = await Self.toggleDecision(of: group)
+            // the frame's own group, as a click on the group updates it
+            if let frame = frameView.frame,
+               let frameGroup = await frame.getOutlierGroups()?.members[name]
+            {
+                _ = await frameGroup.shouldRemove(decision)
+                await frame.markAsChanged()
+            }
+            var updated = await OutlierGroupTableRow(group)
+            if let index = sequence.outlierGroupTableRows.firstIndex(where: { $0.name == name }) {
+                updated.id = sequence.outlierGroupTableRows[index].id // the row stays selected
+                sequence.outlierGroupTableRows[index] = updated
+            }
+        }
     }
     
     // add paint reason

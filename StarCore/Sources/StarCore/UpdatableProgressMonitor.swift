@@ -82,8 +82,6 @@ public actor UpdatableProgressMonitor {
         }
     }
 
-    private var lastUpdateTime: TimeInterval?
-
     public func operationsChange(
       _ operations: [OperationType: [OperationState: UInt]]
     ) async {

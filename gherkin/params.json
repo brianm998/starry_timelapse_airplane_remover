@@ -87,6 +87,9 @@
     "uiStartupBackFromRemoval": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiStartupSpeedSharpness": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiSequenceWindowsGoWithIt": {
       "sequence": "test_data/test_a7sii_10"
     },
@@ -117,10 +120,19 @@
     "uiPainterOpensInEditMode": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiPainterOpens": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiPainterWaitsForExtraction": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiKeysWhilePainting": {
       "sequence": "test_data/test_a7sii_10"
     },
     "uiNumberFields": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiNumberFieldMessage": {
       "sequence": "test_data/test_a7sii_10"
     },
     "uiTranslatedScreen": {
@@ -147,6 +159,9 @@
     "uiMultiSelectSheet": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiMultiSheetChoices": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiFrameModeChange": {
       "sequence": "test_data/test_a7sii_10"
     },
@@ -157,6 +172,54 @@
       "sequence": "test_data/test_a7sii_10"
     },
     "uiReprocessNonContiguous": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiStartDuringRun": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiRenderAllFrames": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiAutoSelectiveEnds": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiRestartNow": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiMultiChoiceSheet": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryStartup": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryProcessing": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGallerySequence": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryProcessed": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGridShowList": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryMultiSelect": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryMultiChoice": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryPostRender": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryWindows": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryVideoImport": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiGalleryLocation": {
       "sequence": "test_data/test_a7sii_10"
     }
   }

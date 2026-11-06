@@ -3,6 +3,8 @@ name: CLI Build
 # A change that only touches paths that cannot affect the star program does not start this workflow.
 # The same list is decided in pr-gate.yml's `changes` job: keep the two in step.
 # GitHub does not evaluate path filters for tag pushes, so release/* tags (and workflow_dispatch) run everything.
+# A pull request (the batch PR) skips the Windows jobs, `windows` and `windows-e2e`: they are the slowest legs and run post-merge on
+# the push to develop instead, even when "Already tested?" says the PR run covered the tree (it did not cover Windows).
 on:
   push:
     branches: [main, develop]
@@ -36,9 +38,52 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
 
 jobs:
+  # On a push to develop that merges a batch PR whose tree this workflow already passed, `tested` is true and the heavy jobs below
+  # skip (already-tested.yml). It is always false on pull requests, tags and workflow_dispatch, so they run as before.
+  tested:
+    name: Already tested?
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    uses: ./.github/workflows/already-tested.yml
+
   # ─── Linux ───────────────────────────────────────────────────────────────────
+  # ─── OpenCV: built once per OS per key by opencv.yml (cache, then the opencv-prebuilt release, then a build) ───
+  opencv-linux:
+    name: OpenCV (linux)
+    needs: tested
+    if: needs.tested.outputs.tested != 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: linux
+
+  opencv-macos:
+    name: OpenCV (macos)
+    needs: tested
+    if: needs.tested.outputs.tested != 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: macos
+
+  opencv-windows:
+    name: OpenCV (windows)
+    # the Windows jobs run on everything but a pull request, whatever `tested` says (see the header of the Windows section)
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: windows
+
   linux:
     name: Linux (ubuntu-24.04)
+    needs: [tested, opencv-linux]
+    if: needs.tested.outputs.tested != 'true'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -56,13 +101,11 @@ jobs:
         with:
           swift-version: '6.0'
 
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/linux
-            opencv/include
-          key: opencv-linux-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          name: opencv-linux
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -102,13 +145,15 @@ jobs:
   # inline using the same sub-scripts the macOS release uses.
   #
   # macos-15, not macos-14: GitHub retires the macos-14 image on 2026-11-02 and its brownouts already cancel
-  # this job (https://github.com/actions/runner-images/issues/13518). The OpenCV and StarDecisionTrees caches
-  # below carry their own macos15 keys (shared with pr-gate.yml's macos-15 job): the StarDecisionTrees
-  # .swiftmodule only imports under the compiler that built it (see gherkin.yml), so they must not restore
-  # what the remaining macos-14 jobs (macos-signed-release, kotlin-client.yml macos-signed) saved under the
-  # plain keys.
+  # this job (https://github.com/actions/runner-images/issues/13518). OpenCV comes from opencv.yml (its
+  # macos15 key leaves the remaining macos-14 jobs' opencv-macos- caches alone). The StarDecisionTrees cache below
+  # has its own macos15 key (shared with pr-gate.yml's macos-15 job): its .swiftmodule only imports under the
+  # compiler that built it (see gherkin.yml), so it must not restore what the remaining macos-14 jobs
+  # (macos-signed-release, kotlin-client.yml macos-signed) saved under the plain key.
   macos:
     name: macOS (macos-15)
+    needs: [tested, opencv-macos]
+    if: needs.tested.outputs.tested != 'true'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -129,13 +174,11 @@ jobs:
         # which the macos-15 runner uses).
         run: brew install eigen
 
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/macos
-            opencv/include
-          key: opencv-macos15-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          name: opencv-macos
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -144,14 +187,6 @@ jobs:
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
           key: dt-macos15-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
-
-      - name: Build OpenCV (if not cached)
-        run: |
-          if [ ! -f opencv/lib/macos/libopencv2.a ]; then
-            cd opencv && ./release.sh
-          else
-            echo "OpenCV: restored from cache"
-          fi
 
       - name: Build StarDecisionTrees (if not cached)
         run: |
@@ -168,6 +203,13 @@ jobs:
           strip .build/release/star
 
       - name: Smoke-test CLI
+        env:
+          # The 7GB hosted runner really is short on memory: the MemoryMonitor breakdown line shows
+          # ~4.0GB counted as available (free + purgeable + file cache) and ~3.4GB of runner-owned
+          # anonymous + wired + compressed pages that star cannot reclaim (star itself is ~50MB).
+          # Each op asks for ~2.2GB, so against the default 2GB floor the headroom is ~140MB short and
+          # the first op waits a minute for a forced admission. Same override as the gherkin jobs.
+          STAR_SYSTEM_FLOOR_MB: 512
         run: |
           cli/.build/release/star -l info test_data/test_a7sii_10 star-smoke-output
           ACTUAL=$(ls -1 star-smoke-output/ | wc -l | tr -d ' ')
@@ -259,6 +301,11 @@ jobs:
       - name: Install Eigen3 via Homebrew
         run: brew install eigen
 
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
       # Share caches with the unsigned macos smoke job — same keys.
       - name: Cache OpenCV
         uses: actions/cache@v4
@@ -266,7 +313,7 @@ jobs:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -451,9 +498,209 @@ jobs:
           rm -f "$RUNNER_TEMP/certs.p12"
           rm -rf "$RUNNER_TEMP/private_keys"
 
+  # ─── macOS (Mac App Store build -> TestFlight) ───────────────────────────────
+  # The sandboxed App Store variant of the GUI (gui/appstore_release.sh), archived, exported and uploaded to App Store
+  # Connect, where it shows up in TestFlight for macOS once processing is done. Submitting it for review stays a manual step.
+  # Same trigger as macos-signed-release, and it waits only for the ffmpeg artifact, not for that job or the smoke build:
+  # neither job blocks or slows the other.
+  #
+  # The App Store Connect API key secrets are the ones macos-signed-release uses; for the upload the key's role has to
+  # be App Manager or Admin. Further prerequisites in repo Settings -> Secrets and variables -> Actions:
+  #   APPSTORE_CERTIFICATE_P12_BASE64      — base64 of a .p12 containing BOTH "Apple Distribution" and
+  #                                          "Mac Installer Distribution" identities plus their private keys
+  #   APPSTORE_CERTIFICATE_PASSWORD        — password used when exporting that .p12
+  #   APPSTORE_PROVISIONING_PROFILE_BASE64 — base64 of the Mac App Store .provisionprofile for the app's bundle id
+  #   KEYCHAIN_PASSWORD, APPLE_API_KEY_P8_BASE64, APPLE_API_KEY_ID, APPLE_API_ISSUER_ID — as for macos-signed-release
+  # The team is read from the Apple Distribution identity (it need not be APPLE_TEAM_ID, which is the Developer ID team).
+  # Repository variable APPSTORE_BUNDLE_ID (optional) sets the store's bundle id; the default is com.star. The first step
+  # fails naming every secret that is not set.
+  # The build number is <run number>.<run attempt>, so every upload and every re-run of one rises (see appstore_release.sh).
+  macos-testflight:
+    name: macOS App Store build -> TestFlight (macos-14)
+    runs-on: macos-14
+    if: startsWith(github.ref, 'refs/tags/release/') || github.event_name == 'workflow_dispatch'
+    needs: [ffmpeg]
+    steps:
+      - name: Check the secrets this job needs
+        env:
+          APPSTORE_CERTIFICATE_P12_BASE64: ${{ secrets.APPSTORE_CERTIFICATE_P12_BASE64 }}
+          APPSTORE_CERTIFICATE_PASSWORD: ${{ secrets.APPSTORE_CERTIFICATE_PASSWORD }}
+          APPSTORE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPSTORE_PROVISIONING_PROFILE_BASE64 }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          missing=""
+          for name in APPSTORE_CERTIFICATE_P12_BASE64 APPSTORE_CERTIFICATE_PASSWORD \
+                      APPSTORE_PROVISIONING_PROFILE_BASE64 KEYCHAIN_PASSWORD \
+                      APPLE_API_KEY_P8_BASE64 APPLE_API_KEY_ID APPLE_API_ISSUER_ID; do
+            [ -n "${!name}" ] || missing="${missing:+$missing, }$name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::macos-testflight needs these repository secrets, which are not set: $missing"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install Eigen3 via Homebrew
+        run: brew install eigen
+
+      - name: OpenCV cache key
+        id: opencv-key
+        shell: bash
+        run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
+
+      # Same keys as the unsigned macos smoke job and macos-signed-release.
+      - name: Cache OpenCV
+        uses: actions/cache@v4
+        with:
+          path: |
+            opencv/lib/macos
+            opencv/include
+          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/macos
+            StarDecisionTrees/include/release/macos
+          key: dt-macos-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Import the App Store certificates into a temporary keychain
+        # A throwaway keychain, as in macos-signed-release. xcodebuild signs the app with Apple Distribution and the
+        # export signs the installer pkg with Mac Installer Distribution (productbuild/productsign).
+        env:
+          P12_B64: ${{ secrets.APPSTORE_CERTIFICATE_P12_BASE64 }}
+          P12_PASS: ${{ secrets.APPSTORE_CERTIFICATE_PASSWORD }}
+          KC_PASS: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -e
+          KC="$RUNNER_TEMP/appstore.keychain"
+          P12="$RUNNER_TEMP/appstore-certs.p12"
+          echo "$P12_B64" | base64 --decode > "$P12"
+
+          security create-keychain -p "$KC_PASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PASS" "$KC"
+
+          security import "$P12" -k "$KC" -P "$P12_PASS" \
+              -T /usr/bin/codesign \
+              -T /usr/bin/productbuild \
+              -T /usr/bin/productsign \
+              -T /usr/bin/pkgbuild \
+              -T /usr/bin/security
+          security set-key-partition-list \
+              -S apple-tool:,apple:,codesign: -s -k "$KC_PASS" "$KC"
+          security list-keychains -d user -s "$KC" \
+              $(security list-keychains -d user | tr -d '"')
+
+          # No `-p codesigning`: the installer identity is not under that policy (see macos-signed-release).
+          security find-identity -v "$KC"
+          APP_IDS=$(security find-identity -v "$KC" | grep "Apple Distribution:" || true)
+          INST_IDS=$(security find-identity -v "$KC" | grep "Mac Installer Distribution:" || true)
+          if [ -z "$APP_IDS" ] || [ -z "$INST_IDS" ]; then
+              echo "::error::Missing App Store identities in APPSTORE_CERTIFICATE_P12_BASE64." \
+                   "Found: Apple Distribution=$(echo -n "$APP_IDS" | grep -c . || true)," \
+                   "Mac Installer Distribution=$(echo -n "$INST_IDS" | grep -c . || true) (need 1 of each, with private keys)."
+              exit 1
+          fi
+          # "Apple Distribution: Name (TEAMID)" -> TEAMID; the profile, the API key and the app record must be this team's
+          TEAMS=$(echo "$APP_IDS" | sed -n 's/.*"Apple Distribution: .*(\([A-Z0-9]*\))".*/\1/p' | sort -u)
+          if [ "$(echo "$TEAMS" | wc -l)" -ne 1 ]; then
+              echo "::error::The .p12 has Apple Distribution identities for several teams: $(echo "$TEAMS" | tr "\n" " ")"
+              exit 1
+          fi
+          echo "APPSTORE_TEAM_ID=$TEAMS" >> "$GITHUB_ENV"
+
+      - name: Stage the provisioning profile and the App Store Connect API key
+        env:
+          PROFILE_B64: ${{ secrets.APPSTORE_PROVISIONING_PROFILE_BASE64 }}
+          KEY_B64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          KEY_ID:  ${{ secrets.APPLE_API_KEY_ID }}
+        run: |
+          set -e
+          echo "$PROFILE_B64" | base64 --decode > "$RUNNER_TEMP/appstore.provisionprofile"
+          mkdir -p "$RUNNER_TEMP/private_keys"
+          echo "$KEY_B64" | base64 --decode > "$RUNNER_TEMP/private_keys/AuthKey_${KEY_ID}.p8"
+
+      - name: Build OpenCV (if not cached)
+        run: |
+          if [ ! -f opencv/lib/macos/libopencv2.a ]; then
+            cd opencv && ./release.sh
+          else
+            echo "OpenCV: restored from cache"
+          fi
+
+      - name: Build StarDecisionTrees (if not cached)
+        run: |
+          if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then
+            cd StarDecisionTrees && ./release.sh
+          else
+            echo "StarDecisionTrees: restored from cache"
+          fi
+
+      - name: Fetch large GUI assets from ci-assets release
+        # See macos-signed-release.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p gui/videos
+          gh release download ci-assets \
+              --repo "${{ github.repository }}" \
+              --pattern '*.mp4' \
+              --dir gui/videos
+          ls -lh gui/videos
+
+      - name: Fetch the universal ffmpeg/ffprobe the GUI bundles
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-macos-universal
+          path: external_binaries/bin
+
+      - name: Check ffmpeg/ffprobe are universal
+        run: |
+          chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe
+          for t in ffmpeg ffprobe; do
+            archs="$(lipo -archs "external_binaries/bin/$t")"
+            echo "$t: $archs"
+            case "$archs" in *arm64*x86_64*|*x86_64*arm64*) ;; *) echo "::error::$t lacks an arm64 or x86_64 slice"; exit 1 ;; esac
+          done
+
+      - name: Build, check entitlements, export and upload the App Store GUI
+        working-directory: gui
+        env:
+          # APPSTORE_PROFILE_PATH makes the script sign manually (a runner has no Apple ID in Xcode).
+          APPSTORE_PROFILE_PATH: ${{ runner.temp }}/appstore.provisionprofile
+          APPSTORE_BUNDLE_ID: ${{ vars.APPSTORE_BUNDLE_ID }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/private_keys/AuthKey_${{ secrets.APPLE_API_KEY_ID }}.p8
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: bash appstore_release.sh
+
+      - name: Clean up keychain + secrets
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/appstore.keychain" || true
+          rm -f "$RUNNER_TEMP/appstore-certs.p12" "$RUNNER_TEMP/appstore.provisionprofile"
+          rm -rf "$RUNNER_TEMP/private_keys"
+
   # ─── Windows ─────────────────────────────────────────────────────────────────
+  # Windows is the slowest leg of a batch (~18 min here, plus windows-e2e), so a pull request skips it (and opencv-windows, and
+  # windows-e2e through `needs`). It runs on every push (develop, main, release tags) and workflow_dispatch, and does NOT honour the
+  # "Already tested?" answer: that answer says a green PR run tested this tree, but the PR run never ran Windows. The develop push is
+  # where a Windows break is found; the pipeline's post-merge watch files a ticket when the job is red on two runs.
   windows:
     name: Windows (windows-2022)
+    needs: opencv-windows
+    if: github.event_name != 'pull_request'
     runs-on: windows-2022
     defaults:
       run:
@@ -639,16 +886,11 @@ jobs:
               }
           }
 
-      # NOTE: cache keys include "msvc14.40" so changing the toolset pin
-      # above invalidates these caches automatically (otherwise an older
-      # toolset's libs could get linked against a newer toolset's code).
-      - name: Cache OpenCV
-        uses: actions/cache@v4
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            opencv/lib/windows
-            opencv/include
-          key: opencv-windows-msvc14.40-sdk22621-${{ hashFiles('opencv/build.sh', 'opencv/release.sh') }}
+          name: opencv-windows
+          path: opencv
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4

@@ -11,8 +11,6 @@ public struct FrameEditImageView: View {
 
     @Bindable var frameViewModel: FrameViewModel
     
-    @State private var localID = 0
-    
     private var fullResolutionImage: some View {
         @Bindable var viewModel = viewModel
         return Group {
@@ -168,6 +166,13 @@ public struct FrameEditImageView: View {
         }
     }
 
+    /// The id of the group a UI test clicks, only under `-StarUITestProbes YES` (`OutlierGroupView.probeGroupId`).
+    private func probeGroupId(drawn: [OutlierGroupViewModel]) -> UInt16? {
+        guard ViewModel.uiTestProbes else { return nil }
+        let candidates = drawn.map { OutlierGroupView.ProbeCandidate(id: $0.group.id, bounds: $0.group.bounds, size: $0.group.size) }
+        return OutlierGroupView.probeGroupId(groups: candidates, pointsPerPixel: viewModel.currentZoomScale)
+    }
+
     public var body: some View {
         @Bindable var viewModel = viewModel
 
@@ -227,9 +232,9 @@ public struct FrameEditImageView: View {
                             let sorted = outlierViews.sorted() {
                                 $0.group.bounds.size > $1.group.bounds.size
                             }
-                            // a test finds one group: the smallest box that is drawn, which is on top, so a click on it is a click on it
-                            // (`-StarUITestProbes YES`, `outlier.first` in `gherkin/ui/ids.json`)
-                            let probe = ViewModel.uiTestProbes ? sorted.last(where: { $0.group.size > 40 })?.group.id : nil
+                            // a test finds one group, one a click can hit at the size the frame is shown at
+                            // (`-StarUITestProbes YES`, `outlier.first` in `gherkin/ui/ids.json`, `OutlierGroupView.probeGroupId`)
+                            let probe = self.probeGroupId(drawn: sorted)
                             ForEach(sorted) { outlierViewModel in
                                 if outlierViewModel.group.size > 40 { // XXX use a constant here
                                     OutlierGroupView(groupViewModel: outlierViewModel,

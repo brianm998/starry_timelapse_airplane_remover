@@ -1,5 +1,12 @@
 {
   "activity": "landed",
+  "blockers": [
+    {
+      "number": 27,
+      "title": "Processing Frames dialog: remember the window size"
+    }
+  ],
+  "held_retry": "retry from ci when unblocked",
   "branch": "pipe/28-processing-frames-dialog-show-alignment-",
   "checks": [
     {

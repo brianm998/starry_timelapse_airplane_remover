@@ -296,18 +296,21 @@ final class StarAlignedHorizonMaskTests: XCTestCase {
         guard ProcessInfo.processInfo.physicalMemory >= 16 << 30 else {
             throw XCTSkip("needs memory for a dozen 24MB masks and 16-bit frames in flight")
         }
-        let width = 6000, height = 4000
+        // STAR_HEAP_HUNT_SCALE (default 1) divides the frame size and mask count so tools/heap-hunt/gmalloc-xctest.sh
+        // can run this under libgmalloc, which is far too slow at full size.
+        let scale = max(1, Int(ProcessInfo.processInfo.environment["STAR_HEAP_HUNT_SCALE"] ?? "") ?? 1)
+        let width = 6000 / scale, height = 4000 / scale
         let wave = (0..<width).map { x in
-            Optional(2000 + Int(150 * sin(Double(x) / 400)))
+            Optional(height / 2 + Int(Double(150 / scale) * sin(Double(x) / Double(400 / scale))))
         }
         let mask = try XCTUnwrap(PixelatedImage.fromHorizonColumnY(
           width: width, height: height, columnY: wave))
         let frame = try XCTUnwrap(PixelatedImage(mat: sixteenBitFrame(width: width, height: height,
                                                                     seed: 3)))
-        let small = try XCTUnwrap(PixelatedImage(mat: sixteenBitFrame(width: 3000, height: 2000,
+        let small = try XCTUnwrap(PixelatedImage(mat: sixteenBitFrame(width: width / 2, height: height / 2,
                                                                     seed: 9)))
 
-        let masks = 12
+        let masks = max(2, 12 / scale)
         let expected = (0..<masks).map { variant in
             StarAlignedHorizonMask.compute(from: mask, homographies: Self.a9_2Set(variant: variant))
                 .map(Self.bytes(of:))
@@ -327,7 +330,7 @@ final class StarAlignedHorizonMaskTests: XCTestCase {
                 }
                 for _ in 0..<4 {
                     group.addTask {
-                        _ = await NativeWork.run { frame.downScaleTo(width: 1500, height: 1000) }
+                        _ = await NativeWork.run { frame.downScaleTo(width: UInt(width / 4), height: UInt(height / 4)) }
                         return (-1, nil)
                     }
                     group.addTask {

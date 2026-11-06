@@ -149,6 +149,21 @@ final class VideoFrameSourceTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: "\(source.outputFolder)/.extracting"))
     }
 
+    func testFramesFromTheHoldFileOnWaitUntilItIsRemoved() async throws {
+        let video = try h264("hold", frames: 12)
+        try "2".write(toFile: video + ".hold", atomically: true, encoding: .utf8)
+        let source = try await VideoFrameSource.make(videoPath: video, settings: .sweepOnly)
+        try await source.waitUntilAvailable(1)
+        // ffmpeg finishes a clip this short at once: give the held frames time to have arrived if they were going to
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+        XCTAssertFalse(source.isAvailable(2), "a held frame is not moved into the frames folder")
+        XCTAssertEqual(files(in: source.outputFolder).count, 2)
+        try FileManager.default.removeItem(atPath: video + ".hold")
+        try await source.waitUntilAvailable(11)
+        try await source.waitUntilFinished()
+        XCTAssertEqual(files(in: source.outputFolder).count, 12, "the held frames arrive once the hold is gone, though ffmpeg had exited")
+    }
+
     func testTheNonWaitingCallIsFalseBeforeAndTrueAfter() async throws {
         let video = try h264("nonwait", frames: 200, size: "1280x720")
         let source = try await VideoFrameSource.make(videoPath: video, settings: .sweepOnly)

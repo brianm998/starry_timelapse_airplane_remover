@@ -1,0 +1,84 @@
+name: Gherkin smoke
+
+# What a PR runs of Gherkin: gherkin.yml in smoke mode, the features of gherkin/smoke.json (one per client, on every OS the client
+# has), about 30 minutes instead of the full matrix's ~3 h. The pipeline's CI judge waits for and blocks on this workflow like any
+# other; the full "Gherkin" workflow is post-merge only (ci_post_merge_workflows in pipeline/src/starpipe/config.py).
+#
+# It also runs on pushes to develop: the judge blocks a red job only when develop has it green, so a smoke job that never ran on
+# develop could never block anything. This is a separate workflow file because a workflow's `name:` cannot be an expression, and the
+# name is how the pipeline tells smoke from full. See "The smoke subset on a PR" in gherkin/README.md.
+#
+# A pull request skips the Windows legs (cli-windows, desktop-windows): they are the slowest jobs of a batch. They run post-merge, on
+# the push to develop (the `smoke-windows` job when "Already tested?" skips the rest), and on the nightly full run.
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - 'gherkin/**'
+      - 'test_data/**'
+      - 'cli/**'
+      - 'gui/**'
+      - 'star-desktop/**'
+      - 'daemon/**'
+      - 'StarCore/**'
+      - 'StarCpp/**'
+      - 'trail_tools/**'
+      - '.github/workflows/gherkin.yml'
+      - '.github/workflows/gherkin-smoke.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'gherkin/**'
+      - 'test_data/**'
+      - 'cli/**'
+      - 'gui/**'
+      - 'star-desktop/**'
+      - 'daemon/**'
+      - 'StarCore/**'
+      - 'StarCpp/**'
+      - 'trail_tools/**'
+      - '.github/workflows/gherkin.yml'
+      - '.github/workflows/gherkin-smoke.yml'
+  workflow_dispatch:
+
+# not the group gherkin.yml uses inside this call (it includes github.workflow, which is this workflow's name here): a caller and the
+# workflow it calls must not share a concurrency group, or the called one is cancelled
+concurrency:
+  group: gherkin-smoke-caller-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
+
+jobs:
+  # On a push to develop that merges a batch PR whose tree this workflow already passed, `tested` is true and the heavy jobs below
+  # skip (already-tested.yml). It is always false on pull requests, tags and workflow_dispatch, so they run as before.
+  tested:
+    name: Already tested?
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    uses: ./.github/workflows/already-tested.yml
+
+  smoke:
+    needs: tested
+    if: needs.tested.outputs.tested != 'true'
+    # opencv.yml's release tier uploads with the workflow token, and a called workflow cannot hold more than its caller grants
+    permissions:
+      contents: write
+    uses: ./.github/workflows/gherkin.yml
+    with:
+      smoke: true
+      # the Windows legs are the slowest of the batch, so a PR skips them; they run on the push to develop (below) and the nightly
+      windows: ${{ github.event_name == 'pull_request' && 'skip' || 'run' }}
+
+  # On a push to develop that merges an already-tested batch PR, `smoke` above skips. That PR run did not include Windows, so the
+  # Windows legs (and only those) run here: this is the per-landing Windows Gherkin coverage.
+  smoke-windows:
+    needs: tested
+    if: github.event_name == 'push' && needs.tested.outputs.tested == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/gherkin.yml
+    with:
+      smoke: true
+      windows: only

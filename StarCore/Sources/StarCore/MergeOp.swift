@@ -73,6 +73,11 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
                     return
                 }
                 try await frame.finishSelective()
+            case .dirtySky:
+                // no decision tree: the dirty methods keep every bad signal
+                try await frame.finishDirty(portion: .sky)
+            case .dirtyEarth:
+                try await frame.finishDirty(portion: .earth)
             }
             Log.d("frame \(frame.frameIndex) done")
         } catch is CancellationError {

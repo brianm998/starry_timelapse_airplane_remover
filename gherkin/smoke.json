@@ -1,0 +1,5 @@
+{
+  "cli": ["autoHorizonJpeg"],
+  "mac-gui": ["autoHorizonJpeg"],
+  "desktop": ["autoHorizonJpeg"]
+}

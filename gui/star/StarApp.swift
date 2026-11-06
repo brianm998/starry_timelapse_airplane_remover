@@ -303,6 +303,13 @@ struct StarApp: App {
               .background(MainWindowAccessor { window in
                   appDelegate.viewModel = viewModel
                   window.delegate = appDelegate
+                  if let size = ViewModel.uiTestWindowSize {
+                      // the parity gallery's window: placed on the screen's top left, so the whole of it is on screen
+                      window.setContentSize(size)
+                      if let screen = window.screen ?? NSScreen.main {
+                          window.setFrameTopLeftPoint(NSPoint(x: screen.visibleFrame.minX + 20, y: screen.visibleFrame.maxY - 20))
+                      }
+                  }
               })
               .onAppear {
                   enableGUILogs()
@@ -311,6 +318,7 @@ struct StarApp: App {
                   viewModel.openSequenceFromUITestArgument()
                   viewModel.openConfigFromUITestArgument()
                   viewModel.openVideoFromUITestArgument()
+                  viewModel.openSequenceLocationFromUITestArgument()
               }
               // the windows about the sequence go with it (D11)
               .onChange(of: viewModel.imageSequence == nil) { _, unloaded in
@@ -337,18 +345,12 @@ struct StarApp: App {
         // this shows up as stars and wand in the upper right of the menu bar
         // always there when app is running, even when another app is used
         MenuBarExtra {
-            ScrollView {
-                VStack(spacing: 0) {
-                    // maybe add buttons show show the different windows?
-                    // maybe show overall progress monitor of some type?
-                    Text(localized("ui.should_really_be_doing_something_here"))
-                    Text(localized("ui.what_exactly"))
-                    Text(localized("ui.not_sure"))
-                }
-            }
+            // The panel style, because the default menu cannot draw a progress bar.
+            MenuBarStatusView(viewModel: viewModel)
         } label: {
-            Label(localized("ui.star"), systemImage: "wand.and.stars.inverse")
+            MenuBarLabel(viewModel: viewModel)
         }
+        .menuBarExtraStyle(.window)
 
     }
 }

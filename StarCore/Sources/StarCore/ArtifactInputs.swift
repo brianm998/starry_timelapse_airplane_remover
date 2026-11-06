@@ -697,6 +697,8 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         switch value {
         case .automatic(let selective): return "automatic(\(str(selective)))"
         case .selective:                return "selective"
+        case .dirtySky:                 return "dirtySky"
+        case .dirtyEarth:               return "dirtyEarth"
         }
     }
 

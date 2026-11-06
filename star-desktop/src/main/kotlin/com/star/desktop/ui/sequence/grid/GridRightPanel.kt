@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.text.style.TextOverflow
+import com.star.desktop.ui.components.HoverTip
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
@@ -22,6 +25,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -70,15 +75,9 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 SectionTitle(localized("ui.display"))
                 // The gui's order: the horizon lines and which kinds, then the filmstrip.
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Switch(checked = showHorizon, onCheckedChange = vm::setShowHorizonOnMainView)
-                    Text(localized("ui.show_horizon_lines"), color = StarColors.white, fontSize = 11.sp)
-                }
+                GridSwitchRow(localized("ui.show_horizon_lines"), showHorizon, vm::setShowHorizonOnMainView)
                 HorizonLineKindToggles(vm)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Switch(checked = showFilmstrip, onCheckedChange = { vm.toggleFilmstrip() })
-                    Text(localized("ui.show_filmstrip"), color = StarColors.white, fontSize = 11.sp)
-                }
+                GridSwitchRow(localized("ui.show_filmstrip"), showFilmstrip) { vm.toggleFilmstrip() }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -93,8 +92,8 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             // that are "not known", which the gui leaves out (it shows the section when the frame's outliers are loaded).
             info?.takeIf { it.outliersLoaded }?.let { fi ->
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SectionTitle(localized("ui.outliers"))
-                    InfoRow(localized("ui.positive"), "${fi.numPositiveOutliers}", if (fi.numPositiveOutliers > 0) StarColors.red else StarColors.white)
+                    SectionTitle(localized("ui.outliers"), "grid.panel.outliers")
+                    InfoRow(localized("ui.positive"), "${fi.numPositiveOutliers}", if (fi.numPositiveOutliers > 0) StarColors.red else StarColors.white, tag = "grid.panel.positive")
                     InfoRow(localized("ui.negative"), "${fi.numNegativeOutliers}", if (fi.numNegativeOutliers > 0) StarColors.green else StarColors.white)
                     InfoRow(localized("ui.undecided"), "${fi.numUndecidedOutliers}", if (fi.numUndecidedOutliers > 0) StarColors.orange else StarColors.white)
                     InfoRow(localized("ui.trash"), "${fi.numTrashOutliers}", if (fi.numTrashOutliers > 0) StarColors.gray else StarColors.white)
@@ -117,17 +116,35 @@ fun GridRightPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 private fun cleanMethodName(m: CleanMethod): String = localized(when (m) {
     CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.auto_selective"
     CleanMethod.CLEAN_AUTOMATIC -> "ui.automatic"
+    CleanMethod.CLEAN_DIRTY_SKY -> "ui.dirty_sky"
+    CleanMethod.CLEAN_DIRTY_EARTH -> "ui.dirty_earth"
     else -> "ui.selective"
 })
 
 @Composable
-private fun SectionTitle(text: String) =
-    Text(text, color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+private fun SectionTitle(text: String, tag: String? = null) =
+    Text(text, color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = if (tag != null) Modifier.testTag(tag) else Modifier)
 
+/** A switch and its label; the label takes what is left of the row and wraps at its spaces. */
 @Composable
-private fun InfoRow(label: String, value: String, valueColor: Color = StarColors.white) {
-    Row(Modifier.fillMaxWidth()) {
-        Text(label, color = StarColors.textSecondary, fontSize = 10.sp, modifier = Modifier.width(62.dp))
-        Text(value, color = valueColor, fontSize = 10.sp)
+internal fun GridSwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Switch(checked = checked, onCheckedChange = onChange)
+        Text(label, color = StarColors.white, fontSize = 11.sp, modifier = Modifier.weight(1f))
+    }
+}
+
+/**
+ * A label and its value. The label is one line at least 62dp wide, as wide as its own text when that is more, so a long translation never breaks
+ * inside a word; the value takes the rest and is one line, ellipsized with the whole text in a hover tip (a file name has no space to wrap at).
+ */
+@Composable
+internal fun InfoRow(label: String, value: String, valueColor: Color = StarColors.white, tag: String? = null) {
+    // A tagged row is one node whose text is its label and value (a hover tip beneath it would otherwise take the tag's semantics apart).
+    Row(Modifier.fillMaxWidth().then(if (tag != null) Modifier.semantics(mergeDescendants = true) {}.testTag(tag) else Modifier)) {
+        Text(label, color = StarColors.textSecondary, fontSize = 10.sp, maxLines = 1, softWrap = false, modifier = Modifier.widthIn(min = 62.dp).padding(end = 6.dp))
+        HoverTip(value, Modifier.weight(1f)) {
+            Text(value, color = valueColor, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }

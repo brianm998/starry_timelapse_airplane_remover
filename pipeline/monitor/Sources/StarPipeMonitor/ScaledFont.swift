@@ -14,10 +14,11 @@ extension EnvironmentValues {
 
 /// The macOS point size of each semantic text style. macOS ignores dynamicTypeSize, so the scale is applied to these explicitly.
 enum MonitorTextStyle {
-    case title2, title3, body, callout, caption, caption2
+    case counter, title2, title3, body, callout, caption, caption2
 
     var basePointSize: Double {
         switch self {
+        case .counter: 24
         case .title2: 17
         case .title3: 15
         case .body: 13
@@ -34,7 +35,9 @@ private struct ScaledFont: ViewModifier {
     let monospaced: Bool
 
     func body(content: Content) -> some View {
-        content.font(.system(size: style.basePointSize * scale, weight: weight, design: monospaced ? .monospaced : .default))
+        // the tile counter is the only rounded text
+        let design: Font.Design = monospaced ? .monospaced : style == .counter ? .rounded : .default
+        content.font(.system(size: style.basePointSize * scale, weight: weight, design: design))
     }
 }
 

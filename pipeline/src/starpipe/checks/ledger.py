@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from ..config import home
@@ -13,7 +13,7 @@ from ..config import home
 @dataclass
 class Result:
     check: str
-    status: str  # pass | fail | vacuous | skipped-tests | not-run
+    status: str  # pass | fail | hung | vacuous | skipped-tests | not-run
     sha: str
     seconds: float
     lock_wait: float = 0.0
@@ -23,6 +23,11 @@ class Result:
     log: str = ""
     detail: str = ""
     at: float = 0.0
+    failures: list[str] = field(default_factory=list[str])  # names of the failing tests (old rows have none)
+    # What the check's heavy jobs used of the machine (old rows have none): cores averaged over the hold, the busiest sample, peak RSS
+    cpu_mean: float = 0.0
+    cpu_peak: float = 0.0
+    rss_peak_mb: float = 0.0
 
     @property
     def green(self) -> bool:

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
+from .checks.ledger import Result
 from .config import home
 from .db import Database
 
-PAGES = {"needs-input", "develop-red", "phantom-landing", "daemon-down", "runtime-rollback", "self-update-failed"}
+PAGES = {"needs-input", "develop-red", "phantom-landing", "daemon-down", "runtime-rollback", "self-update-failed", "heavy-hung"}
 Sender = Callable[[str, str], None]
 
 
@@ -40,6 +41,14 @@ class Notifier:
                 self.send(f"star pipeline: {kind}", text)
             except OSError:
                 pass  # a failed page must never take a stage down
+
+    def hung_checks(self, ticket: int, results: Sequence[Result]) -> None:
+        """A check killed for making no progress is an alert for its ticket (it held the heavy lock); a rerun without one clears it."""
+        hung = [r for r in results if r.status == "hung"]
+        if hung:
+            self.alert("heavy-hung", ticket, f"ticket #{ticket}: " + "; ".join(f"{r.check}: {r.detail}" for r in hung))
+        else:
+            self.clear("heavy-hung", ticket)
 
     def clear(self, kind: str, ticket: int | None) -> None:
         self.db.close_alert(f"{kind}:{ticket}" if ticket is not None else kind)

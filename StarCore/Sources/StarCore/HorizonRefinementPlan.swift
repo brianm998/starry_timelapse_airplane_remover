@@ -56,7 +56,8 @@ public struct HorizonRefinementPlan: Sendable, Equatable {
     /// Frame output whose presence means a frame has to be rendered again when the horizon under it
     /// moves -- the same set `FrameAirplaneRemover.deleteMergeOutput` deletes.
     public static let outputTypes: Set<FrameViewMode> =
-      [.autoProcessed, .autoSelectiveProcessed, .selectiveProcessed, .final]
+      [.autoProcessed, .autoSelectiveProcessed, .selectiveProcessed,
+       .dirtySkyProcessed, .dirtyEarthProcessed, .final]
 
     // MARK: - what is owed
 

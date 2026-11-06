@@ -85,6 +85,8 @@ def audit(root: Path, merge_base: str, develop: str, pr_original: str, result: s
         for line in lines:
             if not line.strip() or re.fullmatch(r"\W*", line):
                 continue  # blank lines and bare punctuation move around without meaning
+            if "source-hash:" in line:
+                continue  # a generated file's hash of its inputs: regenerating after the merge rewrites it, so it is never "kept"
             if line in have or line in gone_by_pr:
                 continue
             tokens = _tokens(line)

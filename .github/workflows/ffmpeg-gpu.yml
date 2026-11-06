@@ -206,7 +206,9 @@ jobs:
           path: ffmpeg/dist/windows-x64
           key: ffmpeg-windows-x64-${{ hashFiles('ffmpeg/versions.env', 'ffmpeg/build.sh', 'ffmpeg/lib/**') }}
 
+      # Only a build needs MSYS2. Setting it up on a cache hit cost 1m23s and saved a ~200 MB msys2-pkgs entry per branch.
       - name: Set up MSYS2
+        if: steps.cache.outputs.cache-hit != 'true'
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -222,9 +224,22 @@ jobs:
         run: ./ffmpeg/build.sh windows-x64
 
       - name: Smoke test
+        if: steps.cache.outputs.cache-hit != 'true'
         run: ./ffmpeg/smoke_test.sh --target windows-x64 ffmpeg/dist/windows-x64
 
       - name: Check the NVENC entries in StarCore's tables against this build
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ./ffmpeg/check_extra_encoders.sh ffmpeg/dist/windows-x64
+
+      # On a cache hit MSYS2 is not set up, so the job's default `msys2` shell does not exist; both scripts also run under Git Bash.
+      - name: Smoke test (cached binaries)
+        if: steps.cache.outputs.cache-hit == 'true'
+        shell: bash
+        run: ./ffmpeg/smoke_test.sh --target windows-x64 ffmpeg/dist/windows-x64
+
+      - name: Check the NVENC entries in StarCore's tables against this build (cached binaries)
+        if: steps.cache.outputs.cache-hit == 'true'
+        shell: bash
         run: ./ffmpeg/check_extra_encoders.sh ffmpeg/dist/windows-x64
 
       - uses: actions/upload-artifact@v4

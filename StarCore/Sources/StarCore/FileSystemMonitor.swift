@@ -9,7 +9,6 @@ import Semaphore
 // XXX make this max a parameter
 public let fileSystemMonitor = FileSystemMonitor(max: 16)
 //public let fileSystemMonitor = FileSystemMonitor(max: 80)
-public let finalFileSystemMonitor = FileSystemMonitor(max: 32)
 
 public actor FileSystemMonitor {
 

@@ -114,7 +114,14 @@ struct VideoImportSheetView: View {
                 Button(localized("ui.cancel"), action: onCancel)
                   .keyboardShortcut(.cancelAction)
                 Button(localized("ui.video_import_start")) {
-                    onImport(VideoImportOptions(format: format, extractInBackground: extractInBackground, outputDir: outputDir))
+                    // Under the sandbox "beside the video" has to be granted first; nothing happens when it is not asked for.
+                    var chosen = outputDir
+                    switch FolderAccess.grantOutputLocation(source: pending.path, outputDir: outputDir) {
+                    case .granted: break
+                    case .choseOutputDir(let dir): chosen = dir; outputDir = dir
+                    case .cancelled: return
+                    }
+                    onImport(VideoImportOptions(format: format, extractInBackground: extractInBackground, outputDir: chosen))
                 }
                   .keyboardShortcut(.defaultAction)
                   .accessibilityIdentifier("videoimport.import")
@@ -244,7 +251,10 @@ struct WorkingLocationSectionView: View {
         panel.allowsMultipleSelection = false
         panel.message = localized("ui.location_title")
         panel.directoryURL = URL(fileURLWithPath: effectiveFolder, isDirectory: true)
-        if panel.runModal() == .OK, let url = panel.url { outputDir = url.path }
+        if panel.runModal() == .OK, let url = panel.url {
+            FolderAccess.remember(url)
+            outputDir = url.path
+        }
     }
 }
 
@@ -267,7 +277,15 @@ struct SequenceLocationSheetView: View {
                 Spacer()
                 Button(localized("ui.cancel"), action: onCancel)
                   .keyboardShortcut(.cancelAction)
-                Button(localized("ui.sequence_location_open")) { onOpen(outputDir) }
+                Button(localized("ui.sequence_location_open")) {
+                    var chosen = outputDir
+                    switch FolderAccess.grantOutputLocation(source: pending.path, outputDir: outputDir) {
+                    case .granted: break
+                    case .choseOutputDir(let dir): chosen = dir; outputDir = dir
+                    case .cancelled: return
+                    }
+                    onOpen(chosen)
+                }
                   .keyboardShortcut(.defaultAction)
                   .accessibilityIdentifier("sequencelocation.open")
             }

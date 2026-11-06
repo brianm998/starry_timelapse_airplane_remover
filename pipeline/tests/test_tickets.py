@@ -150,3 +150,83 @@ def test_ensure_labels_is_idempotent() -> None:
     created, present = GitHub(Config(), runner).ensure_labels()
     assert "pipeline" not in created and "pipe:queued" in created and present == ["p2", "pipeline"]
     assert created == created_names
+
+
+PLAN_BODY = """## Goal
+Make the thing work.
+
+## Context
+See docs/a.md.
+
+## Acceptance criteria
+- A1: it works — check: FooTests/testWorks
+- A2: docs updated — check: review: docs/a.md
+
+## Tests
+- unit: pipeline/tests/test_foo.py test_it_works — shows: A1 — fails before fix
+- unit: pipeline/tests/test_foo.py test_docs — shows: A2
+
+## Out of scope
+Anything else.
+
+## Plan
+summary: Fix the thing in docs.
+parity: desktop-only — the gui has no such screen
+localization: no
+- approach: edit docs/a.md
+- approach: add the test
+- file: docs/a.md:1 — the line that matters
+- risk: stale docs
+
+## Pipeline
+gherkin: no
+"""
+
+
+def test_ticket_plan_parses_to_the_plan_model() -> None:
+    from starpipe.plan import AcceptanceMap, Finding, NewTest, Plan, Tests
+
+    plan, errors = tickets.ticket_plan(PLAN_BODY)
+    assert errors == []
+    assert plan is not None
+    assert plan.model_dump() == Plan(
+        summary="Fix the thing in docs.", findings=[Finding(file="docs/a.md", line=1, claim="the line that matters")],
+        approach=["edit docs/a.md", "add the test"],
+        tests=Tests(new=[NewTest(target="pipeline/tests/test_foo.py", name="test_it_works", kind="unit", shows="A1",
+                                 fails_before_fix=True),
+                         NewTest(target="pipeline/tests/test_foo.py", name="test_docs", kind="unit", shows="A2")]),
+        gherkin_features_to_run=[],
+        acceptance=[AcceptanceMap(id="A1", check="FooTests/testWorks"), AcceptanceMap(id="A2", check="review: docs/a.md")],
+        parity="desktop-only", parity_reason="the gui has no such screen", touches_localization=False,
+        risks=["stale docs"]).model_dump()
+    assert tickets.ticket_plan(GOOD) == (None, [])
+    none_tests = PLAN_BODY.split("## Tests")[0] + "## Tests\nnone: docs only\n\n## Out" + PLAN_BODY.split("## Out", 1)[1]
+    with_none, _ = tickets.ticket_plan(none_tests)
+    assert with_none and with_none.tests.none_reason == "docs only" and not with_none.tests.new
+    features, _ = tickets.ticket_plan(PLAN_BODY.replace("gherkin: no", "gherkin: autoHorizonJpeg, autoHorizonTiff16"))
+    assert features and features.gherkin_features_to_run == ["autoHorizonJpeg", "autoHorizonTiff16"]
+
+
+def test_plan_section_lint() -> None:
+    assert tickets.lint(PLAN_BODY).ok
+    assert tickets.lint(GOOD).ok  # no '## Plan': lints as before
+
+    def errors(old: str, new: str) -> list[str]:
+        assert old in PLAN_BODY
+        return tickets.lint(PLAN_BODY.replace(old, new)).errors
+
+    assert any("unknown key" in e and "colour" in e for e in errors("localization: no", "localization: no\ncolour: red"))
+    assert any("needs a 'summary:'" in e for e in errors("summary: Fix the thing in docs.\n", ""))
+    assert any("needs a 'parity:'" in e for e in errors("parity: desktop-only — the gui has no such screen\n", ""))
+    assert any("needs a 'localization:'" in e for e in errors("localization: no\n", ""))
+    assert any("at least one '- approach:'" in e for e in errors("- approach: edit docs/a.md\n- approach: add the test\n", ""))
+    assert any("needs a reason" in e for e in errors("desktop-only — the gui has no such screen", "gui-only"))
+    assert any("is not neither, both" in e for e in errors("desktop-only — the gui", "sideways — the gui"))
+    assert any("localization must be yes or no" in e for e in errors("localization: no", "localization: maybe"))
+    assert any("expected '<repo path>:<line>" in e for e in errors("docs/a.md:1 —", "docs/a.md —"))
+    assert any("a plan ticket needs" in e for e in errors("- unit: pipeline/tests/test_foo.py test_docs — shows: A2",
+                                                         "- FooTests.testDocs: fails without the fix"))
+    assert any("shows: A9 is not an acceptance criterion" in e for e in errors("shows: A2", "shows: A9"))
+    assert any("explicit 'gherkin:" in e for e in errors("## Pipeline\ngherkin: no\n", ""))
+    assert any("explicit 'gherkin:" in e for e in errors("gherkin: no", "effort_develop: low"))
+    assert any("summary" in e for e in errors("summary: Fix the thing in docs.", "summary: Short"))  # Pydantic's min_length

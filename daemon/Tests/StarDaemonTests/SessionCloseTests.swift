@@ -106,7 +106,7 @@ final class SessionCloseTests: XCTestCase {
         await session.reprocessFrames(indices: [0], type: .everything)
 
         var events = 0
-        for await _ in stream { events += 1 }
+        for await _ in boundedStream(stream, seconds: 30, what: "a closed session's progress stream to end") { events += 1 }
         XCTAssertEqual(events, 0, "a closed session reported a run")
     }
 
@@ -132,7 +132,7 @@ final class SessionCloseTests: XCTestCase {
         let task = Task { await session.renderNow(frame) }
         task.cancel()
         let started = Date()
-        let rendered = await task.value
+        let rendered = try await boundedValue(of: task, seconds: 30, what: "renderNow for a cancelled caller")
         XCTAssertFalse(rendered)
         XCTAssertLessThan(Date().timeIntervalSince(started), 2)
     }

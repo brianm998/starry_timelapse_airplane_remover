@@ -7,24 +7,31 @@ from __future__ import annotations
 import difflib
 import json
 import re
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ValidationError
 
-from . import gitutil
+from . import gitutil, heavy
 from . import plan as planmod
-from .checks import impact, ledger
+from .checks import baseline, impact, ledger
 from .db import Database, Ticket
 from .github import GitHub, GitHubError
+from .notify import Notifier
 
 ACCEPTED = "accepted. End your turn now."
 CLOSE_REASONS = ("duplicate-of", "already-done", "no-defect", "not-this-repo")
 GUI_PREFIX, DESKTOP_PREFIX = "gui/star/", "star-desktop/src/main/"
 
-CheckRunner = Callable[[Path, str], list[ledger.Result]]
+LENIENT_TIERS = {"t0"}
+
+
+class CheckRunner(Protocol):
+    """Runs the checks a diff needs. `tiers` None means every tier of the plan; a land-now conflict catch-up asks for the
+    cheap t0 checks alone."""
+
+    def __call__(self, worktree: Path, base: str, tiers: set[str] | None = None, /) -> list[ledger.Result]: ...
 
 
 class ChangeSubmission(BaseModel):
@@ -66,10 +73,20 @@ class Contract:
     db: Database
     gh: GitHub | None = None
     check_runner: CheckRunner | None = None
+    notifier: Notifier | None = None
     owner_filed: bool = True
     result: tuple[str, Any] | None = None
     lock_wait_s: float = 0.0  # seconds spent waiting for the heavy lock; stage budgets are net of it
     followups: list[dict[str, Any]] = field(default_factory=list[dict[str, Any]])
+    baseline_runner: baseline.BaselineRunner = baseline.result_at_base  # a check at the branch's merge-base
+    known_red: dict[tuple[str, str], baseline.KnownRed | None] = field(default_factory=dict[tuple[str, str], baseline.KnownRed | None])
+    stage: str = ""  # which stage's session this is: the heavy lock serves the ticket furthest along first
+
+    def lenient(self) -> bool:
+        """A conflict catch-up of a ticket the owner landed with land-now is gated on the cheap t0 checks only. Read from
+        the db at every call: the owner may mark land-now while the stage runs."""
+        from . import ship  # late: ship imports engine, which imports this module
+        return self.stage == "conflict" and ship.land_now_mark(self.db, self.ticket.number)
 
     def _bug(self) -> bool:
         return bool(re.search(r"\b(bug|fix|crash|regress|wrong|fails?)\b", self.ticket.title, re.IGNORECASE))
@@ -79,13 +96,19 @@ class Contract:
         return ACCEPTED
 
     # EXPLORE -------------------------------------------------------------------------------------------------------
-    def submit_plan(self, args: dict[str, Any]) -> str:
+    def check_plan(self, args: dict[str, Any]) -> tuple[planmod.Plan | None, list[str]]:
+        """The one place a plan is judged: the model's shape, then `planmod.validate` against the worktree and ticket.
+        EXPLORE's `submit_plan` and the engine's plan-from-the-ticket path both come through here."""
         try:
             p = planmod.Plan.model_validate(args)
         except ValidationError as exc:
-            return "plan rejected:\n" + "\n".join(f"- {'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
+            return None, [f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()]
         errors = planmod.validate(p, self.worktree, self.ticket.body, self._bug())
-        if errors:
+        return (None, errors) if errors else (p, [])
+
+    def submit_plan(self, args: dict[str, Any]) -> str:
+        p, errors = self.check_plan(args)
+        if p is None:
             return "plan rejected:\n" + "\n".join(f"- {e}" for e in errors)
         return self._accept("plan", p.model_dump())
 
@@ -113,21 +136,45 @@ class Contract:
     def run_checks(self, args: dict[str, Any]) -> str:
         if self.check_runner is None:
             return "run_checks is not available in this stage"
-        results = self.check_runner(self.worktree, self.base_ref)
+        lenient = self.lenient()
+        with heavy.requester(self.ticket.number, self.stage, self.ticket.priority):
+            results = self.check_runner(self.worktree, self.base_ref, LENIENT_TIERS if lenient else None)
         sha = gitutil.head_sha(self.worktree)
         self.lock_wait_s += sum(r.lock_wait for r in results)
         for r in results:
             self.db.record_check(self.ticket.number, sha, r.check, r.status,
                                  {"executed": r.executed, "failed": r.failed, "skipped": r.skipped}, r.log)
-        lines = [f"{'PASS' if r.green else r.status.upper()} {r.check} ({r.executed} tests, {r.failed} failed)"
-                 + ("" if r.green else f" — {r.detail} log: {r.log}") for r in results]
+        if self.notifier:
+            self.notifier.hung_checks(self.ticket.number, results)
+        lines: list[str] = []
+        for r in results:
+            line = f"{'PASS' if r.green else r.status.upper()} {r.check} ({r.executed} tests, {r.failed} failed)"
+            if not r.green:
+                line += f" — {r.detail} log: {r.log}"
+                if r.failures:
+                    line += f" failing: {', '.join(r.failures)}"
+                if (excused := self._excuse(r)) is not None:
+                    line += f"\nKNOWN-RED {excused.line()} (also red on develop: does not block submit_change)"
+            lines.append(line)
+        if lenient:
+            lines.append("land-now: only the cheap checks are required")
         return "\n".join(lines) or "no checks needed for this diff"
+
+    def _excuse(self, r: ledger.Result) -> baseline.KnownRed | None:
+        """The failures of a red test check that develop has too (run once per check and sha; see checks/baseline.py)."""
+        key = (r.sha, r.check)
+        if key not in self.known_red:
+            found = baseline.known_red(self.worktree, self.base_ref, r, self.baseline_runner, self.notifier)
+            self.known_red[key] = found
+            if found:
+                baseline.note(self.db, self.ticket.number, r.sha, found)
+        return self.known_red[key]
 
     def _missing_green(self, sha: str) -> list[str]:
         changed = gitutil.changed_paths(self.worktree, self.base_ref)
         need = impact.plan_for(changed)
-        wanted = [*need.t0, *need.t1()]
-        return [c for c in wanted if not (r := ledger.latest(sha, c)) or not r.green]
+        wanted = list(need.t0) if self.lenient() else [*need.t0, *need.t1()]
+        return [c for c in wanted if not (r := ledger.latest(sha, c)) or not (r.green or self._excuse(r))]
 
     def submit_change(self, args: dict[str, Any]) -> str:
         try:
@@ -157,7 +204,11 @@ class Contract:
                 problems.append("gui and desktop changed one-sided: give parity_reason (CLAUDE.md)")
         if problems:
             return "change rejected:\n" + "\n".join(f"- {p}" for p in problems)
-        return self._accept("change", sub.model_dump())
+        excused = [k for (s, _c), k in self.known_red.items() if k and s == gitutil.head_sha(self.worktree)]
+        accepted = self._accept("change", sub.model_dump())
+        if not excused:
+            return accepted
+        return accepted + "\nKnown red on develop, not held against this change:\n" + "\n".join(f"- {k.line()}" for k in excused)
 
     # REVIEW --------------------------------------------------------------------------------------------------------
     def submit_review(self, args: dict[str, Any]) -> str:

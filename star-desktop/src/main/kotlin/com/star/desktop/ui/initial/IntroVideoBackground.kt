@@ -4,7 +4,7 @@ import com.star.desktop.domain.AspectFill
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -15,88 +15,43 @@ import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import java.io.File
-import javafx.animation.AnimationTimer
-import javafx.application.Platform
-import javafx.embed.swing.JFXPanel
-import javafx.embed.swing.SwingFXUtils
-import javafx.scene.Scene
-import javafx.scene.SnapshotParameters
-import javafx.scene.image.WritableImage
-import javafx.scene.layout.StackPane
-import javafx.scene.media.Media
-import javafx.scene.media.MediaPlayer
-import javafx.scene.media.MediaView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
+import org.jetbrains.skia.ColorAlphaType
+import org.jetbrains.skia.ColorType
+import org.jetbrains.skia.Image
+import org.jetbrains.skia.ImageInfo
+
+/** How many decoded frames stay open (about a tenth of a second at 25 fps) before the oldest is closed. */
+private const val FRAMES_KEPT_OPEN = 4
 
 private const val INTRO_VIDEO_NAME = "11_30_2024-fx3-aurora-topaz-star.mp4"
 
 /** Set (to anything) by a UI test host to have the start screen draw no video; see [IntroVideoBackground]. */
 const val NO_INTRO_VIDEO_PROPERTY = "star.ui.noIntroVideo"
 
-// Off-screen render width for the snapshot loop; the height follows the video's own shape, and Canvas.drawImage below scales the picture to
-// fill whatever size the initial screen actually is, cutting what overhangs rather than stretching it (macOS aspect-fills).
-private const val SNAPSHOT_WIDTH = 1280.0
-private const val SNAPSHOT_HEIGHT = 720.0   // only the scene's size: the view is as tall as the video's shape makes it
-
 /**
  * Full-bleed looping background video on the initial screen (macOS `SplitRevealVideoView`).
  *
- * Compose Desktop has no video playback of its own. An earlier version of this embedded a JavaFX
- * `MediaView` directly via `SwingPanel`/`JFXPanel` — but Compose Desktop always draws `SwingPanel`
- * content on top of every other Compose composable in the window, regardless of where it sits in
- * the composition tree. That hid the drop zone and the Open/Load buttons the initial screen needs
- * to be usable. Instead, this decodes frames off-screen (a `MediaView` inside a `Scene` that is
- * never attached to any visible AWT container) and periodically snapshots them into a plain
- * Compose `ImageBitmap`, drawn via `Canvas` like any other Compose content — so the rest of the
- * initial screen layers normally on top of it.
+ * Compose Desktop has no video playback of its own, and a `SwingPanel` is always drawn over every Compose element, hiding the drop zone and
+ * buttons. So the bundled ffmpeg decodes the clip to raw BGRA frames on a pipe ([introVideoFfmpegArgs]); each whole frame becomes an
+ * `ImageBitmap` that `Canvas` draws aspect-filled like any other Compose content, and the rest of the start screen layers on top.
  *
- * Shows nothing (falls back to whatever background the caller draws behind it) if the asset isn't
- * staged — same as macOS's `Bundle.main.url` returning nil for a dev build that hasn't fetched
- * gui/videos.
+ * Shows nothing (falls back to whatever background the caller draws behind it) if the asset or ffmpeg isn't there, or if anything fails -
+ * same as macOS's `Bundle.main.url` returning nil for a dev build that hasn't fetched gui/videos. Leaving composition cancels the effect,
+ * which kills the ffmpeg child.
  */
 @Composable
 fun IntroVideoBackground(modifier: Modifier = Modifier) {
-    // A UI test host is headless, where JavaFX cannot start and composing this would block the UI thread for good. The video is only a
-    // background, so a test that asks for none sees the start screen as it is without it.
+    // A UI test host asks for no video: it should not spawn ffmpeg, and the start screen is then seen as it is without the background.
     if (System.getProperty(NO_INTRO_VIDEO_PROPERTY) != null) return
     val file = remember { resolveIntroVideoFile() } ?: return
     var frame by remember { mutableStateOf<ImageBitmap?>(null) }
 
-    DisposableEffect(file) {
-        // JFXPanel()'s constructor is the standard way to force JavaFX toolkit startup before any
-        // Scene/MediaPlayer is touched. This instance is discarded — never added to any container.
-        JFXPanel()
-        var player: MediaPlayer? = null
-        var timer: AnimationTimer? = null
-        Platform.runLater {
-            val p = MediaPlayer(Media(file.toURI().toString()))
-            p.cycleCount = MediaPlayer.INDEFINITE
-            val view = MediaView(p)
-            view.isPreserveRatio = true
-            view.fitWidth = SNAPSHOT_WIDTH
-            // Never shown in any Window — snapshot() below renders it on demand regardless — but a
-            // MediaView needs a Scene attached for its decode/present pipeline to have somewhere to draw.
-            Scene(StackPane(view), SNAPSHOT_WIDTH, SNAPSHOT_HEIGHT)
-            player = p
-
-            val params = SnapshotParameters()
-            var writable: WritableImage? = null
-            val t = object : AnimationTimer() {
-                override fun handle(now: Long) {
-                    writable = view.snapshot(params, writable)
-                    val wi = writable ?: return
-                    frame = SwingFXUtils.fromFXImage(wi, null).toComposeImageBitmap()
-                }
-            }
-            timer = t
-            t.start()
-            p.play()
-        }
-        onDispose {
-            Platform.runLater {
-                timer?.stop()
-                player?.stop()
-                player?.dispose()
-            }
+    LaunchedEffect(file) {
+        withContext(Dispatchers.IO) {
+            runCatching { playIntroVideo(file) { frame = it } }
         }
     }
 
@@ -108,6 +63,52 @@ fun IntroVideoBackground(modifier: Modifier = Modifier) {
         }
     }
 }
+
+/** Runs ffmpeg on [file] and hands every decoded frame to [onFrame] until cancelled; the child is always killed on the way out. */
+private fun kotlinx.coroutines.CoroutineScope.playIntroVideo(file: File, onFrame: (ImageBitmap) -> Unit) {
+    val ffmpeg = resolveIntroFfmpeg() ?: return
+    val (w, h) = parseVideoSize(probeIntroVideo(ffmpeg, file)) ?: return
+    val height = introVideoHeight(w, h)
+    val process = ProcessBuilder(introVideoFfmpegArgs(ffmpeg.path, file.path, height)).start()
+    val recent = ArrayDeque<Image>()
+    val hook = Thread { process.destroyForcibly() }
+    Runtime.getRuntime().addShutdownHook(hook)
+    try {
+        process.outputStream.close()
+        // ffmpeg's stderr must be read or a full pipe blocks it; with -loglevel error it only ever says what went wrong.
+        Thread { runCatching { process.errorStream.copyTo(java.io.OutputStream.nullOutputStream()) } }.apply { isDaemon = true }.start()
+        val reader = RawFrameReader(process.inputStream.buffered(1 shl 20), INTRO_VIDEO_WIDTH, height)
+        val buf = ByteArray(reader.frameBytes)
+        val info = ImageInfo(INTRO_VIDEO_WIDTH, height, ColorType.BGRA_8888, ColorAlphaType.OPAQUE)
+        // Every frame is a native Skia picture of ~3.7 MB, ~90 MB/s at video rate. The JVM-side wrappers are tiny, so the garbage collector
+        // would hardly ever run the cleaners that free them and native memory would climb for as long as the start screen is open. So each
+        // picture is closed explicitly once it is a few frames old: long enough that the draw which took it has finished with it.
+        while (reader.nextInto(buf)) {
+            ensureActive()
+            // makeRaster copies the pixels, so buf is free to be refilled while the picture just handed over is still being drawn.
+            val image = Image.makeRaster(info, buf, INTRO_VIDEO_WIDTH * 4)
+            recent.addLast(image)
+            onFrame(image.toComposeImageBitmap())
+            if (recent.size > FRAMES_KEPT_OPEN) recent.removeFirst().close()
+        }
+    } finally {
+        // all but the newest, which the canvas may still be drawing; that one is left to the garbage collector
+        while (recent.size > 1) recent.removeFirst().close()
+        process.destroyForcibly()
+        runCatching { Runtime.getRuntime().removeShutdownHook(hook) }
+    }
+}
+
+/** `ffmpeg -i video` stderr, which names the stream sizes; "" if it cannot be run. */
+private fun probeIntroVideo(ffmpeg: File, file: File): String = runCatching {
+    val p = ProcessBuilder(introVideoProbeArgs(ffmpeg.path, file.path)).redirectErrorStream(true).start()
+    p.outputStream.close()
+    try {
+        String(p.inputStream.readBytes())
+    } finally {
+        p.destroyForcibly()
+    }
+}.getOrDefault("")
 
 /** Bundled resource dir (packaged app) or dev fallback (../gui/videos) — same file both clients share. */
 private fun resolveIntroVideoFile(): File? {

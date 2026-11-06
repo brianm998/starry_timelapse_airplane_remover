@@ -13,7 +13,10 @@
 # (the macOS leg wraps it in one) runs only what failed.  Every feature runs even if an earlier one failed; the exit status is
 # non-zero when any did.
 #
-# Environment (STAR_SYSTEM_FLOOR_MB, STAR_GHERKIN_ARTIFACTS, ...) is inherited by gradlew and the test JVM.
+# Environment (STAR_SYSTEM_FLOOR_MB, STAR_GHERKIN_ARTIFACTS, ...) is inherited by gradlew and the test JVM.  When
+# STAR_HANG_WATCHDOG_SECONDS is set (the Linux and Windows legs), gherkin/hang-watchdog.sh runs beside the features and dumps stard's and
+# the test JVM's stacks into the log, and into build/gherkin-each/hang-watchdog.log, once stard has been silent that long (tickets #54,
+# #53); unset, nothing changes.
 
 set -u
 
@@ -24,8 +27,20 @@ fi
 stard=$1
 shift
 
-cd "$(dirname "$0")/../star-desktop" || exit 2
+here=$(cd "$(dirname "$0")" && pwd)
+cd "$here/../star-desktop" || exit 2
+
 each=build/gherkin-each
+
+if [ -n "${STAR_HANG_WATCHDOG_SECONDS:-}" ]; then
+    # The dumps also go to a file the reports artifact carries (a cancelled job's log is lost); per-feature dirs are removed one by
+    # one below, so this file survives retries.
+    mkdir -p "$each"
+    HANG_WATCHDOG_OUT="$each/hang-watchdog.log" "$here/hang-watchdog.sh" "$STAR_HANG_WATCHDOG_SECONDS" &
+    watchdog=$!
+    trap 'kill "$watchdog" 2>/dev/null' EXIT
+    trap 'exit 143' TERM
+fi
 
 # One test, ran, not skipped, no failures: the same three greps over the Gradle XML as ever, on this feature's copy of it.
 proved() {
