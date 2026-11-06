@@ -4086,13 +4086,12 @@ final class SharedConstantsTests: XCTestCase {
     func testSpeedSheetBackgroundIsNotWhite() throws {
         let view = KeypointDivisorStartupView(initial: 1.5, onCancel: {}, onUpdate: { _ in })
         // The field's `.cursor()` modifier reads the app's ViewModel from the environment.
-        let renderer = ImageRenderer(content: view.environment(ViewModel()).frame(width: 700, height: 600))
+        let renderer = ImageRenderer(content: view.environment(ViewModel()).frame(width: 700, height: 600, alignment: .topLeading))
         renderer.scale = 1
         let cg = try XCTUnwrap(renderer.cgImage, "the sheet did not render")
         let rep = NSBitmapImageRep(cgImage: cg)
-        // Corners lie in the sheet's padding, away from any text or control.
-        let w = rep.pixelsWide, h = rep.pixelsHigh
-        for (x, y) in [(4, 4), (w - 5, 4), (4, h - 5), (w - 5, h - 5)] {
+        // The sheet sits at the top left; its first 24pt of padding hold no text or control.
+        for (x, y) in [(4, 4), (4, 20), (20, 4)] {
             let c = try XCTUnwrap(rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
             let luminance = 0.2126 * c.redComponent + 0.7152 * c.greenComponent + 0.0722 * c.blueComponent
             XCTAssertGreaterThan(c.alphaComponent, 0.99, "nothing is drawn at (\(x), \(y)): the sheet would show the system's light background")
