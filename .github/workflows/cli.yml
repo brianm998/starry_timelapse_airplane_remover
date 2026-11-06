@@ -49,6 +49,33 @@ jobs:
       pull-requests: read
     uses: ./.github/workflows/already-tested.yml
 
+  # A pull request runs the macOS jobs (`macos`, `macos-e2e` through `needs`, and the OpenCV build they use) only when it touches a
+  # macOS-specific path (.github/scripts/macos-paths.sh): Linux builds and tests the same code on the PR, and macOS runs post-merge
+  # on the push to develop. Every other event (push, tags, workflow_dispatch) runs them. pr-gate.yml's `changes` job decides the same.
+  # The macOS jobs do NOT look at "Already tested?": a batch PR's green run did not include them unless it touched a macOS path,
+  # so a push to develop that is skipped for everything else still runs them (that is where macOS is tested once per landing).
+  changes:
+    name: macOS-specific change?
+    runs-on: ubuntu-24.04
+    outputs:
+      macos: ${{ steps.decide.outputs.macos }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - id: decide
+        run: |
+          macos=true
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            # the checkout is the PR's merge commit: HEAD^1 is the base tip, so this is the PR's own files
+            files=$(git diff --name-only --no-renames HEAD^1 HEAD)
+            echo "Changed files:"; echo "$files"
+            if [ -n "$files" ]; then macos=$(.github/scripts/macos-paths.sh <<< "$files"); fi
+          fi
+          echo "macos=$macos"
+          echo "macos=$macos" >> "$GITHUB_OUTPUT"
+
   # ─── Linux ───────────────────────────────────────────────────────────────────
   # ─── OpenCV: built once per OS per key by opencv.yml (cache, then the opencv-prebuilt release, then a build) ───
   opencv-linux:
@@ -63,8 +90,8 @@ jobs:
 
   opencv-macos:
     name: OpenCV (macos)
-    needs: tested
-    if: needs.tested.outputs.tested != 'true'
+    needs: changes
+    if: needs.changes.outputs.macos == 'true'
     permissions:
       contents: write
     uses: ./.github/workflows/opencv.yml
@@ -153,12 +180,17 @@ jobs:
   # (macos-signed-release, kotlin-client.yml macos-signed) saved under the plain key.
   #
   # `macos` also needs `linux`, which builds and tests the same code: macOS runners are scarce (jobs have gone unacquired, see #388), and a
-  # red Linux job already fails the PR, so a PR that is red on Linux never joins the macOS queue. Both jobs run on exactly the same
-  # condition (`tested`), so `linux` is never skipped while `macos` should run.
+  # red Linux job already fails the PR, so a PR that is red on Linux never joins the macOS queue. A `linux` that is skipped
+  # (`tested`: already passed before the merge) does not hold `macos` back: it still runs once per landing.
   macos:
     name: macOS (macos-15)
-    needs: [tested, opencv-macos, linux]
-    if: needs.tested.outputs.tested != 'true'
+    needs: [changes, opencv-macos, linux]
+    # `!cancelled()` stops a skipped `linux` (already tested on a push to develop) from skipping this job with it: a failed `linux` still does.
+    if: >-
+      ${{ !cancelled()
+      && needs.changes.outputs.macos == 'true'
+      && needs.opencv-macos.result == 'success'
+      && contains(fromJSON('["success","skipped"]'), needs.linux.result) }}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
