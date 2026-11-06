@@ -29,10 +29,20 @@ final class UserPreferencesStore {
 struct UserPreferences: Codable, Sendable {
     static let filename = ".star.userprefs.json"
 
-    /// `~/.star.userprefs.json`, which the Kotlin client reads and writes too.  `NSHomeDirectory()` is `$HOME` as it always was, and
-    /// under the App Sandbox it is the app's container instead, so there the file moves with it (and is not shared).
+    /// `~/.star.userprefs.json`, which the Kotlin client reads and writes too.  Under the App Sandbox the home is the app's container
+    /// (`NSHomeDirectory()`), so there the file moves with it (and is not shared).  Unsandboxed it is `$HOME` from the environment, as
+    /// it was before the sandbox work: `NSHomeDirectory()` ignores a `$HOME` override, and the UI-test runner launches the app with
+    /// `HOME=<scratch>/home` to keep it off the real preferences.
     static var fullPath: String {
-        URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true).appendingPathComponent(filename).path
+        path(environment: ProcessInfo.processInfo.environment,
+             sandboxed: BookmarkStore.processIsSandboxed,
+             nsHomeDirectory: NSHomeDirectory())
+    }
+
+    static func path(environment: [String: String], sandboxed: Bool, nsHomeDirectory: String) -> String {
+        var home = nsHomeDirectory
+        if !sandboxed, let env = environment["HOME"], !env.isEmpty { home = env }
+        return URL(fileURLWithPath: home, isDirectory: true).appendingPathComponent(filename).path
     }
 
     // other things can be saved here too if needed

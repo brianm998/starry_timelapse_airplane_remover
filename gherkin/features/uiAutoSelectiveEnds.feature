@@ -13,7 +13,7 @@ Feature: A run in Automatic with Selective Auto Clean ends with every frame comp
       And I click "startup.moving.static"
       And I click "startup.removal.autoselective"
     Then  "startup.removal.autoselective" is on
-    When  I click "startup.removal.start"
+    When  I press "return"
     Then  "prompt.pre.no" is shown
     When  I click "prompt.pre.no"
     Then  "processing.modal" is shown
