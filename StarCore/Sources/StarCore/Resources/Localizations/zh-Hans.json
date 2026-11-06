@@ -1266,5 +1266,6 @@
   "ui.frame_mode_desc_dirty_sky": "只保留此帧天空中移动过的内容（原图减去对齐后的参考）；地面为黑色。此帧没有需要查看的内容。",
   "ui.frame_mode_desc_dirty_earth": "只保留此帧地面上移动过的内容（原图减去对齐后的参考）；天空为黑色。此帧没有需要查看的内容。",
   "ui.this_frame_uses_dirty_sky": "此帧使用未清理的天空模式",
-  "ui.this_frame_uses_dirty_earth": "此帧使用未清理的地面模式"
+  "ui.this_frame_uses_dirty_earth": "此帧使用未清理的地面模式",
+  "ui.change": "更改"
 }
