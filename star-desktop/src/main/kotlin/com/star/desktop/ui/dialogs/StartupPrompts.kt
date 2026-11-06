@@ -199,18 +199,23 @@ private fun RemovalPrompt(app: AppViewModel, onOpenSpeedModal: () -> Unit) {
 }
 
 /**
- * The cleanup dialog's one-line "Speed vs. Sharpness": the title, what is in effect and an Update button (macOS `KeypointDivisorSummaryRow`).
- * Update opens the modal ([KeypointDivisorModal]).
+ * The cleanup dialog's one-line "Speed vs. Sharpness": the title, what is in effect and a Change button (macOS `KeypointDivisorSummaryRow`).
+ * Change opens the modal ([KeypointDivisorModal]).
  */
 @Composable
 private fun KeypointDivisorSummaryRow(app: AppViewModel, onUpdate: () -> Unit) {
     val session by app.sessions.session.collectAsState()
-    val divisor = session?.config?.alignmentKeypointDetectionDivisor?.takeIf { it > 0.0 } ?: 1.0
+    KeypointDivisorSummaryRow(session?.config?.alignmentKeypointDetectionDivisor?.takeIf { it > 0.0 } ?: 1.0, onUpdate)
+}
+
+/** The row itself, over a value; `internal` so a test can draw it without an [AppViewModel]. The button says Change: the modal it opens has its own Update. */
+@Composable
+internal fun KeypointDivisorSummaryRow(divisor: Double, onUpdate: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(localized("ui.speed_vs_sharpness"), color = StarColors.textPrimary, fontSize = 18.sp)
         Text(KeypointDivisor.summaryLabel(divisor), color = StarColors.textSecondary, fontSize = 15.sp, modifier = Modifier.testTag("startup.removal.speed.value"))
         Spacer(Modifier.weight(1f))
-        PrimaryButton(localized("ui.update"), "startup.removal.speed.update", onUpdate)
+        PrimaryButton(localized("ui.change"), "startup.removal.speed.update", onUpdate)
     }
 }
 

@@ -17,6 +17,8 @@ import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
@@ -395,8 +397,22 @@ class DesktopFeatureRunner {
         finishOpening(t, model, answer = false)
     }
 
+    /**
+     * A grid cell is lazy: in the one-column grid of the test window only the cells near the scroll position are composed, so a cell a few
+     * rows away is not in the tree to click. Scrolls the grid to it, as a user would (the mac gui runner's `scrollGridToBuild`).
+     */
+    private fun scrollGridToCell(t: ComposeUiTest, id: String) {
+        val index = id.removePrefix("grid.cell.").takeIf { id.startsWith("grid.cell.") }?.toIntOrNull() ?: return
+        if (t.onAllNodesWithTagExists(id)) return
+        val grid = t.onAllNodes(hasScrollToIndexAction())
+        if (grid.fetchSemanticsNodes().isEmpty()) return
+        grid[0].performScrollToIndex(index)
+        t.waitForIdle()
+    }
+
     /** Clicks the control; where a list has one per row (the recents' remove button), the first, which is the row on top. */
     private fun clickId(t: ComposeUiTest, id: String) {
+        scrollGridToCell(t, id)
         waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
         t.waitForIdle()
         val node = t.onAllNodes(hasTestTag(id))[0]
@@ -413,6 +429,7 @@ class DesktopFeatureRunner {
 
     /** A click with the command (control off a Mac) key held, or a right click: by the pointer, which is what a cell reads them from. */
     private fun clickWith(t: ComposeUiTest, id: String, command: Boolean = false, right: Boolean = false) {
+        scrollGridToCell(t, id)
         waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
         t.waitForIdle()
         val mac = System.getProperty("os.name").orEmpty().startsWith("Mac", ignoreCase = true)
@@ -1224,29 +1241,32 @@ class DesktopFeatureRunner {
         waitFor(t, "the sequence location question", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("sequencelocation.open") }
     }
 
-    /** The ffmpeg to run: `$STAR_FFMPEG_DIR`'s (the CI jobs name the one they fetched), the bundled one (`.exe` on Windows), or the one on the PATH. */
-    private fun ffmpegExecutable(): String {
-        val dirs = listOfNotNull(System.getenv("STAR_FFMPEG_DIR")?.takeIf { it.isNotBlank() }?.let { File(it) }, File(repoRoot(), "external_binaries/bin"))
-        for (dir in dirs) for (name in listOf("ffmpeg", "ffmpeg.exe")) File(dir, name).takeIf { it.isFile }?.let { return it.path }
-        return "ffmpeg"
+    /**
+     * The ffmpeg to make a test video with: `$STAR_FFMPEG_DIR/ffmpeg[.exe]` (what CI exports), else the one in `<repo>/external_binaries/bin`,
+     * else whatever is on the PATH. Windows builds are `ffmpeg.exe`.
+     */
+    private fun ffmpegExecutable(): File {
+        val name = if (System.getProperty("os.name").lowercase().contains("win")) "ffmpeg.exe" else "ffmpeg"
+        val dirs = listOfNotNull(System.getenv("STAR_FFMPEG_DIR")?.takeIf { it.isNotEmpty() }?.let { File(it) }, File(repoRoot(), "external_binaries/bin"))
+        return dirs.map { File(it, name) }.firstOrNull { it.isFile } ?: File(name)
     }
 
-    /** A short video made from the copied sequence's frames with the bundled ffmpeg. */
+    /**
+     * A short video made from the copied sequence's frames with the bundled ffmpeg: 5 fps, the frames in name order. The frames go in through a
+     * concat list, not `-pattern_type glob`, which the Windows ffmpeg build does not have.
+     */
     private fun makeVideoOfCopiedSequence(): File {
         if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
-        val video = File(scratch, "gallery-video.mp4")
-        // The frames go in through a concat list and not `-pattern_type glob`, which not every ffmpeg build (the Windows one) supports.
-        val frames = sequenceCopy.listFiles { f -> f.isFile && f.extension.lowercase() == "jpg" }.orEmpty().sortedBy { it.name }
+        val frames = (sequenceCopy.listFiles { f -> f.isFile && f.name.endsWith(".jpg") } ?: emptyArray()).sortedBy { it.name }
         if (frames.isEmpty()) throw RunnerError("no .jpg frames in $sequenceCopy to make a video from")
         val list = File(scratch, "gallery-video-frames.txt")
-        list.writeText(buildString {
-            for (f in frames) append("file '").append(f.absolutePath.replace('\\', '/').replace("'", "'\\''")).append("'\nduration 0.2\n")
-            // the demuxer ignores the last duration unless its file is named again
-            append("file '").append(frames.last().absolutePath.replace('\\', '/').replace("'", "'\\''")).append("'\n")
-        })
+        fun entry(f: File) = "file '${f.absolutePath.replace('\\', '/')}'"
+        // the concat demuxer drops the duration of the last file, so that one is listed again without one (and -frames:v keeps that repeat out of the video)
+        list.writeText(frames.joinToString("") { "${entry(it)}\nduration 0.2\n" } + entry(frames.last()) + "\n")
+        val video = File(scratch, "gallery-video.mp4")
         val process = ProcessBuilder(
-            ffmpegExecutable(), "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list.path,
-            "-vf", "scale=1280:-2", "-r", "5", "-c:v", "libx264", "-pix_fmt", "yuv420p", video.path,
+            ffmpegExecutable().path, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list.path,
+            "-vf", "scale=1280:-2", "-r", "5", "-frames:v", "${frames.size}", "-c:v", "libx264", "-pix_fmt", "yuv420p", video.path,
         ).redirectErrorStream(true).start()
         val log = process.inputStream.bufferedReader().readText()
         if (process.waitFor() != 0 || !video.isFile) throw RunnerError("could not make a video from $sequenceCopy: $log")
