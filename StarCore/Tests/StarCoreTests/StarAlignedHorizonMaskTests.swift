@@ -291,7 +291,8 @@ final class StarAlignedHorizonMaskTests: XCTestCase {
     /// preview (`ImageAccessor.saveInt`), the distance transform behind the feathered horizon,
     /// and warps of 16-bit frames.  Run under `swift test --sanitize=address` and with
     /// `MallocNanoZone=0 MallocGuardEdges=1 MallocScribble=1`; a clean pass also pins that
-    /// every concurrent answer is the one a lone computation gives.
+    /// every concurrent answer is the one a lone computation gives.  `STAR_HEAP_HUNT_SCALE=n`
+    /// shrinks the frames and mask count by n for libgmalloc runs.
     func testConcurrentFullFrameMasksAlongsideOtherNativeWorkKeepTheHeapIntact() async throws {
         guard ProcessInfo.processInfo.physicalMemory >= 16 << 30 else {
             throw XCTSkip("needs memory for a dozen 24MB masks and 16-bit frames in flight")
