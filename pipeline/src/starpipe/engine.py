@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from . import gitutil, guards, heavy, landing, load, negctl, ship, tickets, trust, worktrees
-from .agent import READ_ONLY_STAGES, STAGE_TOOLS, AgentRunner, StageOutcome, StageRequest
+from .agent import CREDITS_USABLE, READ_ONLY_STAGES, STAGE_TOOLS, AgentRunner, StageOutcome, StageRequest
 from .announce import Announcer, Kind, SilentAnnouncer
 from .checks import baseline, impact, ledger
 from .config import Config, home
@@ -98,7 +98,7 @@ class Engine:
     land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
     publish_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-publish is one step
     landing_waiting: set[int] = field(default_factory=lambda: set[int]())  # tickets whose landing stage is waiting for an LLM slot
-    llm_waiting: dict[int, tuple[int, int, int]] = field(default_factory=lambda: dict[int, tuple[int, int, int]]())  # other waiters' rank
+    llm_waiting: dict[int, tuple[int, int, float, int]] = field(default_factory=lambda: dict[int, tuple[int, int, float, int]]())  # other waiters' rank
     announcer: Announcer = field(default_factory=SilentAnnouncer)  # spoken alerts; the daemon injects the real one
 
     # intake --------------------------------------------------------------------------------------------------------
@@ -247,8 +247,10 @@ class Engine:
     def claimable(self) -> Ticket | None:
         if self.db.get("pause") in ("all", "claims") or self.update_hold():
             return None  # the second is the daemon waiting to swap to new code: nothing new starts until it swaps, at most the cap
-        if self.landing_waiting:
-            return None  # a ticket in the landing train needs the next LLM slot
+        if self._usage_paused_until() > self.clock():
+            return None  # every stage waits in _wait_for_usage with no stage row open, so llm_room() is ok: a claim would only sit idle
+        if self.landing_waiting or self.llm_waiting:
+            return None  # a ticket already claimed is waiting for a session: it takes the next slot, not a new claim
         if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
             return None
         for t in self.db.tickets(("queued",)):  # ordered by priority then age
@@ -307,6 +309,44 @@ class Engine:
         while (left := self._usage_paused_until() - self.clock()) > 0:
             await self.sleep(min(left, 60))
         self.db.put("usage_pause_until", None)
+        if self.db.get("usage_pause_window") == "overage":
+            self.db.put("credit_exhausted", None)  # the credit window has reset; the next event says whether it is still out
+        self.db.put("usage_pause_window", None)
+
+    def _record_credits(self, report: dict[str, Any]) -> None:
+        """Keep what a rate-limit event says about usage credits: `credit_support` (supported / none; absent = unknown),
+        `credit_exhausted`, and `credit_use` while they are being spent (logging `credits-in-use` when the spend starts).
+        An event that says nothing about credits changes nothing; any overage state not recognised as usable is no credits."""
+        overage, window, status = report.get("overage_status"), report.get("window"), report.get("status")
+        exhausted = window == "overage" and status == "rejected"
+        if overage is not None:
+            if overage in CREDITS_USABLE and not exhausted:
+                self.db.put("credit_support", "supported")
+                self.db.put("credit_exhausted", None)
+            else:
+                if self.db.get("credit_support") != "supported":
+                    self.db.put("credit_support", "none")
+                exhausted = True
+        if exhausted:
+            self.db.put("credit_exhausted", "1")
+            self.db.put("credit_use", None)
+            return
+        spending = overage in CREDITS_USABLE and (status == "rejected" or (window == "overage" and status in CREDITS_USABLE))
+        if spending:
+            util = report.get("utilization")
+            amount = float(util) if isinstance(util, (int, float)) and not isinstance(util, bool) and window == "overage" else None
+            previous = self.db.get("credit_use")
+            since = self.clock()
+            if previous:
+                try:
+                    since = float(json.loads(previous).get("since", since))
+                except (ValueError, AttributeError):
+                    pass
+            self.db.put("credit_use", json.dumps({"since": since, "amount": amount, "window": window}))
+            if not previous:
+                self.db.event("credits-in-use", None, amount=amount, window=window)
+        elif window != "overage" and status in CREDITS_USABLE:
+            self.db.put("credit_use", None)  # a base window is back to normal: nothing is being spent on top of it
 
     async def _wait_for_update_hold(self) -> None:
         while self.update_hold():
@@ -418,7 +458,7 @@ class Engine:
                                prompt_text("_preamble") + "\n\n" + prompt_text(stage.replace("-", "_")), model,
                                effort, BUDGET_S[stage], contract, self._fence(t, stage), resume,
                                on_session=lambda sid, sid_row=stage_id: self.db.set_session(sid_row, sid),
-                               on_usage=self._record_usage_windows)
+                               on_usage=self._record_usage_windows, on_credits=self._record_credits)
             out: StageOutcome = await self.agent.run(req)
             if out.session_id:
                 self.db.set_session(stage_id, out.session_id)
@@ -432,7 +472,8 @@ class Engine:
             known = out.session_id or self._last_session(t, stage)  # the row has it even if the run never finished
             if out.status == "usage-limit":
                 self.db.put("usage_pause_until", str(out.resets_at or self.clock() + 1800))
-                self.db.event("usage-pause", None, until=out.resets_at)
+                self.db.put("usage_pause_window", out.window)
+                self.db.event("usage-pause", None, until=out.resets_at, window=out.window)
                 resume = known or resume
                 continue  # not a failure: no attempt counted
             summary = out.summary
@@ -458,8 +499,8 @@ class Engine:
             landing = stage in LANDING_STAGES
         if landing:
             self.landing_waiting.add(t.number)
-        else:  # rank: furthest along first, then priority (p0 first), then the older ticket
-            self.llm_waiting[t.number] = (-STAGE_DEPTH.get(stage, 0), t.priority, t.number)
+        else:  # rank: furthest along first, then priority (p0 first), then the earlier claim
+            self.llm_waiting[t.number] = (-STAGE_DEPTH.get(stage, 0), t.priority, t.claimed_at or 0.0, t.number)
         try:
             while True:
                 async with self.llm_lock:

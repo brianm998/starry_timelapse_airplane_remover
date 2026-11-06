@@ -78,10 +78,10 @@ class WholeWordsTest {
         })
     }
 
-    /** The panels' widths less their padding: the right panel is 150dp (8dp padding), the left 220dp (12), the grid's left 160dp (12) and right 200dp (12). */
+    /** The panels' widths less their padding: the right panel is 150dp (8dp padding), the left 220dp (12), the grid's left 180dp (12) and right 200dp (12). */
     private val rightPanel = 134.dp
     private val leftPanel = 196.dp
-    private val gridLeftPanel = 136.dp
+    private val gridLeftPanel = 156.dp
     private val gridRightPanel = 176.dp
 
     private fun check(width: Dp, content: @Composable () -> Unit) = assertNone(wholeWordProblemsInEachLanguage(width, content))
@@ -140,7 +140,7 @@ class WholeWordsTest {
             VerticalStarPicker(FastAdvancementType.entries, FastAdvancementType.NORMAL, { it.label }, {}, Modifier.width(rightPanel))
         }
 
-        // The grid's panels: left 160dp, right 200dp.
+        // The grid's panels: left 180dp, right 200dp.
         case("grid left picker", gridLeftPanel) { VerticalStarPicker(ViewModes.all, ViewModes.all.first(), { ViewModes.longName(it) }, {}, Modifier.width(gridLeftPanel)) }
         case("grid right switches", gridRightPanel) {
             Column {
