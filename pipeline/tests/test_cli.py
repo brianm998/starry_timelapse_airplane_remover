@@ -162,7 +162,7 @@ def test_status_says_when_a_self_update_holds_claims(monkeypatch: pytest.MonkeyP
 
 
 def test_limits_and_status_say_model_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
-    res = {"llm_active": 2, "llm_max": 3, "cpu_pct": 10.0, "cpu_limit": 80.0, "waiting": "", "overridden": False}
+    res: dict[str, object] = {"llm_active": 2, "llm_max": 3, "cpu_pct": 10.0, "cpu_limit": 80.0, "waiting": "", "overridden": False}
 
     class FakeClient:
         def call(self, _method: str, path: str, _body: dict[str, object] | None = None) -> dict[str, object]:
