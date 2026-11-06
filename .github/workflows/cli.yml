@@ -151,9 +151,13 @@ jobs:
   # has its own macos15 key (shared with pr-gate.yml's macos-15 job): its .swiftmodule only imports under the
   # compiler that built it (see gherkin.yml), so it must not restore what the remaining macos-14 jobs
   # (macos-signed-release, kotlin-client.yml macos-signed) saved under the plain key.
+  #
+  # `macos` also needs `linux`, which builds and tests the same code: macOS runners are scarce (jobs have gone unacquired, see #388), and a
+  # red Linux job already fails the PR, so a PR that is red on Linux never joins the macOS queue. Both jobs run on exactly the same
+  # condition (`tested`), so `linux` is never skipped while `macos` should run.
   macos:
     name: macOS (macos-15)
-    needs: [tested, opencv-macos]
+    needs: [tested, opencv-macos, linux]
     if: needs.tested.outputs.tested != 'true'
     runs-on: macos-15
     steps:
