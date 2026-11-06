@@ -46,7 +46,7 @@ on:
 # workflow it calls must not share a concurrency group, or the called one is cancelled
 concurrency:
   group: gherkin-smoke-caller-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # On a push to develop that merges a batch PR whose tree this workflow already passed, `tested` is true and the heavy jobs below
