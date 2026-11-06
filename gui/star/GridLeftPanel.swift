@@ -36,7 +36,7 @@ struct GridLeftPanel: View {
             .buttonStyle(PlainButtonStyle())
             .padding(10)
         }
-        .frame(width: 160)
+        .frame(width: 180)
         .background(Color(white: 0.18))
         .frame(maxHeight: .infinity, alignment: .bottomTrailing)
     }

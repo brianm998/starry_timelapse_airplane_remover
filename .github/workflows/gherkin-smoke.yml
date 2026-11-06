@@ -9,7 +9,12 @@ name: Gherkin smoke
 # name is how the pipeline tells smoke from full. See "The smoke subset on a PR" in gherkin/README.md.
 #
 # A pull request skips the Windows legs (cli-windows, desktop-windows): they are the slowest jobs of a batch. They run post-merge, on
-# the push to develop (the `smoke-windows` job when "Already tested?" skips the rest), and on the nightly full run.
+# the push to develop (the `smoke-post-merge` job when "Already tested?" skips the rest), and on the nightly full run.
+#
+# A pull request also skips the macOS legs that Linux covers, `cli-macos` and `desktop-macos`, and the macOS runners they queue for.
+# It runs only what needs macOS, `build-macos` and `mac-gui` (the XCUITest of Star.app), and only when the PR touches a macOS-specific
+# path (.github/scripts/macos-paths.sh): the `changes` job below says `gui` then and `skip` otherwise. Every macOS leg runs on the
+# push to develop, with or without "Already tested?" (the PR's green run did not include them), and on the nightly full run.
 
 on:
   push:
@@ -46,7 +51,7 @@ on:
 # workflow it calls must not share a concurrency group, or the called one is cancelled
 concurrency:
   group: gherkin-smoke-caller-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/develop') }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # On a push to develop that merges a batch PR whose tree this workflow already passed, `tested` is true and the heavy jobs below
@@ -59,8 +64,33 @@ jobs:
       pull-requests: read
     uses: ./.github/workflows/already-tested.yml
 
+  # Which macOS legs a PR runs: `gui` (build-macos and mac-gui) when it touches a macOS-specific path, `skip` otherwise. Every other
+  # event runs them all. gherkin.yml's `macos` input documents the three values.
+  changes:
+    name: macOS-specific change?
+    runs-on: ubuntu-24.04
+    outputs:
+      macos: ${{ steps.decide.outputs.macos }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - id: decide
+        run: |
+          macos=run
+          if [ "${{ github.event_name }}" = pull_request ]; then
+            # the checkout is the PR's merge commit: HEAD^1 is the base tip, so this is the PR's own files
+            files=$(git diff --name-only --no-renames HEAD^1 HEAD)
+            echo "Changed files:"; echo "$files"
+            macos=skip
+            if [ -z "$files" ] || [ "$(.github/scripts/macos-paths.sh <<< "$files")" = true ]; then macos=gui; fi
+          fi
+          echo "macos=$macos"
+          echo "macos=$macos" >> "$GITHUB_OUTPUT"
+
   smoke:
-    needs: tested
+    needs: [tested, changes]
     if: needs.tested.outputs.tested != 'true'
     # opencv.yml's release tier uploads with the workflow token, and a called workflow cannot hold more than its caller grants
     permissions:
@@ -70,10 +100,13 @@ jobs:
       smoke: true
       # the Windows legs are the slowest of the batch, so a PR skips them; they run on the push to develop (below) and the nightly
       windows: ${{ github.event_name == 'pull_request' && 'skip' || 'run' }}
+      # likewise the macOS legs Linux covers; mac-gui and its build only when the PR touches something macOS-specific
+      macos: ${{ needs.changes.outputs.macos }}
 
-  # On a push to develop that merges an already-tested batch PR, `smoke` above skips. That PR run did not include Windows, so the
-  # Windows legs (and only those) run here: this is the per-landing Windows Gherkin coverage.
-  smoke-windows:
+  # On a push to develop that merges an already-tested batch PR, `smoke` above skips. That PR run did not include Windows, nor the
+  # macOS legs unless it touched a macOS-specific path, so the Windows and macOS legs (and only those, not the Linux ones) run here:
+  # this is the per-landing Windows and macOS Gherkin coverage.
+  smoke-post-merge:
     needs: tested
     if: github.event_name == 'push' && needs.tested.outputs.tested == 'true'
     permissions:

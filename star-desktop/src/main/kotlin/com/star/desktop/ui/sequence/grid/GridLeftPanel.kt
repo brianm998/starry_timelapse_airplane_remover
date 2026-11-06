@@ -37,7 +37,7 @@ fun GridLeftPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     var available by remember { mutableStateOf<List<FrameViewMode>>(emptyList()) }
     // Recompute when the frame changes or its processing state advances (new images may now exist).
     LaunchedEffect(current, states[current]) { available = vm.availableViewModes(current) }
-    Column(modifier.width(160.dp).fillMaxHeight().background(StarColors.gridLeftPanel)) {
+    Column(modifier.width(180.dp).fillMaxHeight().background(StarColors.gridLeftPanel)) {
         Column(
             Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
