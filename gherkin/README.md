@@ -224,7 +224,7 @@ The full matrix takes about 3 hours, so it is not what a PR runs. What runs when
 
 | Workflow (name) | File | Runs on | The pipeline |
 |---|---|---|---|
-| **Gherkin smoke** | `gherkin-smoke.yml`, which calls `gherkin.yml` with `smoke: true` | every PR touching program code (without the Windows legs), pushes to `develop` (with them), by hand (with them) | waits for it and blocks on it |
+| **Gherkin smoke** | `gherkin-smoke.yml`, which calls `gherkin.yml` with `smoke: true` | every PR touching program code (without the Windows legs, and with only `build-macos` and `mac-gui` for macOS, when the PR touches a macOS-specific path), pushes to `develop` (with them), by hand (with them) | waits for it and blocks on it |
 | **Gherkin** (the full matrix) | `gherkin.yml` | pushes to `main`, the nightly dispatch, by hand (`workflow_dispatch`, optionally `features`) | does not wait for it on a PR (`ci_post_merge_workflows` in `pipeline/src/starpipe/config.py` lists this name only); the nightly reruns its failed jobs once and files the tickets (`Gherkin nightly red: …`, `Gherkin flaky: …`); the post-merge watch only updates its baseline |
 
 `gherkin/smoke.json` is the subset, a client name to a list of feature names:
@@ -238,9 +238,20 @@ one feature each, **except on a PR, which skips the two Windows jobs** (`cli-win
 every batch (MSVC install, the stard and validator builds), so Windows runs post-merge instead. `gherkin-smoke.yml` passes
 `windows: skip` to `gherkin.yml` on a `pull_request` and `windows: run` otherwise. On the push to `develop` the Windows jobs run
 even when "Already tested?" (`already-tested.yml`) skips the rest because the batch PR's green run covered the tree: the
-`smoke-windows` job then calls `gherkin.yml` with `windows: only`. A Windows-only break is therefore found on `develop` by the
+`smoke-post-merge` job then calls `gherkin.yml` with `windows: only` (no Linux legs: Windows and macOS). A Windows-only break is therefore found on `develop` by the
 post-merge watch (a ticket after two red runs), not on the PR; `workflow_dispatch` and the nightly still run every leg. `cli.yml`
-("CLI Build") does the same for `Windows (windows-2022)` and `windows-e2e`: skipped on a PR, run on every push. `autoHorizonJpeg` is the cheapest real flow (one 46 MB JPEG dataset, no video, no 16-bit, no trail verifier build). The
+("CLI Build") does the same for `Windows (windows-2022)` and `windows-e2e`: skipped on a PR, run on every push.
+
+**macOS on a PR.** macOS runners are the scarce ones (queues of 40 minutes), so a PR starts a macOS job only for what is specific to
+macOS. `cli-macos` and `desktop-macos` run the same feature as `cli-linux` and `desktop-linux` on code that has no macOS guards, so
+they are skipped on a PR, as are pr-gate's `macos` and cli.yml's `macos` (the same `swift build` and StarCore tests as their `linux`
+jobs). `build-macos` and `mac-gui` (the XCUITest of Star.app) run on a PR only when it touches a macOS-specific path: `gui/`,
+`StarCpp/`, `wgpu/`, `cli/*.xcodeproj`, `ffmpeg/` or `.github/` (`.github/scripts/macos-paths.sh` is the one list; the `changes` jobs
+of `gherkin-smoke.yml`, `pr-gate.yml` and `cli.yml` call it). A PR that touches such a path also runs pr-gate's `macos` and cli.yml's
+`macos`. `gherkin-smoke.yml` passes `gherkin.yml` the `macos` input: `gui` (only `build-macos` and `mac-gui`) or `skip` on a PR, `run`
+otherwise. On the push to `develop` every macOS leg runs, **also when "Already tested?" skips the rest** (the PR's green run did not
+include them): `smoke-post-merge` covers Gherkin, and the `macos` job of cli.yml ignores `tested`. A macOS-only break in shared code
+is therefore found on `develop`, as a regression there, not on the PR; the nightly full run covers every leg. `autoHorizonJpeg` is the cheapest real flow (one 46 MB JPEG dataset, no video, no 16-bit, no trail verifier build). The
 target is about 30 minutes on a PR; the slow part is the queue for the macOS runners, which is why only three jobs are macOS.
 
 **Changing it:** edit `gherkin/smoke.json`. A name must be a feature of that client (a name in `generated/features-<client>.json`) and
