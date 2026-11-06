@@ -4102,6 +4102,7 @@ final class SharedConstantsTests: XCTestCase {
         for (x, y) in [(4, 4), (w - 5, 4), (4, h - 5), (w - 5, h - 5)] {
             let c = try XCTUnwrap(rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
             let luminance = 0.2126 * c.redComponent + 0.7152 * c.greenComponent + 0.0722 * c.blueComponent
+            XCTAssertGreaterThan(c.alphaComponent, 0.99, "nothing is drawn at (\(x), \(y)): the sheet would show the system's light background")
             XCTAssertLessThan(luminance, 0.75, "background at (\(x), \(y)) is near-white: \(c)")
         }
     }
