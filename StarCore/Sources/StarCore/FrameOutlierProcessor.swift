@@ -569,9 +569,11 @@ final public actor FrameOutlierProcessor {
     
     public func loadUserSlices() async {
         do {
-            // a local file: read it directly (URLSession on Linux and Windows fails these loads, and can deadlock when
-            // the task is cancelled with one in flight, see FrameAlignmentProcessor.readHomographyFromJSONFile)
-            let data = try Data(contentsOf: URL(fileURLWithPath: await userSliceFilename, isDirectory: false))
+            let slices_url = NSURL(fileURLWithPath: await userSliceFilename,
+                                   isDirectory: false) as URL
+            // a local file: read it directly. URLSession fails these loads on Linux (-1002) and
+            // deadlocks in corelibs when tasks are cancelled while others start.
+            let data = try Data(contentsOf: slices_url)
             let decoder = JSONDecoder()
             userSlices = try decoder.decode([BoundingBox].self, from: data)
         } catch {

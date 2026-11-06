@@ -2279,6 +2279,8 @@ final class UserPreferencesStoreTests: XCTestCase {
 
     /// The App Sandbox denies writes to `/tmp` and moves `$HOME` into the container, so no source builds either path by hand: the
     /// home directory comes from `NSHomeDirectory()` (which follows the sandbox) and scratch files go in the temporary directory.
+    /// The one exception is `UserPreferences.path`, which reads `$HOME` only when the process is not sandboxed: `NSHomeDirectory()` ignores a
+    /// `$HOME` override, and the UI-test runner launches the app with one to keep it off the real preferences.
     func testNoHandBuiltTmpOrHomePathsInSources() throws {
         let sources = Self.guiDir.deletingLastPathComponent().appendingPathComponent("StarCore/Sources")
         var urls = try swiftSources().map { Self.guiDir.appendingPathComponent("star/\($0.name)") }
@@ -2290,7 +2292,7 @@ final class UserPreferencesStoreTests: XCTestCase {
 
         let handBuilt = try NSRegularExpression(pattern: #""/tmp|environment\["HOME"\]|env\["HOME"\]"#)
         var found: [String] = []
-        for url in urls {
+        for url in urls where url.lastPathComponent != "UserPreferences.swift" {
             let text = NoHardCodedStringsTests.withoutComments(try String(contentsOf: url, encoding: .utf8))
             let n = handBuilt.numberOfMatches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
             if n > 0 { found.append("\(url.lastPathComponent) ×\(n)") }
@@ -3138,6 +3140,21 @@ final class UserPreferencesMergeTests: XCTestCase {
 
     private func written() throws -> [String: Any] {
         try obj(String(contentsOfFile: path, encoding: .utf8))
+    }
+
+    func testThePathFollowsTheHomeEnvironmentWhenNotSandboxed() {
+        XCTAssertEqual(
+            UserPreferences.path(environment: ["HOME": "/scratch/home"], sandboxed: false, nsHomeDirectory: "/Users/real"),
+            "/scratch/home/.star.userprefs.json")
+        XCTAssertEqual(
+            UserPreferences.path(environment: ["HOME": "/scratch/home"], sandboxed: true, nsHomeDirectory: "/container"),
+            "/container/.star.userprefs.json")
+        XCTAssertEqual(
+            UserPreferences.path(environment: [:], sandboxed: false, nsHomeDirectory: "/Users/real"),
+            "/Users/real/.star.userprefs.json")
+        XCTAssertEqual(
+            UserPreferences.path(environment: ["HOME": ""], sandboxed: false, nsHomeDirectory: "/Users/real"),
+            "/Users/real/.star.userprefs.json")
     }
 
     func testAKeyOnlyTheOtherClientKnowsSurvivesASave() throws {

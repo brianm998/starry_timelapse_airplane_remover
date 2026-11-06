@@ -43,6 +43,7 @@ class Ticket:
     pr_number: int | None
     created_at: float
     updated_at: float = 0.0
+    claimed_at: float | None = None
 
     @property
     def plan(self) -> dict[str, Any] | None:
@@ -52,7 +53,7 @@ class Ticket:
 def _ticket(row: sqlite3.Row) -> Ticket:
     return Ticket(row["number"], row["title"], row["body"], row["author"], row["state"], row["priority"],
                   json.loads(row["blocked_by"]), row["branch"], row["worktree"], row["plan_json"],
-                  row["park_reason"], row["pr_number"], row["created_at"], row["updated_at"])
+                  row["park_reason"], row["pr_number"], row["created_at"], row["updated_at"], row["claimed_at"])
 
 
 class Database:

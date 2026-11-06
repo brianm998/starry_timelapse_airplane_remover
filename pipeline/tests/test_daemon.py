@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import shutil
 import time
 from pathlib import Path
@@ -11,6 +12,7 @@ from aiohttp.test_utils import TestClient, TestServer
 
 from starpipe import selfupdate
 from starpipe.agent import StageOutcome, StageRequest
+from starpipe.cli import usage_lines
 from starpipe.config import Config
 from starpipe.daemon import Daemon, activity
 from starpipe.github import GitHubError
@@ -58,6 +60,27 @@ async def test_status_and_show_report_the_ticket_and_its_activity(rig: Rig) -> N
         assert (await client.get("/v1/tickets/99", headers=AUTH)).status == 404
     finally:
         await client.close()
+
+
+async def test_status_reports_credits_and_pause(rig: Rig) -> None:
+    client, _ = await api(rig)
+    try:
+        data = await (await client.get("/v1/status", headers=AUTH)).json()
+        assert data["credit_support"] == "unknown" and data["credit_use"] is None and data["usage_pause_until"] is None
+        assert usage_lines(data) == ["usage credits: unknown"]
+        rig.db.put("credit_support", "supported")
+        rig.db.put("credit_use", json.dumps({"since": 1000.0, "amount": 0.25, "window": "five_hour"}))
+        rig.db.put("usage_pause_until", "1793493600")
+        rig.db.put("usage_pause_window", "seven_day")
+        data = await (await client.get("/v1/status", headers=AUTH)).json()
+    finally:
+        await client.close()
+    assert data["credit_support"] == "supported" and data["credit_use"]["amount"] == 0.25
+    lines = usage_lines(data)
+    assert lines[0].startswith("usage limit: model stages wait until ") and lines[0].endswith("(seven_day window)")
+    assert time.ctime(1793493600) in lines[0]
+    assert lines[1] == "usage credits: supported"
+    assert lines[2].startswith("credits in use since ") and lines[2].endswith("25% of the credit limit")
 
 
 async def test_retry_and_answer_ask_for_a_catch_up(rig: Rig) -> None:
@@ -226,6 +249,32 @@ async def test_settings_stores_max_active_and_snapshot_reports_it(rig: Rig) -> N
         assert rig.engine.max_active() == 1
     finally:
         await client.close()
+
+
+async def test_the_cli_and_the_monitor_set_the_same_session_limit(rig: Rig) -> None:
+    client, daemon = await api(rig)
+    try:
+        assert (await client.post("/v1/limits", json={"llm": 2}, headers=AUTH)).status == 200
+        assert rig.db.get("max_active") == "2" and rig.db.get("limit_llm") is None and rig.engine.max_active() == 2
+        snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        assert snap["max_active"] == 2, "the monitor's stepper shows what the CLI set"
+        assert (await client.post("/v1/settings", json={"max_active": 4}, headers=AUTH)).status == 200
+        limits = await (await client.get("/v1/limits", headers=AUTH)).json()
+        assert limits["llm_max"] == 4 and limits["overridden"] is True
+        for bad in (0, 7, 32):
+            assert (await client.post("/v1/limits", json={"llm": bad}, headers=AUTH)).status == 400, bad
+        assert rig.db.get("max_active") == "4"
+        assert (await client.post("/v1/limits", json={"reset": True}, headers=AUTH)).status == 200
+        assert rig.db.get("max_active") is None and rig.engine.max_active() == rig.engine.config.max_llm_sessions
+        assert (await (await client.get("/v1/limits", headers=AUTH)).json())["overridden"] is False
+    finally:
+        await client.close()
+    rig.db.put("limit_llm", "9")  # a leftover from the old second key: moved over, clamped, and deleted at daemon start
+    daemon.migrate_limits()
+    assert rig.db.get("max_active") == "6" and rig.db.get("limit_llm") is None
+    rig.db.put("limit_llm", "3")
+    daemon.migrate_limits()
+    assert rig.db.get("max_active") == "3" and rig.db.get("limit_llm") is None
 
 
 async def test_land_now_is_refused_outside_ready_ci_landing(rig: Rig) -> None:

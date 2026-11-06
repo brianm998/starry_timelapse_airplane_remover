@@ -1250,11 +1250,9 @@ final public actor FrameAlignmentProcessor {
         }
         do {
             let fullPath = "\(dirname)/\(frameIndex)/\(filename)"
-            // a local file: read it directly. URLSession fails these loads on Linux and Windows, and cancelling a task
-            // with one in flight (a start that supersedes a run) deadlocks swift-corelibs-foundation: swift_task_cancel
-            // holds the task's status lock while URLSessionTask.cancel waits on the session's queue, which is waiting for
-            // that lock to resume the failed load.
-            let data = try Data(contentsOf: URL(fileURLWithPath: fullPath, isDirectory: false))
+            let url = NSURL(fileURLWithPath: fullPath, isDirectory: false) as URL
+            // a local file: read it directly, URLSession fails these loads on Linux and can deadlock
+            let data = try Data(contentsOf: url)
             return try JSONDecoder().decode(HomographyResultsCodable.self, from: data)
         } catch {
             return nil
