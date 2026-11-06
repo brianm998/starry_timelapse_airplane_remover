@@ -703,13 +703,26 @@ final class GuiFeatureRunner {
         let ready = (try? waitFor("\(item.label) to be hittable", timeout: 10, interval: 0.5) {
             entry.isHittable && entry.frame.minX.isFinite && entry.frame.minY.isFinite && !entry.frame.isInfinite
         }) != nil
-        if ready {
-            entry.click()
+        // XCUIElement.click() re-resolves the element when it synthesises the event, after its own hover, and can land on a
+        // transient infinite frame the wait above has already passed. So read the frame once, check it, and click a point
+        // computed from it, relative to the menu bar's origin: nothing is resolved at synthesis time.
+        let bar = app.menuBars.firstMatch
+        let entryFrame = entry.frame
+        let barFrame = bar.frame
+        if ready, Self.isFinite(entryFrame), Self.isFinite(barFrame) {
+            let origin = bar.coordinate(withNormalizedOffset: .zero)
+            origin.withOffset(CGVector(dx: entryFrame.midX - barFrame.minX, dy: entryFrame.midY - barFrame.minY)).click()
         } else {
             app.typeKey(.escape, modifierFlags: [])
             guard let shortcut = try commandShortcut(command) else { throw RunnerError("\"\(item.label)\" never got a hit point and has no shortcut") }
             try press(shortcut)
         }
+    }
+
+    /// A frame with real coordinates: not null, not infinite, not empty.
+    private static func isFinite(_ frame: CGRect) -> Bool {
+        !frame.isNull && !frame.isInfinite && !frame.isEmpty
+            && frame.minX.isFinite && frame.minY.isFinite && frame.width.isFinite && frame.height.isFinite
     }
 
     /// The command's shortcut from `gherkin/ui/commands.json` ("option+o"), if it has one.
