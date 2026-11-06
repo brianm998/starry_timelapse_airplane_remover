@@ -70,7 +70,9 @@ jobs:
   macos:
     name: macOS universal (macos-14)
     if: ${{ !inputs.platforms || contains(inputs.platforms, 'macos') }}
-    runs-on: macos-14
+    # macos-15 (arm64), not macos-14: GitHub retired the macos-14 image on 2026-11-02 and cancels its jobs outright.
+    # The check name keeps "(macos-14)" so references to it (the pipeline's CI judge, branch rules) still match.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
