@@ -3140,6 +3140,21 @@ final class UserPreferencesMergeTests: XCTestCase {
         try obj(String(contentsOfFile: path, encoding: .utf8))
     }
 
+    func testThePathFollowsTheHomeEnvironmentWhenNotSandboxed() {
+        XCTAssertEqual(
+            UserPreferences.path(environment: ["HOME": "/scratch/home"], sandboxed: false, nsHomeDirectory: "/Users/real"),
+            "/scratch/home/.star.userprefs.json")
+        XCTAssertEqual(
+            UserPreferences.path(environment: ["HOME": "/scratch/home"], sandboxed: true, nsHomeDirectory: "/container"),
+            "/container/.star.userprefs.json")
+        XCTAssertEqual(
+            UserPreferences.path(environment: [:], sandboxed: false, nsHomeDirectory: "/Users/real"),
+            "/Users/real/.star.userprefs.json")
+        XCTAssertEqual(
+            UserPreferences.path(environment: ["HOME": ""], sandboxed: false, nsHomeDirectory: "/Users/real"),
+            "/Users/real/.star.userprefs.json")
+    }
+
     func testAKeyOnlyTheOtherClientKnowsSurvivesASave() throws {
         try #"{"recentlyOpenedSequencelist":{},"outlierTableColumns":["rank","area"]}"#
             .write(toFile: path, atomically: true, encoding: .utf8)

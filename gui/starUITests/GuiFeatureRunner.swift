@@ -386,14 +386,18 @@ final class GuiFeatureRunner {
     private func whyNotClickable(_ e: XCUIElement, _ identifier: String) -> String {
         let window = app.windows.firstMatch
         let scale = NSScreen.main.map { "\($0.backingScaleFactor)" } ?? "unknown"
-        return "\n\(identifier): exists \(e.exists), hittable \(e.isHittable), frame \(e.frame), window \(window.exists ? "\(window.frame)" : "none"), backingScaleFactor \(scale), screen \(NSScreen.main?.frame ?? .zero)\n\(app.debugDescription)"
+        // a frame read on an element that is not in the tree raises XCTest's snapshot error and hides the runner's own message
+        let there = e.exists
+        return "\n\(identifier): exists \(there), hittable \(there && e.isHittable), frame \(there ? "\(e.frame)" : "none"), window \(window.exists ? "\(window.frame)" : "none"), backingScaleFactor \(scale), screen \(NSScreen.main?.frame ?? .zero)\n\(app.debugDescription)"
     }
 
     private func clickId(_ identifier: String, how: Click = .plain) throws {
         let e = element(identifier)
         var scroller = Scroller()
+        var gridSteps = 0
         try waitFor("\(identifier) to be clickable", timeout: 60, detail: { self.whyNotClickable(e, identifier) }) {
             if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller) }
+            else if !e.exists && identifier.hasPrefix("grid.cell.") { self.scrollGridToBuild(&gridSteps) }
             return e.exists && e.isHittable
         }
         // ...and one that is still moving into place takes a click that is lost: wait until its frame has stopped changing
@@ -463,6 +467,17 @@ final class GuiFeatureRunner {
         if let last = scroller.lastGap, abs(gap) >= abs(last) { scroller.direction = -scroller.direction }
         scroller.lastGap = gap
         holder.scroll(byDeltaX: 0, deltaY: (gap > 0 ? -1 : 1) * scroller.direction * min(abs(gap), 300))
+    }
+
+    /// A lazy grid builds only the cells in view, so a cell below the fold of a small window is not in the tree and cannot be scrolled to by
+    /// its own frame: scroll the grid's scroll view down a step (and back to the top once it has run out) until the row comes into being.
+    private func scrollGridToBuild(_ steps: inout Int) {
+        let holder = app.scrollViews.containing(NSPredicate(format: "identifier BEGINSWITH %@", "grid.cell.")).firstMatch
+        guard holder.exists, holder.isHittable else { return }
+        // down for eight steps, then back up for eight, so a grid that has scrolled past is not left there
+        let down = (steps / 8) % 2 == 0
+        holder.scroll(byDeltaX: 0, deltaY: down ? -200 : 200)
+        steps += 1
     }
 
     private func expectShown(_ identifier: String, shown: Bool) throws {
@@ -676,7 +691,26 @@ final class GuiFeatureRunner {
             app.typeKey(.escape, modifierFlags: [])
             throw RunnerError("\"\(item.label)\" is disabled")
         }
-        entry.click()
+        // A menu item can be listed before the menu has laid it out: its frame is infinite and a click on it fails the whole test
+        // ("point.x != INFINITY"). Give it a moment to get a hit point; if it never does, use the command's shortcut instead.
+        let ready = (try? waitFor("\(item.label) to be hittable", timeout: 10, interval: 0.5) {
+            entry.isHittable && entry.frame.minX.isFinite && entry.frame.minY.isFinite && !entry.frame.isInfinite
+        }) != nil
+        if ready {
+            entry.click()
+        } else {
+            app.typeKey(.escape, modifierFlags: [])
+            guard let shortcut = try commandShortcut(command) else { throw RunnerError("\"\(item.label)\" never got a hit point and has no shortcut") }
+            try press(shortcut)
+        }
+    }
+
+    /// The command's shortcut from `gherkin/ui/commands.json` ("option+o"), if it has one.
+    private func commandShortcut(_ command: String) throws -> String? {
+        let url = Self.repoRoot.appendingPathComponent("gherkin/ui/commands.json")
+        guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any],
+              let commands = object["commands"] as? [[String: String]] else { return nil }
+        return commands.first(where: { $0["id"] == command })?["shortcut"]
     }
 
     private func expectMenuCommand(_ command: String, enabled: Bool) throws {
