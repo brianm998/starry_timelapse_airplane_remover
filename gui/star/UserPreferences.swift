@@ -239,14 +239,6 @@ struct UserPreferences: Codable, Sendable {
         recentlyOpenedSequencelist.removeValue(forKey: filename)
     }
 
-    /// What the Open Recent picker shows once `removed` has gone from `list` (newest first): the entry that took its place, else the one
-    /// before it, else nothing.
-    static func recentSelection(afterRemoving removed: String, from list: [String]) -> String {
-        guard let index = list.firstIndex(of: removed) else { return list.first ?? "" }
-        let rest = list.filter { $0 != removed }
-        return rest.isEmpty ? "" : rest[min(index, rest.count - 1)]
-    }
-
     /// Under the sandbox `fileExists` is false for everything not granted this launch, which after a relaunch is every recent: an
     /// entry stays when a bookmark that still leads somewhere covers it.
     mutating func pruneNonExistentFromRecentList(sandboxed: Bool = BookmarkStore.processIsSandboxed) {

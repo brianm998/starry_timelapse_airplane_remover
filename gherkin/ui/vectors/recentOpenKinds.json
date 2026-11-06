@@ -1,0 +1,97 @@
+{
+  "comment": "How a recent entry is opened, by its path: a .json (any case) resumes a config, a video extension imports, anything else opens as a sequence folder. star-desktop's RecentOpenKindTest runs inferOpenKind over these; the gui's StartScreenTests runs InitialView.openKind(for:) over the same.",
+  "cases": [
+    {
+      "path": "/a/b/config.json",
+      "kind": "config"
+    },
+    {
+      "path": "/a/b/my-session.JSON",
+      "kind": "config"
+    },
+    {
+      "path": "/a/b/Config.Json",
+      "kind": "config"
+    },
+    {
+      "path": "/a/b/clip.mov",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/CLIP.MOV",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/clip.mp4",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/CLIP.MP4",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/clip.m4v",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/CLIP.M4V",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/clip.avi",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/CLIP.AVI",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/clip.mkv",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/CLIP.MKV",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/clip.mpg",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/CLIP.MPG",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/clip.mpeg",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/CLIP.MPEG",
+      "kind": "video"
+    },
+    {
+      "path": "/a/b/folder",
+      "kind": "sequence"
+    },
+    {
+      "path": "/a/b/folder.with.dots/",
+      "kind": "sequence"
+    },
+    {
+      "path": "/a/b/frames.d",
+      "kind": "sequence"
+    },
+    {
+      "path": "/a/b/notes.txt",
+      "kind": "sequence"
+    },
+    {
+      "path": "/a/b/mov",
+      "kind": "sequence"
+    },
+    {
+      "path": "/a/b/config.json.bak",
+      "kind": "sequence"
+    }
+  ]
+}
