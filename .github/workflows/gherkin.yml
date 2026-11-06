@@ -1106,10 +1106,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Read-only: kotlin-client.yml's build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per shard job filled it).
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-read-only: true
           cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
@@ -1363,10 +1364,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Read-only: kotlin-client.yml's build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per shard job filled it).
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-read-only: true
           cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
@@ -1498,10 +1500,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Read-only: kotlin-client.yml's build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per shard job filled it).
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-read-only: true
           cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
