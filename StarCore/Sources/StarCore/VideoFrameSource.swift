@@ -475,13 +475,27 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
         }
     }
 
+    /// Test seam: while the file `<video>.hold` exists, frames from the index it holds (its text; the first frame when empty) on are not moved
+    /// into the frames folder, so a UI test can look at a frame that is not extracted yet and then let it arrive (delete the file).  The frames
+    /// stay in their staging folder meanwhile; a file beside the video can never be taken for a frame.
+    static func heldFromFrame(forVideo videoPath: String) -> Int? {
+        guard let data = FileManager.default.contents(atPath: videoPath + ".hold") else { return nil }
+        let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        return Int(text) ?? 0
+    }
+
+    /// How long a held frame waits before the hold is looked at again.
+    static let holdRecheck: TimeInterval = 0.25
+
     /// Moves what a worker's ffmpeg has finished writing into the frames folder, in order, and tells whoever is waiting.
     private func scan(_ worker: Worker) {
         guard !stopped else { return }
         var arrived = IndexSet()
         let fileManager = FileManager.default
+        let heldFrom = Self.heldFromFrame(forVideo: videoPath)
         while worker.end.map({ worker.cursor < $0 }) ?? true {
             let index = worker.cursor
+            if let heldFrom, index >= heldFrom { break }
             let name = FrameNaming.fileName(forFrame: index, digits: digits, fileExtension: format.fileExtension)
             let staged = "\(worker.stagingFolder)/\(name)"
             guard fileManager.fileExists(atPath: staged) else { break }
@@ -531,6 +545,12 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
 
     private func workerExited(_ worker: Worker, failure: Error?) {
         if !stopped { scan(worker) }
+        // A frame held back (see `heldFromFrame`) is still in the staging folder, which goes with the worker: wait for the hold to end.
+        if !stopped, let heldFrom = Self.heldFromFrame(forVideo: videoPath), worker.cursor >= heldFrom,
+           FileManager.default.fileExists(atPath: "\(worker.stagingFolder)/\(FrameNaming.fileName(forFrame: worker.cursor, digits: digits, fileExtension: format.fileExtension))") {
+            queue.asyncAfter(deadline: .now() + Self.holdRecheck) { self.workerExited(worker, failure: failure) }
+            return
+        }
         try? FileManager.default.removeItem(atPath: worker.stagingFolder)
         if sweep === worker { sweep = nil }
         jumps.removeAll { $0 === worker }

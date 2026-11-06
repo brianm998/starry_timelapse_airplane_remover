@@ -169,6 +169,9 @@ class DesktopFeatureRunner {
         StepAction.VIDEO_FRAMES_EXTRACTING to { t -> expectVideoFramesBeingExtracted(t) },
         StepAction.VIDEO_FRAMES_GONE to { t -> expectVideoFramesGone(t) },
         StepAction.CHOOSER_ANSWERS_PROCESSED to { _ -> chooserAnswersWithProcessedCopy() },
+        StepAction.OPEN_VIDEO_HELD to { t -> openVideoWithExtractionHeld(t) },
+        StepAction.RELEASE_EXTRACTION to { t -> releaseExtraction(t) },
+        StepAction.PAINT_BAND to { t -> paintBand(t, args[0]) },
         StepAction.SAVE_SCREENSHOT to { t -> saveScreenshot(t, args[0]) },
         StepAction.SAVE_WINDOW_SCREENSHOT to { t -> saveScreenshot(t, args[1], window = args[0]) },
     )
@@ -1186,8 +1189,8 @@ class DesktopFeatureRunner {
         waitFor(t, "the sequence location question", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("sequencelocation.open") }
     }
 
-    /** A short video made from the copied sequence's frames with the bundled ffmpeg, opened as Load Video opens one: the import dialog comes up. */
-    private fun openVideoAtItsImportDialog(t: ComposeUiTest) {
+    /** A short video made from the copied sequence's frames with the bundled ffmpeg. */
+    private fun makeVideoOfCopiedSequence(): File {
         if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
         val ffmpeg = File(repoRoot(), "external_binaries/bin/ffmpeg").takeIf { it.canExecute() } ?: File("ffmpeg")
         val video = File(scratch, "gallery-video.mp4")
@@ -1197,6 +1200,12 @@ class DesktopFeatureRunner {
         ).redirectErrorStream(true).start()
         val log = process.inputStream.bufferedReader().readText()
         if (process.waitFor() != 0 || !video.isFile) throw RunnerError("could not make a video from $sequenceCopy: $log")
+        return video
+    }
+
+    /** A short video made from the copied sequence's frames, opened as Load Video opens one: the import dialog comes up. */
+    private fun openVideoAtItsImportDialog(t: ComposeUiTest) {
+        val video = makeVideoOfCopiedSequence()
         val model = newModel()
         showApp(t, model)
         t.runOnUiThread { model.openVideo(video.absolutePath) }
@@ -1252,6 +1261,54 @@ class DesktopFeatureRunner {
     private fun chooserAnswersWithProcessedCopy() {
         if (processedConfig == null) throw RunnerError("\"a processed copy of the sequence\" has not run")
         System.setProperty(com.star.desktop.ui.initial.CHOOSE_PATH_PROPERTY, File(scratch, "processed").path)
+    }
+
+    /** The file beside the video that holds its frames back from the second one on (StarCore's `VideoFrameSource.heldFromFrame`). */
+    private var extractionHold: File? = null
+
+    /**
+     * The video of the copied sequence, imported in the background with every frame but the first held back (a file beside the video, which
+     * StarCore's extraction watches), landing on the sequence screen in edit mode without the startup questions.
+     */
+    private fun openVideoWithExtractionHeld(t: ComposeUiTest) {
+        val video = makeVideoOfCopiedSequence()
+        val hold = File(video.path + ".hold").also { it.writeText("1") }
+        extractionHold = hold
+        // autoMode "edit" is what skips the startup questions (and puts the screen in edit mode)
+        val model = newModel(mode = "edit")
+        showApp(t, model)
+        t.runOnUiThread { model.openVideo(video.absolutePath) }
+        waitFor(t, "the video import dialog", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("videoimport.import") }
+        // The box starts off for H.264 (the probe is not run here, so for every video): once, to go to the main screen while the frames are
+        // still being extracted.
+        t.onNodeWithTag("videoimport.background").performClick()
+        t.onNodeWithTag("videoimport.import").performClick()
+        waitFor(t, "the sequence screen", OPEN_TIMEOUT_MS) { t.onAllNodesWithTagExists("frame.number") }
+    }
+
+    /** Lets the held frames come out: removes the file that held them. */
+    private fun releaseExtraction(t: ComposeUiTest) {
+        val hold = extractionHold ?: throw RunnerError("\"I open a video of the copied sequence with its extraction held\" has not run")
+        if (!hold.delete()) throw RunnerError("could not remove $hold")
+        t.waitForIdle()
+    }
+
+    /**
+     * Paints a band across the element: one drag from its left edge to its right, at 80% of its height, where the horizon of a frame is. The band
+     * is complete when it spans the width, and the painter then starts looking for the horizon in it.
+     */
+    private fun paintBand(t: ComposeUiTest, id: String) {
+        waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
+        t.waitForIdle()
+        t.onAllNodes(hasTestTag(id))[0].performMouseInput {
+            val y = height * 0.8f
+            val x0 = width * 0.002f
+            moveTo(Offset(x0, y))
+            press()
+            repeat(PAINT_STEPS) { moveBy(Offset(width * 0.996f / PAINT_STEPS, 0f)) }
+            release()
+        }
+        t.waitForIdle()
     }
 
     /** `<dir>/<client>/<name>.png`, where dir is `STAR_GALLERY_DIR` (the gui's runner reads the same), else `<repo>/.test-data/gallery/latest`. */
@@ -1334,6 +1391,7 @@ class DesktopFeatureRunner {
         const val LONG_VIDEO_LOOPS = 99   // the sequence's frames played this many times over again: 19 frames make 1900
         const val DRAG_HALF_PX = 24f   // a drag around a group is a box this far each way from its centre, in pixels
         const val DRAG_STEPS = 8
+        const val PAINT_STEPS = 60   // a band painted across a frame is this many pointer moves
         const val PROCESS_TIMEOUT_MS = 50L * 60_000   // auto selective on a 4-core runner took over 25 minutes
         const val STALL_LIMIT_MS = 10L * 60_000   // longest a processing wait may sit on one progress line; see the survey in the commit message
         const val RENDER_TIMEOUT_MS = 10L * 60_000

@@ -25,6 +25,8 @@ final class FixtureTests: XCTestCase {
         XCTAssertEqual(s.nightly?.line, "Sat 03:00 · aaaaaaaa · 1 red")
         XCTAssertEqual(s.nightly?.running, false)
         XCTAssertNil(s.usagePauseUntil)
+        XCTAssertEqual(s.creditSupport, "unknown")
+        XCTAssertNil(s.creditUse)
         XCTAssertEqual(s.usageWindows, UsageWindows(fiveHour: UsageWindow(utilization: 0.1, resetsAt: 3600),
                                                     sevenDay: UsageWindow(utilization: 0.24, resetsAt: 90000)))
     }
@@ -206,6 +208,15 @@ final class FixtureTests: XCTestCase {
         XCTAssertTrue(bad.first { $0.label == "Usage limit" }!.value.hasPrefix("model stages wait until "))
         XCTAssertEqual(Overview.attentionWords(bad),
                        ["Daemon down", "Landing paused", "develop red", "Usage limit", "Update available", "Paused"])
+
+        XCTAssertEqual(bad.first { $0.label == "Credits" }?.value, "—")
+        XCTAssertNil(bad.first { $0.label == "Credits in use" })
+        var spending = base
+        spending.creditSupport = "supported"; spending.creditUse = CreditUse(since: 1000, amount: 0.25, window: "overage")
+        let paid = rows(spending)
+        XCTAssertEqual(paid.first { $0.label == "Credits" }?.value, "available")
+        XCTAssertEqual(paid.first { $0.label == "Credits in use" }?.value, "25%")
+        XCTAssertEqual(Overview.attentionWords(paid), ["Credits in use"])
 
         let connecting = rows(nil, .connecting)
         XCTAssertEqual(connecting.map(\.value).prefix(4), ["connecting…", "—", "—", "—"])
@@ -862,6 +873,23 @@ final class UpdateTests: XCTestCase {
         answer(#"{"behind": null, "latest": null}"#)
         let unknown = try await client().monitorUpdate(sha: "abc123")
         XCTAssertEqual(unknown, MonitorUpdateInfo(behind: nil, latest: nil))
+    }
+}
+
+final class CreditTextTests: XCTestCase {
+    func testCreditHeaderText() {
+        XCTAssertEqual(CreditText.support("supported").text, "Credits: available")
+        XCTAssertEqual(CreditText.support("none").text, "Credits: none")
+        XCTAssertEqual(CreditText.support("unknown").text, "Credits: —")
+        XCTAssertEqual(CreditText.support(nil).text, "Credits: —")
+        XCTAssertNil(CreditText.inUse(nil), "no item unless credits are being spent")
+        XCTAssertEqual(CreditText.inUse(CreditUse(since: 1000, amount: 0.25, window: "overage"))?.text, "Credits in use: 25%")
+        XCTAssertEqual(CreditText.inUse(CreditUse(since: 1000))?.text, "Credits in use: —")
+    }
+
+    func testTheCreditFieldsDecode() throws {
+        let json = #"{"since": 1000.0, "amount": 0.5, "window": "five_hour"}"#
+        XCTAssertEqual(try JSONDecoder().decode(CreditUse.self, from: Data(json.utf8)), CreditUse(since: 1000, amount: 0.5, window: "five_hour"))
     }
 }
 

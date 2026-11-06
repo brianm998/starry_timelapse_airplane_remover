@@ -126,6 +126,9 @@ final class GuiFeatureRunner {
         .videoFramesExtracting: { try $0.expectVideoFramesBeingExtracted() },
         .videoFramesGone: { try $0.expectVideoFramesGone() },
         .chooserAnswersProcessed: { try $0.chooserAnswersWithProcessedCopy() },
+        .openVideoHeld: { try $0.openVideoWithExtractionHeld() },
+        .releaseExtraction: { try $0.releaseExtraction() },
+        .paintBand: { try $0.paintBand(across: $0.args[0]) },
         .saveScreenshot: { try $0.saveScreenshot(named: $0.args[0]) },
         .saveWindowScreenshot: { try $0.saveScreenshot(named: $0.args[1], ofWindow: $0.args[0]) },
     ]
@@ -389,14 +392,18 @@ final class GuiFeatureRunner {
     private func whyNotClickable(_ e: XCUIElement, _ identifier: String) -> String {
         let window = app.windows.firstMatch
         let scale = NSScreen.main.map { "\($0.backingScaleFactor)" } ?? "unknown"
-        return "\n\(identifier): exists \(e.exists), hittable \(e.isHittable), frame \(e.frame), window \(window.exists ? "\(window.frame)" : "none"), backingScaleFactor \(scale), screen \(NSScreen.main?.frame ?? .zero)\n\(app.debugDescription)"
+        // a frame read on an element that is not in the tree raises XCTest's snapshot error and hides the runner's own message
+        let there = e.exists
+        return "\n\(identifier): exists \(there), hittable \(there && e.isHittable), frame \(there ? "\(e.frame)" : "none"), window \(window.exists ? "\(window.frame)" : "none"), backingScaleFactor \(scale), screen \(NSScreen.main?.frame ?? .zero)\n\(app.debugDescription)"
     }
 
     private func clickId(_ identifier: String, how: Click = .plain) throws {
         let e = element(identifier)
         var scroller = Scroller()
+        var gridSteps = 0
         try waitFor("\(identifier) to be clickable", timeout: 60, detail: { self.whyNotClickable(e, identifier) }) {
             if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller) }
+            else if !e.exists && identifier.hasPrefix("grid.cell.") { self.scrollGridToBuild(&gridSteps) }
             return e.exists && e.isHittable
         }
         // ...and one that is still moving into place takes a click that is lost: wait until its frame has stopped changing
@@ -466,6 +473,17 @@ final class GuiFeatureRunner {
         if let last = scroller.lastGap, abs(gap) >= abs(last) { scroller.direction = -scroller.direction }
         scroller.lastGap = gap
         holder.scroll(byDeltaX: 0, deltaY: (gap > 0 ? -1 : 1) * scroller.direction * min(abs(gap), 300))
+    }
+
+    /// A lazy grid builds only the cells in view, so a cell below the fold of a small window is not in the tree and cannot be scrolled to by
+    /// its own frame: scroll the grid's scroll view down a step (and back to the top once it has run out) until the row comes into being.
+    private func scrollGridToBuild(_ steps: inout Int) {
+        let holder = app.scrollViews.containing(NSPredicate(format: "identifier BEGINSWITH %@", "grid.cell.")).firstMatch
+        guard holder.exists, holder.isHittable else { return }
+        // down for eight steps, then back up for eight, so a grid that has scrolled past is not left there
+        let down = (steps / 8) % 2 == 0
+        holder.scroll(byDeltaX: 0, deltaY: down ? -200 : 200)
+        steps += 1
     }
 
     private func expectShown(_ identifier: String, shown: Bool) throws {
@@ -679,7 +697,26 @@ final class GuiFeatureRunner {
             app.typeKey(.escape, modifierFlags: [])
             throw RunnerError("\"\(item.label)\" is disabled")
         }
-        entry.click()
+        // A menu item can be listed before the menu has laid it out: its frame is infinite and a click on it fails the whole test
+        // ("point.x != INFINITY"). Give it a moment to get a hit point; if it never does, use the command's shortcut instead.
+        let ready = (try? waitFor("\(item.label) to be hittable", timeout: 10, interval: 0.5) {
+            entry.isHittable && entry.frame.minX.isFinite && entry.frame.minY.isFinite && !entry.frame.isInfinite
+        }) != nil
+        if ready {
+            entry.click()
+        } else {
+            app.typeKey(.escape, modifierFlags: [])
+            guard let shortcut = try commandShortcut(command) else { throw RunnerError("\"\(item.label)\" never got a hit point and has no shortcut") }
+            try press(shortcut)
+        }
+    }
+
+    /// The command's shortcut from `gherkin/ui/commands.json` ("option+o"), if it has one.
+    private func commandShortcut(_ command: String) throws -> String? {
+        let url = Self.repoRoot.appendingPathComponent("gherkin/ui/commands.json")
+        guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any],
+              let commands = object["commands"] as? [[String: String]] else { return nil }
+        return commands.first(where: { $0["id"] == command })?["shortcut"]
     }
 
     private func expectMenuCommand(_ command: String, enabled: Bool) throws {
@@ -719,8 +756,8 @@ final class GuiFeatureRunner {
         try launch(arguments: ["-StarUITestSequenceLocation", copy.path])
     }
 
-    /// A short video made from the copied sequence's frames with the bundled ffmpeg, opened as "Load Video" opens one: the import sheet comes up.
-    private func openVideoAtItsImportDialog() throws {
+    /// A short video made from the copied sequence's frames with the bundled ffmpeg.
+    private func makeVideoOfCopiedSequence() throws -> URL {
         guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
         let ffmpeg = Self.repoRoot.appendingPathComponent("external_binaries/bin/ffmpeg")
         let video = scratch.appendingPathComponent("gallery-video.mp4")
@@ -731,7 +768,54 @@ final class GuiFeatureRunner {
         try process.run()
         process.waitUntilExit()
         guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: video.path) else { throw RunnerError("could not make a video from \(copy.path)") }
-        try launch(arguments: ["-StarUITestOpenVideo", video.path])
+        return video
+    }
+
+    /// A short video made from the copied sequence's frames, opened as "Load Video" opens one: the import sheet comes up.
+    private func openVideoAtItsImportDialog() throws {
+        try launch(arguments: ["-StarUITestOpenVideo", try makeVideoOfCopiedSequence().path])
+    }
+
+    /// The file beside the video that holds its frames back from the second one on (StarCore's `VideoFrameSource.heldFromFrame`).
+    private var extractionHold: URL?
+
+    /// The video of the copied sequence, imported in the background with every frame but the first held back (a file beside the video, which
+    /// StarCore's extraction watches), landing on the sequence screen without the startup questions.
+    private func openVideoWithExtractionHeld() throws {
+        let video = try makeVideoOfCopiedSequence()
+        let hold = URL(fileURLWithPath: video.path + ".hold")
+        try "1".write(to: hold, atomically: true, encoding: .utf8)
+        extractionHold = hold
+        try launch(arguments: ["-StarUITestOpenVideo", video.path, "-StarUITestSkipStartupQuestions", "YES"])
+        let importButton = element("videoimport.import")
+        guard importButton.waitForExistence(timeout: 120) else { throw RunnerError("the video import sheet did not appear\n\(app.debugDescription)") }
+        // "Extract video in background" is on or off by what the video's packets say, which arrives a moment after the sheet: put it on whichever way it starts
+        let background = element("videoimport.background")
+        guard background.waitForExistence(timeout: 30) else { throw RunnerError("the import sheet has no background choice\n\(app.debugDescription)") }
+        func isOn() -> Bool { (background.value as? String) == "1" || (background.value as? Int) == 1 }
+        if !isOn() { background.click() }
+        try waitFor("\"videoimport.background\" on", timeout: 20, detail: { "(value \(String(describing: background.value)))" }) { isOn() }
+        // Return is Import's default action: the button can sit under the Dock on a small screen
+        app.typeKey(.return, modifierFlags: [])
+        try waitFor("the sequence screen", timeout: 300, detail: { self.app.debugDescription }) { self.element("frame.number").exists }
+    }
+
+    /// Lets the held frames come out: removes the file that held them.
+    private func releaseExtraction() throws {
+        guard let hold = extractionHold else { throw RunnerError("\"I open a video of the copied sequence with its extraction held\" has not run") }
+        try FileManager.default.removeItem(at: hold)
+    }
+
+    /// Paints a band across the element: one drag from its left edge to its right, at 80% of its height, where the horizon of a frame is. The band
+    /// is complete when it spans the width, and the painter then starts looking for the horizon in it.
+    private func paintBand(across identifier: String, timeout: TimeInterval = 120) throws {
+        let e = element(identifier)
+        guard e.waitForExistence(timeout: timeout) else {
+            throw RunnerError("\(identifier) did not appear within \(Int(timeout))s\n\(app.debugDescription)")
+        }
+        let start = e.coordinate(withNormalizedOffset: CGVector(dx: 0.002, dy: 0.8))
+        let end = e.coordinate(withNormalizedOffset: CGVector(dx: 0.998, dy: 0.8))
+        start.press(forDuration: 0.2, thenDragTo: end)
     }
 
     /// A feature from the processed sequence starts runs, and this Mac must never run the GPU merge (CLAUDE.md).
