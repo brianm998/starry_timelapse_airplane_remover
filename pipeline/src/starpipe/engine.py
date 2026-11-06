@@ -98,7 +98,7 @@ class Engine:
     land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
     publish_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-publish is one step
     landing_waiting: set[int] = field(default_factory=lambda: set[int]())  # tickets whose landing stage is waiting for an LLM slot
-    llm_waiting: dict[int, tuple[int, int, int]] = field(default_factory=lambda: dict[int, tuple[int, int, int]]())  # other waiters' rank
+    llm_waiting: dict[int, tuple[int, int, float, int]] = field(default_factory=lambda: dict[int, tuple[int, int, float, int]]())  # other waiters' rank
     announcer: Announcer = field(default_factory=SilentAnnouncer)  # spoken alerts; the daemon injects the real one
 
     # intake --------------------------------------------------------------------------------------------------------
@@ -247,8 +247,10 @@ class Engine:
     def claimable(self) -> Ticket | None:
         if self.db.get("pause") in ("all", "claims") or self.update_hold():
             return None  # the second is the daemon waiting to swap to new code: nothing new starts until it swaps, at most the cap
-        if self.landing_waiting:
-            return None  # a ticket in the landing train needs the next LLM slot
+        if self._usage_paused_until() > self.clock():
+            return None  # every stage waits in _wait_for_usage with no stage row open, so llm_room() is ok: a claim would only sit idle
+        if self.landing_waiting or self.llm_waiting:
+            return None  # a ticket already claimed is waiting for a session: it takes the next slot, not a new claim
         if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
             return None
         for t in self.db.tickets(("queued",)):  # ordered by priority then age
@@ -497,8 +499,8 @@ class Engine:
             landing = stage in LANDING_STAGES
         if landing:
             self.landing_waiting.add(t.number)
-        else:  # rank: furthest along first, then priority (p0 first), then the older ticket
-            self.llm_waiting[t.number] = (-STAGE_DEPTH.get(stage, 0), t.priority, t.number)
+        else:  # rank: furthest along first, then priority (p0 first), then the earlier claim
+            self.llm_waiting[t.number] = (-STAGE_DEPTH.get(stage, 0), t.priority, t.claimed_at or 0.0, t.number)
         try:
             while True:
                 async with self.llm_lock:
