@@ -683,9 +683,16 @@ final class GuiFeatureRunner {
         }
     }
 
+    /// Clicks a menu-bar item once it is there: Actions and Tools are built only for a loaded sequence, so right after a load they can be missing.
+    private func openMenu(_ item: (menu: String, label: String)) throws {
+        let bar = app.menuBars.menuBarItems[item.menu]
+        try waitFor("the \"\(item.menu)\" menu to be in the menu bar", timeout: 60, interval: 1) { bar.exists }
+        bar.click()
+    }
+
     private func chooseMenuCommand(_ command: String) throws {
         let item = try menuItem(command)
-        app.menuBars.menuBarItems[item.menu].click()
+        try openMenu(item)
         let entry = app.menuBars.menuItems[item.label]
         guard entry.waitForExistence(timeout: 10) else { throw RunnerError("no menu item \"\(item.label)\" in \"\(item.menu)\"") }
         guard entry.isEnabled else {
@@ -697,13 +704,26 @@ final class GuiFeatureRunner {
         let ready = (try? waitFor("\(item.label) to be hittable", timeout: 10, interval: 0.5) {
             entry.isHittable && entry.frame.minX.isFinite && entry.frame.minY.isFinite && !entry.frame.isInfinite
         }) != nil
-        if ready {
-            entry.click()
+        // XCUIElement.click() re-resolves the element when it synthesises the event, after its own hover, and can land on a
+        // transient infinite frame the wait above has already passed. So read the frame once, check it, and click a point
+        // computed from it, relative to the menu bar's origin: nothing is resolved at synthesis time.
+        let bar = app.menuBars.firstMatch
+        let entryFrame = entry.frame
+        let barFrame = bar.frame
+        if ready, Self.isFinite(entryFrame), Self.isFinite(barFrame) {
+            let origin = bar.coordinate(withNormalizedOffset: .zero)
+            origin.withOffset(CGVector(dx: entryFrame.midX - barFrame.minX, dy: entryFrame.midY - barFrame.minY)).click()
         } else {
             app.typeKey(.escape, modifierFlags: [])
             guard let shortcut = try commandShortcut(command) else { throw RunnerError("\"\(item.label)\" never got a hit point and has no shortcut") }
             try press(shortcut)
         }
+    }
+
+    /// A frame with real coordinates: not null, not infinite, not empty.
+    private static func isFinite(_ frame: CGRect) -> Bool {
+        !frame.isNull && !frame.isInfinite && !frame.isEmpty
+            && frame.minX.isFinite && frame.minY.isFinite && frame.width.isFinite && frame.height.isFinite
     }
 
     /// The command's shortcut from `gherkin/ui/commands.json` ("option+o"), if it has one.
@@ -716,7 +736,7 @@ final class GuiFeatureRunner {
 
     private func expectMenuCommand(_ command: String, enabled: Bool) throws {
         let item = try menuItem(command)
-        app.menuBars.menuBarItems[item.menu].click()
+        try openMenu(item)
         let entry = app.menuBars.menuItems[item.label]
         defer { app.typeKey(.escape, modifierFlags: []) }
         guard entry.waitForExistence(timeout: 10) else { throw RunnerError("no menu item \"\(item.label)\" in \"\(item.menu)\"") }
@@ -801,15 +821,24 @@ final class GuiFeatureRunner {
         try FileManager.default.removeItem(at: hold)
     }
 
-    /// Paints a band across the element: one drag from its left edge to its right, at 80% of its height, where the horizon of a frame is. The band
-    /// is complete when it spans the width, and the painter then starts looking for the horizon in it.
+    /// Paints a band across the element: one drag from its left edge to its right, at 80% of its height (higher if the painter's toolbar covers
+    /// that), where the horizon of a frame is. The band is complete when it spans the width, and the painter then starts looking for the horizon in it.
     private func paintBand(across identifier: String, timeout: TimeInterval = 120) throws {
         let e = element(identifier)
         guard e.waitForExistence(timeout: timeout) else {
             throw RunnerError("\(identifier) did not appear within \(Int(timeout))s\n\(app.debugDescription)")
         }
-        let start = e.coordinate(withNormalizedOffset: CGVector(dx: 0.002, dy: 0.8))
-        let end = e.coordinate(withNormalizedOffset: CGVector(dx: 0.998, dy: 0.8))
+        // 80% of the height, unless the painter's toolbar (an overlay at the bottom of the frame area) covers that on a small window: then the
+        // drag goes above it, as a user's would. The band label is the toolbar's top row; the toolbar pads 12pt above it.
+        var dy: CGFloat = 0.8
+        let label = element("painter.band")
+        let frame = e.frame
+        if label.exists, frame.height > 0 {
+            let clearOfToolbar = (label.frame.minY - 12 - 8 - frame.minY) / frame.height
+            dy = max(0.1, min(dy, clearOfToolbar))
+        }
+        let start = e.coordinate(withNormalizedOffset: CGVector(dx: 0.002, dy: dy))
+        let end = e.coordinate(withNormalizedOffset: CGVector(dx: 0.998, dy: dy))
         start.press(forDuration: 0.2, thenDragTo: end)
     }
 

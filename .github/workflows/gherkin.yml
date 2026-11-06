@@ -533,8 +533,23 @@ jobs:
   build-macos:
     name: build star, stard and the validators (macos-15)
     runs-on: macos-15
-    needs: [features, opencv-macos]
-    if: (needs.features.outputs.cli != '[]' || needs.features.outputs.macgui != '[]' || needs.features.outputs.desktop != '[]') && inputs.windows != 'only'
+    # The Linux legs that run the same work come first: macOS runners are scarce (jobs have gone unacquired, see #388), and a red Linux job
+    # already fails the PR, so in smoke mode (what a PR runs) a failed Linux job keeps every macOS leg out of the queue (cli-macos, mac-gui and
+    # desktop-macos need this job). A Linux job that is skipped (no features for that client, windows: only) is not a failure.
+    # `!cancelled()` stops a skipped Linux job from skipping this one with it, so the results of what this job really needs are checked
+    # by hand. The full matrix (nightly, `smoke` false) waits for the Linux legs too, but runs the macOS legs whatever they did: its
+    # point is a complete picture per platform.
+    needs: [features, opencv-macos, generate-check, cli-linux, desktop-linux]
+    if: >-
+      ${{ !cancelled()
+      && needs.features.result == 'success'
+      && needs.opencv-macos.result == 'success'
+      && (needs.features.outputs.cli != '[]' || needs.features.outputs.macgui != '[]' || needs.features.outputs.desktop != '[]')
+      && inputs.windows != 'only'
+      && (!inputs.smoke || (
+        contains(fromJSON('["success","skipped"]'), needs.generate-check.result)
+        && contains(fromJSON('["success","skipped"]'), needs.cli-linux.result)
+        && contains(fromJSON('["success","skipped"]'), needs.desktop-linux.result))) }}
     timeout-minutes: 60
     env:
       NEED_VALIDATOR: ${{ contains(needs.features.outputs.cli, '"validator":true') || contains(needs.features.outputs.macgui, '"validator":true') || contains(needs.features.outputs.desktop, '"validator":true') }}
@@ -1128,10 +1143,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Read-only: kotlin-client.yml's build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per shard job filled it).
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-read-only: true
           cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
@@ -1399,10 +1415,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Read-only: kotlin-client.yml's build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per shard job filled it).
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-read-only: true
           cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
@@ -1534,10 +1551,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Read-only: kotlin-client.yml's build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per shard job filled it).
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-read-only: true
           cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the

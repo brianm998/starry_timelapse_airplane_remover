@@ -3324,7 +3324,17 @@ public final class ImageSequenceViewModel {
                     }
                 }
             }
-            
+
+            // A start or Stop that landed while this run was still before its build (the drain
+            // above has nothing to wait for then) bumped the generation: this run must not build
+            // a graph over its range, or it would finish frames the newer run (or the Stop) meant
+            // to leave alone. The newer run, or cancelProcessing, owns the run state.
+            let stillCurrent = await MainActor.run { self.processingGeneration == runGeneration }
+            guard stillCurrent else {
+                Log.d("processFrames run \(runGeneration) superseded or stopped before its build; not building")
+                return
+            }
+
             if let frame = await frames[0].frame {
                 await self.process(
                   frame: frame,

@@ -15,6 +15,10 @@ struct KeypointDivisorSummaryRow: View {
     let divisor: Double
     let onUpdate: () -> Void
 
+    /// What the row's button says. "Change", not "Update": the sheet it opens has its own
+    /// Update, which is the one that commits.
+    static var buttonTitle: String { localized("ui.change") }
+
     var body: some View {
         HStack(spacing: 12) {
             Text(localized("ui.speed_vs_sharpness"))
@@ -27,7 +31,7 @@ struct KeypointDivisorSummaryRow: View {
               .accessibilityIdentifier("startup.removal.speed.value")
             Spacer()
             Button(action: onUpdate) {
-                Text(localized("ui.update"))
+                Text(Self.buttonTitle)
                   .font(.title3)
                   .foregroundColor(.white)
                   .padding(.horizontal, 12)
@@ -76,7 +80,7 @@ struct KeypointDivisorDraft {
 /// startup prompt, on the way to Start Processing.
 ///
 /// The cleanup dialog shows a one-line `KeypointDivisorSummaryRow`; this is the sheet its
-/// Update button opens. It edits a draft: Update hands the draft to `onUpdate`, Cancel hands
+/// Change button opens. It edits a draft: Update hands the draft to `onUpdate`, Cancel hands
 /// nothing over, so the value stays as it was when the sheet opened. The explanation and the
 /// "Recommended" badge come from `Config.keypointDivisorAdvice(physicalMemory:)` — see there
 /// for where the boundary is and why.
@@ -85,7 +89,9 @@ struct KeypointDivisorDraft {
 /// just wants their video cleaned up has to be able to make this choice. The Advanced
 /// panel's version of the same setting explains the mechanism for those who want it.
 struct KeypointDivisorStartupView: View {
-    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    /// Optional so the sheet can be drawn on its own (a test renders it with none); without
+    /// one there is no machine to quote numbers for, and the explanation says so.
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel?
 
     let onCancel: () -> Void
     let onUpdate: (Double) -> Void
@@ -136,10 +142,13 @@ struct KeypointDivisorStartupView: View {
     /// that panel will also accept.
     static let maxDivisor: Double = 8.0
 
+    /// The ground the sheet's white text sits on: the gray of the cleanup dialog behind it.
+    static let sheetBackground = Color.gray
+
     private var divisor: Double { draft.current }
 
     private var advice: Config.KeypointDivisorAdvice? {
-        viewModel.config.config()
+        viewModel?.config.config()
           .keypointDivisorAdvice(physicalMemory: ProcessInfo.processInfo.physicalMemory)
     }
 
@@ -163,6 +172,11 @@ struct KeypointDivisorStartupView: View {
         }
           .frame(maxWidth: 640, alignment: .leading)
           .padding(24)
+          // A sheet takes the system's light background, and everything in it is white text:
+          // give it the dark gray of the dialog it opens from, and the dark appearance so the
+          // checkboxes and the field are drawn for a dark ground.
+          .background(Self.sheetBackground)
+          .preferredColorScheme(.dark)
           .onChange(of: customText) { applyCustomTextIfValid() }
           .onChange(of: divisor) {
               // Resync the field when a preset moved the value, but never while it is
