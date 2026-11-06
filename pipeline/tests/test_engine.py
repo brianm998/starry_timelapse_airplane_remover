@@ -199,6 +199,88 @@ async def test_nothing_new_is_claimed_while_a_landing_stage_waits_for_a_session(
     assert rig.engine.claimable() is None
 
 
+async def test_no_claim_during_a_usage_pause(rig: Rig) -> None:
+    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    assert rig.engine.llm_active() == 0 and rig.engine.llm_room().ok, "no stage row is open during a pause"
+    rig.db.put("usage_pause_until", str(rig.now + 600))
+    assert rig.engine.claimable() is None
+    rig.now += 601
+    assert rig.engine.claimable() is not None
+
+
+async def test_a_ticket_waiting_for_a_session_holds_back_new_claims(rig: Rig) -> None:
+    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
+    rig.gh.add_issue(2, "claimed", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    t2 = rig.db.ticket(2)
+    assert t2
+    rig.db.set_state(2, "developing")
+    assert rig.engine.llm_room().ok and rig.engine.claimable() is not None
+
+    async def sleep(_: float) -> None:
+        await asyncio.sleep(0.01)
+
+    rig.engine.sleep = sleep
+    rig.engine.config.max_llm_sessions = 1
+    busy = rig.db.begin_stage(5, "develop", 1, "sonnet")
+    waiter = asyncio.create_task(rig.engine._begin_when_room(t2, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(0.05)
+    assert 2 in rig.engine.llm_waiting and rig.engine.claimable() is None
+    rig.db.end_stage(busy, "accepted", 0.0, "")
+    rig.engine.llm_waiting[9] = (-99, 0, 0.0, 9)  # a better-ranked waiter: room is ok now, yet the claim still waits its turn
+    await asyncio.sleep(0.05)
+    assert rig.engine.llm_room().ok and rig.engine.claimable() is None and not waiter.done()
+    waiter.cancel()
+    await asyncio.gather(waiter, return_exceptions=True)
+    assert 2 not in rig.engine.llm_waiting, "a cancelled waiter leaves the registry, or claims stop for good"
+    rig.engine.llm_waiting.pop(9)
+    assert rig.engine.claimable() is not None
+
+
+async def test_waiting_sessions_start_in_rank_order(rig: Rig) -> None:
+    rig.engine.config.max_llm_sessions = 1
+    for n in (1, 2, 3, 4, 5):
+        rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    rig.db.set_fields(4, claimed_at=100.0)  # same stage and priority as 5: the earlier claim goes first
+    rig.db.set_fields(5, claimed_at=50.0)
+    ts = {n: rig.db.ticket(n) for n in (1, 2, 3, 4, 5)}
+    assert all(ts.values())
+    busy = rig.db.begin_stage(1, "develop", 1, "sonnet")
+
+    async def sleep(_: float) -> None:
+        await asyncio.sleep(0.01)
+
+    rig.engine.sleep = sleep
+    begin = rig.engine._begin_when_room  # pyright: ignore[reportPrivateUsage]
+    tasks = {
+        "explore": asyncio.create_task(begin(ts[2], "explore", 1, "sonnet")),  # type: ignore[arg-type]
+        "develop-late": asyncio.create_task(begin(ts[4], "develop", 1, "sonnet")),  # type: ignore[arg-type]
+        "develop-early": asyncio.create_task(begin(ts[5], "develop", 1, "sonnet")),  # type: ignore[arg-type]
+        "review": asyncio.create_task(begin(ts[3], "review", 1, "sonnet")),  # type: ignore[arg-type]
+    }
+    await asyncio.sleep(0.05)
+    assert not any(t.done() for t in tasks.values())
+    started: list[str] = []
+    rig.db.end_stage(busy, "accepted", 0.0, "")
+    for name in ("review", "develop-early", "develop-late", "explore"):
+        stage_id = await asyncio.wait_for(tasks[name], 2)
+        started.append(name)
+        await asyncio.sleep(0.05)
+        assert {n for n, t in tasks.items() if t.done()} == set(started), "one slot, one start, in rank order"
+        rig.db.end_stage(stage_id, "accepted", 0.0, "")
+    assert rig.engine.llm_waiting == {}
+
+
+async def test_claims_still_happen_when_there_is_room(rig: Rig) -> None:
+    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    assert rig.engine.llm_room().ok
+    t = rig.engine.claimable()
+    assert t and t.number == 1
+
+
 async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
     rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
     rig.engine.sync_issues()
