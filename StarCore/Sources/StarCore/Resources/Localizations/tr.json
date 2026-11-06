@@ -1266,5 +1266,6 @@
   "ui.frame_mode_desc_dirty_sky": "Yalnızca bu karenin gökyüzünde hareket edeni tutar (orijinal eksi hizalanmış referans); zemin siyahtır. Bu karede incelenecek bir şey yoktur.",
   "ui.frame_mode_desc_dirty_earth": "Yalnızca bu karenin yerinde hareket edeni tutar (orijinal eksi hizalanmış referans); gökyüzü siyahtır. Bu karede incelenecek bir şey yoktur.",
   "ui.this_frame_uses_dirty_sky": "Bu kare temizlenmemiş gökyüzü kipini kullanıyor",
-  "ui.this_frame_uses_dirty_earth": "Bu kare temizlenmemiş yer kipini kullanıyor"
+  "ui.this_frame_uses_dirty_earth": "Bu kare temizlenmemiş yer kipini kullanıyor",
+  "ui.change": "Değiştir"
 }

@@ -1266,5 +1266,6 @@
   "ui.frame_mode_desc_dirty_sky": "Conserva solo lo que se movió en el cielo de este fotograma (el original menos la referencia alineada); la tierra queda en negro. No hay nada que revisar en este fotograma.",
   "ui.frame_mode_desc_dirty_earth": "Conserva solo lo que se movió en la tierra de este fotograma (el original menos la referencia alineada); el cielo queda en negro. No hay nada que revisar en este fotograma.",
   "ui.this_frame_uses_dirty_sky": "Este fotograma usa el modo cielo sin limpiar",
-  "ui.this_frame_uses_dirty_earth": "Este fotograma usa el modo tierra sin limpiar"
+  "ui.this_frame_uses_dirty_earth": "Este fotograma usa el modo tierra sin limpiar",
+  "ui.change": "Cambiar"
 }

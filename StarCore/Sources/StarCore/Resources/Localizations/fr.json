@@ -1266,5 +1266,6 @@
   "ui.frame_mode_desc_dirty_sky": "Ne garde que ce qui a bougé dans le ciel de cette image (l'original moins la référence alignée) ; le sol est noir. Il n'y a rien à examiner sur cette image.",
   "ui.frame_mode_desc_dirty_earth": "Ne garde que ce qui a bougé au sol dans cette image (l'original moins la référence alignée) ; le ciel est noir. Il n'y a rien à examiner sur cette image.",
   "ui.this_frame_uses_dirty_sky": "Cette image utilise le mode ciel non nettoyé",
-  "ui.this_frame_uses_dirty_earth": "Cette image utilise le mode sol non nettoyé"
+  "ui.this_frame_uses_dirty_earth": "Cette image utilise le mode sol non nettoyé",
+  "ui.change": "Changer"
 }
