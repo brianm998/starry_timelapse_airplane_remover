@@ -69,5 +69,7 @@
   "uiStartupReturnStarts": [],
   "uiStartupSpeedSharpness": [],
   "uiTranslatedScreen": [],
+  "uiVideoRender": [],
+  "uiVideoRenderCancel": [],
   "uiViewPickerNeedsAnImage": []
 }
