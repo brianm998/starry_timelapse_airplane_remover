@@ -117,7 +117,7 @@ private fun runApp(args: Array<String>) = application {
     val screen by vm.screen.collectAsState()
     val svm = (screen as? com.star.desktop.ui.app.AppScreen.Sequence)?.vm
     if (showOutlier && svm != null) {
-        // "Outliers for frame N", for the frame the table lists (0-based, like everywhere else in the app).
+        // "Outliers for frame N", for the frame the table lists (0-based, like everywhere else in the app); the gui's view sets the same title.
         val listed by svm.infoRows.collectAsState()
         val looking by svm.currentIndex.collectAsState()
         Window(
@@ -164,7 +164,7 @@ private fun runApp(args: Array<String>) = application {
     if (showAlign && svm != null) {
         Window(
             onCloseRequest = vm::closeAlignmentWindow,
-            title = localized("ui.alignment_2"),
+            title = localized("ui.star_alignment_info"),
             state = rememberWindowState(size = SecondaryWindow.ALIGNMENT.size),
         ) {
             // The menu and its shortcuts follow the focused window, as the macOS menu bar does (M9).

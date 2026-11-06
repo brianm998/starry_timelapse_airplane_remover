@@ -57,7 +57,7 @@ fun HorizonLineKindToggles(vm: SequenceViewModel) {
 
 /**
  * One kind's check box, its colour dot and its name; the name takes what is left of the row and wraps at its spaces.
- * The check box is not padded out to Material's 48dp touch target: in the 160dp grid panel that left 98dp for the name, and a wider system
+ * The check box is not padded out to Material's 48dp touch target: in the 180dp grid panel that left 118dp for the name, and a wider system
  * font (the Linux default) broke "Zusammengeführt" inside the word. The row is as tall as its text anyway, so nothing is lost on a desktop.
  */
 @Composable
