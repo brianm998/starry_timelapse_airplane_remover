@@ -52,6 +52,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.file.Files
 import com.star.desktop.domain.FrameFormatChoice
@@ -429,7 +433,12 @@ class DesktopFeatureRunner {
      * of the edit and scrub screens, so the feature looks away from the processing screen (Preview) and to one of them first.
      */
     private fun waitForProcessingToFinish(t: ComposeUiTest) {
+        // A run on a slow host can end before the first poll, so "running" is never read. The view model counts a run when it starts (before the
+        // progress line says anything), so a count that has gone up since the last wait ended proves one began.
+        val svm = (vm?.screen?.value as? AppScreen.Sequence)?.vm
+        val baseline = if (svm != null && svm === runsCountedFor) runsCounted else 0
         var sawRunning = false
+        var idleSince: Long? = null
         var last = "(none)"
         val stall = ProgressStall(STALL_LIMIT_MS * 1_000_000)
         waitFor(t, "processing to finish", 20L * 60_000, { "(last progress: $last)" }) {
@@ -440,9 +449,27 @@ class DesktopFeatureRunner {
             val parts = state.split('/')
             if (parts.size != 3) return@waitFor false
             if (parts[2] == "running") sawRunning = true
-            sawRunning && parts[2] == "idle" && (parts[1].toIntOrNull() ?: 0) > 0 && parts[0] == parts[1]
+            val finished = parts[2] == "idle" && (parts[1].toIntOrNull() ?: 0) > 0 && parts[0] == parts[1]
+            if (!finished) { idleSince = null; return@waitFor false }
+            if (sawRunning) return@waitFor true
+            // Never seen running: only if a run has begun, and the finished reading holds (a reading from before it began would not).
+            if (svm == null || svm.runsStarted <= baseline) return@waitFor false
+            val since = idleSince ?: System.nanoTime().also { idleSince = it }
+            System.nanoTime() - since >= IDLE_STOPPED_NS
         }
+        (vm?.screen?.value as? AppScreen.Sequence)?.vm?.let { runsCountedFor = it; runsCounted = it.runsStarted }
     }
+
+    /** The sequence whose runs [runsCounted] counts: what its `runsStarted` read when the last wait for a run to finish ended. */
+    private var runsCountedFor: com.star.desktop.ui.sequence.SequenceViewModel? = null
+    private var runsCounted = 0
+
+    /**
+     * How many times the processing modal has come up since the app was shown, collected in the background: the modal exists only while a run
+     * goes, and a short run on a slow host can be over before a poll of the tree looks.
+     */
+    private val modalRaised = java.util.concurrent.atomic.AtomicInteger(0)
+    private var modalRaisedAtLastCheck = 0
 
     /**
      * Waits for the run to be idle, whether or not every frame is complete (a run that another start put an end to leaves the frames it
@@ -502,9 +529,15 @@ class DesktopFeatureRunner {
     private fun expectShown(t: ComposeUiTest, id: String, shown: Boolean) {
         // The unmerged tree: a control inside a merging parent (the badge on a grid cell, whose text the cell's own node takes in) is drawn, and so
         // shown, though only the unmerged tree has it under its own tag; "is not shown" of it would otherwise pass whether it was drawn or not.
+        // The processing modal is up only while a run goes: "shown" is also met by its having come up since the last time this was asked, which
+        // a run that has ended by the time of the poll still did. A start that was ignored never raises it, so that still fails.
+        val raisedBefore = modalRaisedAtLastCheck
+        val latched = shown && id == "processing.modal"
         waitFor(t, "\"$id\" ${if (shown) "shown" else "not shown"}", UI_TIMEOUT_MS) {
-            t.onAllNodes(hasTestTag(id), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() == shown
+            t.onAllNodes(hasTestTag(id), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() == shown ||
+                (latched && modalRaised.get() > raisedBefore)
         }
+        if (id == "processing.modal") modalRaisedAtLastCheck = modalRaised.get()
     }
 
     private fun semanticsOf(t: ComposeUiTest, id: String) =
@@ -653,7 +686,15 @@ class DesktopFeatureRunner {
      * Composes the app. What `Main.kt` hangs on the window and not in [StarApp], a @ui feature hosts the same way: the window's key handler
      * (`Window(onKeyEvent = ...)`) on an ancestor, in the bubble phase, with the focus put on it to begin with.
      */
+    @OptIn(ExperimentalCoroutinesApi::class)
     private fun showApp(t: ComposeUiTest, model: AppViewModel) {
+        scope?.let { appScope ->
+            appScope.launch {
+                model.screen
+                    .flatMapLatest { (it as? AppScreen.Sequence)?.vm?.showProcessingModal ?: flowOf(false) }
+                    .collect { if (it) modalRaised.incrementAndGet() }
+            }
+        }
         if ("@ui" in feature.tags) t.setContent { KeyHost(model) { SecondaryWindowOverlay(model) { StarApp(model) } } } else t.setContent { StarApp(model) }
     }
 
@@ -1183,14 +1224,29 @@ class DesktopFeatureRunner {
         waitFor(t, "the sequence location question", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("sequencelocation.open") }
     }
 
+    /** The ffmpeg to run: `$STAR_FFMPEG_DIR`'s (the CI jobs name the one they fetched), the bundled one (`.exe` on Windows), or the one on the PATH. */
+    private fun ffmpegExecutable(): String {
+        val dirs = listOfNotNull(System.getenv("STAR_FFMPEG_DIR")?.takeIf { it.isNotBlank() }?.let { File(it) }, File(repoRoot(), "external_binaries/bin"))
+        for (dir in dirs) for (name in listOf("ffmpeg", "ffmpeg.exe")) File(dir, name).takeIf { it.isFile }?.let { return it.path }
+        return "ffmpeg"
+    }
+
     /** A short video made from the copied sequence's frames with the bundled ffmpeg. */
     private fun makeVideoOfCopiedSequence(): File {
         if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
-        val ffmpeg = File(repoRoot(), "external_binaries/bin/ffmpeg").takeIf { it.canExecute() } ?: File("ffmpeg")
         val video = File(scratch, "gallery-video.mp4")
+        // The frames go in through a concat list and not `-pattern_type glob`, which not every ffmpeg build (the Windows one) supports.
+        val frames = sequenceCopy.listFiles { f -> f.isFile && f.extension.lowercase() == "jpg" }.orEmpty().sortedBy { it.name }
+        if (frames.isEmpty()) throw RunnerError("no .jpg frames in $sequenceCopy to make a video from")
+        val list = File(scratch, "gallery-video-frames.txt")
+        list.writeText(buildString {
+            for (f in frames) append("file '").append(f.absolutePath.replace('\\', '/').replace("'", "'\\''")).append("'\nduration 0.2\n")
+            // the demuxer ignores the last duration unless its file is named again
+            append("file '").append(frames.last().absolutePath.replace('\\', '/').replace("'", "'\\''")).append("'\n")
+        })
         val process = ProcessBuilder(
-            ffmpeg.path, "-y", "-loglevel", "error", "-framerate", "5", "-pattern_type", "glob", "-i", File(sequenceCopy, "*.jpg").path,
-            "-vf", "scale=1280:-2", "-c:v", "libx264", "-pix_fmt", "yuv420p", video.path,
+            ffmpegExecutable(), "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list.path,
+            "-vf", "scale=1280:-2", "-r", "5", "-c:v", "libx264", "-pix_fmt", "yuv420p", video.path,
         ).redirectErrorStream(true).start()
         val log = process.inputStream.bufferedReader().readText()
         if (process.waitFor() != 0 || !video.isFile) throw RunnerError("could not make a video from $sequenceCopy: $log")
