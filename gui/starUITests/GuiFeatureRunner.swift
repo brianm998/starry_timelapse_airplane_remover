@@ -92,6 +92,10 @@ final class GuiFeatureRunner {
         .idSays: { try $0.expectSays($0.args[0], text: $0.args[1]) },
         .typeInto: { try $0.typeInto($0.args[0], into: $0.args[1]) },
         .idHolds: { try $0.expectHolds($0.args[0], number: Int($0.args[1]) ?? -1) },
+        .idEnabled: { try $0.expectEnabled($0.args[0], enabled: true) },
+        .idDisabled: { try $0.expectEnabled($0.args[0], enabled: false) },
+        .renderedVideoFrames: { try $0.renderedVideoHasEveryFrame(framesPerSecond: Int($0.args[0]) ?? -1) },
+        .noVideoLeft: { try $0.noVideoLeft() },
         .idFocused: { try $0.expectFocus($0.args[0], focused: true) },
         .idNotFocused: { try $0.expectFocus($0.args[0], focused: false) },
         .languageIs: { _ in },   // read by `language` when the app is launched
@@ -536,6 +540,70 @@ final class GuiFeatureRunner {
         // `hasKeyboardFocus` is the attribute the accessibility API reports for it; XCUIElement has no public property on macOS.
         func hasKeyboard() -> Bool { (e.value(forKey: "hasKeyboardFocus") as? Bool) ?? false }
         try waitFor("\(identifier) \(focused ? "to have" : "not to have") the keyboard", timeout: 20, detail: { "(hasKeyboardFocus: \(hasKeyboard()))" }) { hasKeyboard() == focused }
+    }
+
+    /// The control takes clicks (a button that is not greyed out), or does not.
+    private func expectEnabled(_ identifier: String, enabled: Bool) throws {
+        try expectShown(identifier, shown: true)
+        let e = element(identifier)
+        try waitFor("\(identifier) \(enabled ? "enabled" : "disabled")", timeout: 20, detail: { "(isEnabled \(e.isEnabled))" }) { e.isEnabled == enabled }
+    }
+
+    /// The folder the processed copy's videos are written to: its config's `outputPath`.
+    private func processedOutputFolder() throws -> URL {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: config)) as? [String: Any], let path = object["outputPath"] as? String else {
+            throw RunnerError("\(config.path) has no outputPath")
+        }
+        return URL(fileURLWithPath: path)
+    }
+
+    /// The videos in [folder] (not its subfolders), by the containers a render writes.
+    private func videos(in folder: URL) -> [URL] {
+        ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? [])
+            .filter { ["mov", "mp4", "mkv", "avi"].contains($0.pathExtension.lowercased()) }
+    }
+
+    /// The one video the render wrote has a frame for each image of the processed copy's sequence, at [framesPerSecond]. Read with the bundled ffprobe
+    /// (the @ui shard builds no star-output-verify).
+    private func renderedVideoHasEveryFrame(framesPerSecond: Int) throws {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        let folder = try processedOutputFolder()
+        var found: [URL] = []
+        try waitFor("a video in \(folder.path)", timeout: 60) { found = videos(in: folder); return !found.isEmpty }
+        guard found.count == 1 else { throw RunnerError("expected one rendered video in \(folder.path), found \(found.map(\.lastPathComponent))") }
+        // the frames: the sequence's images, beside its working folder (`input/<name>` for `input/star_temp_<name>`)
+        let working = config.deletingLastPathComponent()
+        let sequence = working.deletingLastPathComponent().appendingPathComponent(String(working.lastPathComponent.dropFirst("star_temp_".count)))
+        let images = ((try? FileManager.default.contentsOfDirectory(at: sequence, includingPropertiesForKeys: nil)) ?? [])
+            .filter { ["tif", "tiff", "jpg", "jpeg", "png"].contains($0.pathExtension.lowercased()) }
+        guard !images.isEmpty else { throw RunnerError("no images in \(sequence.path)") }
+        let ffprobe = Self.repoRoot.appendingPathComponent("external_binaries/bin/ffprobe")
+        let process = Process()
+        process.executableURL = ffprobe
+        process.arguments = ["-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames,r_frame_rate",
+                             "-of", "default=noprint_wrappers=1", found[0].path]
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = out
+        try process.run()
+        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { throw RunnerError("ffprobe failed on \(found[0].path):\n\(text)") }
+        func value(_ key: String) -> String? {
+            text.split(whereSeparator: \.isNewline).first { $0.hasPrefix("\(key)=") }.map { String($0.dropFirst(key.count + 1)) }
+        }
+        guard let frames = value("nb_read_frames").flatMap({ Int($0) }), let rate = value("r_frame_rate") else {
+            throw RunnerError("ffprobe's answer has no frame count and rate:\n\(text)")
+        }
+        guard frames == images.count else { throw RunnerError("\(found[0].lastPathComponent) has \(frames) frames, the sequence \(images.count)") }
+        guard rate == "\(framesPerSecond)/1" else { throw RunnerError("\(found[0].lastPathComponent) is at \(rate), expected \(framesPerSecond)/1") }
+    }
+
+    /// No video is in the output folder, now or soon (a cancelled render's partial file goes when its process has ended).
+    private func noVideoLeft() throws {
+        let folder = try processedOutputFolder()
+        try waitFor("the output folder to hold no video", timeout: 30, detail: { "(\(self.videos(in: folder).map(\.lastPathComponent)))" }) { videos(in: folder).isEmpty }
     }
 
     /// The first whole number in the control's text is [number]: "7" in an open field, "merge with 7 static neighbors" in one that is not.
