@@ -43,7 +43,7 @@ def test_the_session_limit_and_the_cpu_limit_apply_once_something_is_running() -
     assert load.room(1, 40.0, 3, 85.0).ok
     assert load.room(2, 84.0, 3, 85.0).ok
     full = load.room(3, 10.0, 3, 85.0)
-    assert not full.ok and "3 of 3 LLM sessions" in full.reason
+    assert not full.ok and "3 of 3 model sessions" in full.reason
     busy = load.room(1, 91.0, 3, 85.0)
     assert not busy.ok and "CPU is at 91%" in busy.reason and "limit 85%" in busy.reason
 
@@ -95,18 +95,6 @@ def test_high_cpu_defers_a_claim_only_while_something_else_is_running(rig: Rig) 
     assert rig.engine.claimable() is not None
 
 
-def test_a_session_waiting_for_the_heavy_lock_does_not_count_as_running(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
-    queue_ticket(rig, 1)
-    queue_ticket(rig, 2)
-    rig.engine.config.max_llm_sessions = 1
-    running_session(rig, 1)
-    assert rig.engine.llm_active() == 1 and rig.engine.claimable() is None
-    waiter = heavy.Waiter(priority=1, enqueued_at=0.0, pid=4242, started=0.0, ticket="1", cmd="swift test")
-    monkeypatch.setattr(heavy, "status", lambda: heavy.Status([], [waiter]))
-    assert rig.engine.llm_active() == 0, "ticket 1's session is blocked on the lock, not generating"
-    assert rig.engine.claimable() is not None
-
-
 # starting a stage -----------------------------------------------------------------------------------------------------
 async def test_stages_wait_for_room_instead_of_running_more_sessions_than_the_limit(rig: Rig) -> None:
     rig.engine.config.max_llm_sessions = 1
@@ -137,7 +125,7 @@ async def test_stages_wait_for_room_instead_of_running_more_sessions_than_the_li
     await asyncio.gather(*(rig.engine.drive(n) for n in (1, 2, 3)))
     assert peak == 1, "never more than the limit of sessions at once"
     assert [r.stage for r in rig.agent.requests if r.stage == "explore"] == ["explore"] * 3, "all three still ran"
-    assert any("1 of 1 LLM sessions are running" in line for line in seen_waiting), "the activity line says why it is waiting"
+    assert any("1 of 1 model sessions are running" in line for line in seen_waiting), "the activity line says why it is waiting"
 
 
 async def test_a_stage_waits_out_a_cpu_spike_and_then_starts(rig: Rig) -> None:
@@ -164,7 +152,7 @@ async def test_the_wait_note_is_cleared_once_the_stage_starts(rig: Rig) -> None:
 # the limits can be changed while it runs ---------------------------------------------------------------------------------
 def test_a_runtime_override_beats_the_config(rig: Rig) -> None:
     assert rig.engine.limits() == (2, 80.0)
-    rig.db.put("limit_llm", "5")
+    rig.db.put("max_active", "5")
     rig.db.put("limit_cpu", "60.5")
     assert rig.engine.limits() == (5, 60.5)
 

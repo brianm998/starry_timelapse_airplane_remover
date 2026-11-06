@@ -360,6 +360,7 @@ async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Ri
     assert rig.engine.max_active() == 2
     rig.db.put("max_active", "junk")
     assert rig.engine.max_active() == rig.engine.config.max_llm_sessions  # an unreadable override falls back to the file
+    rig.db.put("max_active", "2")
     rig.db.put("limit_llm", "5")  # a leftover from before there was one setting is ignored here (the daemon migrates it at start)
     assert rig.engine.max_active() == 2
     rig.db.put("limit_llm", None)
