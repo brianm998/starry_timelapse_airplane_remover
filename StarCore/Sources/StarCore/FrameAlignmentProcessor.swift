@@ -1251,7 +1251,8 @@ final public actor FrameAlignmentProcessor {
         do {
             let fullPath = "\(dirname)/\(frameIndex)/\(filename)"
             let url = NSURL(fileURLWithPath: fullPath, isDirectory: false) as URL
-            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url))
+            // a local file: read it directly, URLSession fails these loads on Linux and can deadlock
+            let data = try Data(contentsOf: url)
             return try JSONDecoder().decode(HomographyResultsCodable.self, from: data)
         } catch {
             return nil

@@ -316,7 +316,7 @@ def status(as_json: bool) -> None:
         click.echo(f"daemon up, pid {d['pid']}" + (f"  last error: {d['error']}" if d.get("error") else ""))
     res = data.get("resources")
     if res:
-        click.echo(f"LLM sessions {res['llm_active']}/{res['llm_max']} · CPU {res['cpu_pct']:.0f}% (limit {res['cpu_limit']:.0f}%)"
+        click.echo(f"model sessions {res['llm_active']}/{res['llm_max']} · CPU {res['cpu_pct']:.0f}% (limit {res['cpu_limit']:.0f}%)"
                    + (f" · new sessions wait: {res['waiting']}" if res.get("waiting") else ""))
     if data.get("pause"):
         click.echo(f"PAUSED: {data['pause']}")
@@ -452,11 +452,11 @@ def unblock(number: int, blocker: int) -> None:
 
 
 @main.command()
-@click.option("--llm", type=int, default=None, help="Most LLM sessions running at once.")
+@click.option("--llm", type=int, default=None, help="Most model sessions at once (1 to 6; the monitor's stepper sets the same value).")
 @click.option("--cpu", type=float, default=None, help="Do not start another session while CPU use is above this percent.")
 @click.option("--reset", is_flag=True, help="Go back to the values in config.toml.")
 def limits(llm: int | None, cpu: float | None, reset: bool) -> None:
-    """Show or change what limits starting work: LLM sessions at once, and CPU use (a runtime override of config.toml)."""
+    """Show or change what limits starting work: model sessions at once, and CPU use (a runtime override of config.toml)."""
     from . import client as client_mod
 
     try:
@@ -465,7 +465,7 @@ def limits(llm: int | None, cpu: float | None, reset: bool) -> None:
             else client.call("GET", "/v1/limits")
     except (client_mod.DaemonDown, RuntimeError) as exc:
         raise click.ClickException(str(exc)) from exc
-    click.echo(f"LLM sessions {res['llm_active']}/{res['llm_max']} · CPU {res['cpu_pct']:.0f}% (limit {res['cpu_limit']:.0f}%)"
+    click.echo(f"model sessions {res['llm_active']}/{res['llm_max']} · CPU {res['cpu_pct']:.0f}% (limit {res['cpu_limit']:.0f}%)"
                + (" · overridden at runtime" if res["overridden"] else " · from config.toml")
                + (f" · new sessions wait: {res['waiting']}" if res["waiting"] else ""))
 

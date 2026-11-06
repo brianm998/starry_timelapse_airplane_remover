@@ -211,7 +211,7 @@ class Engine:
     # limits ----------------------------------------------------------------------------------------------------------
     def limits(self) -> tuple[int, float]:
         """(max LLM sessions, CPU limit %): the owner's runtime override if set (`starpipe limits`), else the config."""
-        sessions, cpu = self.db.get("limit_llm") or self.db.get("max_active"), self.db.get("limit_cpu")  # max_active: the monitor's stepper
+        sessions, cpu = self.db.get("max_active"), self.db.get("limit_cpu")  # max_active: set by `limits --llm` and the monitor's stepper
         return (int(sessions) if sessions and sessions.isdigit() and int(sessions) >= 1 else self.config.max_llm_sessions,
                 float(cpu) if cpu else self.config.cpu_limit_pct)
 
@@ -220,14 +220,12 @@ class Engine:
         return self.limits()[0]
 
     def llm_active(self) -> int:
-        """Sessions in the middle of work. One whose ticket is only waiting for the heavy lock is not generating anything."""
+        """Every open model session, including one blocked on the heavy lock: the limit is a hard cap on what is open."""
+        return len(self.db.running_stages())
 
-        waiting = {w.ticket for w in heavy.status().queue}
-        return len([s for s in self.db.running_stages() if str(s["ticket"]) not in waiting])
-
-    def llm_room(self, extra: int = 0) -> load.Room:
+    def llm_room(self) -> load.Room:
         sessions, cpu_limit = self.limits()
-        return load.room(self.llm_active(), self.cpu(), sessions + extra, cpu_limit)
+        return load.room(self.llm_active(), self.cpu(), sessions, cpu_limit)
 
     def update_hold(self) -> dict[str, Any] | None:
         """The self-update holding new work, until it swaps: {sha, left_s, waiting_on}; None otherwise.
@@ -504,13 +502,15 @@ class Engine:
         try:
             while True:
                 async with self.llm_lock:
-                    # A landing stage may take one session over the limit, at once; everything else waits while one is waiting.
-                    room = self.llm_room(extra=1 if landing else 0)
+                    # The limit is a hard cap, landing stages included. A waiting landing stage takes the next free slot
+                    # ahead of everything else that waits.
+                    room = self.llm_room()
                     first = landing or t.number == min(self.llm_waiting, key=lambda n: self.llm_waiting[n])
                     if room.ok and (landing or not self.landing_waiting) and first:
                         self.db.put(f"llm_wait:{t.number}", None)
                         return self.db.begin_stage(t.number, stage, attempt, model)
-                reason = (room.reason if not room.ok else "a landing stage is waiting for a session" if self.landing_waiting
+                reason = ("landing: next free session" if landing and not room.ok
+                          else room.reason if not room.ok else "a landing stage is waiting for a session" if self.landing_waiting
                           else "a ticket further along is waiting for the session first")
                 self.db.put(f"llm_wait:{t.number}", reason)
                 await self.sleep(15)
