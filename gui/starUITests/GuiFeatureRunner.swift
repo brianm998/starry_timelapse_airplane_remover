@@ -123,6 +123,9 @@ final class GuiFeatureRunner {
         .openPreferences: { try $0.openPreferences() },
         .openLocationQuestion: { try $0.openCopiedSequenceAtItsLocationQuestion() },
         .openVideoImport: { try $0.openVideoAtItsImportDialog() },
+        .openVideoHeld: { try $0.openVideoWithExtractionHeld() },
+        .releaseExtraction: { try $0.releaseExtraction() },
+        .paintBand: { try $0.paintBand(across: $0.args[0]) },
         .saveScreenshot: { try $0.saveScreenshot(named: $0.args[0]) },
         .saveWindowScreenshot: { try $0.saveScreenshot(named: $0.args[1], ofWindow: $0.args[0]) },
     ]
@@ -714,8 +717,8 @@ final class GuiFeatureRunner {
         try launch(arguments: ["-StarUITestSequenceLocation", copy.path])
     }
 
-    /// A short video made from the copied sequence's frames with the bundled ffmpeg, opened as "Load Video" opens one: the import sheet comes up.
-    private func openVideoAtItsImportDialog() throws {
+    /// A short video made from the copied sequence's frames with the bundled ffmpeg.
+    private func makeVideoOfCopiedSequence() throws -> URL {
         guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
         let ffmpeg = Self.repoRoot.appendingPathComponent("external_binaries/bin/ffmpeg")
         let video = scratch.appendingPathComponent("gallery-video.mp4")
@@ -726,7 +729,54 @@ final class GuiFeatureRunner {
         try process.run()
         process.waitUntilExit()
         guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: video.path) else { throw RunnerError("could not make a video from \(copy.path)") }
-        try launch(arguments: ["-StarUITestOpenVideo", video.path])
+        return video
+    }
+
+    /// A short video made from the copied sequence's frames, opened as "Load Video" opens one: the import sheet comes up.
+    private func openVideoAtItsImportDialog() throws {
+        try launch(arguments: ["-StarUITestOpenVideo", try makeVideoOfCopiedSequence().path])
+    }
+
+    /// The file beside the video that holds its frames back from the second one on (StarCore's `VideoFrameSource.heldFromFrame`).
+    private var extractionHold: URL?
+
+    /// The video of the copied sequence, imported in the background with every frame but the first held back (a file beside the video, which
+    /// StarCore's extraction watches), landing on the sequence screen without the startup questions.
+    private func openVideoWithExtractionHeld() throws {
+        let video = try makeVideoOfCopiedSequence()
+        let hold = URL(fileURLWithPath: video.path + ".hold")
+        try "1".write(to: hold, atomically: true, encoding: .utf8)
+        extractionHold = hold
+        try launch(arguments: ["-StarUITestOpenVideo", video.path, "-StarUITestSkipStartupQuestions", "YES"])
+        let importButton = element("videoimport.import")
+        guard importButton.waitForExistence(timeout: 120) else { throw RunnerError("the video import sheet did not appear\n\(app.debugDescription)") }
+        // "Extract video in background" is on or off by what the video's packets say, which arrives a moment after the sheet: put it on whichever way it starts
+        let background = element("videoimport.background")
+        guard background.waitForExistence(timeout: 30) else { throw RunnerError("the import sheet has no background choice\n\(app.debugDescription)") }
+        func isOn() -> Bool { (background.value as? String) == "1" || (background.value as? Int) == 1 }
+        if !isOn() { background.click() }
+        try waitFor("\"videoimport.background\" on", timeout: 20, detail: { "(value \(String(describing: background.value)))" }) { isOn() }
+        // Return is Import's default action: the button can sit under the Dock on a small screen
+        app.typeKey(.return, modifierFlags: [])
+        try waitFor("the sequence screen", timeout: 300, detail: { self.app.debugDescription }) { self.element("frame.number").exists }
+    }
+
+    /// Lets the held frames come out: removes the file that held them.
+    private func releaseExtraction() throws {
+        guard let hold = extractionHold else { throw RunnerError("\"I open a video of the copied sequence with its extraction held\" has not run") }
+        try FileManager.default.removeItem(at: hold)
+    }
+
+    /// Paints a band across the element: one drag from its left edge to its right, at 80% of its height, where the horizon of a frame is. The band
+    /// is complete when it spans the width, and the painter then starts looking for the horizon in it.
+    private func paintBand(across identifier: String, timeout: TimeInterval = 120) throws {
+        let e = element(identifier)
+        guard e.waitForExistence(timeout: timeout) else {
+            throw RunnerError("\(identifier) did not appear within \(Int(timeout))s\n\(app.debugDescription)")
+        }
+        let start = e.coordinate(withNormalizedOffset: CGVector(dx: 0.002, dy: 0.8))
+        let end = e.coordinate(withNormalizedOffset: CGVector(dx: 0.998, dy: 0.8))
+        start.press(forDuration: 0.2, thenDragTo: end)
     }
 
     private var savesScreenshots: Bool {
