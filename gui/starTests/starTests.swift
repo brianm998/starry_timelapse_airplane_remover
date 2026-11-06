@@ -3217,16 +3217,6 @@ final class UserPreferencesMergeTests: XCTestCase {
         XCTAssertEqual(Set(recent.keys), ["/a/config.json", "/c/config.json", "/d/config.json"])
     }
 
-    /// What the Open Recent picker shows after its entry is removed: the one that took its place, else the one before, else nothing.
-    func testThePickerMovesToTheNextRecentAfterARemoval() {
-        let list = ["/c", "/b", "/a"]
-        XCTAssertEqual(UserPreferences.recentSelection(afterRemoving: "/c", from: list), "/b")
-        XCTAssertEqual(UserPreferences.recentSelection(afterRemoving: "/b", from: list), "/a")
-        XCTAssertEqual(UserPreferences.recentSelection(afterRemoving: "/a", from: list), "/b")
-        XCTAssertEqual(UserPreferences.recentSelection(afterRemoving: "/a", from: ["/a"]), "")
-        XCTAssertEqual(UserPreferences.recentSelection(afterRemoving: "/z", from: list), "/c", "not in the list: the first")
-    }
-
     /// Recent files are one object: two clients opening different sequences both keep theirs.
     func testRecentFilesAddedByTheOtherClientAreKept() throws {
         try #"{"recentlyOpenedSequencelist":{"/a/config.json":10,"/b/config.json":20}}"#
@@ -4427,6 +4417,45 @@ final class StartScreenTests: XCTestCase {
         XCTAssertNotEqual(english, key, "\(key) is missing from the catalogue")
         StarLocalization.shared.languageOverride = "de"
         XCTAssertNotEqual(localized(key), english, "\(key) is English in German")
+    }
+
+    /// A1: the recents are a list with a row per entry, each with its own ✕ and ids, as the desktop's; no picker with one ✕ for the shown entry.
+    func testRecentsAreAListWithARemovePerRow() throws {
+        let source = try String(contentsOf: Self.root.appendingPathComponent("gui/star/InitialView.swift"), encoding: .utf8)
+        XCTAssertFalse(source.contains("Picker("), "the recents are still a picker")
+        XCTAssertFalse(source.contains("previously_opened_sheet_showing_item"))
+        let list = try XCTUnwrap(source.range(of: "struct RecentsListView"), "no recents list")
+        let body = String(source[list.lowerBound...])
+        XCTAssertTrue(body.contains("ForEach(recent, id: \\.self)"), "no row per entry")
+        XCTAssertTrue(source.contains("RecentsListView(recent: recent"), "the start screen does not show the list")
+        XCTAssertTrue(source.contains("viewModel.userPreferences.sortedSequenceList"), "the list is not the recents")
+        let row = try XCTUnwrap(body.range(of: "ForEach(recent"))
+        let inRow = String(body[row.lowerBound...])
+        XCTAssertTrue(inRow.contains("accessibilityIdentifier(\"startup.recent.open\")"), "a row has no open id")
+        XCTAssertTrue(inRow.contains("accessibilityIdentifier(\"startup.recent.remove\")"), "a row has no remove id")
+        XCTAssertTrue(inRow.contains(".help(localized(\"ui.remove_from_recent\"))"), "a row's ✕ has no hover text")
+        XCTAssertTrue(inRow.contains("onRemove(path)"), "a row's ✕ does not remove its own entry")
+        XCTAssertTrue(source.contains("removeFromRecent(filename: $0)"))
+        // a config.json is titled by its folder, the rest by their own name
+        XCTAssertEqual(RecentsListView.titleAndLocation(of: "/a/b/seq/config.json").title, "seq")
+        XCTAssertEqual(RecentsListView.titleAndLocation(of: "/a/b/seq/config.json").location, "/a/b")
+        XCTAssertEqual(RecentsListView.titleAndLocation(of: "/a/b/clip.mov").title, "clip.mov")
+        XCTAssertEqual(RecentsListView.titleAndLocation(of: "/a/b/clip.mov").location, "/a/b")
+    }
+
+    /// A2: a recent opens by its kind, from the cases the desktop's `RecentOpenKindTest` runs too, and `loadRecent` routes by them.
+    func testRecentOpenKindsAreTheVectors() throws {
+        let doc = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(contentsOf: Self.root.appendingPathComponent("gherkin/ui/vectors/recentOpenKinds.json"))) as? [String: Any])
+        let cases = try XCTUnwrap(doc["cases"] as? [[String: String]])
+        XCTAssertGreaterThanOrEqual(cases.count, 15, "the vector lost cases")
+        for c in cases {
+            let path = try XCTUnwrap(c["path"])
+            XCTAssertEqual(InitialView.openKind(for: path).rawValue, c["kind"], path)
+        }
+        let source = try String(contentsOf: Self.root.appendingPathComponent("gui/star/InitialView.swift"), encoding: .utf8)
+        XCTAssertTrue(source.contains("switch Self.openKind(for: path)"), "loadRecent does not route by kind")
+        XCTAssertFalse(source.contains("func loadRecent()"), "a recent is still always opened as a config")
     }
 
     private func zoneSource() throws -> String {
