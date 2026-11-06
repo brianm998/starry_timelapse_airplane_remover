@@ -4087,7 +4087,7 @@ final class SharedConstantsTests: XCTestCase {
         let view = KeypointDivisorStartupView(initial: 1.5, onCancel: {}, onUpdate: { _ in })
         // Hosted in a light window, as a sheet is: the sheet's own background has to be what shows.
         // The field's `.cursor()` modifier reads the app's ViewModel from the environment.
-        let host = NSHostingView(rootView: view.environment(ViewModel()))
+        let host = NSHostingView(rootView: view.environment(ViewModel()).frame(width: 700, height: 600))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 600),
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.appearance = NSAppearance(named: .aqua)
