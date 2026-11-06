@@ -120,9 +120,10 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Read-only: build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per job filled it).
       - uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-read-only: true
           cache-cleanup: on-success
 
       # Plugin resolution from plugins.gradle.org fails transiently ("Could not parse POM"); try once more before going red.
