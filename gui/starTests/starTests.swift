@@ -4073,6 +4073,54 @@ final class SharedConstantsTests: XCTestCase {
         XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(1.25), "1.25")
     }
 
+    /// A1: the row's button says Change; the sheet's own confirm button is the one that says Update.
+    func testKeypointDivisorRowButtonSaysChange() {
+        StarLocalization.shared.languageOverride = "en"
+        defer { StarLocalization.shared.languageOverride = nil }
+        XCTAssertEqual(KeypointDivisorSummaryRow.buttonTitle, "Change")
+        XCTAssertEqual(localized("ui.update"), "Update", "ui.update keeps its value: the settings sheet uses it too")
+    }
+
+    /// A3: the Speed vs. Sharpness sheet is all white text, so what it is drawn on must not be near-white.
+    @MainActor
+    func testSpeedSheetBackgroundIsNotWhite() throws {
+        let view = KeypointDivisorStartupView(initial: 1.5, onCancel: {}, onUpdate: { _ in })
+        // Hosted in a light window, as a sheet is: the sheet's own background has to be what shows.
+        // The field's `.cursor()` modifier reads the app's ViewModel from the environment.
+        let host = NSHostingView(rootView: view.environment(ViewModel()))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 700, height: 600),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: .aqua)
+        window.contentView = host
+        host.frame = NSRect(x: 0, y: 0, width: 700, height: 600)
+        RunLoop.main.run(until: Date().addingTimeInterval(1.0))
+        host.layoutSubtreeIfNeeded()
+        let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: rep)
+        // Corners lie in the sheet's padding, away from any text or control.
+        let w = rep.pixelsWide, h = rep.pixelsHigh
+        for (x, y) in [(4, 4), (w - 5, 4), (4, h - 5), (w - 5, h - 5)] {
+            let c = try XCTUnwrap(rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
+            let luminance = 0.2126 * c.redComponent + 0.7152 * c.greenComponent + 0.0722 * c.blueComponent
+            XCTAssertLessThan(luminance, 0.75, "background at (\(x), \(y)) is near-white: \(c)")
+        }
+    }
+
+    /// A4: the new key is translated in every language, not left as English.
+    func testChangeKeyTranslatedEverywhere() throws {
+        defer { StarLocalization.shared.languageOverride = nil }
+        StarLocalization.shared.languageOverride = "en"
+        XCTAssertEqual(localized("ui.change"), "Change")
+        let others = ["ar", "bn", "cs", "de", "es", "fr", "hi", "id", "it", "ja", "ko", "nl", "pl",
+                      "pt-BR", "ru", "th", "tr", "uk", "ur", "vi", "zh-Hans"]
+        for code in others {
+            StarLocalization.shared.languageOverride = code
+            let text = localized("ui.change")
+            XCTAssertNotEqual(text, "ui.change", "\(code) is missing ui.change")
+            XCTAssertNotEqual(text, "Change", "\(code) has English for ui.change")
+        }
+    }
+
     /// A5: Cancel keeps the value the sheet opened with; Update keeps the draft, a typed custom value included.
     func testKeypointDivisorDraftCancelAndUpdate() {
         var picked = KeypointDivisorDraft(original: 1.0)

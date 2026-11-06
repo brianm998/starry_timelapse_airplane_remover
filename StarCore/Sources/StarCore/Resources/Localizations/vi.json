@@ -1266,5 +1266,6 @@
   "ui.frame_mode_desc_dirty_sky": "Chỉ giữ lại những gì đã di chuyển trên bầu trời của khung này (ảnh gốc trừ đi tham chiếu đã căn chỉnh); mặt đất màu đen. Khung này không có gì để xem lại.",
   "ui.frame_mode_desc_dirty_earth": "Chỉ giữ lại những gì đã di chuyển trên mặt đất của khung này (ảnh gốc trừ đi tham chiếu đã căn chỉnh); bầu trời màu đen. Khung này không có gì để xem lại.",
   "ui.this_frame_uses_dirty_sky": "Khung này dùng chế độ bầu trời chưa làm sạch",
-  "ui.this_frame_uses_dirty_earth": "Khung này dùng chế độ mặt đất chưa làm sạch"
+  "ui.this_frame_uses_dirty_earth": "Khung này dùng chế độ mặt đất chưa làm sạch",
+  "ui.change": "Đổi"
 }
