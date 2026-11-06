@@ -571,7 +571,9 @@ final public actor FrameOutlierProcessor {
         do {
             let slices_url = NSURL(fileURLWithPath: await userSliceFilename,
                                    isDirectory: false) as URL
-            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: slices_url))
+            // a local file: read it directly. URLSession fails these loads on Linux (-1002) and
+            // deadlocks in corelibs when tasks are cancelled while others start.
+            let data = try Data(contentsOf: slices_url)
             let decoder = JSONDecoder()
             userSlices = try decoder.decode([BoundingBox].self, from: data)
         } catch {
