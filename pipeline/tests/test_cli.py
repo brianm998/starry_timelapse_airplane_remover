@@ -161,6 +161,20 @@ def test_status_says_when_a_self_update_holds_claims(monkeypatch: pytest.MonkeyP
         assert out.exit_code == 0 and ("self-update to e3c559f6 pending" in out.output) is shown
 
 
+def test_limits_and_status_say_model_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
+    res = {"llm_active": 2, "llm_max": 3, "cpu_pct": 10.0, "cpu_limit": 80.0, "waiting": "", "overridden": False}
+
+    class FakeClient:
+        def call(self, _method: str, path: str, _body: dict[str, object] | None = None) -> dict[str, object]:
+            return {"daemon": {"pid": 1, "error": None}, "resources": res, "tickets": []} if path == "/v1/status" else res
+
+    monkeypatch.setattr("starpipe.cli._client", lambda: FakeClient())
+    for args in (["status"], ["limits"]):
+        out = CliRunner().invoke(main, args)
+        assert out.exit_code == 0 and "model sessions 2/3" in out.output and "LLM" not in out.output, out.output
+    assert "model sessions at once" in CliRunner().invoke(main, ["limits", "--help"]).output
+
+
 class FakeDaemon:
     def __init__(self, result: str = "ok") -> None:
         self.calls: list[tuple[str, str, dict[str, Any] | None]] = []
