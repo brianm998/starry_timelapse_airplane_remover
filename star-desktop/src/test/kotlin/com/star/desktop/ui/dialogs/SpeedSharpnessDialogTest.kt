@@ -3,6 +3,7 @@ package com.star.desktop.ui.dialogs
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onNodeWithText
@@ -81,5 +82,18 @@ class SpeedSharpnessDialogTest {
         waitForIdle()
         onNodeWithTag("startup.speed.update").assertDoesNotExist()
         assertEquals(listOf(3.2), updated)
+    }
+
+    /** The cleanup dialog's row button says Change; the sheet it opens still confirms with Update. */
+    @Test fun rowButtonSaysChangeSheetConfirmSaysUpdate() = runDesktopComposeUiTest {
+        var open by mutableStateOf(false)
+        setContent {
+            KeypointDivisorSummaryRow(1.5) { open = true }
+            if (open) SpeedSharpnessDialog(initial = 1.5, advice = null, onCancel = { open = false }, onUpdate = { open = false })
+        }
+        onNodeWithTag("startup.removal.speed.update").assertTextEquals("Change")
+        onNodeWithTag("startup.removal.speed.update").performClick()
+        waitForIdle()
+        onNodeWithTag("startup.speed.update").assertTextEquals("Update")
     }
 }
