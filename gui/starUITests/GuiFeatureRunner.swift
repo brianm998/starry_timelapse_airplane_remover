@@ -715,7 +715,12 @@ final class GuiFeatureRunner {
         let bar = app.menuBars.firstMatch
         let entryFrame = entry.frame
         let barFrame = bar.frame
-        if ready, Self.isFinite(entryFrame), Self.isFinite(barFrame) {
+        if ready, item.menu == fileMenuTitle {
+            // The File menu's items are clicked as XCUIElement does: a click at a point computed from the item's frame opened nothing for
+            // File ▸ Open Image Sequence with a run going (the menu closed and no question came: 0 of 10 runs of uiOpenWhileProcessing, 4 of 4
+            // with this click), where the Window menu's items took it.
+            entry.click()
+        } else if ready, Self.isFinite(entryFrame), Self.isFinite(barFrame) {
             let origin = bar.coordinate(withNormalizedOffset: .zero)
             origin.withOffset(CGVector(dx: entryFrame.midX - barFrame.minX, dy: entryFrame.midY - barFrame.minY)).click()
         } else {
@@ -724,6 +729,8 @@ final class GuiFeatureRunner {
             try press(shortcut)
         }
     }
+
+    private var fileMenuTitle: String { (try? menuTitle("file")) ?? "File" }
 
     /// A frame with real coordinates: not null, not infinite, not empty.
     private static func isFinite(_ frame: CGRect) -> Bool {

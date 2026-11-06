@@ -5,7 +5,7 @@ Feature: File > Open while a run is going asks first
   they ask the work-in-progress question, with "Stop and Open" as the red button, before the file chooser is shown. Cancel keeps the run, and
   Stop and Open goes on to the chooser. The chooser is the system's own and cannot be driven, so the runner answers it with the processed copy's
   folder (gui: `-StarUITestChoosePath`; desktop: the `star.ui.choosePath` property), which leads on to the question of where its files go.
-  The run is the one `uiStartDuringRun` starts: Re-Process Everything on frames 0, 1 and 3 of the processed sequence the cli made once.
+  The run is the start of `uiStartDuringRun`, longer: Re-Process Everything on frames 0 to 7 of the processed sequence the cli made once (on frames 0, 1 and 3 it was over before the feature's second Open, on a loaded machine, and then nothing is asked).
 
   Scenario: Open Image Sequence during a run, cancelled and then confirmed
     Given a processed copy of the sequence {sequence}
@@ -16,8 +16,13 @@ Feature: File > Open while a run is going asks first
       And I click "mode.grid"
       And I click "grid.cell.0"
       And I command-click "grid.cell.1"
+      And I command-click "grid.cell.2"
       And I command-click "grid.cell.3"
-      And I right-click "grid.cell.3"
+      And I command-click "grid.cell.4"
+      And I command-click "grid.cell.5"
+      And I command-click "grid.cell.6"
+      And I command-click "grid.cell.7"
+      And I right-click "grid.cell.7"
       And I click the label "ui.re_process_everything"
     Then  "processing.modal" is shown
     When  I press "return"
