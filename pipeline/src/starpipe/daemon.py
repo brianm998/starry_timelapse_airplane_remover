@@ -196,6 +196,15 @@ class Daemon:
         self.exit: Callable[[int], None] = hard_exit  # replaced in tests
 
     # supervision ---------------------------------------------------------------------------------------------------
+    def migrate_limits(self) -> None:
+        """`limit_llm` was a second key for the session limit that shadowed `max_active`: fold a leftover into it and delete it."""
+        old = self.db.get("limit_llm")
+        if old is None:
+            return
+        if old.isdigit() and int(old) >= 1:
+            self.db.put("max_active", str(min(int(old), MAX_ACTIVE_CAP)))
+        self.db.put("limit_llm", None)
+
     def reconcile(self) -> None:
         """Mark stages that were running when the daemon died; drive() resumes them by session id."""
         for s in self.db.running_stages():
@@ -492,7 +501,7 @@ class Daemon:
         sessions, cpu_limit = self.engine.limits()
         room = self.engine.llm_room()
         return {"llm_active": room.llm_active, "llm_max": sessions, "cpu_pct": round(room.cpu, 1), "cpu_limit": cpu_limit,
-                "waiting": room.reason, "overridden": bool(self.db.get("limit_llm") or self.db.get("limit_cpu"))}
+                "waiting": room.reason, "overridden": bool(self.db.get("max_active") or self.db.get("limit_cpu"))}
 
     async def scheduler(self) -> None:
         while True:
@@ -922,13 +931,13 @@ class Daemon:
         async def limits_set(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             body = await body_of(req)
             if body.get("reset"):
-                self.db.put("limit_llm", None)
+                self.db.put("max_active", None)
                 self.db.put("limit_cpu", None)
             if body.get("llm") is not None:
                 value = int(str(body["llm"]))
-                if not 1 <= value <= 32:
-                    raise web.HTTPBadRequest(text="llm must be between 1 and 32")
-                self.db.put("limit_llm", str(value))
+                if not 1 <= value <= MAX_ACTIVE_CAP:
+                    raise web.HTTPBadRequest(text=f"llm must be between 1 and {MAX_ACTIVE_CAP}")
+                self.db.put("max_active", str(value))  # the one session limit, shared with the monitor's stepper
             if body.get("cpu") is not None:
                 pct = float(str(body["cpu"]))
                 if not 10 <= pct <= 100:
@@ -1099,6 +1108,7 @@ class Daemon:
         return app
 
     async def run(self) -> None:
+        self.migrate_limits()
         self.reconcile()
         os.environ["STARPIPE_TICKET"] = "daemon"  # the daemon's own heavy jobs queue at pipeline priority
         runner = web.AppRunner(self.app())
