@@ -1266,5 +1266,6 @@
   "ui.frame_mode_desc_dirty_sky": "Zachowuje tylko to, co poruszyło się na niebie tej klatki (oryginał minus wyrównane odniesienie); ziemia jest czarna. Nie ma tu nic do przejrzenia.",
   "ui.frame_mode_desc_dirty_earth": "Zachowuje tylko to, co poruszyło się na ziemi tej klatki (oryginał minus wyrównane odniesienie); niebo jest czarne. Nie ma tu nic do przejrzenia.",
   "ui.this_frame_uses_dirty_sky": "Ta klatka używa trybu nieoczyszczonego nieba",
-  "ui.this_frame_uses_dirty_earth": "Ta klatka używa trybu nieoczyszczonej ziemi"
+  "ui.this_frame_uses_dirty_earth": "Ta klatka używa trybu nieoczyszczonej ziemi",
+  "ui.change": "Zmień"
 }

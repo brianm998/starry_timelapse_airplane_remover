@@ -1266,5 +1266,6 @@
   "ui.frame_mode_desc_dirty_sky": "Mantém só o que se moveu no céu deste quadro (o original menos a referência alinhada); o solo fica preto. Não há nada para revisar neste quadro.",
   "ui.frame_mode_desc_dirty_earth": "Mantém só o que se moveu no solo deste quadro (o original menos a referência alinhada); o céu fica preto. Não há nada para revisar neste quadro.",
   "ui.this_frame_uses_dirty_sky": "Este quadro usa o modo céu sem limpeza",
-  "ui.this_frame_uses_dirty_earth": "Este quadro usa o modo solo sem limpeza"
+  "ui.this_frame_uses_dirty_earth": "Este quadro usa o modo solo sem limpeza",
+  "ui.change": "Alterar"
 }
