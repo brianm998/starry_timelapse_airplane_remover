@@ -86,7 +86,11 @@ on:
         type: string
         default: ''
       windows:
-        description: "Which legs run: 'run' (all, the default; also when empty, as under workflow_dispatch), 'skip' (no Windows legs), 'only' (just the Windows legs and what they need)"
+        description: "Which legs run: 'run' (all, the default; also when empty, as under workflow_dispatch), 'skip' (no Windows legs), 'only' (no Linux legs: the Windows legs and, unless `macos` says otherwise, the macOS ones, with what they need)"
+        type: string
+        default: run
+      macos:
+        description: "Which macOS legs run: 'run' (all, the default; also when empty, as under workflow_dispatch), 'skip' (none), 'gui' (only what needs macOS: build-macos and mac-gui, not cli-macos or desktop-macos, which Linux covers)"
         type: string
         default: run
 
@@ -540,22 +544,23 @@ jobs:
     # by hand. The full matrix (nightly, `smoke` false) waits for the Linux legs too, but runs the macOS legs whatever they did: its
     # point is a complete picture per platform.
     needs: [features, opencv-macos, generate-check, cli-linux, desktop-linux]
+    # in 'gui' mode only mac-gui runs after this job, so the cli and desktop features neither start it nor add to what it builds
     if: >-
       ${{ !cancelled()
       && needs.features.result == 'success'
       && needs.opencv-macos.result == 'success'
-      && (needs.features.outputs.cli != '[]' || needs.features.outputs.macgui != '[]' || needs.features.outputs.desktop != '[]')
-      && inputs.windows != 'only'
+      && (needs.features.outputs.macgui != '[]' || (inputs.macos != 'gui' && (needs.features.outputs.cli != '[]' || needs.features.outputs.desktop != '[]')))
+      && inputs.macos != 'skip'
       && (!inputs.smoke || (
         contains(fromJSON('["success","skipped"]'), needs.generate-check.result)
         && contains(fromJSON('["success","skipped"]'), needs.cli-linux.result)
         && contains(fromJSON('["success","skipped"]'), needs.desktop-linux.result))) }}
     timeout-minutes: 60
     env:
-      NEED_VALIDATOR: ${{ contains(needs.features.outputs.cli, '"validator":true') || contains(needs.features.outputs.macgui, '"validator":true') || contains(needs.features.outputs.desktop, '"validator":true') }}
-      NEED_TRAIL: ${{ contains(needs.features.outputs.cli, '"trail":true') || contains(needs.features.outputs.macgui, '"trail":true') || contains(needs.features.outputs.desktop, '"trail":true') }}
-      NEED_CLI: ${{ contains(needs.features.outputs.macgui, '"name":"ui"') || contains(needs.features.outputs.desktop, '"name":"ui"') }}
-      NEED_STARD: ${{ needs.features.outputs.desktop != '[]' }}
+      NEED_VALIDATOR: ${{ contains(needs.features.outputs.macgui, '"validator":true') || (inputs.macos != 'gui' && (contains(needs.features.outputs.cli, '"validator":true') || contains(needs.features.outputs.desktop, '"validator":true'))) }}
+      NEED_TRAIL: ${{ contains(needs.features.outputs.macgui, '"trail":true') || (inputs.macos != 'gui' && (contains(needs.features.outputs.cli, '"trail":true') || contains(needs.features.outputs.desktop, '"trail":true'))) }}
+      NEED_CLI: ${{ contains(needs.features.outputs.macgui, '"name":"ui"') || (inputs.macos != 'gui' && contains(needs.features.outputs.desktop, '"name":"ui"')) }}
+      NEED_STARD: ${{ inputs.macos != 'gui' && needs.features.outputs.desktop != '[]' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -626,7 +631,7 @@ jobs:
     name: cli (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos, opencv-macos, build-macos]
-    if: needs.features.outputs.cli != '[]' && inputs.windows != 'only'
+    if: needs.features.outputs.cli != '[]' && inputs.macos != 'skip' && inputs.macos != 'gui'
     strategy:
       fail-fast: false
       matrix:
@@ -755,7 +760,7 @@ jobs:
       platforms: linux
 
   ffmpeg-macos:
-    if: inputs.windows != 'only'
+    if: inputs.macos != 'skip'
     uses: ./.github/workflows/ffmpeg-gpu.yml
     with:
       platforms: macos
@@ -778,7 +783,7 @@ jobs:
 
   opencv-macos:
     name: OpenCV (macos)
-    if: inputs.windows != 'only'
+    if: inputs.macos != 'skip'
     permissions:
       contents: write
     uses: ./.github/workflows/opencv.yml
@@ -798,7 +803,7 @@ jobs:
     name: mac gui (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos, opencv-macos, build-macos]
-    if: needs.features.outputs.macgui != '[]' && inputs.windows != 'only'
+    if: needs.features.outputs.macgui != '[]' && inputs.macos != 'skip'
     strategy:
       fail-fast: false
       matrix:
@@ -1426,7 +1431,7 @@ jobs:
     name: desktop (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos, build-macos]
-    if: needs.features.outputs.desktop != '[]' && inputs.windows != 'only'
+    if: needs.features.outputs.desktop != '[]' && inputs.macos != 'skip' && inputs.macos != 'gui'
     strategy:
       fail-fast: false
       matrix:
