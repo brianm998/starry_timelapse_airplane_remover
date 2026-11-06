@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
-from starpipe import heavy, load
+from starpipe import load
 from starpipe.agent import StageOutcome, StageRequest
 from starpipe.config import Config
 from starpipe.daemon import Daemon, activity
