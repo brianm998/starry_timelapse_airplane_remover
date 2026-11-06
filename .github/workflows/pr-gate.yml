@@ -221,9 +221,13 @@ jobs:
   # macos15 key leaves the macos-14 jobs' opencv-macos- caches alone). The StarDecisionTrees cache below has its
   # own macos15 key: its .swiftmodule only imports under the compiler that built it (see gherkin.yml), so it must
   # not restore what cli.yml's macos-14 jobs saved under the plain key.
+  #
+  # `macos` also needs `linux`, which builds and tests the same code: macOS runners are scarce (jobs have gone unacquired, see #388), and a
+  # red Linux job already fails the PR, so a PR that is red on Linux never joins the macOS queue. Both jobs run on exactly the same
+  # condition, so `linux` is never skipped while `macos` should run.
   macos:
     name: macOS build + tests (macos-15)
-    needs: [changes, opencv-macos]
+    needs: [changes, opencv-macos, linux]
     if: needs.changes.outputs.program == 'true'
     runs-on: macos-15
     steps:
