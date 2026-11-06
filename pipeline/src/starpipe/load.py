@@ -1,4 +1,4 @@
-"""What limits starting work: CPU use and how many LLM sessions are running (owner's rule, 2026-10-31), not a fixed number of tickets.
+"""What limits starting work: CPU use and how many model sessions are running (owner's rule, 2026-10-31), not a fixed number of tickets.
 
 Measured CPU utilisation, never the load average: on this Mac the load average sits at 20 to 27 because of other sessions and would
 block everything for good. CPU is judged on a rolling average (one busy second is not a reason to wait), and it is only a reason to wait
@@ -48,7 +48,7 @@ def room(active: int, cpu: float, max_sessions: int, cpu_limit: float) -> Room:
     if active <= 0:
         return Room(True, "", active, cpu)
     if active >= max_sessions:
-        return Room(False, f"{active} of {max_sessions} LLM sessions are running", active, cpu)
+        return Room(False, f"{active} of {max_sessions} model sessions are running", active, cpu)
     if cpu >= cpu_limit:
         return Room(False, f"CPU is at {cpu:.0f}% (limit {cpu_limit:.0f}%)", active, cpu)
     return Room(True, "", active, cpu)

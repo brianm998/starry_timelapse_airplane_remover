@@ -136,7 +136,7 @@ async def test_blockers_and_priority_decide_the_claim(rig: Rig) -> None:
     assert t and t.number == 1
 
 
-async def test_a_landing_stage_takes_a_session_over_the_limit_and_new_work_waits_for_it(rig: Rig) -> None:
+async def test_a_landing_stage_waits_for_a_free_slot_but_goes_first(rig: Rig) -> None:
     rig.engine.config.max_llm_sessions = 1
     rig.gh.add_issue(1, "running", labels=("pipeline", "p2"))
     rig.gh.add_issue(2, "landing", labels=("pipeline", "p2"))
@@ -144,20 +144,40 @@ async def test_a_landing_stage_takes_a_session_over_the_limit_and_new_work_waits
     rig.engine.sync_issues()
     t1, t2, t3 = (rig.db.ticket(n) for n in (1, 2, 3))
     assert t1 and t2 and t3
-    rig.db.begin_stage(1, "develop", 1, "sonnet")  # the one allowed session is busy
-    assert not rig.engine.llm_room().ok and rig.engine.llm_room(extra=1).ok
+    busy = rig.db.begin_stage(1, "develop", 1, "sonnet")  # the one allowed session is busy
+    assert not rig.engine.llm_room().ok
+
     async def sleep(_: float) -> None:
         await asyncio.sleep(0.01)
 
     rig.engine.sleep = sleep
-    new_work = asyncio.create_task(rig.engine._begin_when_room(t3, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
+    begin = rig.engine._begin_when_room  # pyright: ignore[reportPrivateUsage]
+    new_work = asyncio.create_task(begin(t3, "develop", 1, "sonnet"))
+    landing = asyncio.create_task(begin(t2, "conflict", 1, "sonnet"))
     await asyncio.sleep(0.05)
-    assert not new_work.done() and rig.db.get("llm_wait:3"), "no room for new work"
-    stage_id = await rig.engine._begin_when_room(t2, "conflict", 1, "sonnet")  # pyright: ignore[reportPrivateUsage]
-    assert stage_id and rig.engine.landing_waiting == set(), "the landing stage started at once, one over the limit"
-    rig.db.end_stage(1, "accepted", 0.0, "")  # stage rows are 1 (develop) and 2 (conflict): both end, room opens
-    rig.db.end_stage(2, "accepted", 0.0, "")
+    assert not new_work.done() and not landing.done(), "the limit is a hard cap: even a landing stage waits"
+    assert rig.db.get("llm_wait:2") == "landing: next free session" and rig.db.get("llm_wait:3")
+    assert len(rig.db.running_stages()) == 1
+    rig.db.end_stage(busy, "accepted", 0.0, "")
+    await asyncio.wait_for(landing, 2)  # the landing stage takes the one free slot
+    await asyncio.sleep(0.05)
+    assert not new_work.done() and len(rig.db.running_stages()) == 1
+    rig.db.end_stage(2, "accepted", 0.0, "")  # stage rows: 1 develop (ended), 2 the conflict stage
     await asyncio.wait_for(new_work, 2)
+
+
+async def test_a_session_waiting_for_the_heavy_lock_still_counts(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    rig.engine.config.max_llm_sessions = 2
+    for n in (1, 2, 3):
+        rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    rig.db.begin_stage(1, "develop", 1, "sonnet")
+    rig.db.begin_stage(2, "develop", 1, "sonnet")
+    monkeypatch.setattr("starpipe.heavy.status", lambda: SimpleNamespace(queue=[SimpleNamespace(ticket="1"), SimpleNamespace(ticket="2")]))
+    assert rig.engine.llm_active() == 2, "a session blocked on the heavy lock is still open"
+    assert not rig.engine.llm_room().ok and rig.engine.claimable() is None
 
 
 async def test_a_free_session_goes_to_the_ticket_furthest_along_in_the_pipeline(rig: Rig) -> None:
@@ -341,8 +361,8 @@ async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Ri
     rig.db.put("max_active", "junk")
     assert rig.engine.max_active() == rig.engine.config.max_llm_sessions  # an unreadable override falls back to the file
     rig.db.put("max_active", "2")
-    rig.db.put("limit_llm", "5")  # `starpipe limits` is the more specific override
-    assert rig.engine.max_active() == 5
+    rig.db.put("limit_llm", "5")  # a leftover from before there was one setting is ignored here (the daemon migrates it at start)
+    assert rig.engine.max_active() == 2
     rig.db.put("limit_llm", None)
     rig.db.put("max_active", None)
     assert rig.engine.max_active() == rig.engine.config.max_llm_sessions

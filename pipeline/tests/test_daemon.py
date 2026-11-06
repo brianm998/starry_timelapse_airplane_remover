@@ -251,6 +251,32 @@ async def test_settings_stores_max_active_and_snapshot_reports_it(rig: Rig) -> N
         await client.close()
 
 
+async def test_the_cli_and_the_monitor_set_the_same_session_limit(rig: Rig) -> None:
+    client, daemon = await api(rig)
+    try:
+        assert (await client.post("/v1/limits", json={"llm": 2}, headers=AUTH)).status == 200
+        assert rig.db.get("max_active") == "2" and rig.db.get("limit_llm") is None and rig.engine.max_active() == 2
+        snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        assert snap["max_active"] == 2, "the monitor's stepper shows what the CLI set"
+        assert (await client.post("/v1/settings", json={"max_active": 4}, headers=AUTH)).status == 200
+        limits = await (await client.get("/v1/limits", headers=AUTH)).json()
+        assert limits["llm_max"] == 4 and limits["overridden"] is True
+        for bad in (0, 7, 32):
+            assert (await client.post("/v1/limits", json={"llm": bad}, headers=AUTH)).status == 400, bad
+        assert rig.db.get("max_active") == "4"
+        assert (await client.post("/v1/limits", json={"reset": True}, headers=AUTH)).status == 200
+        assert rig.db.get("max_active") is None and rig.engine.max_active() == rig.engine.config.max_llm_sessions
+        assert (await (await client.get("/v1/limits", headers=AUTH)).json())["overridden"] is False
+    finally:
+        await client.close()
+    rig.db.put("limit_llm", "9")  # a leftover from the old second key: moved over, clamped, and deleted at daemon start
+    daemon.migrate_limits()
+    assert rig.db.get("max_active") == "6" and rig.db.get("limit_llm") is None
+    rig.db.put("limit_llm", "3")
+    daemon.migrate_limits()
+    assert rig.db.get("max_active") == "3" and rig.db.get("limit_llm") is None
+
+
 async def test_land_now_is_refused_outside_ready_ci_landing(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
