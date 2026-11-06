@@ -42,7 +42,8 @@ name: Gherkin
 #
 # The full matrix above runs on pushes to develop/main and by hand; it is NOT what a PR runs (the pipeline would not wait for ~3 h).
 # A PR runs "Gherkin smoke" (gherkin-smoke.yml), this same file in smoke mode: one feature per leg from gherkin/smoke.json, which
-# the CI judge waits for and blocks on. See "The smoke subset on a PR" in gherkin/README.md.
+# the CI judge waits for and blocks on. In smoke mode all macOS work is ONE job, `smoke-macos` (build, cli, mac gui, desktop one after the
+# other: one wait for a scarce macOS runner); the cli-macos / mac-gui / desktop-macos / build-macos jobs below are the full matrix's. See "The smoke subset on a PR" in gherkin/README.md.
 #
 # DUPLICATED ON PURPOSE (collapse into reusable workflows later, see gherkin/README.md): the apt/Eigen/
 # Swift/MSVC/StarDecisionTrees setup of cli.yml's `linux`/`macos`/`windows` jobs, the stard build
@@ -90,7 +91,7 @@ on:
         type: string
         default: run
       macos:
-        description: "Which macOS legs run: 'run' (all, the default; also when empty, as under workflow_dispatch), 'skip' (none), 'gui' (only what needs macOS: build-macos and mac-gui, not cli-macos or desktop-macos, which Linux covers)"
+        description: "Which macOS legs run: 'run' (all, the default; also when empty, as under workflow_dispatch), 'skip' (none), 'gui' (only what needs macOS: the mac gui leg and what it builds, not the cli or desktop features, which Linux covers)"
         type: string
         default: run
 
@@ -527,7 +528,391 @@ jobs:
           path: ${{ runner.temp }}/gherkin-artifacts
           if-no-files-found: warn
 
-  # ─── macOS: one build of the binaries the three macOS legs run ───────────────
+  # ─── macOS in smoke mode: ONE job for the build and the three features ───────
+  # Smoke mode (what a PR and the push to develop run) has one feature per client, so the four macOS jobs of the full matrix (build-macos,
+  # cli-macos, mac-gui, desktop-macos) did a few minutes of work each behind four separate waits for a scarce macOS runner (jobs have sat
+  # "not acquired" for 40 minutes, see #388/#390) and moved the binaries between them as an artifact.  Here one job builds in place
+  # (removal_tools, trail_tools, stard) and runs the cli, the mac gui and the desktop features one after the other: one runner acquisition,
+  # slower end to end, much less exposed to capacity.  The full matrix has many shards per leg and keeps its separate jobs below.
+  #
+  # The job takes the features of every shard of each client from the same matrix JSON the full legs use (smoke.json: normally one shard
+  # per client; a `ui` feature listed there is a second shard, and its features are simply added to the leg's list).  A red leg does not
+  # hide the others: the run and prove steps of each leg are continue-on-error, so the next leg still runs, and the last step fails the job
+  # if any of them failed.  The per-feature "Prove the scenario ran" steps are the legs' own, unchanged, so a vacuous green stays impossible.
+  # In `macos: gui` mode (a PR that touches a macOS-specific path) only the mac gui leg runs.
+  smoke-macos:
+    name: smoke (macos-15) · build, cli, mac gui, desktop
+    runs-on: macos-15
+    # The Linux legs that run the same work come first: macOS runners are scarce, and a red Linux job already fails the PR, so a failed
+    # Linux job keeps this one out of the queue.  A Linux job that is skipped (no features for that client, windows: only) is not a failure.
+    # `!cancelled()` stops a skipped Linux job from skipping this one with it, so the results of what this job really needs are checked by hand.
+    needs: [features, ffmpeg-macos, opencv-macos, generate-check, cli-linux, desktop-linux]
+    if: >-
+      ${{ !cancelled()
+      && inputs.smoke
+      && inputs.macos != 'skip'
+      && needs.features.result == 'success'
+      && needs.opencv-macos.result == 'success'
+      && needs.ffmpeg-macos.result == 'success'
+      && contains(fromJSON('["success","skipped"]'), needs.generate-check.result)
+      && contains(fromJSON('["success","skipped"]'), needs.cli-linux.result)
+      && contains(fromJSON('["success","skipped"]'), needs.desktop-linux.result) }}
+    # the sum of what the four jobs were allowed: the build (up to 60), the cli (60), the mac gui (90) and the desktop (two 45 minute attempts)
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      # The features of each leg, from the matrix JSON of the `features` job: every shard's features together.  `run_<leg>` is false for a leg
+      # that has nothing to run here (cli and desktop in `macos: gui` mode, where Linux covers them).
+      - name: Which features this job runs
+        id: f
+        shell: bash
+        env:
+          MACOS: ${{ inputs.macos }}
+          CLI: ${{ needs.features.outputs.cli }}
+          MACGUI: ${{ needs.features.outputs.macgui }}
+          DESKTOP: ${{ needs.features.outputs.desktop }}
+        run: |
+          feats() { jq -r '[.[].features] | join(" ")' <<<"$1"; }
+          run_cli=false; run_gui=false; run_desktop=false
+          if [ "$MACOS" != gui ] && [ "$CLI" != '[]' ]; then run_cli=true; fi
+          if [ "$MACGUI" != '[]' ]; then run_gui=true; fi
+          if [ "$MACOS" != gui ] && [ "$DESKTOP" != '[]' ]; then run_desktop=true; fi
+          cli_features=""; gui_features=""; desktop_features=""
+          need_validator=false; need_trail=false
+          if [ $run_cli = true ]; then
+            cli_features=$(feats "$CLI")
+            [ "$(jq -r 'any(.[]; .validator)' <<<"$CLI")" = true ] && need_validator=true
+            [ "$(jq -r 'any(.[]; .trail)' <<<"$CLI")" = true ] && need_trail=true
+          fi
+          if [ $run_gui = true ]; then
+            gui_features=$(feats "$MACGUI")
+            [ "$(jq -r 'any(.[]; .validator)' <<<"$MACGUI")" = true ] && need_validator=true
+            [ "$(jq -r 'any(.[]; .trail)' <<<"$MACGUI")" = true ] && need_trail=true
+          fi
+          if [ $run_desktop = true ]; then
+            desktop_features=$(feats "$DESKTOP")
+            [ "$(jq -r 'any(.[]; .validator)' <<<"$DESKTOP")" = true ] && need_validator=true
+            [ "$(jq -r 'any(.[]; .trail)' <<<"$DESKTOP")" = true ] && need_trail=true
+          fi
+          # xcodebuild -only-testing arguments and swift test names of the leg's features
+          only=""; for n in $gui_features; do only="$only -only-testing:starUITests/GeneratedFeatureUITests/test$(echo "${n:0:1}" | tr a-z A-Z)${n:1}Feature"; done
+          cli_tests=""; for n in $cli_features; do cli_tests="$cli_tests test$(echo "${n:0:1}" | tr a-z A-Z)${n:1}Feature"; done
+          # the @ui features that start from a processed sequence need the fixture the cli makes
+          need_fixture=false
+          for n in $gui_features $desktop_features; do
+            if grep -q 'a processed copy of the sequence' "gherkin/features/$n.feature"; then need_fixture=true; fi
+          done
+          # the datasets of every leg's features (a @ui feature needs none: fetch.sh with no names is a usage error, not a no-op); the mac gui
+          # also bundles its splash video
+          names=$( {
+            for n in $cli_features; do jq -r --arg f "$n" '.[$f][]' gherkin/generated/feature-datasets-cli.json; done
+            for n in $gui_features; do jq -r --arg f "$n" '.[$f][]' gherkin/generated/feature-datasets-mac-gui.json; done
+            if [ $run_gui = true ]; then echo gui_splash_video; fi
+            for n in $desktop_features; do jq -r --arg f "$n" '.[$f][]' gherkin/generated/feature-datasets-desktop.json; done
+          } | sort -u | tr '\n' ' ')
+          # one attempt of the desktop leg is all its features: the old per-shard allowances of its shards, added up
+          desktop_minutes=45
+          if [ $run_desktop = true ]; then desktop_minutes=$(jq -r '[.[] | if .name == "ui" then 75 else .minutes["45"] end] | add' <<<"$DESKTOP"); fi
+          {
+            echo "run_cli=$run_cli"; echo "run_gui=$run_gui"; echo "run_desktop=$run_desktop"
+            echo "cli_features=$cli_features"; echo "cli_tests=${cli_tests# }"; echo "gui_features=$gui_features"; echo "desktop_features=$desktop_features"
+            echo "only=$only"; echo "need_validator=$need_validator"; echo "need_trail=$need_trail"; echo "need_fixture=$need_fixture"
+            echo "names=$names"; echo "desktop_minutes=$desktop_minutes"
+          } | tee -a "$GITHUB_OUTPUT"
+
+      - name: Fetch test data
+        env:
+          NAMES: ${{ steps.f.outputs.names }}
+        run: |
+          if [ -n "$NAMES" ]; then test_data/fetch.sh $NAMES; else echo "no dataset needed"; fi
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      # The StarDecisionTrees .swiftmodule only imports under the compiler that built it, and cli.yml's macos-14 jobs share the plain
+      # dt-macos key with a different Swift: key this one on the toolchain.
+      - name: Toolchain id for the cache key
+        id: toolchain
+        run: echo "id=$(xcodebuild -version | tr -c 'A-Za-z0-9.\n' _ | tr '\n' - | sed 's/-$//')" >> "$GITHUB_OUTPUT"
+
+      - name: Install Eigen3 via Homebrew
+        run: brew install eigen
+
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
+        with:
+          name: opencv-macos
+          path: opencv
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/macos
+            StarDecisionTrees/include/release/macos
+          key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build StarDecisionTrees (if not cached)
+        run: |
+          if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then cd StarDecisionTrees && ./release.sh; else echo "StarDecisionTrees: restored from cache"; fi
+
+      # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
+      - name: Fetch ffmpeg/ffprobe
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-macos-universal
+          path: external_binaries/bin
+
+      - name: Make ffmpeg/ffprobe executable and point STAR_FFMPEG_DIR at them
+        shell: bash
+        run: |
+          chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe || true
+          echo "STAR_FFMPEG_DIR=$GITHUB_WORKSPACE/external_binaries/bin" >> "$GITHUB_ENV"
+
+      # Built in place, where every runner already looks (<package>/.build/release): no artifact, no copy.  A product that is missing fails
+      # the step.  Only what some leg uses is built.  The cli is not built here: the cli leg's `swift test` builds its own, and the fixture
+      # step below builds the release one after it (building it before would leave the cli leg to replace it with its -enable-testing build,
+      # and a changed binary is a new fixture directory).
+      - name: Build the validators and stard
+        id: build
+        shell: bash
+        env:
+          NEED_VALIDATOR: ${{ steps.f.outputs.need_validator }}
+          NEED_TRAIL: ${{ steps.f.outputs.need_trail }}
+          NEED_STARD: ${{ steps.f.outputs.run_desktop }}
+        run: |
+          set -euo pipefail
+          build() {   # build <package dir> <product>
+            swift build -c release --package-path "$1"
+            ls -l "$1/.build/release/$2"
+          }
+          # removal_tools/star-output-verify: every client's runner calls it for the validation steps (the @ui features have none)
+          if [ "$NEED_VALIDATOR" = true ]; then build removal_tools star-output-verify; fi
+          # trail_tools/star-removal-verify: the trail-removal features' Then steps run it as a subprocess
+          if [ "$NEED_TRAIL" = true ]; then build trail_tools star-removal-verify; fi
+          # stard: the desktop client's daemon
+          if [ "$NEED_STARD" = true ]; then build daemon stard; fi
+
+      # ── leg 1: cli ──
+      # Release: the debug star took 22 min on this sequence. -enable-testing because the cli's other test target is `@testable import star`
+      # and --filter still compiles every test target.  --disable-swift-testing: without it, swift test runs a second (Swift Testing) pass that
+      # starts the `star` executable inside the test binary, which parses `-c release` as star's own -c flag and exits 1 after the XCTest pass.
+      # One swift test for the leg: one --filter per feature, so the one release compile serves all of them.
+      - name: "cli: run the Gherkin features against the built star"
+        id: cli_run
+        if: ${{ steps.build.conclusion == 'success' && steps.f.outputs.run_cli == 'true' }}
+        continue-on-error: true
+        env:
+          TESTS: ${{ steps.f.outputs.cli_tests }}
+          TRAIL: ${{ steps.f.outputs.need_trail }}
+        run: |
+          if [ "$TRAIL" = true ]; then export STAR_REMOVAL_REPORTS="$RUNNER_TEMP/gherkin-artifacts/removal"; fi
+          filters=""
+          for t in $TESTS; do filters="$filters --filter GherkinTests.GeneratedFeatureTests/$t"; done
+          swift test -c release -Xswiftc -enable-testing --disable-swift-testing --package-path cli $filters 2>&1 | tee gherkin-cli.log
+
+      - name: "cli: prove the scenario ran (not a vacuous green)"
+        id: cli_prove
+        if: ${{ !cancelled() && steps.cli_run.conclusion != 'skipped' }}
+        continue-on-error: true
+        env:
+          FEATURES: ${{ steps.f.outputs.cli_features }}
+        run: gherkin/prove-xctest-features.sh cli gherkin-cli.log $FEATURES
+
+      # ── the processed fixture of the @ui features of the mac gui and the desktop client ──
+      # The @ui features that start from a processed sequence ask for one made by the cli (gherkin/ui/make-processed-fixture.sh). The UI-test
+      # runner is sandboxed (`swift build` there dies with "xcrun: error: cannot be used within an App Sandbox") and cannot write the fixture
+      # into the workspace, so it is made here, once, with the release cli built here (a build that fails turns the job red, so it is
+      # reported, not skipped); STAR_UI_FIXTURES and STAR_CLI_BUILD=0 make every feature's own call find the same directory and never build.
+      # Not an actions/cache entry: see the header.
+      - name: Build the cli and make the processed fixture for the @ui features
+        id: fixture
+        if: ${{ steps.build.conclusion == 'success' && steps.f.outputs.need_fixture == 'true' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          # a hosted macOS VM can have under 2GB free, below star's default memory floor, so the cli would admit nothing
+          STAR_SYSTEM_FLOOR_MB: 512
+        run: |
+          set -euo pipefail
+          swift build -c release --package-path cli
+          CLI="$GITHUB_WORKSPACE/cli/.build/release/star"
+          if [ ! -x "$CLI" ]; then echo "::error::no star cli at $CLI (smoke (macos-15)): the processed-fixture @ui features cannot run"; exit 1; fi
+          FIXTURES="$GITHUB_WORKSPACE/.test-data/ui-processed"
+          export STAR_CLI_PATH="$CLI" STAR_UI_FIXTURES="$FIXTURES" STAR_CLI_BUILD=0
+          gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10
+          {
+            echo "STAR_CLI_PATH=$CLI"
+            echo "STAR_UI_FIXTURES=$FIXTURES"
+            echo "STAR_CLI_BUILD=0"
+          } >> "$GITHUB_ENV"
+
+      # ── leg 2: mac gui ──
+      # The GUI's Xcode project bundles gui/videos/*.mp4 (too big for git). The splash video comes from the same checksum-verified manifest as
+      # the test data, fetched above.
+      - name: "mac gui: put the splash video where the Xcode project expects it"
+        if: ${{ steps.f.outputs.run_gui == 'true' }}
+        run: |
+          mkdir -p gui/videos
+          cp .test-data/gui_splash_video/*.mp4 gui/videos/
+          ls -lh gui/videos
+
+      # Release, but ENABLE_TESTABILITY=YES: the scheme's other test target (starTests) is `@testable import Star`, and Release builds every test
+      # target even under -only-testing.
+      # Never -target Star (bogus module errors) and no -destination (errors on this scheme): see gherkin/README.md.
+      # Signed ad hoc ("-"): the UI-test runner has to be signed to run, but there is no identity on a hosted runner.
+      - name: "mac gui: run the Gherkin features in Star.app (XCUITest)"
+        id: gui_run
+        if: ${{ steps.build.conclusion == 'success' && steps.f.outputs.run_gui == 'true' }}
+        continue-on-error: true
+        env:
+          # xcodebuild strips TEST_RUNNER_ and hands STAR_TEST_DATA to the UI-test runner
+          TEST_RUNNER_STAR_TEST_DATA: ${{ github.workspace }}/.test-data
+          # A hosted macOS VM can have under 2GB free, below star's default memory floor, so it admits nothing; the runner forwards this to the app
+          STAR_SYSTEM_FLOOR_MB: 512
+          TEST_RUNNER_STAR_SYSTEM_FLOOR_MB: 512
+          TEST_RUNNER_STAR_FFMPEG_DIR: ${{ github.workspace }}/external_binaries/bin
+          TEST_RUNNER_STAR_CLI_PATH: ${{ env.STAR_CLI_PATH }}
+          TEST_RUNNER_STAR_UI_FIXTURES: ${{ env.STAR_UI_FIXTURES }}
+          TEST_RUNNER_STAR_CLI_BUILD: 0
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project gui/star.xcodeproj \
+            -scheme star \
+            -configuration Release \
+            ENABLE_TESTABILITY=YES \
+            ${{ steps.f.outputs.only }} \
+            -resultBundlePath "$RUNNER_TEMP/gherkin-gui.xcresult" \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+            2>&1 | tee gherkin-gui.log
+
+      # Every "Executed N tests" line must be the leg's N (nothing else ran, nothing was skipped) and every feature must show passed.
+      - name: "mac gui: prove the scenarios ran (not a vacuous green)"
+        id: gui_prove
+        if: ${{ !cancelled() && steps.gui_run.conclusion != 'skipped' }}
+        continue-on-error: true
+        env:
+          FEATURES: ${{ steps.f.outputs.gui_features }}
+        run: gherkin/prove-xctest-features.sh gui gherkin-gui.log $FEATURES
+
+      # ── leg 3: desktop ──
+      - name: Set up JDK 21
+        if: ${{ steps.f.outputs.run_desktop == 'true' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # Read-only: kotlin-client.yml's build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit).
+      - name: Set up Gradle
+        if: ${{ steps.f.outputs.run_desktop == 'true' }}
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+          cache-cleanup: on-success
+
+      # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the "not a
+      # vacuous green" check to each one's XML.  Hosted macOS VMs vary (one run had ~2GB free, so stard's memory gate admitted a frame every few
+      # minutes): fail fast per attempt and try once more; the retry kills any stard left behind.
+      - name: "desktop: run the Gherkin features in the Compose UI"
+        id: desktop_run
+        if: ${{ steps.build.conclusion == 'success' && steps.f.outputs.run_desktop == 'true' }}
+        continue-on-error: true
+        env:
+          STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
+        uses: nick-fields/retry@v3
+        with:
+          # an attempt is all the leg's features; a retry runs only those that failed (the script keeps what passed)
+          timeout_minutes: ${{ steps.f.outputs.desktop_minutes }}
+          max_attempts: 2
+          retry_wait_seconds: 20
+          polling_interval_seconds: 5
+          warning_on_retry: true
+          # The killed run's marker would make the next stard report a crashed run and cover the UI with an alert.
+          on_retry_command: pkill -x stard || true; rm -rf star-desktop/build/run-markers
+          shell: bash
+          # A 7GB VM with ~2-3GB free: at full resolution one frame's keypoint reservation (2.2GB) exceeds stard's narrowed memory budget, so
+          # frames wait minutes each. stard itself defaults to 1.5 on such a machine; pin it so a roomier moment on the VM cannot pick 1.
+          # Not coarser: 1.8 and 2 find no usable star alignment on this runner. The cli, gui and other desktop legs run the default.
+          command: STAR_SYSTEM_FLOOR_MB=512 STAR_GHERKIN_DESKTOP_KEYPOINT_DIVISOR=1.5 gherkin/run-desktop-features.sh "$GITHUB_WORKSPACE/daemon/.build/release/stard" ${{ steps.f.outputs.desktop_features }}
+
+      # run-desktop-features.sh proves each feature itself; this reads its PASSED markers after the last attempt: one row per feature in the
+      # job summary, one ::error:: per feature without one.
+      - name: "desktop: prove the scenario ran (per-feature results)"
+        id: desktop_prove
+        if: ${{ !cancelled() && steps.desktop_run.conclusion != 'skipped' }}
+        continue-on-error: true
+        run: gherkin/summarize-desktop-features.sh ${{ steps.f.outputs.desktop_features }}
+
+      # The run and prove steps of the legs are continue-on-error so that a red leg does not hide the next one; this is what makes the job red.
+      - name: Fail the job if any leg failed
+        if: ${{ !cancelled() }}
+        env:
+          OUTCOMES: "fixture=${{ steps.fixture.outcome }} cli_run=${{ steps.cli_run.outcome }} cli_prove=${{ steps.cli_prove.outcome }} gui_run=${{ steps.gui_run.outcome }} gui_prove=${{ steps.gui_prove.outcome }} desktop_run=${{ steps.desktop_run.outcome }} desktop_prove=${{ steps.desktop_prove.outcome }}"
+        run: |
+          echo "$OUTCOMES"
+          bad=false
+          for o in $OUTCOMES; do
+            if [ "${o#*=}" = failure ]; then echo "::error::smoke (macos-15): ${o%%=*} failed"; bad=true; fi
+          done
+          [ "$bad" = false ]
+
+      # ── what the legs leave behind ──
+      - name: Upload the cli log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-smoke-macos-cli-log
+          path: gherkin-cli.log
+          if-no-files-found: ignore
+
+      - name: Upload the validator reports and run configs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-smoke-macos-artifacts
+          path: ${{ runner.temp }}/gherkin-artifacts
+          if-no-files-found: ignore
+
+      - name: Upload the desktop test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-smoke-macos-desktop-reports
+          path: star-desktop/build/gherkin-each
+          if-no-files-found: ignore
+
+      # The screenshots in here are the only evidence of a GUI failure.
+      - name: Upload the xcresult
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-smoke-macos-gui-xcresult
+          path: ${{ runner.temp }}/gherkin-gui.xcresult
+          if-no-files-found: ignore
+
+      - name: Upload the mac gui validator reports and run configs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-smoke-macos-gui-artifacts
+          # the sandboxed UI-test runner writes into its own container
+          path: ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gherkin-artifacts
+          if-no-files-found: ignore
+
+      - name: Upload the gallery screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gherkin-smoke-macos-gui-gallery
+          path: ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gallery
+          if-no-files-found: ignore
+
+  # ─── macOS, full matrix: one build of the binaries the three macOS legs run ──────────────
   # cli-macos, mac-gui and desktop-macos each used to build the same star / stard / output validator on the same runner image (the validator
   # alone links all of StarCore: ~3 min per leg, stard another ~4 in desktop-macos).  They are built once here and shared as the artifact
   # gherkin-bin-macos: one directory per package (removal_tools, trail_tools, cli, daemon) holding the executables and the SwiftPM resource
@@ -537,12 +922,9 @@ jobs:
   build-macos:
     name: build star, stard and the validators (macos-15)
     runs-on: macos-15
-    # The Linux legs that run the same work come first: macOS runners are scarce (jobs have gone unacquired, see #388), and a red Linux job
-    # already fails the PR, so in smoke mode (what a PR runs) a failed Linux job keeps every macOS leg out of the queue (cli-macos, mac-gui and
-    # desktop-macos need this job). A Linux job that is skipped (no features for that client, windows: only) is not a failure.
-    # `!cancelled()` stops a skipped Linux job from skipping this one with it, so the results of what this job really needs are checked
-    # by hand. The full matrix (nightly, `smoke` false) waits for the Linux legs too, but runs the macOS legs whatever they did: its
-    # point is a complete picture per platform.
+    # The full matrix only (nightly, push to main, by hand): smoke mode builds and runs everything in `smoke-macos` above.  It waits for the
+    # Linux legs, but runs the macOS legs whatever they did: its point is a complete picture per platform.  `!cancelled()` stops a skipped
+    # Linux job from skipping this one with it.
     needs: [features, opencv-macos, generate-check, cli-linux, desktop-linux]
     # in 'gui' mode only mac-gui runs after this job, so the cli and desktop features neither start it nor add to what it builds
     if: >-
@@ -551,10 +933,7 @@ jobs:
       && needs.opencv-macos.result == 'success'
       && (needs.features.outputs.macgui != '[]' || (inputs.macos != 'gui' && (needs.features.outputs.cli != '[]' || needs.features.outputs.desktop != '[]')))
       && inputs.macos != 'skip'
-      && (!inputs.smoke || (
-        contains(fromJSON('["success","skipped"]'), needs.generate-check.result)
-        && contains(fromJSON('["success","skipped"]'), needs.cli-linux.result)
-        && contains(fromJSON('["success","skipped"]'), needs.desktop-linux.result))) }}
+      && !inputs.smoke }}
     timeout-minutes: 60
     env:
       NEED_VALIDATOR: ${{ contains(needs.features.outputs.macgui, '"validator":true') || (inputs.macos != 'gui' && (contains(needs.features.outputs.cli, '"validator":true') || contains(needs.features.outputs.desktop, '"validator":true'))) }}
@@ -631,7 +1010,7 @@ jobs:
     name: cli (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos, opencv-macos, build-macos]
-    if: needs.features.outputs.cli != '[]' && inputs.macos != 'skip' && inputs.macos != 'gui'
+    if: needs.features.outputs.cli != '[]' && inputs.macos != 'skip' && inputs.macos != 'gui' && !inputs.smoke
     strategy:
       fail-fast: false
       matrix:
@@ -803,7 +1182,7 @@ jobs:
     name: mac gui (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos, opencv-macos, build-macos]
-    if: needs.features.outputs.macgui != '[]' && inputs.macos != 'skip'
+    if: needs.features.outputs.macgui != '[]' && inputs.macos != 'skip' && !inputs.smoke
     strategy:
       fail-fast: false
       matrix:
@@ -1431,7 +1810,7 @@ jobs:
     name: desktop (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos, build-macos]
-    if: needs.features.outputs.desktop != '[]' && inputs.macos != 'skip' && inputs.macos != 'gui'
+    if: needs.features.outputs.desktop != '[]' && inputs.macos != 'skip' && inputs.macos != 'gui' && !inputs.smoke
     strategy:
       fail-fast: false
       matrix:
