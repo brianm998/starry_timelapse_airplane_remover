@@ -27,9 +27,9 @@ override with `HEAP_HUNT_SCRATCH`). Both take an optional `Class/testName`.
   composite path is instrumented, not just the mask/warp workload. Tens of minutes for 29 frames of a9-2, plus a ~3 min
   build. Needs ~4 GB of scratch for the frames and ~20 GB for the cli's own temp/output siblings; delete
   `.heap-hunt-scratch/` after.
-- `HeapHuntDistanceTransformTests` (opt-in: `STAR_HEAP_HUNT_DT=1`, otherwise skipped): `raiseMaskBy` (the IPP distance
+- `HeapHuntDistanceTransformTests` (small odd sizes by default; `STAR_HEAP_HUNT_DT=1` adds 6000x4000): `raiseMaskBy` (the IPP distance
   transform) at 6000x4000 and odd sizes. Run it with
-  `STAR_HEAP_HUNT_DT=1 tools/heap-hunt/gmalloc-xctest.sh HeapHuntDistanceTransformTests/testGradientMasksAtFullAndOddSizes`
+  `STAR_HEAP_HUNT_DT=1 tools/heap-hunt/gmalloc-xctest.sh HeapHuntDistanceTransformTests/testGradientMasksAtOddSizes`
   (~6 min under libgmalloc: few allocations, so full size is affordable).
 
 Normal debug run used for the third result below:
@@ -52,6 +52,7 @@ Second pass (2026-11-05, current develop, i.e. including `ExactWarp`/`BoxBlur`/`
 | Run | Result |
 | --- | --- |
 | `gmalloc-xctest.sh HeapHuntDistanceTransformTests/...` with `STAR_HEAP_HUNT_DT=1`: `raiseMaskBy` at 6000x4000, 6001x4001, 5999x3999, 4096x2731, 6000x1, 1x4000 and nine small odd sizes, wavy horizon and all-sky, debug + libgmalloc, full size | passed (349 s), no guard-page fault |
+| `asan-xctest.sh` again on the merged tree (`StarAlignedHorizonMaskTests.testConcurrentFullFrameMasksAlongsideOtherNativeWorkKeepTheHeapIntact`, release + ASan, `MallocNanoZone=0`, full size) | passed (44 s), no ASan report |
 | `replay-cli-asan.sh /sp/tmp/LRT_03_16_2024-a9-2-aurora-topaz 591 619`: real a9-2 frames 591-619 through the whole cli (alignment, horizon, star-aligned masks, composite), release + ASan, `MallocNanoZone=0` | finished (exit 0, `done`, run marker cleared), no ASan report, no `FATAL`; 29 full-size masks over 8 homographies, 0 cache hits, the crash's exact pattern |
 
 The replay's first attempt stopped on one `container-overflow` at `medianImageFromMats` (`ImageAligner.cpp:81`, called
