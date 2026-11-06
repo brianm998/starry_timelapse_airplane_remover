@@ -252,7 +252,7 @@ of `gherkin-smoke.yml`, `pr-gate.yml` and `cli.yml` call it). A PR that touches 
 otherwise. On the push to `develop` every macOS leg runs, **also when "Already tested?" skips the rest** (the PR's green run did not
 include them): `smoke-post-merge` covers Gherkin, and the `macos` job of cli.yml ignores `tested`. A macOS-only break in shared code
 is therefore found on `develop`, as a regression there, not on the PR; the nightly full run covers every leg. `autoHorizonJpeg` is the cheapest real flow (one 46 MB JPEG dataset, no video, no 16-bit, no trail verifier build). The
-target is about 30 minutes on a PR; the slow part is the queue for the macOS runners, which is why only three jobs are macOS.
+target is about 30 minutes on a PR; the slow part is the queue for the macOS runners, which is why a PR runs at most two macOS jobs (above).
 
 **Changing it:** edit `gherkin/smoke.json`. A name must be a feature of that client (a name in `generated/features-<client>.json`) and
 no list may be empty; the `feature matrix` job fails with an `::error::` otherwise, so a rename cannot leave the smoke run green having
