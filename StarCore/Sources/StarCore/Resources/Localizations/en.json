@@ -1266,5 +1266,6 @@
   "ui.frame_mode_desc_dirty_sky": "Keeps only what moved in the sky of this frame (the original minus the aligned reference); the ground is black. There is nothing to review on this frame.",
   "ui.frame_mode_desc_dirty_earth": "Keeps only what moved on the ground of this frame (the original minus the aligned reference); the sky is black. There is nothing to review on this frame.",
   "ui.this_frame_uses_dirty_sky": "This frame uses Dirty sky mode",
-  "ui.this_frame_uses_dirty_earth": "This frame uses Dirty earth mode"
+  "ui.this_frame_uses_dirty_earth": "This frame uses Dirty earth mode",
+  "ui.change": "Change"
 }

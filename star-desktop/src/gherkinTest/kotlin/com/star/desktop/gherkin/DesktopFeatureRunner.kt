@@ -17,6 +17,8 @@ import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
@@ -165,6 +167,9 @@ class DesktopFeatureRunner {
         StepAction.OPEN_PREFERENCES to { t -> openPreferences(t) },
         StepAction.OPEN_LOCATION_QUESTION to { t -> openCopiedSequenceAtItsLocationQuestion(t) },
         StepAction.OPEN_VIDEO_IMPORT to { t -> openVideoAtItsImportDialog(t) },
+        StepAction.OPEN_VIDEO_HELD to { t -> openVideoWithExtractionHeld(t) },
+        StepAction.RELEASE_EXTRACTION to { t -> releaseExtraction(t) },
+        StepAction.PAINT_BAND to { t -> paintBand(t, args[0]) },
         StepAction.SAVE_SCREENSHOT to { t -> saveScreenshot(t, args[0]) },
         StepAction.SAVE_WINDOW_SCREENSHOT to { t -> saveScreenshot(t, args[1], window = args[0]) },
     )
@@ -388,8 +393,22 @@ class DesktopFeatureRunner {
         finishOpening(t, model, answer = false)
     }
 
+    /**
+     * A grid cell is lazy: in the one-column grid of the test window only the cells near the scroll position are composed, so a cell a few
+     * rows away is not in the tree to click. Scrolls the grid to it, as a user would (the mac gui runner's `scrollGridToBuild`).
+     */
+    private fun scrollGridToCell(t: ComposeUiTest, id: String) {
+        val index = id.removePrefix("grid.cell.").takeIf { id.startsWith("grid.cell.") }?.toIntOrNull() ?: return
+        if (t.onAllNodesWithTagExists(id)) return
+        val grid = t.onAllNodes(hasScrollToIndexAction())
+        if (grid.fetchSemanticsNodes().isEmpty()) return
+        grid[0].performScrollToIndex(index)
+        t.waitForIdle()
+    }
+
     /** Clicks the control; where a list has one per row (the recents' remove button), the first, which is the row on top. */
     private fun clickId(t: ComposeUiTest, id: String) {
+        scrollGridToCell(t, id)
         waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
         t.waitForIdle()
         val node = t.onAllNodes(hasTestTag(id))[0]
@@ -406,6 +425,7 @@ class DesktopFeatureRunner {
 
     /** A click with the command (control off a Mac) key held, or a right click: by the pointer, which is what a cell reads them from. */
     private fun clickWith(t: ComposeUiTest, id: String, command: Boolean = false, right: Boolean = false) {
+        scrollGridToCell(t, id)
         waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
         t.waitForIdle()
         val mac = System.getProperty("os.name").orEmpty().startsWith("Mac", ignoreCase = true)
@@ -1180,21 +1200,93 @@ class DesktopFeatureRunner {
         waitFor(t, "the sequence location question", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("sequencelocation.open") }
     }
 
-    /** A short video made from the copied sequence's frames with the bundled ffmpeg, opened as Load Video opens one: the import dialog comes up. */
-    private fun openVideoAtItsImportDialog(t: ComposeUiTest) {
+    /**
+     * The ffmpeg to make a test video with: `$STAR_FFMPEG_DIR/ffmpeg[.exe]` (what CI exports), else the one in `<repo>/external_binaries/bin`,
+     * else whatever is on the PATH. Windows builds are `ffmpeg.exe`.
+     */
+    private fun ffmpegExecutable(): File {
+        val name = if (System.getProperty("os.name").lowercase().contains("win")) "ffmpeg.exe" else "ffmpeg"
+        val dirs = listOfNotNull(System.getenv("STAR_FFMPEG_DIR")?.takeIf { it.isNotEmpty() }?.let { File(it) }, File(repoRoot(), "external_binaries/bin"))
+        return dirs.map { File(it, name) }.firstOrNull { it.isFile } ?: File(name)
+    }
+
+    /**
+     * A short video made from the copied sequence's frames with the bundled ffmpeg: 5 fps, the frames in name order. The frames go in through a
+     * concat list, not `-pattern_type glob`, which the Windows ffmpeg build does not have.
+     */
+    private fun makeVideoOfCopiedSequence(): File {
         if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
-        val ffmpeg = File(repoRoot(), "external_binaries/bin/ffmpeg").takeIf { it.canExecute() } ?: File("ffmpeg")
+        val frames = (sequenceCopy.listFiles { f -> f.isFile && f.name.endsWith(".jpg") } ?: emptyArray()).sortedBy { it.name }
+        if (frames.isEmpty()) throw RunnerError("no .jpg frames in $sequenceCopy to make a video from")
+        val list = File(scratch, "gallery-video-frames.txt")
+        fun entry(f: File) = "file '${f.absolutePath.replace('\\', '/')}'"
+        // the concat demuxer drops the duration of the last file, so that one is listed again without one (and -frames:v keeps that repeat out of the video)
+        list.writeText(frames.joinToString("") { "${entry(it)}\nduration 0.2\n" } + entry(frames.last()) + "\n")
         val video = File(scratch, "gallery-video.mp4")
         val process = ProcessBuilder(
-            ffmpeg.path, "-y", "-loglevel", "error", "-framerate", "5", "-pattern_type", "glob", "-i", File(sequenceCopy, "*.jpg").path,
-            "-vf", "scale=1280:-2", "-c:v", "libx264", "-pix_fmt", "yuv420p", video.path,
+            ffmpegExecutable().path, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list.path,
+            "-vf", "scale=1280:-2", "-r", "5", "-frames:v", "${frames.size}", "-c:v", "libx264", "-pix_fmt", "yuv420p", video.path,
         ).redirectErrorStream(true).start()
         val log = process.inputStream.bufferedReader().readText()
         if (process.waitFor() != 0 || !video.isFile) throw RunnerError("could not make a video from $sequenceCopy: $log")
+        return video
+    }
+
+    /** A short video made from the copied sequence's frames, opened as Load Video opens one: the import dialog comes up. */
+    private fun openVideoAtItsImportDialog(t: ComposeUiTest) {
+        val video = makeVideoOfCopiedSequence()
         val model = newModel()
         showApp(t, model)
         t.runOnUiThread { model.openVideo(video.absolutePath) }
         waitFor(t, "the video import dialog", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("videoimport.import") }
+    }
+
+    /** The file beside the video that holds its frames back from the second one on (StarCore's `VideoFrameSource.heldFromFrame`). */
+    private var extractionHold: File? = null
+
+    /**
+     * The video of the copied sequence, imported in the background with every frame but the first held back (a file beside the video, which
+     * StarCore's extraction watches), landing on the sequence screen in edit mode without the startup questions.
+     */
+    private fun openVideoWithExtractionHeld(t: ComposeUiTest) {
+        val video = makeVideoOfCopiedSequence()
+        val hold = File(video.path + ".hold").also { it.writeText("1") }
+        extractionHold = hold
+        // autoMode "edit" is what skips the startup questions (and puts the screen in edit mode)
+        val model = newModel(mode = "edit")
+        showApp(t, model)
+        t.runOnUiThread { model.openVideo(video.absolutePath) }
+        waitFor(t, "the video import dialog", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists("videoimport.import") }
+        // The box starts off for H.264 (the probe is not run here, so for every video): once, to go to the main screen while the frames are
+        // still being extracted.
+        t.onNodeWithTag("videoimport.background").performClick()
+        t.onNodeWithTag("videoimport.import").performClick()
+        waitFor(t, "the sequence screen", OPEN_TIMEOUT_MS) { t.onAllNodesWithTagExists("frame.number") }
+    }
+
+    /** Lets the held frames come out: removes the file that held them. */
+    private fun releaseExtraction(t: ComposeUiTest) {
+        val hold = extractionHold ?: throw RunnerError("\"I open a video of the copied sequence with its extraction held\" has not run")
+        if (!hold.delete()) throw RunnerError("could not remove $hold")
+        t.waitForIdle()
+    }
+
+    /**
+     * Paints a band across the element: one drag from its left edge to its right, at 80% of its height, where the horizon of a frame is. The band
+     * is complete when it spans the width, and the painter then starts looking for the horizon in it.
+     */
+    private fun paintBand(t: ComposeUiTest, id: String) {
+        waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
+        t.waitForIdle()
+        t.onAllNodes(hasTestTag(id))[0].performMouseInput {
+            val y = height * 0.8f
+            val x0 = width * 0.002f
+            moveTo(Offset(x0, y))
+            press()
+            repeat(PAINT_STEPS) { moveBy(Offset(width * 0.996f / PAINT_STEPS, 0f)) }
+            release()
+        }
+        t.waitForIdle()
     }
 
     /** `<dir>/<client>/<name>.png`, where dir is `STAR_GALLERY_DIR` (the gui's runner reads the same), else `<repo>/.test-data/gallery/latest`. */
@@ -1276,6 +1368,7 @@ class DesktopFeatureRunner {
         const val UI_TIMEOUT_MS = 90_000L
         const val DRAG_HALF_PX = 24f   // a drag around a group is a box this far each way from its centre, in pixels
         const val DRAG_STEPS = 8
+        const val PAINT_STEPS = 60   // a band painted across a frame is this many pointer moves
         const val PROCESS_TIMEOUT_MS = 50L * 60_000   // auto selective on a 4-core runner took over 25 minutes
         const val STALL_LIMIT_MS = 10L * 60_000   // longest a processing wait may sit on one progress line; see the survey in the commit message
         const val RENDER_TIMEOUT_MS = 10L * 60_000

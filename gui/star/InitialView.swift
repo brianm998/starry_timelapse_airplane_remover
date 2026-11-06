@@ -336,6 +336,8 @@ struct InitialView: View {
                                             outputDir: options.outputDir)
                 Task { @MainActor in
                     viewModel.imageSequence?.initialLoadInProgress = true
+                    // UI-test seam (see `openSequenceFromUITestArgument`): the video lands on the sequence screen
+                    if ViewModel.uiTestSkipStartupQuestions { viewModel.imageSequence?.shouldShowInitialInstructions = false }
                 }
             } catch {
                 Log.e("\(error)")
