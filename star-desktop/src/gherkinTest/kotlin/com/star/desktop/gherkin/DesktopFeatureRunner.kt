@@ -17,6 +17,8 @@ import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
@@ -391,8 +393,22 @@ class DesktopFeatureRunner {
         finishOpening(t, model, answer = false)
     }
 
+    /**
+     * A grid cell is lazy: in the one-column grid of the test window only the cells near the scroll position are composed, so a cell a few
+     * rows away is not in the tree to click. Scrolls the grid to it, as a user would (the mac gui runner's `scrollGridToBuild`).
+     */
+    private fun scrollGridToCell(t: ComposeUiTest, id: String) {
+        val index = id.removePrefix("grid.cell.").takeIf { id.startsWith("grid.cell.") }?.toIntOrNull() ?: return
+        if (t.onAllNodesWithTagExists(id)) return
+        val grid = t.onAllNodes(hasScrollToIndexAction())
+        if (grid.fetchSemanticsNodes().isEmpty()) return
+        grid[0].performScrollToIndex(index)
+        t.waitForIdle()
+    }
+
     /** Clicks the control; where a list has one per row (the recents' remove button), the first, which is the row on top. */
     private fun clickId(t: ComposeUiTest, id: String) {
+        scrollGridToCell(t, id)
         waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
         t.waitForIdle()
         val node = t.onAllNodes(hasTestTag(id))[0]
@@ -409,6 +425,7 @@ class DesktopFeatureRunner {
 
     /** A click with the command (control off a Mac) key held, or a right click: by the pointer, which is what a cell reads them from. */
     private fun clickWith(t: ComposeUiTest, id: String, command: Boolean = false, right: Boolean = false) {
+        scrollGridToCell(t, id)
         waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
         t.waitForIdle()
         val mac = System.getProperty("os.name").orEmpty().startsWith("Mac", ignoreCase = true)
