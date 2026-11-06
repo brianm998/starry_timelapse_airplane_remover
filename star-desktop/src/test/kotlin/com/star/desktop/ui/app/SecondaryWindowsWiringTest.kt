@@ -29,4 +29,8 @@ class SecondaryWindowsWiringTest {
         assertTrue("if (showOutlier && svm != null)" in source, "the outlier window is shown without a sequence")
         assertTrue("if (showAlign && svm != null)" in source, "the alignment window is shown without a sequence")
     }
+
+    @Test fun theOutlierWindowIsTitledWithTheFunctionTheTestHostReads() {
+        assertTrue("title = com.star.desktop.ui.windows.outlierWindowTitle(" in source, "Main.kt does not title the outlier window with outlierWindowTitle")
+    }
 }
