@@ -40,6 +40,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -327,6 +330,7 @@ fun HorizonPainterView(app: AppViewModel, vm: SequenceViewModel, modifier: Modif
     Column(modifier.fillMaxSize().background(StarColors.appBackground).focusRequester(keyFocus).focusable().then(keyHandler)) {
         Box(
             Modifier.weight(1f).fillMaxSize()
+                .testTag("painter.canvas")
                 .clipToBounds()
                 .onSizeChanged { canvasSize = it.toSize(); transform.canvasChanged(canvasSize) }
                 // Scroll pans, Ctrl/Cmd-scroll zooms, middle- or Alt-drag pans (as in the edit view): the horizon can be
@@ -649,7 +653,7 @@ private fun HorizonControlBar(
 
         if (phase == HorizonPhase.COMPUTING) {
             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = StarColors.accent)
-            Text(localized("ui.computing_horizon"), color = StarColors.textSecondary, fontSize = 12.sp)
+            Text(localized("ui.computing_horizon"), color = StarColors.textSecondary, fontSize = 12.sp, modifier = Modifier.testTag("painter.computing"))
             Spacer(Modifier.weight(1f))
             OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
             return@Row
@@ -662,7 +666,7 @@ private fun HorizonControlBar(
             SkyGroundToggle(state)
         } else {
             DividerDot()
-            Text(localized("ui.paint_across_horizon", coverage), color = StarColors.yellow, fontSize = 12.sp)
+            Text(localized("ui.paint_across_horizon", coverage), color = StarColors.yellow, fontSize = 12.sp, modifier = Modifier.testTag("painter.band"))
         }
 
         if (phase == HorizonPhase.REFINEMENT) {
@@ -683,7 +687,7 @@ private fun HorizonControlBar(
 
         // Nothing to start over from until something is painted (macOS disables Reset in band selection until then).
         HoverTip(localized(if (phase == HorizonPhase.REFINEMENT) "ui.reset_and_start_over_r" else "ui.reset_and_start_over_from_band_selection_r")) {
-            OutlinedButton(onClick = onReset, enabled = phase == HorizonPhase.REFINEMENT || v.let { state.hasBand() }) { Text(localized("ui.reset")) }
+            OutlinedButton(onClick = onReset, modifier = Modifier.testTag("painter.reset"), enabled = phase == HorizonPhase.REFINEMENT || v.let { state.hasBand() }) { Text(localized("ui.reset")) }
         }
 
         Spacer(Modifier.weight(1f))
@@ -697,6 +701,7 @@ private fun HorizonControlBar(
         if (phase == HorizonPhase.REFINEMENT) {
             HoverTip(localized(if (startup) "ui.save_horizon_continue" else "ui.save_horizon_reference")) {
                 Button(
+                    modifier = Modifier.testTag("painter.save"),
                     enabled = canSave,
                     colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
                     onClick = if (startup) onContinue else onSave,
@@ -786,17 +791,17 @@ private fun SkyGroundToggle(state: HorizonPaintState) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         if (!state.isErasing) {
             HoverTip(localized("ui.paint_sky_adds_to_the_selection_p")) {
-                Button(onClick = { state.isErasing = false }, colors = ButtonDefaults.buttonColors(containerColor = StarColors.green)) { Text(localized("ui.sky"), color = Color.White) }
+                Button(onClick = { state.isErasing = false }, modifier = Modifier.testTag("painter.sky").semantics { selected = true }, colors = ButtonDefaults.buttonColors(containerColor = StarColors.green)) { Text(localized("ui.sky"), color = Color.White) }
             }
             HoverTip(localized("ui.erase_sky_removes_from_the_selection_e")) {
-                OutlinedButton(onClick = { state.isErasing = true }) { Text(localized("ui.ground")) }
+                OutlinedButton(onClick = { state.isErasing = true }, modifier = Modifier.testTag("painter.ground").semantics { selected = false }) { Text(localized("ui.ground")) }
             }
         } else {
             HoverTip(localized("ui.paint_sky_adds_to_the_selection_p")) {
-                OutlinedButton(onClick = { state.isErasing = false }) { Text(localized("ui.sky")) }
+                OutlinedButton(onClick = { state.isErasing = false }, modifier = Modifier.testTag("painter.sky").semantics { selected = false }) { Text(localized("ui.sky")) }
             }
             HoverTip(localized("ui.erase_sky_removes_from_the_selection_e")) {
-                Button(onClick = { state.isErasing = true }, colors = ButtonDefaults.buttonColors(containerColor = StarColors.red)) { Text(localized("ui.ground"), color = Color.White) }
+                Button(onClick = { state.isErasing = true }, modifier = Modifier.testTag("painter.ground").semantics { selected = true }, colors = ButtonDefaults.buttonColors(containerColor = StarColors.red)) { Text(localized("ui.ground"), color = Color.White) }
             }
         }
     }

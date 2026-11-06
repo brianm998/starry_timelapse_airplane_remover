@@ -87,9 +87,6 @@ def ready_activity(db: Database, t: Ticket, config: Config, now: float) -> str:
     if (member := db.batch_of(t.number)) is not None:
         row = db.batch(member)
         return f"ready · in batch {member} ({row['state'] if row else 'building'})"
-    if (features := tickets.gherkin_features(t.body, t.plan)) and not db.get(f"gherkin_ok:{t.number}"):
-        err = json.loads(db.get(f"gherkin_err:{t.number}") or "null")
-        return f"ready · proving Gherkin features ({', '.join(features)})" + (f" · last poll failed: {err['error']}" if err else "")
     if active := db.active_batches():
         return f"ready · waiting for the next batch ({', '.join(f'batch {b['id']} is {b['state']}' for b in active)})"
     left = train.window_left(db, config, now)
@@ -115,6 +112,8 @@ def activity(db: Database, t: Ticket, now: float | None = None, mode: str = "bat
     if t.state == "needs-input":
         q = db.open_question(t.number)
         return f"needs you · asked {int((now - q['asked_at']) / 60)}m ago" if q else "needs you"
+    if (asking := db.asking_batch_of(t.number)) is not None and (q := db.question_for(t.number)) is not None:
+        return f"needs you · batch #{asking} CI red · asked {int((now - q['asked_at']) / 60)}m ago"
     if t.state in HOLDABLE_STATES and (held := held_retry_line(db, t.number)):
         return f"{t.state} · {held}"
     if t.state in ("failed", "cancelled", "closed", "paused") and t.park_reason:
@@ -140,9 +139,10 @@ MAX_ACTIVE_CAP = 6
 GROUPS = ("needs_you", "running", "waiting", "queued", "landed_today", "failed")
 
 
-def group_of(t: Ticket, waiting_for_lock: bool, now: float, updated: float) -> str | None:
-    """Which sidebar group a ticket belongs in (computed here, never by a client). None: not shown."""
-    if t.state == "needs-input":
+def group_of(t: Ticket, waiting_for_lock: bool, now: float, updated: float, asked: bool = False) -> str | None:
+    """Which sidebar group a ticket belongs in (computed here, never by a client). None: not shown.
+    `asked`: the ticket is in a batch that waits for the owner's answer."""
+    if t.state == "needs-input" or asked:
         return "needs_you"
     if t.state in ACTIVE_STATES:
         return "waiting" if waiting_for_lock else "running"
@@ -196,6 +196,15 @@ class Daemon:
         self.exit: Callable[[int], None] = hard_exit  # replaced in tests
 
     # supervision ---------------------------------------------------------------------------------------------------
+    def migrate_limits(self) -> None:
+        """`limit_llm` was a second key for the session limit that shadowed `max_active`: fold a leftover into it and delete it."""
+        old = self.db.get("limit_llm")
+        if old is None:
+            return
+        if old.isdigit() and int(old) >= 1:
+            self.db.put("max_active", str(min(int(old), MAX_ACTIVE_CAP)))
+        self.db.put("limit_llm", None)
+
     def reconcile(self) -> None:
         """Mark stages that were running when the daemon died; drive() resumes them by session id."""
         for s in self.db.running_stages():
@@ -492,7 +501,7 @@ class Daemon:
         sessions, cpu_limit = self.engine.limits()
         room = self.engine.llm_room()
         return {"llm_active": room.llm_active, "llm_max": sessions, "cpu_pct": round(room.cpu, 1), "cpu_limit": cpu_limit,
-                "waiting": room.reason, "overridden": bool(self.db.get("limit_llm") or self.db.get("limit_cpu"))}
+                "waiting": room.reason, "overridden": bool(self.db.get("max_active") or self.db.get("limit_cpu"))}
 
     async def scheduler(self) -> None:
         while True:
@@ -513,11 +522,23 @@ class Daemon:
                 "self_update": {"pending": self.db.get("self_update_pending"), "hold": self.engine.update_hold(),
                                 "failed": self.update_failure()},
                 "resources": self.resources(), "pause": self.db.get("pause"), "muted": self.db.get("muted") == "1", "usage_pause_until": self.db.get("usage_pause_until"),
+                "usage_pause_window": self.db.get("usage_pause_window"), **self.credit_info(),
                 "usage_windows": self.usage_windows(),
                 "alerts": self.db.open_alerts(),
                 "heavy": {"holders": [h.__dict__ for h in hv.holders], "queue": [w.__dict__ for w in hv.queue]},
                 "landing": train_info(self.db, self.config, self.engine.clock()),
                 "tickets": tickets, "gherkin_nightly": self.gherkin_info()}
+
+    def credit_info(self) -> dict[str, object]:
+        """Usage-credit state for the snapshot: support ("supported" / "none" / "unknown" until a stream reports), whether
+        the credits are exhausted, and, while they are being spent, `credit_use` ({since, amount, window})."""
+        raw = self.db.get("credit_use")
+        try:
+            use: object = json.loads(raw) if raw else None
+        except ValueError:
+            use = None
+        return {"credit_support": self.db.get("credit_support") or "unknown", "credit_exhausted": bool(self.db.get("credit_exhausted")),
+                "credit_use": cast("dict[str, object]", use) if isinstance(use, dict) else None}
 
     def usage_windows(self) -> dict[str, object] | None:
         raw = self.db.get("usage_windows")
@@ -637,11 +658,12 @@ class Daemon:
         tickets: list[dict[str, object]] = []
         for t in self.db.tickets():
             row = self.db._all("SELECT updated_at FROM tickets WHERE number=?", (t.number,))[0]  # pyright: ignore[reportPrivateUsage]
-            group = group_of(t, str(t.number) in lock_tickets, now, float(row["updated_at"]))
+            question = self.db.question_for(t.number)
+            group = group_of(t, str(t.number) in lock_tickets, now, float(row["updated_at"]),
+                             asked=question is not None and self.db.asking_batch_of(t.number) is not None)
             if group is None:
                 continue
             stages = self.db.stages(t.number)
-            question = self.db.open_question(t.number)
             running = [s["model"] for s in stages if s["ended"] is None]  # the open stage's model, else none
             tickets.append({"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
                             "group": group, "model": running[-1] if running else None, "activity": activity(self.db, t, now, self.config.landing_mode, self.config), "blocked_by": self.db.open_blockers(t.number),
@@ -700,7 +722,7 @@ class Daemon:
         return {"number": t.number, "title": t.title, "state": t.state, "priority": t.priority, "branch": t.branch,
                 "park_reason": t.park_reason, "plan": t.plan,
                 "activity": activity(self.db, t, self.engine.clock(), self.config.landing_mode, self.config),
-                "stages": self.db.stages(n), "checks": self.db.checks(n), "question": question_view(self.db.open_question(n)),
+                "stages": self.db.stages(n), "checks": self.db.checks(n), "question": question_view(self.db.question_for(n)),
                 "blockers": [{"number": b, "title": self.blocker_title(b)} for b in self.db.open_blockers(n)],
                 "held_retry": f"retry from {held} when unblocked" if (held := self.db.get(f"held_retry:{n}")) else None}
 
@@ -723,11 +745,14 @@ class Daemon:
         if t is None:
             raise web.HTTPNotFound(text=f"no ticket #{n}")
         if action == "answer":
-            q = self.db.open_question(n)
+            q = self.db.question_for(n)
             if q is None:
                 raise web.HTTPConflict(text="no open question")
             self.db.answer_question(q["id"], str(body["text"]), "owner")
             self.db.intervention(n, "answer", q["stage"])
+            if q["stage"] == train.BATCH_STAGE:  # a red batch's question: the train reads the answer and moves the batch, no ticket changes state
+                self.engine.notifier.clear("needs-input", int(q["ticket"]))
+                return f"answered for batch #{self.db.asking_batch_of(n)}"
             self.engine.notifier.clear("needs-input", n)
             self.engine.parked.discard(n)
             resume = STAGE_STATE.get(q["stage"], "exploring")
@@ -757,6 +782,7 @@ class Daemon:
                 task.cancel()
             self.db.intervention(n, "cancel", t.state)
             self.db.put(f"land_now:{n}", None)
+            self.db.put(f"skip_features:{n}", None)
             self.db.put(f"held_retry:{n}", None)
             self.engine._to_state(n, "cancelled", str(body.get("reason") or "cancelled by the owner"))  # pyright: ignore[reportPrivateUsage]
         elif action == "requeue":
@@ -775,6 +801,11 @@ class Daemon:
                     self.engine.gh.update_pr(t.pr_number, ship.pr_body(self.engine, t))
                 except (GitHubError, RuntimeError):
                     pass
+        elif action == "skip-features":
+            if t.state not in LAND_NOW_STATES:
+                raise web.HTTPConflict(text=f"#{n} is {t.state}: skip-features needs a ticket in {', '.join(LAND_NOW_STATES)}")
+            self.db.put(f"skip_features:{n}", "1")  # the batch it lands in does not run this ticket's Gherkin features
+            self.db.intervention(n, "skip-features", t.state)
         elif action == "prio":
             prio = int(str(body["priority"]))
             self.db.set_fields(n, priority=prio)
@@ -900,13 +931,13 @@ class Daemon:
         async def limits_set(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
             body = await body_of(req)
             if body.get("reset"):
-                self.db.put("limit_llm", None)
+                self.db.put("max_active", None)
                 self.db.put("limit_cpu", None)
             if body.get("llm") is not None:
                 value = int(str(body["llm"]))
-                if not 1 <= value <= 32:
-                    raise web.HTTPBadRequest(text="llm must be between 1 and 32")
-                self.db.put("limit_llm", str(value))
+                if not 1 <= value <= MAX_ACTIVE_CAP:
+                    raise web.HTTPBadRequest(text=f"llm must be between 1 and {MAX_ACTIVE_CAP}")
+                self.db.put("max_active", str(value))  # the one session limit, shared with the monitor's stepper
             if body.get("cpu") is not None:
                 pct = float(str(body["cpu"]))
                 if not 10 <= pct <= 100:
@@ -1077,6 +1108,7 @@ class Daemon:
         return app
 
     async def run(self) -> None:
+        self.migrate_limits()
         self.reconcile()
         os.environ["STARPIPE_TICKET"] = "daemon"  # the daemon's own heavy jobs queue at pipeline priority
         runner = web.AppRunner(self.app())

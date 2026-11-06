@@ -120,6 +120,12 @@
     "uiPainterOpensInEditMode": {
       "sequence": "test_data/test_a7sii_10"
     },
+    "uiPainterOpens": {
+      "sequence": "test_data/test_a7sii_10"
+    },
+    "uiPainterWaitsForExtraction": {
+      "sequence": "test_data/test_a7sii_10"
+    },
     "uiKeysWhilePainting": {
       "sequence": "test_data/test_a7sii_10"
     },

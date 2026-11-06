@@ -4,11 +4,13 @@ import asyncio
 import json
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from starpipe import gitutil, guards, negctl, worktrees
 from starpipe.agent import StageOutcome, StageRequest
+from starpipe.checks import ledger
 from starpipe.config import Config
 from starpipe.db import Database
 from starpipe.engine import Engine
@@ -134,7 +136,7 @@ async def test_blockers_and_priority_decide_the_claim(rig: Rig) -> None:
     assert t and t.number == 1
 
 
-async def test_a_landing_stage_takes_a_session_over_the_limit_and_new_work_waits_for_it(rig: Rig) -> None:
+async def test_a_landing_stage_waits_for_a_free_slot_but_goes_first(rig: Rig) -> None:
     rig.engine.config.max_llm_sessions = 1
     rig.gh.add_issue(1, "running", labels=("pipeline", "p2"))
     rig.gh.add_issue(2, "landing", labels=("pipeline", "p2"))
@@ -142,20 +144,40 @@ async def test_a_landing_stage_takes_a_session_over_the_limit_and_new_work_waits
     rig.engine.sync_issues()
     t1, t2, t3 = (rig.db.ticket(n) for n in (1, 2, 3))
     assert t1 and t2 and t3
-    rig.db.begin_stage(1, "develop", 1, "sonnet")  # the one allowed session is busy
-    assert not rig.engine.llm_room().ok and rig.engine.llm_room(extra=1).ok
+    busy = rig.db.begin_stage(1, "develop", 1, "sonnet")  # the one allowed session is busy
+    assert not rig.engine.llm_room().ok
+
     async def sleep(_: float) -> None:
         await asyncio.sleep(0.01)
 
     rig.engine.sleep = sleep
-    new_work = asyncio.create_task(rig.engine._begin_when_room(t3, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
+    begin = rig.engine._begin_when_room  # pyright: ignore[reportPrivateUsage]
+    new_work = asyncio.create_task(begin(t3, "develop", 1, "sonnet"))
+    landing = asyncio.create_task(begin(t2, "conflict", 1, "sonnet"))
     await asyncio.sleep(0.05)
-    assert not new_work.done() and rig.db.get("llm_wait:3"), "no room for new work"
-    stage_id = await rig.engine._begin_when_room(t2, "conflict", 1, "sonnet")  # pyright: ignore[reportPrivateUsage]
-    assert stage_id and rig.engine.landing_waiting == set(), "the landing stage started at once, one over the limit"
-    rig.db.end_stage(1, "accepted", 0.0, "")  # stage rows are 1 (develop) and 2 (conflict): both end, room opens
-    rig.db.end_stage(2, "accepted", 0.0, "")
+    assert not new_work.done() and not landing.done(), "the limit is a hard cap: even a landing stage waits"
+    assert rig.db.get("llm_wait:2") == "landing: next free session" and rig.db.get("llm_wait:3")
+    assert len(rig.db.running_stages()) == 1
+    rig.db.end_stage(busy, "accepted", 0.0, "")
+    await asyncio.wait_for(landing, 2)  # the landing stage takes the one free slot
+    await asyncio.sleep(0.05)
+    assert not new_work.done() and len(rig.db.running_stages()) == 1
+    rig.db.end_stage(2, "accepted", 0.0, "")  # stage rows: 1 develop (ended), 2 the conflict stage
     await asyncio.wait_for(new_work, 2)
+
+
+async def test_a_session_waiting_for_the_heavy_lock_still_counts(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    rig.engine.config.max_llm_sessions = 2
+    for n in (1, 2, 3):
+        rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    rig.db.begin_stage(1, "develop", 1, "sonnet")
+    rig.db.begin_stage(2, "develop", 1, "sonnet")
+    monkeypatch.setattr("starpipe.heavy.status", lambda: SimpleNamespace(queue=[SimpleNamespace(ticket="1"), SimpleNamespace(ticket="2")]))
+    assert rig.engine.llm_active() == 2, "a session blocked on the heavy lock is still open"
+    assert not rig.engine.llm_room().ok and rig.engine.claimable() is None
 
 
 async def test_a_free_session_goes_to_the_ticket_furthest_along_in_the_pipeline(rig: Rig) -> None:
@@ -195,6 +217,88 @@ async def test_nothing_new_is_claimed_while_a_landing_stage_waits_for_a_session(
     assert rig.engine.claimable() is not None
     rig.engine.landing_waiting.add(9)
     assert rig.engine.claimable() is None
+
+
+async def test_no_claim_during_a_usage_pause(rig: Rig) -> None:
+    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    assert rig.engine.llm_active() == 0 and rig.engine.llm_room().ok, "no stage row is open during a pause"
+    rig.db.put("usage_pause_until", str(rig.now + 600))
+    assert rig.engine.claimable() is None
+    rig.now += 601
+    assert rig.engine.claimable() is not None
+
+
+async def test_a_ticket_waiting_for_a_session_holds_back_new_claims(rig: Rig) -> None:
+    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
+    rig.gh.add_issue(2, "claimed", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    t2 = rig.db.ticket(2)
+    assert t2
+    rig.db.set_state(2, "developing")
+    assert rig.engine.llm_room().ok and rig.engine.claimable() is not None
+
+    async def sleep(_: float) -> None:
+        await asyncio.sleep(0.01)
+
+    rig.engine.sleep = sleep
+    rig.engine.config.max_llm_sessions = 1
+    busy = rig.db.begin_stage(5, "develop", 1, "sonnet")
+    waiter = asyncio.create_task(rig.engine._begin_when_room(t2, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(0.05)
+    assert 2 in rig.engine.llm_waiting and rig.engine.claimable() is None
+    rig.db.end_stage(busy, "accepted", 0.0, "")
+    rig.engine.llm_waiting[9] = (-99, 0, 0.0, 9)  # a better-ranked waiter: room is ok now, yet the claim still waits its turn
+    await asyncio.sleep(0.05)
+    assert rig.engine.llm_room().ok and rig.engine.claimable() is None and not waiter.done()
+    waiter.cancel()
+    await asyncio.gather(waiter, return_exceptions=True)
+    assert 2 not in rig.engine.llm_waiting, "a cancelled waiter leaves the registry, or claims stop for good"
+    rig.engine.llm_waiting.pop(9)
+    assert rig.engine.claimable() is not None
+
+
+async def test_waiting_sessions_start_in_rank_order(rig: Rig) -> None:
+    rig.engine.config.max_llm_sessions = 1
+    for n in (1, 2, 3, 4, 5):
+        rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    rig.db.set_fields(4, claimed_at=100.0)  # same stage and priority as 5: the earlier claim goes first
+    rig.db.set_fields(5, claimed_at=50.0)
+    ts = {n: rig.db.ticket(n) for n in (1, 2, 3, 4, 5)}
+    assert all(ts.values())
+    busy = rig.db.begin_stage(1, "develop", 1, "sonnet")
+
+    async def sleep(_: float) -> None:
+        await asyncio.sleep(0.01)
+
+    rig.engine.sleep = sleep
+    begin = rig.engine._begin_when_room  # pyright: ignore[reportPrivateUsage]
+    tasks = {
+        "explore": asyncio.create_task(begin(ts[2], "explore", 1, "sonnet")),  # type: ignore[arg-type]
+        "develop-late": asyncio.create_task(begin(ts[4], "develop", 1, "sonnet")),  # type: ignore[arg-type]
+        "develop-early": asyncio.create_task(begin(ts[5], "develop", 1, "sonnet")),  # type: ignore[arg-type]
+        "review": asyncio.create_task(begin(ts[3], "review", 1, "sonnet")),  # type: ignore[arg-type]
+    }
+    await asyncio.sleep(0.05)
+    assert not any(t.done() for t in tasks.values())
+    started: list[str] = []
+    rig.db.end_stage(busy, "accepted", 0.0, "")
+    for name in ("review", "develop-early", "develop-late", "explore"):
+        stage_id = await asyncio.wait_for(tasks[name], 2)
+        started.append(name)
+        await asyncio.sleep(0.05)
+        assert {n for n, t in tasks.items() if t.done()} == set(started), "one slot, one start, in rank order"
+        rig.db.end_stage(stage_id, "accepted", 0.0, "")
+    assert rig.engine.llm_waiting == {}
+
+
+async def test_claims_still_happen_when_there_is_room(rig: Rig) -> None:
+    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    assert rig.engine.llm_room().ok
+    t = rig.engine.claimable()
+    assert t and t.number == 1
 
 
 async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
@@ -257,8 +361,8 @@ async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Ri
     rig.db.put("max_active", "junk")
     assert rig.engine.max_active() == rig.engine.config.max_llm_sessions  # an unreadable override falls back to the file
     rig.db.put("max_active", "2")
-    rig.db.put("limit_llm", "5")  # `starpipe limits` is the more specific override
-    assert rig.engine.max_active() == 5
+    rig.db.put("limit_llm", "5")  # a leftover from before there was one setting is ignored here (the daemon migrates it at start)
+    assert rig.engine.max_active() == 2
     rig.db.put("limit_llm", None)
     rig.db.put("max_active", None)
     assert rig.engine.max_active() == rig.engine.config.max_llm_sessions
@@ -425,6 +529,137 @@ async def test_rate_limit_windows_are_recorded(rig: Rig, tmp_path: Path) -> None
     assert json.loads(reopened.get("usage_windows") or "null") == stored
 
 
+def _credit_report(**over: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {"status": "allowed", "window": "five_hour", "utilization": None, "overage_status": None,
+                            "overage_resets_at": None, "overage_disabled_reason": None}
+    return {**base, **over}
+
+
+async def test_credit_support_is_recorded(rig: Rig, tmp_path: Path) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    assert rig.db.get("credit_support") is None, "unknown until a stream reports"
+
+    def explore(req: StageRequest) -> StageOutcome:
+        req.on_credits(_credit_report())  # says nothing about credits: still unknown
+        assert rig.db.get("credit_support") is None
+        req.on_credits(_credit_report(overage_status="allowed"))
+        return explore_ok(req)
+
+    rig.agent.on("explore", explore)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    assert rig.db.get("credit_support") == "supported"
+    assert Database(tmp_path / "state.db").get("credit_support") == "supported"  # survives a restart
+    rig.engine._record_credits(_credit_report(status="rejected", overage_status="rejected", overage_disabled_reason="out_of_credits"))  # pyright: ignore[reportPrivateUsage]
+    assert rig.db.get("credit_support") == "supported", "exhausted credits are still supported credits"
+    rig.db.put("credit_support", None)
+    rig.engine._record_credits(_credit_report(overage_status="rejected", overage_disabled_reason="org_level_disabled"))  # pyright: ignore[reportPrivateUsage]
+    assert rig.db.get("credit_support") == "none"
+    rig.db.put("credit_support", None)
+    rig.engine._record_credits(_credit_report(overage_status="something-new"))  # pyright: ignore[reportPrivateUsage]
+    assert rig.db.get("credit_support") == "none", "an unrecognised state is treated as no credits"
+
+
+async def test_credit_use_is_recorded_and_announced(rig: Rig) -> None:
+    record = rig.engine._record_credits  # pyright: ignore[reportPrivateUsage]
+    record(_credit_report(status="allowed", window="five_hour", overage_status="allowed"))
+    assert rig.db.get("credit_use") is None
+    record(_credit_report(status="rejected", window="five_hour", overage_status="allowed"))  # base window out, credits carry on
+    first = json.loads(rig.db.get("credit_use") or "null")
+    assert first["window"] == "five_hour" and first["amount"] is None
+    record(_credit_report(status="allowed", window="overage", overage_status="allowed", utilization=0.25))
+    second = json.loads(rig.db.get("credit_use") or "null")
+    assert second["amount"] == 0.25 and second["since"] == first["since"], "the amount follows; the start stays"
+    record(_credit_report(status="allowed_warning", window="overage", overage_status="allowed_warning", utilization=0.9))
+    events = [e for e in rig.db.events_since() if e["kind"] == "credits-in-use"]
+    assert len(events) == 1, "announced once per start of use"
+    assert events[0]["data"]["window"] == "five_hour"
+    record(_credit_report(status="allowed", window="five_hour", overage_status="allowed"))  # the base window is back
+    assert rig.db.get("credit_use") is None
+    record(_credit_report(status="rejected", window="five_hour", overage_status="allowed"))
+    assert len([e for e in rig.db.events_since() if e["kind"] == "credits-in-use"]) == 2, "a new start is announced again"
+    record(_credit_report(status="rejected", window="overage", overage_status="rejected"))  # credits ran out
+    assert rig.db.get("credit_use") is None and rig.db.get("credit_exhausted") == "1"
+
+
+async def test_no_credits_pause_resumes_at_the_reset(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    reset = rig.now + 900
+
+    def limited(req: StageRequest) -> StageOutcome:
+        req.on_credits(_credit_report(status="rejected", window="seven_day", overage_status="rejected"))
+        assert rig.db.get("credit_support") == "none"
+        return StageOutcome("usage-limit", session_id="S1", resets_at=reset, window="seven_day")
+
+    paused: list[tuple[str | None, str | None]] = []
+
+    def resumed(req: StageRequest) -> StageOutcome:
+        paused.append((rig.db.get("usage_pause_until"), rig.db.get("usage_pause_window")))
+        return explore_ok(req)
+
+    rig.agent.on("explore", limited, resumed)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    # the pause is stored, with its window, while the engine waits
+    original_sleep = rig.engine.sleep
+    seen: list[tuple[str | None, str | None]] = []
+
+    async def watching(seconds: float) -> None:
+        seen.append((rig.db.get("usage_pause_until"), rig.db.get("usage_pause_window")))
+        await original_sleep(seconds)
+
+    rig.engine.sleep = watching
+    await rig.engine.drive(7)
+    explores = [r for r in rig.agent.requests if r.stage == "explore"]
+    assert [r.attempt for r in explores] == [1, 1], "no attempt counted"
+    assert explores[1].resume == "S1"
+    assert seen and all(s == (str(reset), "seven_day") for s in seen)
+    assert sum(rig.slept) >= 900
+    assert rig.db.get("usage_pause_until") is None and rig.db.get("usage_pause_window") is None
+    pauses = [e for e in rig.db.events_since() if e["kind"] == "usage-pause"]
+    assert [e["data"]["window"] for e in pauses] == ["seven_day"]
+
+
+async def test_exhausted_credits_pause_the_stages_until_the_reset(rig: Rig) -> None:
+    """The pause decision is the runner's (`parse_usage_limit`, tested in test_agent); the engine pauses on whatever
+    `usage-limit` outcome it is given and never turns it into a counted crash."""
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    reset = rig.now + 900
+
+    def credits_run_out(req: StageRequest) -> StageOutcome:
+        req.on_credits(_credit_report(status="rejected", window="overage", overage_status="rejected"))
+        return StageOutcome("usage-limit", session_id="S1", resets_at=reset, window="overage")
+
+    rig.agent.on("explore", credits_run_out, explore_ok)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    explores = [r for r in rig.agent.requests if r.stage == "explore"]
+    assert [r.attempt for r in explores] == [1, 1], "a usage limit does not count an attempt, or a crash"
+    pauses = [e for e in rig.db.events_since() if e["kind"] == "usage-pause"]
+    assert [e["data"]["window"] for e in pauses] == ["overage"]
+    assert sum(rig.slept) >= 900
+    assert rig.db.get("credit_exhausted") is None, "cleared when the credit pause ended"
+
+
+async def test_a_usage_limit_with_no_credit_info_pauses_even_when_credits_were_supported(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    reset = rig.now + 900
+
+    def supported_then_limit(req: StageRequest) -> StageOutcome:
+        req.on_credits(_credit_report(overage_status="allowed"))
+        return StageOutcome("usage-limit", session_id="S1", resets_at=reset, window="five_hour")
+
+    rig.agent.on("explore", supported_then_limit, explore_ok)
+    rig.agent.on("develop", lambda r: StageOutcome("no-result"))
+    await rig.engine.drive(7)
+    pauses = [e for e in rig.db.events_since() if e["kind"] == "usage-pause"]
+    assert [e["data"]["window"] for e in pauses] == ["five_hour"], "paused, not resumed at once as a crash"
+    assert sum(rig.slept) >= 900
+
+
 async def test_a_question_the_resolver_can_answer_resumes_the_session(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
@@ -566,8 +801,8 @@ async def test_a_red_verification_runs_fix_then_parks_after_two(rig: Rig) -> Non
     calls = {"n": 0}
     real = rig.engine.check_runner
 
-    def flaky(worktree: Path, base: str):  # type: ignore[no-untyped-def]
-        results = real(worktree, base)
+    def flaky(worktree: Path, base: str, tiers: set[str] | None = None, /) -> list[ledger.Result]:
+        results = real(worktree, base, tiers)
         calls["n"] += 1
         if calls["n"] > 1 and results:  # DEVELOP's own run is green; the daemon's runs are not
             results[0].status = "fail"
@@ -679,8 +914,6 @@ async def test_verification_does_not_block_the_event_loop(rig: Rig) -> None:
     import asyncio
     import threading
 
-    from starpipe.checks import ledger
-
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
     rig.engine.claim(rig.db.tickets()[0])
@@ -688,9 +921,9 @@ async def test_verification_does_not_block_the_event_loop(rig: Rig) -> None:
     loop_ran = threading.Event()
     waited_out: list[bool] = []
 
-    def blocking_runner(worktree: Path, base: str) -> list[ledger.Result]:
+    def blocking_runner(worktree: Path, base: str, tiers: set[str] | None = None, /) -> list[ledger.Result]:
         waited_out.append(not loop_ran.wait(5))  # True would mean the event loop never got to run
-        return green_runner(worktree, base)
+        return green_runner(worktree, base, tiers)
 
     async def ticker() -> None:
         await asyncio.sleep(0.2)

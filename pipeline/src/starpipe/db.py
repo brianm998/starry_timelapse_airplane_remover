@@ -43,6 +43,7 @@ class Ticket:
     pr_number: int | None
     created_at: float
     updated_at: float = 0.0
+    claimed_at: float | None = None
 
     @property
     def plan(self) -> dict[str, Any] | None:
@@ -52,7 +53,7 @@ class Ticket:
 def _ticket(row: sqlite3.Row) -> Ticket:
     return Ticket(row["number"], row["title"], row["body"], row["author"], row["state"], row["priority"],
                   json.loads(row["blocked_by"]), row["branch"], row["worktree"], row["plan_json"],
-                  row["park_reason"], row["pr_number"], row["created_at"], row["updated_at"])
+                  row["park_reason"], row["pr_number"], row["created_at"], row["updated_at"], row["claimed_at"])
 
 
 class Database:
@@ -276,7 +277,7 @@ class Database:
         return cur.lastrowid
 
     def batch_update(self, batch: int, **fields: Any) -> None:
-        allowed = {"state", "branch", "pr_number", "head_sha", "ci_started", "ended", "note"}
+        allowed = {"state", "branch", "pr_number", "head_sha", "ci_started", "ended", "note", "question"}
         assert set(fields) <= allowed, fields
         cols = ", ".join(f"{k}=?" for k in fields)
         self._exec(f"UPDATE batches SET {cols} WHERE id=?", (*fields.values(), batch))
@@ -288,8 +289,35 @@ class Database:
         return dict(rows[0]) if rows else None
 
     def active_batches(self) -> list[dict[str, Any]]:
-        """Every batch still building, in CI or landing, oldest first."""
-        return [dict(r) for r in self._all("SELECT * FROM batches WHERE state IN ('building','ci','landing') ORDER BY id")]
+        """Every batch still building, in CI, landing, or held for the owner's answer (`asking`), oldest first."""
+        return [dict(r) for r in self._all("SELECT * FROM batches WHERE state IN ('building','ci','landing','asking') ORDER BY id")]
+
+    def running_batches(self) -> list[dict[str, Any]]:
+        """The active batches that are being driven: an `asking` batch waits for the owner and takes no slot."""
+        return [b for b in self.active_batches() if b["state"] != "asking"]
+
+    def batch_question(self, batch: int) -> dict[str, Any] | None:
+        """The question the batch's `question` column points at (the questions table is per ticket, so the batch names its row)."""
+        row = self.batch(batch)
+        if row is None or row["question"] is None:
+            return None
+        rows = self._all("SELECT * FROM questions WHERE id=?", (row["question"],))
+        return dict(rows[0]) if rows else None
+
+    def asking_batch_of(self, ticket: int) -> int | None:
+        """The batch this ticket is in while that batch waits for the owner's answer, if any."""
+        batch = self.batch_of(ticket)
+        row = self.batch(batch) if batch is not None else None
+        return batch if row is not None and row["state"] == "asking" else None
+
+    def question_for(self, ticket: int) -> dict[str, Any] | None:
+        """The ticket's own open question, else the unanswered question of the asking batch it is a member of."""
+        own = self.open_question(ticket)
+        if own is not None:
+            return own
+        batch = self.asking_batch_of(ticket)
+        q = self.batch_question(batch) if batch is not None else None
+        return q if q is not None and q["answer"] is None else None
 
     def active_batch(self) -> dict[str, Any] | None:
         """The oldest active batch (the only one when `batch_parallel` is 1)."""
@@ -313,9 +341,9 @@ class Database:
         return [r["ticket"] for r in self._all("SELECT ticket FROM batch_members WHERE batch=? ORDER BY position", (batch,))]
 
     def batch_of(self, ticket: int) -> int | None:
-        """The active batch (still building, in CI or landing) this ticket is in, if any."""
+        """The active batch (still building, in CI, landing or asking the owner) this ticket is in, if any."""
         rows = self._all("SELECT b.id FROM batches b JOIN batch_members m ON m.batch=b.id "
-                         "WHERE m.ticket=? AND b.state IN ('building','ci','landing') ORDER BY b.id DESC LIMIT 1", (ticket,))
+                         "WHERE m.ticket=? AND b.state IN ('building','ci','landing','asking') ORDER BY b.id DESC LIMIT 1", (ticket,))
         return int(rows[0]["id"]) if rows else None
 
     # nightly --------------------------------------------------------------------------------------------------------

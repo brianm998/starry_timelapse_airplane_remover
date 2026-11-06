@@ -12,6 +12,7 @@ from aiohttp.test_utils import TestClient, TestServer
 
 from starpipe import selfupdate
 from starpipe.agent import StageOutcome, StageRequest
+from starpipe.cli import usage_lines
 from starpipe.config import Config
 from starpipe.daemon import Daemon, activity
 from starpipe.github import GitHubError
@@ -59,6 +60,27 @@ async def test_status_and_show_report_the_ticket_and_its_activity(rig: Rig) -> N
         assert (await client.get("/v1/tickets/99", headers=AUTH)).status == 404
     finally:
         await client.close()
+
+
+async def test_status_reports_credits_and_pause(rig: Rig) -> None:
+    client, _ = await api(rig)
+    try:
+        data = await (await client.get("/v1/status", headers=AUTH)).json()
+        assert data["credit_support"] == "unknown" and data["credit_use"] is None and data["usage_pause_until"] is None
+        assert usage_lines(data) == ["usage credits: unknown"]
+        rig.db.put("credit_support", "supported")
+        rig.db.put("credit_use", json.dumps({"since": 1000.0, "amount": 0.25, "window": "five_hour"}))
+        rig.db.put("usage_pause_until", "1793493600")
+        rig.db.put("usage_pause_window", "seven_day")
+        data = await (await client.get("/v1/status", headers=AUTH)).json()
+    finally:
+        await client.close()
+    assert data["credit_support"] == "supported" and data["credit_use"]["amount"] == 0.25
+    lines = usage_lines(data)
+    assert lines[0].startswith("usage limit: model stages wait until ") and lines[0].endswith("(seven_day window)")
+    assert time.ctime(1793493600) in lines[0]
+    assert lines[1] == "usage credits: supported"
+    assert lines[2].startswith("credits in use since ") and lines[2].endswith("25% of the credit limit")
 
 
 async def test_retry_and_answer_ask_for_a_catch_up(rig: Rig) -> None:
@@ -229,6 +251,32 @@ async def test_settings_stores_max_active_and_snapshot_reports_it(rig: Rig) -> N
         await client.close()
 
 
+async def test_the_cli_and_the_monitor_set_the_same_session_limit(rig: Rig) -> None:
+    client, daemon = await api(rig)
+    try:
+        assert (await client.post("/v1/limits", json={"llm": 2}, headers=AUTH)).status == 200
+        assert rig.db.get("max_active") == "2" and rig.db.get("limit_llm") is None and rig.engine.max_active() == 2
+        snap = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        assert snap["max_active"] == 2, "the monitor's stepper shows what the CLI set"
+        assert (await client.post("/v1/settings", json={"max_active": 4}, headers=AUTH)).status == 200
+        limits = await (await client.get("/v1/limits", headers=AUTH)).json()
+        assert limits["llm_max"] == 4 and limits["overridden"] is True
+        for bad in (0, 7, 32):
+            assert (await client.post("/v1/limits", json={"llm": bad}, headers=AUTH)).status == 400, bad
+        assert rig.db.get("max_active") == "4"
+        assert (await client.post("/v1/limits", json={"reset": True}, headers=AUTH)).status == 200
+        assert rig.db.get("max_active") is None and rig.engine.max_active() == rig.engine.config.max_llm_sessions
+        assert (await (await client.get("/v1/limits", headers=AUTH)).json())["overridden"] is False
+    finally:
+        await client.close()
+    rig.db.put("limit_llm", "9")  # a leftover from the old second key: moved over, clamped, and deleted at daemon start
+    daemon.migrate_limits()
+    assert rig.db.get("max_active") == "6" and rig.db.get("limit_llm") is None
+    rig.db.put("limit_llm", "3")
+    daemon.migrate_limits()
+    assert rig.db.get("max_active") == "3" and rig.db.get("limit_llm") is None
+
+
 async def test_land_now_is_refused_outside_ready_ci_landing(rig: Rig) -> None:
     rig.gh.add_issue(7, "t")
     rig.engine.sync_issues()
@@ -243,6 +291,27 @@ async def test_land_now_is_refused_outside_ready_ci_landing(rig: Rig) -> None:
             rig.db.set_state(7, state)
             assert (await client.post("/v1/tickets/7/land-now", headers=AUTH)).status == 200, state
         assert (await client.post("/v1/tickets/99/land-now", headers=AUTH)).status == 404
+    finally:
+        await client.close()
+
+
+async def test_skip_features_action(rig: Rig) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    client, _ = await api(rig)
+    try:
+        for state in ("queued", "exploring", "developing", "review", "needs-input", "failed", "landed", "cancelled"):
+            rig.db.set_state(7, state)
+            assert (await client.post("/v1/tickets/7/skip-features", headers=AUTH)).status == 409, state
+        assert rig.db.get("skip_features:7") is None
+        for state in ("ready", "ci", "landing"):
+            rig.db.set_state(7, state)
+            assert (await client.post("/v1/tickets/7/skip-features", headers=AUTH)).status == 200, state
+        assert rig.db.get("skip_features:7") == "1"
+        assert rig.db.get("land_now:7") is None, "lighter than land-now: CI still runs"
+        assert (await client.post("/v1/tickets/99/skip-features", headers=AUTH)).status == 404
+        await client.post("/v1/tickets/7/cancel", headers=AUTH)
+        assert rig.db.get("skip_features:7") is None
     finally:
         await client.close()
 
@@ -958,21 +1027,17 @@ def test_ready_ticket_reads_waiting_for_the_next_batch_with_the_countdown(rig: R
     assert d.snapshot()["landing"]["next_batch_in_s"] == 0  # type: ignore[index]
 
 
-def test_ready_activity_names_the_feature_gate(rig: Rig) -> None:
+def test_ready_activity_has_no_gate_wait(rig: Rig) -> None:
     rig.gh.add_issue(1, "t1", f"{GOOD_BODY}\n## Pipeline\ngherkin: autoMovingTiff16, uiX\n")
     ready_tickets(rig, 2)
     rig.engine.sync_issues()
     rig.engine._to_state(1, "ready")  # pyright: ignore[reportPrivateUsage]
     d = landing_daemon(rig)
     bid = rig.db.batch_create("0" * 40)
-    rig.db.batch_update(bid, state="ci")  # a batch is in CI, but #1 is owed its feature run first
-    assert activity_of(d, 1) == "ready · proving Gherkin features (autoMovingTiff16, uiX)"
-    assert activity_of(d, 2) == f"ready · waiting for the next batch (batch {bid} is ci)", "no features: nothing to prove"
-    rig.db.put("gherkin_err:1", json.dumps({"sha": "abc", "error": "gh: Bad Gateway (HTTP 502)", "count": 2}))
-    assert activity_of(d, 1) == ("ready · proving Gherkin features (autoMovingTiff16, uiX) · "
-                                 "last poll failed: gh: Bad Gateway (HTTP 502)")
-    rig.db.put("gherkin_ok:1", "abc")
-    assert activity_of(d, 1) == f"ready · waiting for the next batch (batch {bid} is ci)", "proven: it waits on the train"
+    rig.db.batch_update(bid, state="ci")
+    for n in (1, 2):  # features no longer hold a ticket out of a batch: both just wait for the next one
+        assert activity_of(d, n) == f"ready · waiting for the next batch (batch {bid} is ci)"
+        assert "proving" not in activity_of(d, n)
 
 
 def test_snapshot_remembers_the_last_abandoned_batch_for_an_hour(rig: Rig) -> None:
@@ -1019,7 +1084,7 @@ async def test_restart_finishes_an_escalation_it_cut_short(rig: Rig) -> None:
 async def test_hung_heavy_job_raises_an_alert(rig: Rig) -> None:
     from starpipe.checks import ledger
 
-    def hung_runner(worktree: Path, base: str) -> list[ledger.Result]:
+    def hung_runner(worktree: Path, base: str, tiers: set[str] | None = None, /) -> list[ledger.Result]:
         return [ledger.Result("test:daemon", "hung", "abc", 1.0,
                               detail="hung: `swift test --package-path daemon` made no progress for 900s and was killed")]
 
@@ -1270,3 +1335,40 @@ def test_train_info_lists_every_active_batch(rig: Rig) -> None:
         assert [line.split(":")[0] for line in lines] == [f"batch {first}", f"batch {second}"]
     assert activity_of(d, 3) == f"ready · waiting for the next batch (batch {first} is ci, batch {second} is building)"
     assert activity_of(d, 2) == f"ready · in batch {second} (building)"
+
+
+async def test_asking_batch_in_needs_you(rig: Rig) -> None:
+    for n in (7, 8):
+        rig.gh.add_issue(n, f"ticket {n}")
+    rig.engine.sync_issues()
+    rig.gh.add_issue(9, "another")
+    rig.engine.sync_issues()
+    bid = rig.db.batch_create("0" * 40)
+    for position, n in enumerate((7, 8)):
+        rig.db.batch_add(bid, n, position)
+        rig.db.set_state(n, "ci")
+    rig.db.set_state(9, "ci")
+    rig.db.batch_update(bid, state="ci", pr_number=5, head_sha="a" * 40)
+    qid = rig.db.add_question(7, "batch-ci", "Batch #1 is red on pr-gate/linux: fix it or bypass?",
+                              {"why": "boom", "options": ["fix", "bypass"], "recommendation": "fix"})
+    rig.db.batch_update(bid, state="asking", question=qid)
+    client, _ = await api(rig)
+    try:
+        data = await (await client.get("/v1/snapshot", headers=AUTH)).json()
+        shown = {t["number"]: t for t in data["tickets"]}
+        for n in (7, 8):
+            assert shown[n]["group"] == "needs_you" and shown[n]["activity"].startswith("needs you · batch #1 CI red · asked ")
+            assert shown[n]["question"].startswith("Batch #1 is red")
+        assert shown[9]["group"] == "waiting", "a ticket outside the batch is not asked"
+        assert [(b["number"], b["phase"]) for b in data["landing"]["batches"]] == [(1, "asking")]
+        view = await (await client.get("/v1/tickets/8", headers=AUTH)).json()
+        assert view["question"] == {"text": "Batch #1 is red on pr-gate/linux: fix it or bypass?", "why": "boom",
+                                    "options": ["fix", "bypass"], "recommendation": "fix"}
+        r = await client.post("/v1/tickets/8/answer", json={"text": "bypass"}, headers=AUTH)  # answered through a non-anchor member
+        assert r.status == 200 and rig.db.batch_question(bid)["answer"] == "bypass"  # type: ignore[index]
+        assert rig.state(7) == "ci" and rig.state(8) == "ci", "answering moves the batch, not its tickets"
+        assert (await client.post("/v1/tickets/8/answer", json={"text": "again"}, headers=AUTH)).status == 409
+        again = {t["number"]: t for t in (await (await client.get("/v1/snapshot", headers=AUTH)).json())["tickets"]}
+        assert again[7]["group"] == "waiting"
+    finally:
+        await client.close()

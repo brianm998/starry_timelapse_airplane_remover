@@ -533,8 +533,23 @@ jobs:
   build-macos:
     name: build star, stard and the validators (macos-15)
     runs-on: macos-15
-    needs: [features, opencv-macos]
-    if: (needs.features.outputs.cli != '[]' || needs.features.outputs.macgui != '[]' || needs.features.outputs.desktop != '[]') && inputs.windows != 'only'
+    # The Linux legs that run the same work come first: macOS runners are scarce (jobs have gone unacquired, see #388), and a red Linux job
+    # already fails the PR, so in smoke mode (what a PR runs) a failed Linux job keeps every macOS leg out of the queue (cli-macos, mac-gui and
+    # desktop-macos need this job). A Linux job that is skipped (no features for that client, windows: only) is not a failure.
+    # `!cancelled()` stops a skipped Linux job from skipping this one with it, so the results of what this job really needs are checked
+    # by hand. The full matrix (nightly, `smoke` false) waits for the Linux legs too, but runs the macOS legs whatever they did: its
+    # point is a complete picture per platform.
+    needs: [features, opencv-macos, generate-check, cli-linux, desktop-linux]
+    if: >-
+      ${{ !cancelled()
+      && needs.features.result == 'success'
+      && needs.opencv-macos.result == 'success'
+      && (needs.features.outputs.cli != '[]' || needs.features.outputs.macgui != '[]' || needs.features.outputs.desktop != '[]')
+      && inputs.windows != 'only'
+      && (!inputs.smoke || (
+        contains(fromJSON('["success","skipped"]'), needs.generate-check.result)
+        && contains(fromJSON('["success","skipped"]'), needs.cli-linux.result)
+        && contains(fromJSON('["success","skipped"]'), needs.desktop-linux.result))) }}
     timeout-minutes: 60
     env:
       NEED_VALIDATOR: ${{ contains(needs.features.outputs.cli, '"validator":true') || contains(needs.features.outputs.macgui, '"validator":true') || contains(needs.features.outputs.desktop, '"validator":true') }}
@@ -1106,10 +1121,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Read-only: kotlin-client.yml's build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per shard job filled it).
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-read-only: true
           cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
@@ -1119,7 +1135,8 @@ jobs:
       # 8-13 minutes, so cut an attempt off at 25 and try once more; the retry kills any stard left behind.
       # Root cause (ticket #54): gherkin/hang-watchdog.sh runs beside the features and, after 6 minutes of a silent stard.log (before the
       # 10 minute ProgressStall and the 25 minute cut), prints ps, stard's thread stacks and a jstack of the test JVM into this step's log.
-      # Read that dump in the next hung run; it is what the fix is built from.
+      # Read that dump in the next hung run; it is what the fix is built from. It is also in the reports artifact
+      # (star-desktop/build/gherkin-each/hang-watchdog.log), which survives a cancelled job.
       - name: Run the Gherkin features in the Compose UI
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
@@ -1362,17 +1379,22 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Read-only: kotlin-client.yml's build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per shard job filled it).
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-read-only: true
           cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the
       # "not a vacuous green" check to each one's XML: exactly one test, it ran, was not skipped, and nothing failed.
+      # Ticket #53: autoMovingTiff16 hung here silently after `frame 4 findFeatures input`. STAR_HANG_WATCHDOG_SECONDS makes
+      # gherkin/hang-watchdog.sh dump stard's threads (powershell, no gdb on Windows) and a jstack of the test JVM at 6 and 9 minutes of
+      # a silent stard.log, before the 10 minute ProgressStall; the dump is also in the reports artifact (gherkin-each/hang-watchdog.log).
       - name: Run the Gherkin features in the Compose UI
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
+          STAR_HANG_WATCHDOG_SECONDS: '360'
         # cygpath -m: the JVM wants C:/... , not Git Bash's /d/a/...
         run: gherkin/run-desktop-features.sh "$(cygpath -m "$GITHUB_WORKSPACE/daemon/.build/release/stard.exe")" ${{ matrix.shard.features }}
 
@@ -1493,10 +1515,11 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Read-only: kotlin-client.yml's build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per shard job filled it).
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
+          cache-read-only: true
           cache-cleanup: on-success
 
       # gherkin/run-desktop-features.sh runs each feature in a Gradle run of its own (the runner allows one per JVM) and applies the

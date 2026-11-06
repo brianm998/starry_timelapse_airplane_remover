@@ -1266,5 +1266,6 @@
   "ui.frame_mode_desc_dirty_sky": "Ponechává jen to, co se pohnulo na obloze tohoto snímku (originál mínus zarovnaná reference); země je černá. V tomto snímku není co kontrolovat.",
   "ui.frame_mode_desc_dirty_earth": "Ponechává jen to, co se pohnulo na zemi tohoto snímku (originál mínus zarovnaná reference); obloha je černá. V tomto snímku není co kontrolovat.",
   "ui.this_frame_uses_dirty_sky": "Tento snímek používá režim nevyčištěné oblohy",
-  "ui.this_frame_uses_dirty_earth": "Tento snímek používá režim nevyčištěné země"
+  "ui.this_frame_uses_dirty_earth": "Tento snímek používá režim nevyčištěné země",
+  "ui.change": "Změnit"
 }

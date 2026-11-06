@@ -1,0 +1,1 @@
+ALTER TABLE batches ADD COLUMN question INTEGER;

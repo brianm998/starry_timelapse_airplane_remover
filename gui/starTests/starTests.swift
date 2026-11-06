@@ -2279,6 +2279,8 @@ final class UserPreferencesStoreTests: XCTestCase {
 
     /// The App Sandbox denies writes to `/tmp` and moves `$HOME` into the container, so no source builds either path by hand: the
     /// home directory comes from `NSHomeDirectory()` (which follows the sandbox) and scratch files go in the temporary directory.
+    /// The one exception is `UserPreferences.path`, which reads `$HOME` only when the process is not sandboxed: `NSHomeDirectory()` ignores a
+    /// `$HOME` override, and the UI-test runner launches the app with one to keep it off the real preferences.
     func testNoHandBuiltTmpOrHomePathsInSources() throws {
         let sources = Self.guiDir.deletingLastPathComponent().appendingPathComponent("StarCore/Sources")
         var urls = try swiftSources().map { Self.guiDir.appendingPathComponent("star/\($0.name)") }
@@ -2290,7 +2292,7 @@ final class UserPreferencesStoreTests: XCTestCase {
 
         let handBuilt = try NSRegularExpression(pattern: #""/tmp|environment\["HOME"\]|env\["HOME"\]"#)
         var found: [String] = []
-        for url in urls {
+        for url in urls where url.lastPathComponent != "UserPreferences.swift" {
             let text = NoHardCodedStringsTests.withoutComments(try String(contentsOf: url, encoding: .utf8))
             let n = handBuilt.numberOfMatches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
             if n > 0 { found.append("\(url.lastPathComponent) ×\(n)") }
@@ -3140,6 +3142,21 @@ final class UserPreferencesMergeTests: XCTestCase {
         try obj(String(contentsOfFile: path, encoding: .utf8))
     }
 
+    func testThePathFollowsTheHomeEnvironmentWhenNotSandboxed() {
+        XCTAssertEqual(
+            UserPreferences.path(environment: ["HOME": "/scratch/home"], sandboxed: false, nsHomeDirectory: "/Users/real"),
+            "/scratch/home/.star.userprefs.json")
+        XCTAssertEqual(
+            UserPreferences.path(environment: ["HOME": "/scratch/home"], sandboxed: true, nsHomeDirectory: "/container"),
+            "/container/.star.userprefs.json")
+        XCTAssertEqual(
+            UserPreferences.path(environment: [:], sandboxed: false, nsHomeDirectory: "/Users/real"),
+            "/Users/real/.star.userprefs.json")
+        XCTAssertEqual(
+            UserPreferences.path(environment: ["HOME": ""], sandboxed: false, nsHomeDirectory: "/Users/real"),
+            "/Users/real/.star.userprefs.json")
+    }
+
     func testAKeyOnlyTheOtherClientKnowsSurvivesASave() throws {
         try #"{"recentlyOpenedSequencelist":{},"outlierTableColumns":["rank","area"]}"#
             .write(toFile: path, atomically: true, encoding: .utf8)
@@ -3743,6 +3760,51 @@ final class CommandTableTests: XCTestCase {
         XCTAssertEqual(wrong, [], "commands in the wrong menu")
     }
 
+    /// The keys `StarCommands.swift` gives its menu items, spelled as `gherkin/ui/commands.json` spells them (`r`, `cmd+shift+,`).
+    private func commandShortcuts(_ text: String) throws -> [String] {
+        let pattern = try NSRegularExpression(pattern: #"\.keyboardShortcut\("(.)", modifiers: \[([^\]]*)\]\)"#)
+        return pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { m in
+            guard let k = Range(m.range(at: 1), in: text), let mods = Range(m.range(at: 2), in: text) else { return nil }
+            let names = text[mods].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+            let prefix = names.map { [".command": "cmd+", ".shift": "shift+", ".option": "option+"][$0] ?? "?\($0)+" }.joined()
+            return prefix + text[k]
+        }
+    }
+
+    /// The shortcuts of the commands and of the tools are the table's vectors: the desktop client's test holds its menu to the same file.
+    func testTheShortcutsAreTheVectors() throws {
+        let url = Self.repoRoot.appendingPathComponent("gherkin/ui/commands.json")
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+        let commands = try XCTUnwrap(object["commands"] as? [[String: String]])
+        let tools = try XCTUnwrap(object["toolShortcuts"] as? [[String: String]])
+        let commandsText = try guiFile("StarCommands.swift")
+
+        // Each tool item is `ChangeToolButton(tool: .x)` followed by its number key.
+        let toolPattern = try NSRegularExpression(pattern: #"ChangeToolButton\(tool: \.(\w+)\)\s*\.environment\(viewModel\)\s*\.keyboardShortcut\("(\d)", modifiers: \[\]\)"#)
+        let guiTools = toolPattern.matches(in: commandsText, range: NSRange(commandsText.startIndex..., in: commandsText)).compactMap { m -> [String: String]? in
+            guard let t = Range(m.range(at: 1), in: commandsText), let k = Range(m.range(at: 2), in: commandsText) else { return nil }
+            return ["tool": String(commandsText[t]), "shortcut": String(commandsText[k])]
+        }
+        XCTAssertEqual(guiTools, tools, "the Tools menu's first eight items, in order, with their number keys")
+
+        // The window items' keys are Option plus the letter given to `item(...)`.
+        let windowsText = try guiFile("SecondaryWindows.swift")
+        let windowPattern = try NSRegularExpression(pattern: #"item\(\.\w+, label: localized\("[^"]+"\), shortcut: "(.)"\)"#)
+        let windowKeys = windowPattern.matches(in: windowsText, range: NSRange(windowsText.startIndex..., in: windowsText)).compactMap { m in
+            Range(m.range(at: 1), in: windowsText).map { "option+" + windowsText[$0] }
+        }
+        XCTAssertEqual(windowKeys.count, 4)
+        XCTAssertTrue(try guiFile("StarCommands.swift").contains("keyboardShortcut"), "the menu source moved")
+        // Play / Pause's space is on the transport button, not in the menu.
+        XCTAssertTrue(try guiFile("VideoPlaybackButtons.swift").contains(#"shortcutKey: " ""#), "the space shortcut moved")
+
+        let tableKeys = Set(commands.compactMap { $0["shortcut"] }).subtracting(["space"])
+        let guiKeys = Set(try commandShortcuts(commandsText)).union(windowKeys)
+        // Preferences (cmd+,) is the app menu's, not one of the table's commands.
+        let toolKeys = Set(tools.compactMap { $0["shortcut"] })
+        XCTAssertEqual(guiKeys.subtracting(["cmd+,"]).subtracting(toolKeys), tableKeys, "the keys the gui's menu has, and the table's")
+    }
+
     func testTheTableIsNotEmpty() throws {
         XCTAssertGreaterThan(try table().commands.count, 20)
     }
@@ -4026,6 +4088,47 @@ final class SharedConstantsTests: XCTestCase {
                        "a value that round-tripped through the config still names its preset")
         XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(3.0), "3")
         XCTAssertEqual(KeypointDivisorStartupView.summaryLabel(1.25), "1.25")
+    }
+
+    /// A1: the row's button says Change; the sheet's own confirm button is the one that says Update.
+    func testKeypointDivisorRowButtonSaysChange() {
+        StarLocalization.shared.languageOverride = "en"
+        defer { StarLocalization.shared.languageOverride = nil }
+        XCTAssertEqual(KeypointDivisorSummaryRow.buttonTitle, "Change")
+        XCTAssertEqual(localized("ui.update"), "Update", "ui.update keeps its value: the settings sheet uses it too")
+    }
+
+    /// A3: the Speed vs. Sharpness sheet is all white text, so what it is drawn on must not be near-white.
+    @MainActor
+    func testSpeedSheetBackgroundIsNotWhite() throws {
+        let view = KeypointDivisorStartupView(initial: 1.5, onCancel: {}, onUpdate: { _ in })
+        // The field's `.cursor()` modifier reads the app's ViewModel from the environment.
+        let renderer = ImageRenderer(content: view.environment(ViewModel()).frame(width: 700, height: 600, alignment: .topLeading))
+        renderer.scale = 1
+        let cg = try XCTUnwrap(renderer.cgImage, "the sheet did not render")
+        let rep = NSBitmapImageRep(cgImage: cg)
+        // The sheet sits at the top left; its first 24pt of padding hold no text or control.
+        for (x, y) in [(4, 4), (4, 20), (20, 4)] {
+            let c = try XCTUnwrap(rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
+            let luminance = 0.2126 * c.redComponent + 0.7152 * c.greenComponent + 0.0722 * c.blueComponent
+            XCTAssertGreaterThan(c.alphaComponent, 0.99, "nothing is drawn at (\(x), \(y)): the sheet would show the system's light background")
+            XCTAssertLessThan(luminance, 0.75, "background at (\(x), \(y)) is near-white: \(c)")
+        }
+    }
+
+    /// A4: the new key is translated in every language, not left as English.
+    func testChangeKeyTranslatedEverywhere() throws {
+        defer { StarLocalization.shared.languageOverride = nil }
+        StarLocalization.shared.languageOverride = "en"
+        XCTAssertEqual(localized("ui.change"), "Change")
+        let others = ["ar", "bn", "cs", "de", "es", "fr", "hi", "id", "it", "ja", "ko", "nl", "pl",
+                      "pt-BR", "ru", "th", "tr", "uk", "ur", "vi", "zh-Hans"]
+        for code in others {
+            StarLocalization.shared.languageOverride = code
+            let text = localized("ui.change")
+            XCTAssertNotEqual(text, "ui.change", "\(code) is missing ui.change")
+            XCTAssertNotEqual(text, "Change", "\(code) has English for ui.change")
+        }
     }
 
     /// A5: Cancel keeps the value the sheet opened with; Update keeps the draft, a typed custom value included.
