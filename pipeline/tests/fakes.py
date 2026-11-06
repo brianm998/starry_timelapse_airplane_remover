@@ -105,6 +105,8 @@ class FakeGitHub(GitHub):
         self.dispatches: list[tuple[str, str, dict[str, str]]] = []
         self.feature_attempts: list[FeatureJobs] = [[("cli (macos-15) · a", "success")]]
         self.feature_pending_polls = 0
+        self.macos_attempts: list[FeatureJobs] = [[("macOS build + tests (macos-15)", "success")]]  # per rerun attempt, as feature_attempts
+        self.macos_pending_polls = 0
         self.feature_runs: dict[int, dict[str, Any]] = {}
         self._feature_ids = itertools.count(5000)  # dispatches come from worker threads: a counter, not len()
 
@@ -208,21 +210,27 @@ class FakeGitHub(GitHub):
     def dispatch_workflow(self, file: str, ref: str, inputs: dict[str, str]) -> None:
         self.dispatches.append((file, ref, inputs))
         run_id = next(self._feature_ids)
-        self.feature_runs[run_id] = {"id": run_id, "branch": ref, "sha": self._head(ref), "attempt": 1,
-                                     "title": f"Gherkin: {inputs.get('features') or 'full'}", "polls": self.feature_pending_polls}
+        macos = file == "macos-gate.yml"
+        self.feature_runs[run_id] = {"id": run_id, "branch": ref, "sha": self._head(ref), "attempt": 1, "file": file,
+                                     "title": inputs["title"] if macos else f"Gherkin: {inputs.get('features') or 'full'}",
+                                     "polls": self.macos_pending_polls if macos else self.feature_pending_polls}
 
     def _feature_run(self, r: dict[str, Any]) -> dict[str, Any]:
-        jobs: FeatureJobs = self.feature_attempts[min(int(r["attempt"]), len(self.feature_attempts)) - 1]
+        macos = r.get("file") == "macos-gate.yml"
+        attempts = self.macos_attempts if macos else self.feature_attempts
+        jobs: FeatureJobs = attempts[min(int(r["attempt"]), len(attempts)) - 1]
         done = r["polls"] <= 0
         self.run_jobs_by_id[r["id"]] = [{"name": j, "status": "completed" if done else "in_progress",
-                                         "conclusion": c if done else None, "completed_at": None} for j, c in jobs]
+                                         "conclusion": c if done else None, "completed_at": None,
+                                         **({"steps": []} if c == "cancelled" else {})}  # cancelled with no step run: no runner took it
+                                        for j, c in jobs]
         ok = bool(jobs) and {c for _, c in jobs} == {"success"}
-        return {"id": r["id"], "name": "Gherkin", "event": "workflow_dispatch", "display_title": r["title"], "head_sha": r["sha"],
+        return {"id": r["id"], "name": "macOS gate" if macos else "Gherkin", "event": "workflow_dispatch", "display_title": r["title"], "head_sha": r["sha"],
                 "status": "completed" if done else "in_progress", "conclusion": ("success" if ok else "failure") if done else None,
                 "run_attempt": r["attempt"], "updated_at": str(r["attempt"])}
 
     def workflow_file_runs(self, file: str, branch: str, per_page: int = 50) -> list[dict[str, Any]]:
-        mine = [r for r in self.feature_runs.values() if r["branch"] == branch]
+        mine = [r for r in self.feature_runs.values() if r["branch"] == branch and r.get("file", file) == file]
         out = [self._feature_run(r) for r in reversed(mine)]  # newest first
         for r in mine:
             r["polls"] -= 1

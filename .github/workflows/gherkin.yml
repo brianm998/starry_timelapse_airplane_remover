@@ -89,6 +89,10 @@ on:
         description: "Which legs run: 'run' (all, the default; also when empty, as under workflow_dispatch), 'skip' (no Windows legs), 'only' (no Linux legs: the Windows legs and, unless `macos` says otherwise, the macOS ones, with what they need)"
         type: string
         default: run
+      linux:
+        description: "Which Linux legs run: 'run' (all, the default; also when empty, as under workflow_dispatch), 'skip' (none: macos-gate.yml, the landing train's macOS-only check)"
+        type: string
+        default: run
       macos:
         description: "Which macOS legs run: 'run' (all, the default; also when empty, as under workflow_dispatch), 'skip' (none), 'gui' (only what needs macOS: build-macos and mac-gui, not cli-macos or desktop-macos, which Linux covers)"
         type: string
@@ -184,7 +188,7 @@ jobs:
   # iMac's) and this gem produce byte-identical output.
   generate-check:
     name: generated files are current
-    if: inputs.windows != 'only'
+    if: inputs.windows != 'only' && inputs.linux != 'skip'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -218,7 +222,7 @@ jobs:
     name: cli (ubuntu-24.04) · ${{ matrix.shard.label }}
     runs-on: ubuntu-24.04
     needs: [features, ffmpeg-linux, opencv-linux]
-    if: needs.features.outputs.cli != '[]' && inputs.windows != 'only'
+    if: needs.features.outputs.cli != '[]' && inputs.windows != 'only' && inputs.linux != 'skip'
     strategy:
       fail-fast: false
       matrix:
@@ -754,7 +758,7 @@ jobs:
   # ffmpeg-gpu.yml once per OS, so a leg waits for the ffmpeg of its own OS only.  One call for all three made every job wait for
   # the slowest build, and when the macOS or Windows cache was cold (20+ minutes) the Linux jobs sat behind it.
   ffmpeg-linux:
-    if: inputs.windows != 'only'
+    if: inputs.windows != 'only' && inputs.linux != 'skip'
     uses: ./.github/workflows/ffmpeg-gpu.yml
     with:
       platforms: linux
@@ -774,7 +778,7 @@ jobs:
   # opencv.yml once per OS (cache, then the opencv-prebuilt release, then a build), so a leg waits for the OpenCV of its own OS only.
   opencv-linux:
     name: OpenCV (linux)
-    if: inputs.windows != 'only'
+    if: inputs.windows != 'only' && inputs.linux != 'skip'
     permissions:
       contents: write
     uses: ./.github/workflows/opencv.yml
@@ -1007,7 +1011,7 @@ jobs:
     name: desktop (ubuntu-24.04) · ${{ matrix.shard.label }}
     runs-on: ubuntu-24.04
     needs: [features, ffmpeg-linux, opencv-linux]
-    if: needs.features.outputs.desktop != '[]' && inputs.windows != 'only'
+    if: needs.features.outputs.desktop != '[]' && inputs.windows != 'only' && inputs.linux != 'skip'
     strategy:
       fail-fast: false
       matrix:

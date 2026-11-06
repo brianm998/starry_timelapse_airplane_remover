@@ -23,8 +23,10 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import subprocess
 import threading
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -44,6 +46,19 @@ ABANDONED_MEMORY_S = 3600.0  # how long the snapshot and status remember the las
 MAX_NOTED = 5  # files named in an abandon note
 BATCH_STAGE = "batch-ci"  # the stage name of a batch's question to the owner
 LOG_EXCERPT = 1500  # characters of the failing log in the question
+MACOS_PATHS = ".github/scripts/macos-paths.sh"  # the one list of macOS-specific paths (#389); read from the batch's own worktree
+MACOS_GATE_TITLE = "macOS gate"  # the display_title of the dispatched macos-gate.yml run (its `title` input)
+
+
+def macos_relevant(wt: Path, files: list[str]) -> bool:
+    """Does a change to `files` touch anything macOS-specific? Asked of .github/scripts/macos-paths.sh in the worktree, the list PRs
+    use too. A worktree without the script, or one that fails, cannot say: then yes."""
+    script = wt / MACOS_PATHS
+    if not script.exists() or not files:
+        return True
+    stdin = "".join(f"{f}\n" for f in files)  # the script's `read` drops a last line that has no newline
+    done = subprocess.run(["bash", str(script)], input=stdin, capture_output=True, text=True, cwd=wt, check=False)
+    return done.returncode != 0 or done.stdout.strip().splitlines()[-1:] != ["false"]
 
 
 def parse_answer(text: str) -> tuple[str, bool, bool]:
@@ -472,6 +487,92 @@ class Train:
             return ("pass", verdict)
         return ("fail" if verdict.kind == "fail" else "pending", verdict)
 
+    def _macos_needed(self, bid: int, head: str, members: list[int]) -> bool:
+        """Does the batch owe the macOS gate? Not when a member is land-now or skip-features, nor when no file it changes against develop
+        is macOS-specific (macos_relevant). Worker thread."""
+        eng = self.eng
+        if any(ship.land_now(eng, n) or ship.skip_features(eng, n) for n in members):
+            return False
+        wt = batch_worktree(eng.repo, bid)
+        try:
+            mb = gitutil.git(wt, "merge-base", f"origin/{eng.config.base_branch}", head).strip()
+            files = [p for p in gitutil.git(wt, "diff", "--name-only", "--no-renames", f"{mb}..{head}").splitlines() if p]
+        except RuntimeError:
+            return True
+        return macos_relevant(wt, files)
+
+    async def _macos_step(self, bid: int, head: str, members: list[int]) -> tuple[str, ci.Verdict | None]:
+        """One look at the batch's macOS gate run, dispatching it first when this head has none: macos-gate.yml on the batch branch, once
+        per head. ('pass'|'pending'|'fail'|'abandon', verdict). kv `macos_run:batch<id>` (sha, title, time), `macos_reran:`, `macos_ok:`
+        (the head it passed on), `macos_note:` (the note for the PR when it passed without a runner), `macos_need:` (sha, bool).
+
+        Red goes to the normal red handling. Jobs that never got a runner are rerun once; still without one after `macos_gate_wait_s`,
+        the batch lands with a note, or waits (and dispatches the gate again each wait) when `macos_gate_hard` is on."""
+        eng = self.eng
+        key = f"batch{bid}"
+        if eng.db.get(f"macos_ok:{key}") == head:
+            return ("pass", None)
+        need = json.loads(eng.db.get(f"macos_need:{key}") or "null")
+        if not need or need["sha"] != head:
+            need = {"sha": head, "need": await asyncio.to_thread(self._macos_needed, bid, head, members)}
+            eng.db.put(f"macos_need:{key}", json.dumps(need))
+        if not need["need"]:
+            return ("pass", None)
+        rec = json.loads(eng.db.get(f"macos_run:{key}") or "null")
+        try:
+            if not rec or rec["sha"] != head:
+                await asyncio.to_thread(ship.dispatch_macos_gate_on, eng, key, batch_branch(bid), head, MACOS_GATE_TITLE)
+                eng.db.put(f"macos_err:{key}", None)
+                return ("pending", None)
+            reran = {tuple(k) for k in json.loads(eng.db.get(f"macos_reran:{key}") or "[]")}
+            judge = partial(ci.judge_macos_gate, waited_s=eng.clock() - float(rec["at"]), wait_s=eng.config.macos_gate_wait_s,
+                            hard=eng.config.macos_gate_hard)
+            verdict = await asyncio.to_thread(ship.feature_verdict_on, eng, batch_branch(bid), head, rec["title"], float(rec["at"]) - 60,
+                                              reran, ship.MACOS_GATE_FILE, judge)
+        except (GitHubError, RuntimeError) as exc:
+            message = str(exc)
+            eng.db.event("macos-gate-poll-failed", None, batch=bid, error=message[:200])
+            err = json.loads(eng.db.get(f"macos_err:{key}") or "null")
+            count = err["count"] + 1 if err and err["sha"] == head and err["error"] == message else 1
+            eng.db.put(f"macos_err:{key}", json.dumps({"sha": head, "error": message, "count": count}))
+            if count >= ship.GATE_ERROR_LIMIT and not ship._is_transient(message):  # pyright: ignore[reportPrivateUsage]
+                eng.db.put(f"macos_err:{key}", None)
+                return ("abandon", None)
+            return ("pending", None)
+        eng.db.put(f"macos_err:{key}", None)
+        if verdict is None:
+            if eng.clock() - float(rec["at"]) > ship.FEATURE_RUN_WAIT_S:  # dispatched, but no such run ever showed up: dispatch again
+                eng.db.put(f"macos_run:{key}", None)
+            return ("pending", None)
+        if verdict.kind == "rerun":
+            ready = await asyncio.to_thread(ship._rerun, eng, None, [j for j in verdict.rerun if j.run_done])  # pyright: ignore[reportPrivateUsage]
+            reran |= {j.key for j in ready}
+            eng.db.put(f"macos_reran:{key}", json.dumps(sorted(reran)))
+            return ("pending", None)
+        if verdict.warnings:  # macOS jobs without a runner: the run is of no further use, and its queued jobs hold the scarce runners
+            await asyncio.to_thread(self._cancel_runs, [j.run_id for j in verdict.warnings if not j.run_done])
+            names = ", ".join(f"{j.workflow}/{j.job}" for j in verdict.warnings)
+            if verdict.kind == "pending":  # macos_gate_hard: hold, and dispatch the gate again once a whole wait has passed
+                eng.db.event("macos-gate-held", None, batch=bid, sha=head, jobs=names)
+                if eng.clock() - float(rec["at"]) > eng.config.macos_gate_wait_s:
+                    eng.db.put(f"macos_run:{key}", None)
+            else:
+                eng.db.event("macos-gate-no-runner", None, batch=bid, sha=head, jobs=names)
+                eng.db.put(f"macos_note:{key}", f"macOS gate: no macOS runner within {eng.config.macos_gate_wait_s / 3600:g} h "
+                           f"(after one rerun), landed without it: {names}")
+        if verdict.kind == "pass":
+            eng.db.put(f"macos_ok:{key}", head)
+            eng.db.event("macos-gate-proven", None, batch=bid, sha=head)
+            return ("pass", verdict)
+        return ("fail" if verdict.kind == "fail" else "pending", verdict)
+
+    def _cancel_runs(self, run_ids: list[int]) -> None:
+        for run_id in dict.fromkeys(run_ids):
+            try:
+                self.eng.gh.cancel_run(run_id)
+            except GitHubError as exc:  # already finished
+                self.eng.db.event("macos-gate-cancel-refused", None, run=run_id, error=str(exc)[:200])
+
     async def _ci(self, bid: int) -> tuple[str, ci.Verdict | str]:
         """Judge the batch's CI, and its Gherkin feature run beside it, until both pass, one is red, or the batch must be given up on."""
         eng = self.eng
@@ -494,7 +595,7 @@ class Train:
                 if feature_state[0] == "abandon":
                     return ("abandon", f"the Gherkin feature run could not be dispatched or polled {ship.GATE_ERROR_LIMIT} times in a row")
             reran = {tuple(k) for k in json.loads(eng.db.get(f"reran:batch{bid}") or "[]")}
-            keep = (tickets.feature_title(features),) if features else ()
+            keep = (*((tickets.feature_title(features),) if features else ()), MACOS_GATE_TITLE)  # runs the step owns, not the PR judge
             bypassed = self._bypassed(bid)
             try:
                 jobs, verdict = await asyncio.to_thread(ship._judge_jobs, eng, f"batch{bid}", head, reran, keep, bypassed)  # pyright: ignore[reportPrivateUsage]
@@ -521,7 +622,20 @@ class Train:
             elif verdict.kind == "pending" or feature_state[0] != "pass":
                 await eng.sleep(ci.poll_delay(age, eng.config.ci_poll_s))
             else:
+                macos_state = await self._macos_step(bid, head, members)
+                if macos_state[0] == "abandon":
+                    return ("abandon", f"the macOS gate could not be dispatched or polled {ship.GATE_ERROR_LIMIT} times in a row")
+                if macos_state[0] == "fail" and macos_state[1] is not None:
+                    blocking = {j.key for j in macos_state[1].blocking}
+                    if not blocking or not blocking <= bypassed:
+                        return ("red", macos_state[1])
+                    used |= blocking
+                elif macos_state[0] == "pending":
+                    await eng.sleep(ci.poll_delay(age, eng.config.ci_poll_s))
+                    continue
                 notes = ship.pass_notes(eng, verdict, batch=bid)
+                if macos_note := eng.db.get(f"macos_note:batch{bid}"):
+                    notes.append(macos_note)
                 self._save_bypass(bid, used)
                 notes += [f"bypassed by the owner (batch #{bid}): {w}/{j}" for w, j in sorted(used)]
                 return ("pass", "\n".join(f"- {n}" for n in notes))

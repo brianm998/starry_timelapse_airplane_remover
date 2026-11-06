@@ -25,6 +25,20 @@ PASS: Ci = [("pr-gate", "linux", "completed", "success")]
 RED: Ci = [("pr-gate", "linux", "completed", "failure")]
 
 
+REAL_MACOS_RELEVANT = train_mod.macos_relevant
+MAC_JOB = "macOS build + tests (macos-15)"
+
+
+@pytest.fixture(autouse=True)
+def gui_is_macos_specific(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The rig's repos carry no .github/scripts/macos-paths.sh: say what it says for the paths these tests use."""
+
+    def relevant(_wt: Path, files: list[str]) -> bool:
+        return any(f.startswith("gui/") for f in files)
+
+    monkeypatch.setattr(train_mod, "macos_relevant", relevant)
+
+
 @pytest.fixture
 def rig(tmp_path: Path) -> Rig:
     r = Rig(tmp_path)
@@ -768,6 +782,78 @@ async def test_skip_features_on_some_members_runs_only_the_others_features(rig: 
     await train_of(rig).run_until_idle()
     assert [inputs["features"] for _, _, inputs in rig.gh.dispatches] == ["autoHorizonJpeg"]
     assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2
+
+
+async def test_macos_gate_dispatched_once_and_lands(rig: Rig) -> None:
+    ready_ticket(rig, 1, "a.swift", "1\n", folder="gui")
+    ready_ticket(rig, 2, "f2.md", "2\n")
+    rig.gh.macos_pending_polls = 3  # CI is green at once; the gate is not
+    at_merge: list[int] = []
+    real_merge = rig.gh.merge_pr
+
+    def merge_pr(number: int, sha: str) -> None:
+        at_merge.append(max(r["polls"] for r in rig.gh.feature_runs.values()))
+        real_merge(number, sha)
+
+    rig.gh.merge_pr = merge_pr  # type: ignore[method-assign]
+    await train_of(rig).run_until_idle()
+    assert rig.gh.dispatches == [("macos-gate.yml", "pipe/batch-1", {"title": "macOS gate"})], "one run per head, on the batch branch"
+    assert at_merge and at_merge[0] <= 0, f"the batch merged before its macOS gate had finished: {at_merge}"
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2
+    assert rig.gh.cancelled_runs == [], "the batch's CI judge neither counted nor cancelled the gate run"
+    assert any(e["kind"] == "macos-gate-proven" for e in rig.db.events_since())
+
+
+async def test_macos_gate_red_goes_to_on_red(rig: Rig) -> None:
+    ready_ticket(rig, 1, "a.swift", "1\n", folder="gui")
+    ready_ticket(rig, 2, "f2.md", "2\n")
+    rig.gh.macos_attempts = [[(MAC_JOB, "failure")]]
+    t = train_of(rig)
+    await t.step()
+    await t.drain()
+    batch = rig.db.batch(1)
+    assert batch and batch["state"] == "asking", "a red macOS gate holds the batch and asks, as a red CI does"
+    assert rig.state(1) == "ci" and rig.state(2) == "ci" and not any(pr["merged"] for pr in rig.gh.prs.values())
+    question = rig.db.batch_question(1)
+    assert question and MAC_JOB in question["payload"]
+    assert len(rig.gh.reruns) == 1, "a red job is rerun once before it blocks"
+
+
+@pytest.mark.parametrize("hard", [False, True])
+async def test_macos_gate_never_ran_lands_with_note_or_holds(rig: Rig, hard: bool) -> None:
+    ready_ticket(rig, 1, "a.swift", "1\n", folder="gui")
+    rig.engine.config.macos_gate_hard = hard
+    rig.gh.macos_attempts = [[(MAC_JOB, "cancelled")]]  # cancelled with no step run, in both attempts: no runner ever took it
+    t = train_of(rig)
+    if not hard:
+        await t.run_until_idle()
+        assert rig.state(1) == "landed" and len(rig.gh.reruns) == 1, "rerun once, then land"
+        assert any("macOS gate: no macOS runner within 3 h" in pr["body"] and MAC_JOB in pr["body"] for pr in rig.gh.prs.values())
+        assert any(e["kind"] == "macos-gate-no-runner" for e in rig.db.events_since())
+        return
+    with pytest.raises(asyncio.TimeoutError):  # held: it keeps polling (and dispatches the gate again each wait)
+        await asyncio.wait_for(t.run_until_idle(), 1.5)
+    assert rig.state(1) == "ci" and not any(pr["merged"] for pr in rig.gh.prs.values())
+    assert any(e["kind"] == "macos-gate-held" for e in rig.db.events_since())
+    assert len([d for d in rig.gh.dispatches if d[0] == "macos-gate.yml"]) >= 2
+
+
+async def test_macos_gate_skipped_without_macos_paths(rig: Rig) -> None:
+    ready_ticket(rig, 1, "f1.md", "1\n")  # docs only
+    ready_ticket(rig, 2, "b.swift", "2\n", folder="gui")
+    rig.db.put("skip_features:2", "1")  # a macOS path, but the owner skips the heavy proofs
+    await train_of(rig).run_until_idle()
+    assert rig.gh.dispatches == [], "no macOS-specific path (or a skip-features member): no gate run, the batch lands on its CI alone"
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2
+
+
+def test_macos_relevant_asks_the_repos_path_script(tmp_path: Path) -> None:
+    script = Path(__file__).resolve().parents[2] / train_mod.MACOS_PATHS
+    (tmp_path / ".github/scripts").mkdir(parents=True)
+    (tmp_path / train_mod.MACOS_PATHS).write_text(script.read_text())
+    assert REAL_MACOS_RELEVANT(tmp_path, ["StarCore/a.swift", "docs/x.md"]) is False
+    assert REAL_MACOS_RELEVANT(tmp_path, ["StarCore/a.swift", "gui/b.swift"]) is True
+    assert REAL_MACOS_RELEVANT(tmp_path / "elsewhere", ["docs/x.md"]) is True, "no script: cannot tell, so the gate runs"
 
 
 def _land_one(rig: Rig, ci: Ci) -> None:
