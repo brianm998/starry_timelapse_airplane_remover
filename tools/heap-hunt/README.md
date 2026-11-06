@@ -24,7 +24,7 @@ override with `HEAP_HUNT_SCRATCH`). Both take an optional `Class/testName`.
 
 - `replay-cli-asan.sh <input-dir> <first> <last>`: copies a window of a real sequence to the scratch dir and runs the
   release cli over it under ASan (`--moving-camera --no-use-gpu`), so every line of StarCore and StarCpp on the real
-  composite path is instrumented, not just the mask/warp workload. ~25 min for 29 frames of a9-2, plus a ~3 min
+  composite path is instrumented, not just the mask/warp workload. Tens of minutes for 29 frames of a9-2, plus a ~3 min
   build. Needs ~4 GB of scratch for the frames and ~20 GB for the cli's own temp/output siblings; delete
   `.heap-hunt-scratch/` after.
 - `HeapHuntDistanceTransformTests` (opt-in: `STAR_HEAP_HUNT_DT=1`, otherwise skipped): `raiseMaskBy` (the IPP distance
@@ -103,7 +103,7 @@ identifies it. The crash report shows no Metal or GPU-merge frame on any thread.
    on a machine that can (CI, another Mac).
 2. The corruption may predate frame 611 by many frames (the nano zone is only checked when something walks into it).
    Frames are 145 MB, so a window from frame 1 does not fit on this disk; use a downscaled copy of the sequence
-   (>= 2000 px wide, see the cli-behaviour notes) and a longer window.
+   (not below ~2000 px wide: smaller and no neighbour alignment validates) and a longer window.
 3. ASan cannot see writes by OpenCV's own code or IPP. On real data only libgmalloc can, and a whole-cli replay
    under it is hours; try a short window (9-12 frames).
 
