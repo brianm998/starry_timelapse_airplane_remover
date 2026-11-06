@@ -178,10 +178,19 @@ jobs:
   # has its own macos15 key (shared with pr-gate.yml's macos-15 job): its .swiftmodule only imports under the
   # compiler that built it (see gherkin.yml), so it must not restore what the remaining macos-14 jobs
   # (macos-signed-release, kotlin-client.yml macos-signed) saved under the plain key.
+  #
+  # `macos` also needs `linux`, which builds and tests the same code: macOS runners are scarce (jobs have gone unacquired, see #388), and a
+  # red Linux job already fails the PR, so a PR that is red on Linux never joins the macOS queue. A `linux` that is skipped
+  # (`tested`: already passed before the merge) does not hold `macos` back: it still runs once per landing.
   macos:
     name: macOS (macos-15)
-    needs: [changes, opencv-macos]
-    if: needs.changes.outputs.macos == 'true'
+    needs: [changes, opencv-macos, linux]
+    # `!cancelled()` stops a skipped `linux` (already tested on a push to develop) from skipping this job with it: a failed `linux` still does.
+    if: >-
+      ${{ !cancelled()
+      && needs.changes.outputs.macos == 'true'
+      && needs.opencv-macos.result == 'success'
+      && contains(fromJSON('["success","skipped"]'), needs.linux.result) }}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
