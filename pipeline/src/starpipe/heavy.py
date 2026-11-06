@@ -28,6 +28,7 @@ import math
 import os
 import signal
 import subprocess
+import tempfile
 import threading
 import time
 from collections.abc import Callable, Generator
@@ -242,9 +243,16 @@ def _holder_file(pid: int) -> Path:
 def _write_holder(pid: int, record: dict[str, Any]) -> None:
     """Atomically, so a reader never sees half a record."""
     path = _holder_file(pid)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(record))
-    os.replace(tmp, path)
+    # A unique temp per call: jobs inside one process share a pid, so a fixed name collides.
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(json.dumps(record))
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp)
+        raise
 
 
 def _effective_class(cfg: Config, kind: str) -> str:
