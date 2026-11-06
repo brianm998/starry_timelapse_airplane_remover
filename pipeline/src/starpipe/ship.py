@@ -7,6 +7,7 @@ GitHub, clock and sleep, so this runs under fakes and a local bare origin.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import re
 from datetime import datetime
@@ -36,6 +37,15 @@ def land_now_mark(db: Database, n: int) -> bool:
 def land_now(eng: Engine, n: int) -> bool:
     """The owner's land-now mark (db kv, set by the monitor): stop waiting for tests and land."""
     return land_now_mark(eng.db, n)
+
+
+def skip_features_mark(db: Database, n: int) -> bool:
+    return bool(db.get(f"skip_features:{n}"))
+
+
+def skip_features(eng: Engine, n: int) -> bool:
+    """The owner's skip-features mark: the ticket's Gherkin features are not run for the batch it lands in (CI still is)."""
+    return skip_features_mark(eng.db, n)
 
 
 def pr_body(eng: Engine, t: Ticket) -> str:
@@ -103,11 +113,15 @@ def _infra(eng: Engine, job: ci.Job) -> bool:
 
 
 def _judge_jobs(eng: Engine, key: int | str, sha: str, reran: set[tuple[str, str]],
-                keep_titles: tuple[str, ...] = ()) -> tuple[list[ci.Job], ci.Verdict]:
-    """Fetch the PR's jobs and judge them; the jobs come back too, for callers that look at more than the verdict. Network calls:
-    runs in a worker thread, never on the event loop."""
+                keep_titles: tuple[str, ...] = (), bypassed: frozenset[tuple[str, str]] = frozenset()) -> tuple[list[ci.Job], ci.Verdict]:
+    """Fetch the PR's jobs and judge them; the jobs come back too (as GitHub reported them), for callers that look at more than the
+    verdict. Network calls: runs in a worker thread, never on the event loop.
+
+    `bypassed` (the owner chose to land past them) are finished red jobs judged as green; a job still running stays as it is,
+    and the gate still has to report."""
     jobs = fetch_jobs(eng, sha, keep_titles)
-    return jobs, ci.judge(jobs, eng.db.baseline, now=eng.clock(),
+    judged = [dataclasses.replace(j, conclusion="success") if j.red and j.key in bypassed else j for j in jobs] if bypassed else jobs
+    return jobs, ci.judge(judged, eng.db.baseline, now=eng.clock(),
                           head_pushed_at=float(eng.db.get(f"pushed_at:{key}") or eng.clock()),
                           settle_s=eng.config.ci_settle_s, blocking_wait_s=eng.config.ci_blocking_wait_s,
                           reran=reran, infra=lambda j: _infra(eng, j))
@@ -149,15 +163,21 @@ def _finish_ci(eng: Engine, cur: Ticket, notes: list[str]) -> None:
     eng._to_state(cur.number, "landing")  # pyright: ignore[reportPrivateUsage]
 
 
+def dispatch_features_on(eng: Engine, key: int | str, branch: str, sha: str, title: str, features: list[str]) -> None:
+    """Dispatch gherkin.yml on `branch` (already on origin) with the features, and remember it under kv gherkin_run:<key>. Worker thread."""
+    eng.gh.dispatch_workflow(gherkin_nightly.WORKFLOW_FILE, branch, {"features": ",".join(features)})
+    eng.db.put(f"gherkin_run:{key}", json.dumps({"sha": sha, "title": title, "at": eng.clock()}))
+    eng.db.put(f"gherkin_reran:{key}", None)
+    eng.db.event("gherkin-dispatched", key if isinstance(key, int) else None, sha=sha, features=features,
+                 **({} if isinstance(key, int) else {"key": key}))
+
+
 def _dispatch_features(eng: Engine, t: Ticket, sha: str, title: str, features: list[str]) -> None:
     """Make the ticket's head exist on origin, then dispatch gherkin.yml there with the features. Worker thread."""
     pushed = push(eng, t)
     if pushed != sha:
         raise RuntimeError(f"the branch head moved from {sha[:10]} to {pushed[:10]} while it was being pushed")
-    eng.gh.dispatch_workflow(gherkin_nightly.WORKFLOW_FILE, t.branch or "", {"features": ",".join(features)})
-    eng.db.put(f"gherkin_run:{t.number}", json.dumps({"sha": sha, "title": title, "at": eng.clock()}))
-    eng.db.put(f"gherkin_reran:{t.number}", None)
-    eng.db.event("gherkin-dispatched", t.number, sha=sha, features=features)
+    dispatch_features_on(eng, t.number, t.branch or "", sha, title, features)
 
 
 def _is_feature_run(run: dict[str, Any], sha: str, title: str, since: float) -> bool:
@@ -173,9 +193,9 @@ def _is_feature_run(run: dict[str, Any], sha: str, title: str, since: float) -> 
             and datetime.fromisoformat(created).timestamp() >= since)
 
 
-def _feature_verdict(eng: Engine, t: Ticket, sha: str, title: str, since: float, reran: set[tuple[str, str]]) -> ci.Verdict | None:
-    """Judge the newest dispatched run for this head and title; None when GitHub does not list one yet. Worker thread."""
-    runs = [r for r in eng.gh.workflow_file_runs(gherkin_nightly.WORKFLOW_FILE, t.branch or "") if _is_feature_run(r, sha, title, since)]
+def feature_verdict_on(eng: Engine, branch: str, sha: str, title: str, since: float, reran: set[tuple[str, str]]) -> ci.Verdict | None:
+    """Judge the newest dispatched run on `branch` for this head and title; None when GitHub does not list one yet. Worker thread."""
+    runs = [r for r in eng.gh.workflow_file_runs(gherkin_nightly.WORKFLOW_FILE, branch) if _is_feature_run(r, sha, title, since)]
     if not runs:
         return None
     run = max(runs, key=lambda r: int(r["id"]))
@@ -183,6 +203,10 @@ def _feature_verdict(eng: Engine, t: Ticket, sha: str, title: str, since: float,
     jobs = ci.parse_jobs([run], {rid: eng.gh.run_jobs(rid, ci.run_version(run))})
     return ci.judge_feature_run(jobs, reran, run_completed=run.get("status") == "completed",
                                 run_conclusion=run.get("conclusion"), run_id=rid)
+
+
+def _feature_verdict(eng: Engine, t: Ticket, sha: str, title: str, since: float, reran: set[tuple[str, str]]) -> ci.Verdict | None:
+    return feature_verdict_on(eng, t.branch or "", sha, title, since, reran)
 
 
 def _is_transient(message: str) -> bool:
@@ -479,6 +503,13 @@ def watch_develop(eng: Engine) -> None:
             if job.workflow.lower() == "gherkin":
                 eng.db.put(pending, None)
                 continue  # the nightly owns Gherkin's tickets
+            since, checked = f"red_since:{job.workflow}/{job.job}", f"red_checked:{job.workflow}/{job.job}"
+            red_now = job.red and (job.conclusion or "failure") not in ci.INFRA_CONCLUSIONS
+            if red_now and eng.db.get(since) is None:
+                eng.db.put(since, str(eng.clock()))  # includes the reds that were there when the pipeline started
+            elif not job.red:
+                eng.db.put(since, None)
+                eng.db.put(checked, None)
             if seeding or before is None:
                 continue  # reds present when the pipeline first started are the known-red ledger, not tickets
             sha = str(run.get("head_sha"))
@@ -493,6 +524,10 @@ def watch_develop(eng: Engine) -> None:
                     eng.db.put(pending, None)
                     if not _new_red(eng, job, sha):
                         eng.db.put(pending, old)  # nowhere to file it yet: the next poll tries again
+                elif _red_long_enough(eng, since, checked) and _new_red(eng, job, sha, red_since=float(eng.db.get(since) or 0)):
+                    # still red from before (a ticket for another failure, or the ledger's red) and no open ticket names it: it
+                    # is filed now, or `_new_red` found one. Ask GitHub again only after another threshold.
+                    eng.db.put(checked, str(eng.clock()))
             elif not job.red:
                 eng.db.put(pending, None)  # green again: that was a flake
             if job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line") == f"{job.workflow}/{job.job}":
@@ -502,12 +537,20 @@ def watch_develop(eng: Engine) -> None:
                 eng.db.event("stop-line-cleared", None, job=job.job)
 
 
+def _red_long_enough(eng: Engine, since: str, checked: str) -> bool:
+    """True when the job has been red for `red_ticket_after_s` and was not looked at (ticketed or found covered) within it."""
+    start, last = eng.db.get(since), eng.db.get(checked)
+    after = eng.config.red_ticket_after_s
+    now = eng.clock()
+    return start is not None and now - float(start) >= after and (last is None or now - float(last) >= after)
+
+
 def _auto_open(eng: Engine) -> int:
     return len([i for i in eng.gh.paged("issues?state=open&labels=pipe:filed-by-pipeline&per_page=100")
                 if any(lab["name"] == "pipeline" for lab in i.get("labels", []))])
 
 
-def _new_red(eng: Engine, job: ci.Job, sha: str) -> bool:
+def _new_red(eng: Engine, job: ci.Job, sha: str, red_since: float | None = None) -> bool:
     """File a ticket for a red develop job. True: dealt with (filed, or an open ticket already covers it). False: could
     not file it now, so the caller keeps `red_pending` and the next poll tries again. Over the auto-ticket cap the red
     becomes a proposal (waits for `starpipe approve`) instead of being dropped."""
@@ -531,8 +574,14 @@ def _new_red(eng: Engine, job: ci.Job, sha: str) -> bool:
             log = eng.gh.failed_log(job.run_id, 4000)
         except GitHubError:
             pass
-        body = (f"## Goal\nMake {name} green on develop again.\n\n## Context\nIt was green and is now red at "
-                f"{sha}. Run {job.run_id}.\n\n```\n{log}\n```\n\n## Acceptance criteria\n- A1: {name} passes on "
+        if red_since is None:
+            happened = f"It was green and is now red at {sha}. Run {job.run_id}."
+        else:
+            when = datetime.fromtimestamp(red_since).strftime("%Y-%m-%d %H:%M")
+            happened = (f"It has been red on develop since {when} (now at {sha}, run {job.run_id}) and no open ticket names it. "
+                        f"That includes a job that was already red when the pipeline started, and a red caused by a different "
+                        f"failure than the one an earlier ticket was filed for.")
+        body = (f"## Goal\nMake {name} green on develop again.\n\n## Context\n{happened}\n\n```\n{log}\n```\n\n## Acceptance criteria\n- A1: {name} passes on "
                 f"develop — check: review: CI run on the fix PR\n\n## Tests\nnone: restores an existing check\n\n## Out of scope\n"
                 f"Unrelated failures.\n")
         if propose:
