@@ -218,6 +218,13 @@ Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<clie
   are unchanged. To check a run for the prompt: `log stream --predicate 'subsystem == "com.apple.TCC"'` must show no `kTCCServiceSystemPolicyAppData`
   request for `com.star`. Don't `ls` the runner's container in an interactive session: that read raises the same prompt. If the app (not the
   runner) ever still prompts, give pipeline builds a stable signing identity instead of `-`.
+  Result on this Mac (2026-11-06, ad-hoc signed, GPU merge off): `log show --predicate 'subsystem == "com.apple.TCC"'` over the runs (all 61 @ui
+  features once, then reruns of the processed-fixture ones, and `starTests` via `run_checks`) holds no `kTCCServiceSystemPolicyAppData` request and
+  no entry naming `com.star` or the runner. The runner wrote its scratch under `/private/tmp` on every run (uiStartupDefaults and the
+  processed-copy features uiDecisionsSurviveClose, uiFindOutliersInline, uiFrameModeChange pass), so the entitlement is honoured and no stable
+  signing identity was needed. This was not reproduced before the change (no baseline capture), so it shows the prompt's source is gone, not that it
+  once fired from there. A runner cannot make the processed fixture itself (`xcrun: error: cannot be used within an App Sandbox`): make it first
+  with `gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10` (CI does) or those features fail.
   `ScratchLocationTests` is not selected by the pipeline's gherkin run; run it with
   `xcodebuild test -project gui/star.xcodeproj -scheme star -only-testing:starUITests/ScratchLocationTests CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=`.
 
