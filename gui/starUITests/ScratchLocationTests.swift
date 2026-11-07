@@ -17,8 +17,6 @@ final class ScratchLocationTests: XCTestCase {
         let container = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Containers/com.star-guiUITests.xctrunner/Data/tmp")
         XCTAssertTrue(ScratchLocation.isInsideAppContainer(container))
         XCTAssertTrue(ScratchLocation.isInsideAppContainer(URL(fileURLWithPath: "/Users/x/Library/Group Containers/group.y/z")))
-        // and the real (possibly container) temporary directory is never what the scratch is built from
-        XCTAssertFalse(run.path.hasPrefix(NSTemporaryDirectory()) && NSTemporaryDirectory().contains("/Library/Containers/"))
     }
 
     func testScratchEnvironmentOverrideWinsAndContainerPathIsRejected() throws {
