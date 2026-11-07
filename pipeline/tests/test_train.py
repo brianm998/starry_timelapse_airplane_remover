@@ -25,18 +25,7 @@ PASS: Ci = [("pr-gate", "linux", "completed", "success")]
 RED: Ci = [("pr-gate", "linux", "completed", "failure")]
 
 
-REAL_MACOS_RELEVANT = train_mod.macos_relevant
 MAC_JOB = "macOS build + tests (macos-15)"
-
-
-@pytest.fixture(autouse=True)
-def gui_is_macos_specific(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The rig's repos carry no .github/scripts/macos-paths.sh: say what it says for the paths these tests use."""
-
-    def relevant(_wt: Path, files: list[str]) -> bool:
-        return any(f.startswith("gui/") for f in files)
-
-    monkeypatch.setattr(train_mod, "macos_relevant", relevant)
 
 
 @pytest.fixture
@@ -785,7 +774,7 @@ async def test_skip_features_on_some_members_runs_only_the_others_features(rig: 
 
 
 async def test_macos_gate_dispatched_once_and_lands(rig: Rig) -> None:
-    ready_ticket(rig, 1, "a.swift", "1\n", folder="gui")
+    ready_ticket(rig, 1, "a.swift", "1\n", folder="StarCore")
     ready_ticket(rig, 2, "f2.md", "2\n")
     rig.gh.macos_pending_polls = 3  # CI is green at once; the gate is not
     at_merge: list[int] = []
@@ -805,7 +794,7 @@ async def test_macos_gate_dispatched_once_and_lands(rig: Rig) -> None:
 
 
 async def test_macos_gate_red_goes_to_on_red(rig: Rig) -> None:
-    ready_ticket(rig, 1, "a.swift", "1\n", folder="gui")
+    ready_ticket(rig, 1, "a.swift", "1\n", folder="StarCore")
     ready_ticket(rig, 2, "f2.md", "2\n")
     rig.gh.macos_attempts = [[(MAC_JOB, "failure")]]
     t = train_of(rig)
@@ -821,7 +810,7 @@ async def test_macos_gate_red_goes_to_on_red(rig: Rig) -> None:
 
 @pytest.mark.parametrize("hard", [False, True])
 async def test_macos_gate_never_ran_lands_with_note_or_holds(rig: Rig, hard: bool) -> None:
-    ready_ticket(rig, 1, "a.swift", "1\n", folder="gui")
+    ready_ticket(rig, 1, "a.swift", "1\n", folder="StarCore")
     rig.engine.config.macos_gate_hard = hard
     rig.gh.macos_attempts = [[(MAC_JOB, "cancelled")]]  # cancelled with no step run, in both attempts: no runner ever took it
     t = train_of(rig)
@@ -840,20 +829,34 @@ async def test_macos_gate_never_ran_lands_with_note_or_holds(rig: Rig, hard: boo
 
 async def test_macos_gate_skipped_without_macos_paths(rig: Rig) -> None:
     ready_ticket(rig, 1, "f1.md", "1\n")  # docs only
-    ready_ticket(rig, 2, "b.swift", "2\n", folder="gui")
-    rig.db.put("skip_features:2", "1")  # a macOS path, but the owner skips the heavy proofs
+    ready_ticket(rig, 2, "b.swift", "2\n", folder="StarCore")
+    rig.db.put("skip_features:2", "1")  # program code, but the owner skips the heavy proofs
     await train_of(rig).run_until_idle()
     assert rig.gh.dispatches == [], "no macOS-specific path (or a skip-features member): no gate run, the batch lands on its CI alone"
     assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2
 
 
-def test_macos_relevant_asks_the_repos_path_script(tmp_path: Path) -> None:
-    script = Path(__file__).resolve().parents[2] / train_mod.MACOS_PATHS
-    (tmp_path / ".github/scripts").mkdir(parents=True)
-    (tmp_path / train_mod.MACOS_PATHS).write_text(script.read_text())
-    assert REAL_MACOS_RELEVANT(tmp_path, ["StarCore/a.swift", "docs/x.md"]) is False
-    assert REAL_MACOS_RELEVANT(tmp_path, ["StarCore/a.swift", "gui/b.swift"]) is True
-    assert REAL_MACOS_RELEVANT(tmp_path / "elsewhere", ["docs/x.md"]) is True, "no script: cannot tell, so the gate runs"
+def test_macos_relevant_is_any_program_file() -> None:
+    assert train_mod.macos_relevant(["StarCore/Sources/a.swift"]), "shared code PRs do not run macOS for: the gate is for exactly that"
+    assert train_mod.macos_relevant(["docs/x.md", "star-desktop/b.kt"])
+    assert train_mod.macos_relevant([".github/workflows/cli.yml"])
+    assert not train_mod.macos_relevant(["docs/x.md", "README.md", "plans/PIPELINE.md", "pipeline/src/starpipe/ci.py", ".claude/settings.json"])
+    assert not train_mod.macos_relevant([])
+
+
+async def test_macos_gate_hard_does_not_pick_up_the_run_it_cancelled(rig: Rig) -> None:
+    ready_ticket(rig, 1, "a.swift", "1\n", folder="StarCore")
+    rig.engine.config.macos_gate_hard = True
+    rig.engine.config.macos_gate_wait_s = 600.0
+    rig.gh.macos_attempts = [[(MAC_JOB, "queued")]]  # no runner ever takes it: stuck past the wait, cancelled, dispatched again
+    rig.gh.dispatch_lag = 2  # and GitHub lists a new run only a poll or two after the dispatch
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(train_of(rig).run_until_idle(), 1.5)
+    gates = [d for d in rig.gh.dispatches if d[0] == "macos-gate.yml"]
+    assert len(gates) >= 2 and rig.gh.cancelled_runs, "the stuck run was cancelled and the gate dispatched again"
+    assert rig.gh.reruns == [], "the cancelled run is not judged (its cancelled jobs would look like infrastructure reds)"
+    batch = rig.db.batch(1)
+    assert batch and batch["state"] != "asking" and rig.state(1) == "ci", "held, not sent to the red handling"
 
 
 def _land_one(rig: Rig, ci: Ci) -> None:

@@ -23,9 +23,9 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import subprocess
 import threading
 from dataclasses import dataclass, field
+from fnmatch import fnmatchcase
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -46,19 +46,17 @@ ABANDONED_MEMORY_S = 3600.0  # how long the snapshot and status remember the las
 MAX_NOTED = 5  # files named in an abandon note
 BATCH_STAGE = "batch-ci"  # the stage name of a batch's question to the owner
 LOG_EXCERPT = 1500  # characters of the failing log in the question
-MACOS_PATHS = ".github/scripts/macos-paths.sh"  # the one list of macOS-specific paths (#389); read from the batch's own worktree
 MACOS_GATE_TITLE = "macOS gate"  # the display_title of the dispatched macos-gate.yml run (its `title` input)
+# Paths that cannot change what the star program builds or does: the list pr-gate.yml's `changes` job uses for "touches the program"
+# (`*` crosses `/` there as it does in fnmatch). NOT .github/scripts/macos-paths.sh: that is the list of what only macOS builds, and a PR
+# runs macOS only for it, so a batch of shared code (StarCore, daemon, star-desktop) is exactly what the gate exists to cover.
+NON_PROGRAM_PATHS = ("pipeline/*", "plans/*", "docs/*", ".claude/*", "*.md", ".github/ISSUE_TEMPLATE/*")
 
 
-def macos_relevant(wt: Path, files: list[str]) -> bool:
-    """Does a change to `files` touch anything macOS-specific? Asked of .github/scripts/macos-paths.sh in the worktree, the list PRs
-    use too. A worktree without the script, or one that fails, cannot say: then yes."""
-    script = wt / MACOS_PATHS
-    if not script.exists() or not files:
-        return True
-    stdin = "".join(f"{f}\n" for f in files)  # the script's `read` drops a last line that has no newline
-    done = subprocess.run(["bash", str(script)], input=stdin, capture_output=True, text=True, cwd=wt, check=False)
-    return done.returncode != 0 or done.stdout.strip().splitlines()[-1:] != ["false"]
+def macos_relevant(files: list[str]) -> bool:
+    """Does the batch owe the macOS gate: does it change any file that is part of the program (anything but docs, plans, the pipeline's
+    own tooling and Markdown)?"""
+    return any(not any(fnmatchcase(f, pattern) for pattern in NON_PROGRAM_PATHS) for f in files)
 
 
 def parse_answer(text: str) -> tuple[str, bool, bool]:
@@ -488,8 +486,8 @@ class Train:
         return ("fail" if verdict.kind == "fail" else "pending", verdict)
 
     def _macos_needed(self, bid: int, head: str, members: list[int]) -> bool:
-        """Does the batch owe the macOS gate? Not when a member is land-now or skip-features, nor when no file it changes against develop
-        is macOS-specific (macos_relevant). Worker thread."""
+        """Does the batch owe the macOS gate? Not when a member is land-now or skip-features, nor when it changes no file of the program
+        (macos_relevant). Worker thread."""
         eng = self.eng
         if any(ship.land_now(eng, n) or ship.skip_features(eng, n) for n in members):
             return False
@@ -499,11 +497,11 @@ class Train:
             files = [p for p in gitutil.git(wt, "diff", "--name-only", "--no-renames", f"{mb}..{head}").splitlines() if p]
         except RuntimeError:
             return True
-        return macos_relevant(wt, files)
+        return macos_relevant(files)
 
     async def _macos_step(self, bid: int, head: str, members: list[int]) -> tuple[str, ci.Verdict | None]:
         """One look at the batch's macOS gate run, dispatching it first when this head has none: macos-gate.yml on the batch branch, once
-        per head. ('pass'|'pending'|'fail'|'abandon', verdict). kv `macos_run:batch<id>` (sha, title, time), `macos_reran:`, `macos_ok:`
+        per head. ('pass'|'pending'|'fail'|'abandon', verdict). kv `macos_run:batch<id>` (sha, title, time), `macos_reran:`, `macos_floor:` (runs at or below this id are ones the step gave up on), `macos_ok:`
         (the head it passed on), `macos_note:` (the note for the PR when it passed without a runner), `macos_need:` (sha, bool).
 
         Red goes to the normal red handling. Jobs that never got a runner are rerun once; still without one after `macos_gate_wait_s`,
@@ -527,8 +525,9 @@ class Train:
             reran = {tuple(k) for k in json.loads(eng.db.get(f"macos_reran:{key}") or "[]")}
             judge = partial(ci.judge_macos_gate, waited_s=eng.clock() - float(rec["at"]), wait_s=eng.config.macos_gate_wait_s,
                             hard=eng.config.macos_gate_hard)
+            floor = int(eng.db.get(f"macos_floor:{key}") or 0)
             verdict = await asyncio.to_thread(ship.feature_verdict_on, eng, batch_branch(bid), head, rec["title"], float(rec["at"]) - 60,
-                                              reran, ship.MACOS_GATE_FILE, judge)
+                                              reran, ship.MACOS_GATE_FILE, judge, floor)
         except (GitHubError, RuntimeError) as exc:
             message = str(exc)
             eng.db.event("macos-gate-poll-failed", None, batch=bid, error=message[:200])
@@ -555,6 +554,9 @@ class Train:
             if verdict.kind == "pending":  # macos_gate_hard: hold, and dispatch the gate again once a whole wait has passed
                 eng.db.event("macos-gate-held", None, batch=bid, sha=head, jobs=names)
                 if eng.clock() - float(rec["at"]) > eng.config.macos_gate_wait_s:
+                    # the old run (cancelled by now, or finished with no runner) has this head and title too: the poll must not pick it
+                    # up again before GitHub lists the new one
+                    eng.db.put(f"macos_floor:{key}", str(max(j.run_id for j in verdict.warnings)))
                     eng.db.put(f"macos_run:{key}", None)
             else:
                 eng.db.event("macos-gate-no-runner", None, batch=bid, sha=head, jobs=names)

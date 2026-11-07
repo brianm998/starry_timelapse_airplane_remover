@@ -107,6 +107,7 @@ class FakeGitHub(GitHub):
         self.feature_pending_polls = 0
         self.macos_attempts: list[FeatureJobs] = [[("macOS build + tests (macos-15)", "success")]]  # per rerun attempt, as feature_attempts
         self.macos_pending_polls = 0
+        self.dispatch_lag = 0  # polls of workflow_file_runs before a freshly dispatched run is listed (GitHub is not instant)
         self.feature_runs: dict[int, dict[str, Any]] = {}
         self._feature_ids = itertools.count(5000)  # dispatches come from worker threads: a counter, not len()
 
@@ -195,6 +196,8 @@ class FakeGitHub(GitHub):
 
     def cancel_run(self, run_id: int) -> None:
         self.cancelled_runs.append(run_id)
+        if run_id in self.feature_runs:
+            self.feature_runs[run_id]["cancelled"] = True
 
     def close_pr(self, number: int, comment: str = "") -> None:
         self.closed_prs.append((number, comment))
@@ -213,27 +216,35 @@ class FakeGitHub(GitHub):
         macos = file == "macos-gate.yml"
         self.feature_runs[run_id] = {"id": run_id, "branch": ref, "sha": self._head(ref), "attempt": 1, "file": file,
                                      "title": inputs["title"] if macos else f"Gherkin: {inputs.get('features') or 'full'}",
-                                     "polls": self.macos_pending_polls if macos else self.feature_pending_polls}
+                                     "polls": self.macos_pending_polls if macos else self.feature_pending_polls,
+                                     "hidden": self.dispatch_lag}
 
     def _feature_run(self, r: dict[str, Any]) -> dict[str, Any]:
         macos = r.get("file") == "macos-gate.yml"
         attempts = self.macos_attempts if macos else self.feature_attempts
         jobs: FeatureJobs = attempts[min(int(r["attempt"]), len(attempts)) - 1]
-        done = r["polls"] <= 0
-        self.run_jobs_by_id[r["id"]] = [{"name": j, "status": "completed" if done else "in_progress",
-                                         "conclusion": c if done else None, "completed_at": None,
-                                         **({"steps": []} if c == "cancelled" else {})}  # cancelled with no step run: no runner took it
-                                        for j, c in jobs]
+        cancelled = bool(r.get("cancelled"))  # the pipeline cancelled it: every job ends cancelled (queued ones never ran a step)
+        queued = {j for j, c in jobs if c == "queued" and not cancelled}  # waiting for a macOS runner for good
+        done = (r["polls"] <= 0 and not queued) or cancelled
+        self.run_jobs_by_id[r["id"]] = [
+            {"name": j, "status": "queued" if j in queued else "completed" if done else "in_progress",
+             "conclusion": "cancelled" if cancelled else None if j in queued or not done else c, "completed_at": None,
+             **({"labels": ["macos-15"]} if j in queued else {}),
+             **({"steps": []} if cancelled or c == "cancelled" else {})}  # cancelled with no step run: no runner took it
+            for j, c in jobs]
         ok = bool(jobs) and {c for _, c in jobs} == {"success"}
         return {"id": r["id"], "name": "macOS gate" if macos else "Gherkin", "event": "workflow_dispatch", "display_title": r["title"], "head_sha": r["sha"],
-                "status": "completed" if done else "in_progress", "conclusion": ("success" if ok else "failure") if done else None,
+                "status": "completed" if done else "in_progress", "conclusion": ("cancelled" if cancelled else "success" if ok else "failure") if done else None,
                 "run_attempt": r["attempt"], "updated_at": str(r["attempt"])}
 
     def workflow_file_runs(self, file: str, branch: str, per_page: int = 50) -> list[dict[str, Any]]:
         mine = [r for r in self.feature_runs.values() if r["branch"] == branch and r.get("file", file) == file]
-        out = [self._feature_run(r) for r in reversed(mine)]  # newest first
+        out = [self._feature_run(r) for r in reversed(mine) if r.get("hidden", 0) <= 0]  # newest first
         for r in mine:
-            r["polls"] -= 1
+            if r.get("hidden", 0) > 0:
+                r["hidden"] -= 1
+            else:
+                r["polls"] -= 1
         return out
 
     def workflow_runs(self, sha: str | None = None, branch: str | None = None, per_page: int = 50) -> list[dict[str, Any]]:

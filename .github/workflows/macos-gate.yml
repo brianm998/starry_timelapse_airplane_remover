@@ -3,7 +3,8 @@ name: macOS gate
 # The one macOS-only check the landing train runs on a finished batch before it merges (pipeline/src/starpipe/train.py, `_macos_step`).
 # A pull request runs macOS only for macOS-specific paths (.github/scripts/macos-paths.sh, #389) and the rest runs on the push to develop,
 # so without this a macOS-only break in shared Swift or Kotlin code would first show up as a red develop. It is dispatched on the batch's
-# branch, once per head, and has no other trigger. It runs
+# branch, once per head, and has no other trigger. The train dispatches it for any batch that changes a file of the program (not just a
+# macOS-specific one: shared StarCore, daemon and star-desktop code is the case it exists for); a docs-only batch skips it. It runs
 #   - `macos`: pr-gate.yml's macOS build and StarCore tests, and
 #   - `smoke`: gherkin.yml in smoke mode with the Linux and Windows legs skipped, so every macOS leg of gherkin/smoke.json:
 #     build-macos, cli-macos, desktop-macos and mac-gui (Linux has already passed on the PR).

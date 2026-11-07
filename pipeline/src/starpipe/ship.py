@@ -207,10 +207,12 @@ def _is_feature_run(run: dict[str, Any], sha: str, title: str, since: float, wor
 
 
 def feature_verdict_on(eng: Engine, branch: str, sha: str, title: str, since: float, reran: set[tuple[str, str]],
-                       workflow: str = gherkin_nightly.WORKFLOW_FILE, judge: JudgeRun = ci.judge_feature_run) -> ci.Verdict | None:
+                       workflow: str = gherkin_nightly.WORKFLOW_FILE, judge: JudgeRun = ci.judge_feature_run,
+                       after_run: int = 0) -> ci.Verdict | None:
     """Judge the newest dispatched run of `workflow` on `branch` for this head and title (with `judge`, ci.judge_feature_run unless the
-    caller has its own rules); None when GitHub does not list one yet. Worker thread."""
-    runs = [r for r in eng.gh.workflow_file_runs(workflow, branch) if _is_feature_run(r, sha, title, since, workflow)]
+    caller has its own rules), ignoring runs with an id at or below `after_run` (ones the caller cancelled or gave up on, which still have this
+    head and title); None when GitHub does not list one yet. Worker thread."""
+    runs = [r for r in eng.gh.workflow_file_runs(workflow, branch) if int(r["id"]) > after_run and _is_feature_run(r, sha, title, since, workflow)]
     if not runs:
         return None
     run = max(runs, key=lambda r: int(r["id"]))
