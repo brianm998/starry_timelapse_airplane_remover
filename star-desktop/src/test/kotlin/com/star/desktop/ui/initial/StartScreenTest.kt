@@ -1,8 +1,11 @@
 package com.star.desktop.ui.initial
 
 import com.google.gson.JsonParser
+import com.star.desktop.engine.EngineStatus
 import com.star.desktop.i18n.Strings
 import com.star.desktop.i18n.localized
+import com.star.desktop.util.BuildInfo
+import com.star.desktop.util.headingVersion
 import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -36,6 +39,7 @@ class StartScreenTest {
         val source = read("star-desktop/src/main/kotlin/com/star/desktop/ui/initial/InitialView.kt")
         val key = JsonParser.parseString(read("gherkin/ui/vectors/startScreen.json")).asJsonObject["removeRecent"].asString
         assertTrue("HoverTip(localized(\"$key\"))" in source, "the remove button has no hover text")
+        assertTrue("testTag(\"startup.recent.open\")" in source && "testTag(\"startup.recent.remove\")" in source, "a row lacks its ids")
         Strings.setOverride("en")
         val english = localized(key)
         assertNotEquals(key, english, "$key is missing from the catalogue")
@@ -63,5 +67,28 @@ class StartScreenTest {
             if (key == "ui.load_config") continue   // "Load Config" is what German says too
             assertNotEquals(english[key], localized(key), "$key is English in German")
         }
+    }
+
+    /** A4: the heading is there from the first frame, with this build's own version, as the gui's is; the engine's replaces it once it reports. */
+    @Test fun theHeadingDoesNotWaitForTheEngine() {
+        val source = read("star-desktop/src/main/kotlin/com/star/desktop/ui/initial/InitialView.kt")
+        assertTrue("(engineStatus as? EngineStatus.Connected)" !in source, "the heading still waits for Connected")
+        val config = read("StarCore/Sources/StarCore/Config.swift")
+        val latest = Regex("""static let latestVersion\s*=\s*"([^"]+)"""").find(config)!!.groupValues[1]
+        assertEquals(latest, BuildInfo.version, "the build did not stamp Config.latestVersion into the client")
+        Strings.setOverride("en")
+        for (status in listOf(EngineStatus.Disconnected, EngineStatus.Connecting)) {
+            val heading = localized("ui.welcome_to_star", headingVersion(status))
+            assertTrue(latest in heading, "the heading before the engine connects is \"$heading\"")
+        }
+        assertEquals("9.9.9", headingVersion(EngineStatus.Connected("9.9.9", "/tmp")), "the engine's version wins once it has connected")
+    }
+
+    /** A3: the gui's sizes and one clear button style: no accent-filled button on the start screen. */
+    @Test fun theButtonsAreOneStyleAtTheGuisSize() {
+        val source = read("star-desktop/src/main/kotlin/com/star/desktop/ui/initial/InitialView.kt")
+        for (key in listOf("ui.learn_about_star", "ui.load_video", "ui.load_image_sequence", "ui.load_config"))
+            assertTrue("Text(localized(\"$key\"), style = StarType.largeTitle)" in source, "$key is not at largeTitle")
+        assertTrue("ButtonDefaults" !in source && "containerColor" !in source, "a button is accent-filled")
     }
 }

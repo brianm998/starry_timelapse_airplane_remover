@@ -320,8 +320,8 @@ jobs:
   #   APPLE_API_ISSUER_ID           — issuer UUID
   #   APPLE_TEAM_ID                 — G3L75S65V9
   macos-signed-release:
-    name: macOS signed release (macos-14)
-    runs-on: macos-14
+    name: macOS signed release (macos-15)
+    runs-on: macos-15
     # Fires on release/* tag pushes, and on manual "Run workflow" button
     # clicks from the Actions UI (workflow_dispatch). The dispatch path is
     # how you test the signing flow without cutting a real release tag.
@@ -350,7 +350,7 @@ jobs:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
+          key: opencv-release-macos15-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -358,7 +358,7 @@ jobs:
           path: |
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
-          key: dt-macos-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+          key: dt-macos15-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
 
       - name: Import Developer ID certificate into a temporary keychain
         # We create a throwaway keychain rather than touching the runner's
@@ -553,8 +553,8 @@ jobs:
   # fails naming every secret that is not set.
   # The build number is <run number>.<run attempt>, so every upload and every re-run of one rises (see appstore_release.sh).
   macos-testflight:
-    name: macOS App Store build -> TestFlight (macos-14)
-    runs-on: macos-14
+    name: macOS App Store build -> TestFlight (macos-15)
+    runs-on: macos-15
     if: startsWith(github.ref, 'refs/tags/release/') || github.event_name == 'workflow_dispatch'
     needs: [ffmpeg]
     steps:
@@ -601,7 +601,7 @@ jobs:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
+          key: opencv-release-macos15-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -609,7 +609,7 @@ jobs:
           path: |
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
-          key: dt-macos-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+          key: dt-macos15-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
 
       - name: Import the App Store certificates into a temporary keychain
         # A throwaway keychain, as in macos-signed-release. xcodebuild signs the app with Apple Distribution and the
@@ -1078,7 +1078,7 @@ jobs:
   # job that builds it.
   macos-signed-e2e:
     name: macOS end-to-end (signed + notarized .pkg)
-    runs-on: macos-14
+    runs-on: macos-15
     needs: macos-signed-release
     steps:
       - uses: actions/checkout@v4

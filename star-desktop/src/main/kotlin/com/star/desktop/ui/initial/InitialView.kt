@@ -22,8 +22,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,7 +53,8 @@ import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.theme.StarColors
 import java.io.File
-import com.star.desktop.engine.EngineStatus
+import com.star.desktop.ui.theme.StarType
+import com.star.desktop.util.headingVersion
 import com.star.desktop.i18n.localized
 
 /** The startup screen (macOS `StartupView`/`InitialView`): open actions, a drop zone, recent files. */
@@ -72,14 +71,12 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
                 verticalArrangement = Arrangement.spacedBy(20.dp),
                 modifier = Modifier.fillMaxSize().padding(40.dp),
             ) {
-                // The version is the engine's, which is Star's (macOS shows its own); until the engine has said, the heading waits.
+                // The gui's heading: its own version at once (this build's until the engine says its own), subtitle and buttons at largeTitle.
                 val engineStatus by vm.engineStatus.collectAsState()
-                (engineStatus as? EngineStatus.Connected)?.let {
-                    Text(localized("ui.welcome_to_star", it.daemonVersion), color = StarColors.textPrimary, fontSize = 32.sp, fontWeight = FontWeight.Light)
-                }
-                Text(localized("ui.the_starry_timelapse_airplane_remover"), color = StarColors.textSecondary, fontSize = 16.sp)
+                Text(localized("ui.welcome_to_star", headingVersion(engineStatus)), color = Color.White, style = StarType.largeTitle)
+                Text(localized("ui.the_starry_timelapse_airplane_remover"), color = Color.White, style = StarType.largeTitle)
                 HoverTip(localized("ui.tell_me_how_to_us_this_software")) {
-                    OutlinedButton(onClick = vm::openInfoDialog) { Text(localized("ui.learn_about_star")) }
+                    OutlinedButton(onClick = vm::openInfoDialog) { Text(localized("ui.learn_about_star"), style = StarType.largeTitle) }
                 }
 
                 // The gui's Spacer / FinderStyleDropZone / Spacer, its zone capped at 1200x800 and at least 280x150 inside 16dp of padding.
@@ -94,16 +91,13 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
                 // The gui's labels, order and hover texts (S8): Load Video, Load Image Sequence, Load Config.
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     HoverTip(localized("ui.load_a_video_to_process_make_sure_lots_of")) {
-                        OutlinedButton(onClick = { open(vm, OpenKind.VIDEO) }) { Text(localized("ui.load_video")) }
+                        OutlinedButton(onClick = { open(vm, OpenKind.VIDEO) }) { Text(localized("ui.load_video"), style = StarType.largeTitle) }
                     }
                     HoverTip(localized("ui.load_an_image_sequence_yet_to_be_processed")) {
-                        Button(
-                            onClick = { open(vm, OpenKind.SEQUENCE) },
-                            colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
-                        ) { Text(localized("ui.load_image_sequence")) }
+                        OutlinedButton(onClick = { open(vm, OpenKind.SEQUENCE) }) { Text(localized("ui.load_image_sequence"), style = StarType.largeTitle) }
                     }
                     HoverTip(localized("ui.load_a_json_config_file_from_a_previous_run")) {
-                        OutlinedButton(onClick = { open(vm, OpenKind.CONFIG) }) { Text(localized("ui.load_config")) }
+                        OutlinedButton(onClick = { open(vm, OpenKind.CONFIG) }) { Text(localized("ui.load_config"), style = StarType.largeTitle) }
                     }
                 }
 
