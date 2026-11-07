@@ -9,7 +9,7 @@ from .checks.ledger import Result
 from .config import home
 from .db import Database
 
-PAGES = {"needs-input", "develop-red", "phantom-landing", "daemon-down", "runtime-rollback", "self-update-failed", "heavy-hung"}
+PAGES = {"needs-input", "ticket-closed-owner-action", "develop-red", "phantom-landing", "daemon-down", "runtime-rollback", "self-update-failed", "heavy-hung"}
 Sender = Callable[[str, str], None]
 
 

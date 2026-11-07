@@ -101,7 +101,7 @@ def test_lint_still_applies_to_a_proposal(gh: FakeGitHub) -> None:
 def test_approving_adds_the_pipeline_label_and_removes_the_proposal_one(gh: FakeGitHub) -> None:
     n = tickets.file_ticket(gh, "Add a thing", GOOD_BODY, propose=True)
     tickets.approve(gh, n, "p0")
-    assert labels(gh, n) == {"pipeline", "p0"}
+    assert labels(gh, n) == {"pipeline", "pipe:approved", "p0"}
     with pytest.raises(FilingError, match="already approved"):
         tickets.approve(gh, n)
 
@@ -169,11 +169,31 @@ async def test_a_ticket_the_pipeline_filed_is_closed_at_once_not_after_a_veto_wi
                                        text=True).stdout.strip()
 
     def close(req: StageRequest) -> StageOutcome:
-        assert "accepted" in req.contract.close_ticket({"reason": "no-defect", "evidence": [sha]})
+        assert "accepted" in req.contract.close_ticket({"reason": "no-defect", "evidence": [sha], "explanation": "Fine."})
         return accepted(req)
 
     rig.agent.on("explore", close)
     await rig.engine.drive(9)
+    assert rig.state(9) == "closed" and rig.gh.issues[9]["state"] == "closed"
+
+
+async def test_an_approved_proposal_waits_the_veto_window(tmp_path: Path) -> None:
+    rig = Rig(tmp_path)
+    rig.gh.add_issue(9, "regression on develop: x", labels=("pipe:filed-by-pipeline", "pipe:proposed"))
+    tickets.approve(rig.gh, 9)
+    rig.engine.sync_issues()
+    sha = __import__("subprocess").run(["git", "-C", str(rig.engine.repo), "rev-parse", "origin/develop"], capture_output=True,
+                                       text=True).stdout.strip()
+
+    def close(req: StageRequest) -> StageOutcome:
+        assert "accepted" in req.contract.close_ticket({"reason": "no-defect", "evidence": [sha], "explanation": "Fine."})
+        return accepted(req)
+
+    rig.agent.on("explore", close)
+    await rig.engine.drive(9)
+    assert rig.state(9) == "paused" and rig.gh.issues[9]["state"] == "open"
+    rig.now += 25 * 3600
+    rig.engine.close_due()
     assert rig.state(9) == "closed" and rig.gh.issues[9]["state"] == "closed"
 
 
@@ -186,7 +206,7 @@ async def test_the_owners_own_ticket_still_waits_the_veto_window(tmp_path: Path)
                                        text=True).stdout.strip()
 
     def close(req: StageRequest) -> StageOutcome:
-        req.contract.close_ticket({"reason": "no-defect", "evidence": [sha]})
+        req.contract.close_ticket({"reason": "no-defect", "evidence": [sha], "explanation": "Fine."})
         return accepted(req)
 
     rig.agent.on("explore", close)

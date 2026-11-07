@@ -841,12 +841,51 @@ async def test_close_by_explore_closes_a_pipeline_filed_ticket_at_once(rig: Rig)
 
     def close(req: StageRequest) -> StageOutcome:
         req.contract.owner_filed = False
-        assert "accepted" in req.contract.close_ticket({"reason": "already-done", "evidence": [sha]})
+        assert "accepted" in req.contract.close_ticket({"reason": "already-done", "evidence": [sha], "explanation": "Fixed upstream."})
         return accepted(req)
 
     rig.agent.on("explore", close)
     await rig.engine.drive(9)
     assert rig.state(9) == "closed" and rig.gh.issues[9]["state"] == "closed"
+
+
+async def _close_with(rig: Rig, n: int, reason: str, explanation: str, owner_filed: bool = False) -> None:
+    sha = __import__("subprocess").run(["git", "-C", str(rig.engine.repo), "rev-parse", "origin/develop"],
+                                       capture_output=True, text=True).stdout.strip()
+
+    def close(req: StageRequest) -> StageOutcome:
+        req.contract.owner_filed = owner_filed
+        assert "accepted" in req.contract.close_ticket({"reason": reason, "evidence": [sha], "explanation": explanation})
+        return accepted(req)
+
+    rig.agent.on("explore", close)
+    await rig.engine.drive(n)
+
+
+async def test_close_comment_carries_the_explanation(rig: Rig) -> None:
+    for n, owner_filed in ((9, False), (10, True)):
+        rig.gh.add_issue(n, "t")
+        rig.engine.sync_issues()
+        await _close_with(rig, n, "already-done", f"Found it fixed in #{n}.\nNothing to do.", owner_filed)
+        body = rig.gh.comment_list[n][-1]["body"]
+        first, _, rest = body.partition("\nClosing: ")[2].partition("\n")
+        assert first.startswith("already-done. Evidence: ")
+        assert f"Found it fixed in #{n}.\nNothing to do." in rest
+        assert ("24 h" in body) == owner_filed
+
+
+async def test_not_this_repo_close_raises_a_paging_alert(rig: Rig) -> None:
+    rig.gh.add_issue(9, "regression")
+    rig.gh.add_issue(10, "other")
+    rig.engine.sync_issues()
+    await _close_with(rig, 9, "not-this-repo", "Create the app record in App Store Connect." + " x" * 400)
+    assert rig.db.open_alert("ticket-closed-owner-action:9", "again") is False
+    alert = next(a for a in rig.db.open_alerts() if a["key"] == "ticket-closed-owner-action:9")
+    assert "not-this-repo" in alert["text"] and "Create the app record" in alert["text"] and len(alert["text"]) < 500
+    assert len(rig.pages) == 1 and "ticket-closed-owner-action" in rig.pages[0][0]
+    await _close_with(rig, 10, "no-defect", "Works as designed.")
+    assert rig.db.open_alert("ticket-closed:10", "again") is False
+    assert len(rig.pages) == 1, "an ordinary close does not page"
 
 
 async def test_close_of_an_owner_ticket_waits_for_a_veto_window(rig: Rig) -> None:
@@ -856,7 +895,7 @@ async def test_close_of_an_owner_ticket_waits_for_a_veto_window(rig: Rig) -> Non
                                        capture_output=True, text=True).stdout.strip()
 
     def close(req: StageRequest) -> StageOutcome:
-        assert "accepted" in req.contract.close_ticket({"reason": "already-done", "evidence": [sha]})
+        assert "accepted" in req.contract.close_ticket({"reason": "already-done", "evidence": [sha], "explanation": "Fixed upstream."})
         return accepted(req)
 
     rig.agent.on("explore", close)

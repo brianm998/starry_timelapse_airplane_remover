@@ -13,9 +13,10 @@ Runner = Callable[[Sequence[str], str | None], str]
 
 STATE_LABELS = ["pipe:queued", "pipe:exploring", "pipe:developing", "pipe:verifying", "pipe:review", "pipe:ci",
                 "pipe:landing", "pipe:needs-input", "pipe:failed", "pipe:paused"]
-OTHER_LABELS = ["pipeline", "pipe:landed", "pipe:filed-by-pipeline", "pipe:proposed", "p0", "p1", "p2", "p3"]
+OTHER_LABELS = ["pipeline", "pipe:landed", "pipe:filed-by-pipeline", "pipe:proposed", "pipe:approved", "p0", "p1", "p2", "p3"]
 LABEL_COLOURS = {"pipeline": "0e8a16", "pipe:landed": "6f42c1", "pipe:failed": "d73a4a", "pipe:needs-input": "fbca04",
-                 "pipe:paused": "bfbfbf", "pipe:filed-by-pipeline": "c5def5", "pipe:proposed": "d4c5f9"}
+                 "pipe:paused": "bfbfbf", "pipe:filed-by-pipeline": "c5def5", "pipe:proposed": "d4c5f9",
+                 "pipe:approved": "0e8a16"}
 
 
 class GitHubError(RuntimeError):
