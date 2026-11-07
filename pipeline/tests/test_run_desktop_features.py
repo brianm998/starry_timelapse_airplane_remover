@@ -42,7 +42,7 @@ def run(tmp_path: Path, timeout: str | None, features: list[str]) -> tuple[subpr
     else:
         env["STAR_FEATURE_TIMEOUT_SECONDS"] = timeout
     done = subprocess.run(["bash", str(tmp_path / "gherkin" / "run-desktop-features.sh"), "/x/stard", *features],
-                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, timeout=120)
+                          check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, timeout=120)
     return done, desktop
 
 

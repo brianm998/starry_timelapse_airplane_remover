@@ -177,7 +177,7 @@ def dump_now(path_prefix: str = "", why: str = "") -> str:
     if path_prefix:
         env["PATH"] = path_prefix + os.pathsep + env["PATH"]
     args = ["bash", str(SCRIPT), "--dump-now"] + ([why] if why else [])
-    return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, timeout=120).stdout
+    return subprocess.run(args, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, timeout=120).stdout
 
 
 def testDumpNowDumpsAtOnceWithStardQuiet(fake_stard: tuple[subprocess.Popen[bytes], Path], tmp_path: Path) -> None:
