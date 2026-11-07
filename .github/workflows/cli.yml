@@ -642,11 +642,11 @@ jobs:
           # No `-p codesigning`: the installer identity is not under that policy (see macos-signed-release).
           security find-identity -v "$KC"
           APP_IDS=$(security find-identity -v "$KC" | grep "Apple Distribution:" || true)
-          INST_IDS=$(security find-identity -v "$KC" | grep "Mac Installer Distribution:" || true)
+          INST_IDS=$(security find-identity -v "$KC" | grep -E "(Mac Installer Distribution|3rd Party Mac Developer Installer):" || true)
           if [ -z "$APP_IDS" ] || [ -z "$INST_IDS" ]; then
               echo "::error::Missing App Store identities in APPSTORE_CERTIFICATE_P12_BASE64." \
                    "Found: Apple Distribution=$(echo -n "$APP_IDS" | grep -c . || true)," \
-                   "Mac Installer Distribution=$(echo -n "$INST_IDS" | grep -c . || true) (need 1 of each, with private keys)."
+                   "Mac Installer Distribution (or 3rd Party Mac Developer Installer)=$(echo -n "$INST_IDS" | grep -c . || true) (need 1 of each, with private keys)."
               exit 1
           fi
           # "Apple Distribution: Name (TEAMID)" -> TEAMID; the profile, the API key and the app record must be this team's
