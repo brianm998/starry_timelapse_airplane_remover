@@ -225,6 +225,8 @@ Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<clie
   signing identity was needed. This was not reproduced before the change (no baseline capture), so it shows the prompt's source is gone, not that it
   once fired from there. A runner cannot make the processed fixture itself (`xcrun: error: cannot be used within an App Sandbox`): make it first
   with `gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10` (CI does) or those features fail.
+  In the full pass 39 of 61 passed; 19 failed only on that fixture, and 3 others (uiAutoSelectiveEnds, which timed out after 685 s, and two that
+  could not find a control) were not run against the base to see whether the change matters, so they are open.
   `ScratchLocationTests` is not selected by the pipeline's gherkin run; run it with
   `xcodebuild test -project gui/star.xcodeproj -scheme star -only-testing:starUITests/ScratchLocationTests CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=`.
 
