@@ -19,6 +19,8 @@ set -e
 #   APPSTORE_SIGNING        manual or automatic, to override that choice.
 #   APPSTORE_TEAM_ID        the team of the Apple Distribution identity; else read from the one in the keychain.
 #                           Not APPLE_TEAM_ID: that is the Developer ID team, which can be another team.
+#   APPSTORE_INSTALLER_SIGNING  the installer identity's name; else "Mac Installer Distribution", or the older
+#                           "3rd Party Mac Developer Installer" when that is the one in the keychain.
 #   APPSTORE_BUNDLE_ID      the store's bundle id; default com.star. Developer ID builds keep com.star.
 #   APPSTORE_BUILD_NUMBER   CFBundleVersion; default ${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT} in CI (see below).
 #   APPLE_API_KEY_PATH, APPLE_API_KEY_ID, APPLE_API_ISSUER_ID
@@ -30,7 +32,9 @@ APP_NAME=Star
 APP_ENTITLEMENTS=star/star-appstore.entitlements
 TOOL_ENTITLEMENTS=ffmpeg-appstore.entitlements.plist
 SIGN_APP_NAME="Apple Distribution"
-SIGN_PKG_NAME="Mac Installer Distribution"
+# Apple's name for the installer certificate: "Mac Installer Distribution" on newer ones, "3rd Party Mac Developer Installer"
+# on older ones (same purpose, both sign a Mac App Store pkg). Whichever the keychain holds is used; see below.
+SIGN_PKG_NAME="${APPSTORE_INSTALLER_SIGNING:-Mac Installer Distribution}"
 
 MODE=upload
 for arg in "$@"; do
@@ -87,6 +91,13 @@ if [ -z "$APPSTORE_TEAM_ID" ]; then
     APPSTORE_TEAM_ID="$TEAMS"
 fi
 echo "team ${APPSTORE_TEAM_ID}"
+
+if [ -z "$APPSTORE_INSTALLER_SIGNING" ] && ! security find-identity -v | grep -q "\"Mac Installer Distribution: "; then
+    if security find-identity -v | grep -q "\"3rd Party Mac Developer Installer: "; then
+        SIGN_PKG_NAME="3rd Party Mac Developer Installer"
+    fi
+fi
+echo "installer identity ${SIGN_PKG_NAME}"
 
 SIGNING="${APPSTORE_SIGNING:-}"
 if [ -z "$SIGNING" ]; then
