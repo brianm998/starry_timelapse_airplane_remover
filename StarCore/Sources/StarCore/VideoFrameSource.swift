@@ -232,6 +232,24 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
         }
     }
 
+    /// `stop()`, and returns once every ffmpeg it stopped has exited and what `stop()` queued has run: nothing of this source is writing
+    /// into the folder after that, so a caller that takes the folder back does not race a frame or the sidecar being written into it.
+    public func stopAndWaitForTheWriters() async {
+        stop()
+        // `stop()`'s own work is queued ahead of this, and the workers it told to stop are in `allWorkers` until they have exited.
+        let runs: [FFmpegRun] = await withCheckedContinuation { continuation in
+            queue.async { continuation.resume(returning: self.allWorkers.compactMap { $0.run }) }
+        }
+        // Polled: `FFmpegRun.exit()` replaces the termination handler the source's own bookkeeping waits on.  ffmpeg is killed after
+        // `killGrace` if it ignores the stop, so this ends.
+        let deadline = Date().addingTimeInterval(FFmpegRun.killGrace + 3)
+        while runs.contains(where: { $0.process.isRunning }), Date() < deadline {
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.02) { continuation.resume() }
+            }
+        }
+    }
+
     /// Returns once extraction has finished, failed or been stopped.  Throws the failure.
     public func waitUntilFinished() async throws {
         await withTaskCancellationHandler {

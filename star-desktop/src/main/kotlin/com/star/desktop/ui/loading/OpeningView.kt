@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,7 +46,7 @@ fun OpeningView(progress: LoadingProgress, onCancel: () -> Unit, modifier: Modif
             // When a stage is done the next has not reported yet: say so in green, with the spinner that says more is coming.
             Text(progress.caption, color = if (progress.isComplete) StarColors.green else StarColors.textPrimary, fontSize = 15.sp)
             if (progress.isComplete) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = StarColors.textSecondary, strokeWidth = 2.dp)
-            OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel"), fontSize = 16.sp) }
+            OutlinedButton(onClick = onCancel, modifier = Modifier.testTag("loading.cancel")) { Text(localized("ui.cancel"), fontSize = 16.sp) }
         }
     }
 }

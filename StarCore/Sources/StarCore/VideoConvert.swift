@@ -129,9 +129,19 @@ public func decodeVideo(
 
     // A decode that is given up on takes back what it made, and only that: frames left half written would make the next attempt at
     // the same video find a folder it did not make.
-    func giveUp() {
-        source.stop()
-        if source.createdOutputFolder { try? fileManager.removeItem(atPath: outputFolder) }
+    func giveUp() async {
+        // Not before ffmpeg has exited: one still finishing a frame writes into the folder while it is being removed, and the removal
+        // gives up on a folder that is not empty, leaving the half-extracted frames behind.
+        await source.stopAndWaitForTheWriters()
+        guard source.createdOutputFolder else { return }
+        for _ in 0..<10 {
+            try? fileManager.removeItem(atPath: outputFolder)
+            if !fileManager.fileExists(atPath: outputFolder) { return }
+            // not Task.sleep, which returns at once in a cancelled task, and this runs in one
+            await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.1) { continuation.resume() }
+            }
+        }
     }
 
     let reporting = Task {
@@ -167,7 +177,7 @@ public func decodeVideo(
             source.stop()
         }
     } catch is CancellationError {
-        giveUp()
+        await giveUp()
         throw CancellationError()
     } catch let error as FrameSourceError {
         // ffmpeg's own message, as it always was.

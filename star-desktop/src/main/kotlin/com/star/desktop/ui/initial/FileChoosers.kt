@@ -89,12 +89,18 @@ fun resolveDrop(files: List<File>): DropOutcome? {
 private const val DIRECTORIES_PROPERTY = "apple.awt.fileDialogForDirectories"
 
 /**
+ * Test seam: when this system property is set, [chooseDirectory] and [chooseFile] answer with its value instead of showing a dialog, which a UI
+ * test cannot drive (the gui's `-StarUITestChoosePath`). Set only by the gherkin runner.
+ */
+const val CHOOSE_PATH_PROPERTY = "star.ui.choosePath"
+
+/**
  * Folder chooser (image sequence by default, or a folder for [title]). Opens at [startAt] when that is a folder. Blocks on the EDT.
  * It is the platform's own: the Finder panel on a Mac, Explorer's folder picker on Windows, the desktop's chooser (zenity or kdialog) on
  * Linux, as the gui's `NSOpenPanel` is on a Mac. Swing's `JFileChooser` is the fallback where no native one is available.
  */
 fun chooseDirectory(title: String = localized("ui.open_image_sequence").trimEnd('…', '.'), startAt: String? = null): String? =
-    chooseDirectory(
+    System.getProperty(CHOOSE_PATH_PROPERTY)?.takeIf { it.isNotEmpty() } ?: chooseDirectory(
         System.getProperty("os.name").orEmpty(), title, startAt,
         FolderDialogs(::nativeFolderDialog, ::windowsFolderDialog, ::linuxFolderDialog, ::swingFolderDialog),
     )
@@ -163,6 +169,7 @@ internal fun hasExtension(name: String, extensions: Set<String>): Boolean =
  * `.json`); on Windows the box is also pre-filled with the pattern, which is how a native dialog there narrows what it lists.
  */
 fun chooseFile(title: String, extensions: Set<String>? = null): String? {
+    System.getProperty(CHOOSE_PATH_PROPERTY)?.takeIf { it.isNotEmpty() }?.let { return it }
     val dialog = FileDialog(null as Frame?, title, FileDialog.LOAD)
     if (extensions != null) {
         dialog.setFilenameFilter { dir, name -> File(dir, name).isDirectory || hasExtension(name, extensions) }
