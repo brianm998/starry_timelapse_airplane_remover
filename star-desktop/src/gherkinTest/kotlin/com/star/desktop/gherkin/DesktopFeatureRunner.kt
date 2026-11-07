@@ -144,6 +144,7 @@ class DesktopFeatureRunner {
         StepAction.ID_DISABLED to { t -> expectEnabled(t, args[0], enabled = false) },
         StepAction.RENDERED_VIDEO_FRAMES to { t -> renderedVideoHasEveryFrame(t, args[0].toInt()) },
         StepAction.NO_VIDEO_LEFT to { t -> noVideoLeft(t) },
+        StepAction.SLOW_ENCODER to { slowEncoder() },
         StepAction.ID_FOCUSED to { t -> expectFocus(t, args[0], focused = true) },
         StepAction.ID_NOT_FOCUSED to { t -> expectFocus(t, args[0], focused = false) },
         StepAction.LANGUAGE_IS to { },   // read when the run starts
@@ -585,6 +586,20 @@ class DesktopFeatureRunner {
         val config = processedConfig ?: throw RunnerError("\"a processed copy of the sequence\" has not run")
         val path = JsonParser.parseString(config.readText()).asJsonObject["outputPath"]?.asString ?: throw RunnerError("${config.path} has no outputPath")
         return File(path)
+    }
+
+    /**
+     * The processed copy's video settings become VP9 in Matroska, which the Render Video dialog starts from (L12). A ten-frame ProRes render is
+     * done in a few seconds, and a Windows runner needs about that long to get from Render to Cancel; VP9 at this size takes far longer.
+     */
+    private fun slowEncoder() {
+        val config = processedConfig ?: throw RunnerError("\"a processed copy of the sequence\" has not run")
+        val json = JsonParser.parseString(config.readText()).asJsonObject
+        json.addProperty("codec", "vp9")
+        json.addProperty("encoder", "libvpx-vp9")
+        json.addProperty("pixelFormat", "yuv420p")
+        json.addProperty("muxer", "matroska")
+        config.writeText(Gson().toJson(json))
     }
 
     /** The videos in [folder] (not its subfolders), by the containers a render writes. */

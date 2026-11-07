@@ -96,6 +96,7 @@ final class GuiFeatureRunner {
         .idDisabled: { try $0.expectEnabled($0.args[0], enabled: false) },
         .renderedVideoFrames: { try $0.renderedVideoHasEveryFrame(framesPerSecond: Int($0.args[0]) ?? -1) },
         .noVideoLeft: { try $0.noVideoLeft() },
+        .slowEncoder: { try $0.slowEncoder() },
         .idFocused: { try $0.expectFocus($0.args[0], focused: true) },
         .idNotFocused: { try $0.expectFocus($0.args[0], focused: false) },
         .languageIs: { _ in },   // read by `language` when the app is launched
@@ -556,6 +557,18 @@ final class GuiFeatureRunner {
             throw RunnerError("\(config.path) has no outputPath")
         }
         return URL(fileURLWithPath: path)
+    }
+
+    /// The processed copy's video settings become VP9 in Matroska, which the Render Video dialog starts from (L12). A ten-frame ProRes render is done in a
+    /// few seconds, and a slow runner needs about that long to get from Render to Cancel; VP9 at this size takes far longer.
+    private func slowEncoder() throws {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        guard var object = try JSONSerialization.jsonObject(with: Data(contentsOf: config)) as? [String: Any] else { throw RunnerError("\(config.path) is not a JSON object") }
+        object["codec"] = "vp9"
+        object["encoder"] = "libvpx-vp9"
+        object["pixelFormat"] = "yuv420p"
+        object["muxer"] = "matroska"
+        try JSONSerialization.data(withJSONObject: object).write(to: config)
     }
 
     /// The videos in [folder] (not its subfolders), by the containers a render writes.

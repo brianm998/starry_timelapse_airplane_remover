@@ -83,5 +83,6 @@
   { "case": "saveScreenshot"        , "text": "I save a screenshot named \"<name>\"" },
   { "case": "saveWindowScreenshot"  , "text": "I save a screenshot of the \"<window>\" window named \"<name>\"" },
   { "case": "renderedVideoFrames"   , "text": "the rendered video has one frame per frame of the sequence at <n:int> frames per second" },
-  { "case": "noVideoLeft"           , "text": "no video is left in the output folder" }
+  { "case": "noVideoLeft"           , "text": "no video is left in the output folder" },
+  { "case": "slowEncoder"           , "text": "the processed copy renders with a slow encoder" }
 ]
