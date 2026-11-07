@@ -47,6 +47,7 @@
   "uiPainterOpens": [],
   "uiPainterOpensInEditMode": [],
   "uiPainterWaitsForExtraction": [],
+  "uiProcessingModalPlanning": [],
   "uiRecentsRemove": [],
   "uiRemovalSelectiveChoice": [],
   "uiRenderAllFrames": [],
@@ -69,6 +70,7 @@
   "uiStartupReturnStarts": [],
   "uiStartupSpeedSharpness": [],
   "uiTranslatedScreen": [],
+  "uiUpdateSettingsMidRun": [],
   "uiVideoRender": [],
   "uiVideoRenderCancel": [],
   "uiViewPickerNeedsAnImage": []
