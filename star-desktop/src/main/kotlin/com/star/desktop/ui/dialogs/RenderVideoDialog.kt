@@ -37,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -201,7 +203,7 @@ internal fun RenderOptions(app: AppViewModel, state: RenderOptionsState, frameCo
     val rateOptions = c.frameRateCapsList.map { (if (it.custom) "custom" else RenderVideo.rateText(it.value)) to (if (it.custom) localized("ui.custom_2") else RenderVideo.rateText(it.value)) }
     val rateKey = if (rateEntry?.custom == true) "custom" else RenderVideo.rateText(choice.frameRate)
     val customRate = state.customRate
-    Picker(localized("ui.frame_rate"), rateOptions, rateKey) { key ->
+    Picker(localized("ui.frame_rate"), rateOptions, rateKey, tag = "render.frame_rate") { key ->
         state.customPicked = key == "custom"
         if (key == "custom") {
             // Kept at what it was, or a rate to start from; the field takes over from here.
@@ -218,7 +220,7 @@ internal fun RenderOptions(app: AppViewModel, state: RenderOptionsState, frameCo
             if (problem) {
                 Text(
                     localized("ui.enter_a_number_from_a_to_b", RenderVideo.rateText(RenderVideo.CUSTOM_MIN), RenderVideo.rateText(RenderVideo.CUSTOM_MAX)),
-                    color = StarColors.red, fontSize = 10.sp, modifier = Modifier.weight(1f),
+                    color = StarColors.red, fontSize = 10.sp, modifier = Modifier.weight(1f).semantics(mergeDescendants = true) { testTag = "render.custom_frame_rate.message" },
                 )
             }
             BasicTextField(
@@ -296,7 +298,7 @@ private fun RenderingView(state: RenderState.Rendering, onCancel: () -> Unit) {
 private fun SucceededView(state: RenderState.Succeeded, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var problem by remember { mutableStateOf<String?>(null) }
-    Text(renderedStatus(state.path, state.fileName), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.testTag("render.done"))
+    Text(renderedStatus(state.path, state.fileName), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.semantics(mergeDescendants = true) { testTag = "render.done" })
     state.path?.let { Text(it, color = StarColors.textSecondary, fontSize = 11.sp) }
     problem?.let { Text(it, color = StarColors.red, fontSize = 12.sp) }
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
@@ -316,7 +318,7 @@ private fun SucceededView(state: RenderState.Succeeded, onDismiss: () -> Unit) {
 @Composable
 private fun FailedView(state: RenderState.Failed, onDismiss: () -> Unit) {
     androidx.compose.foundation.text.selection.SelectionContainer {
-        Text(localized("ui.rendering_error", state.message), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.testTag("render.error"))
+        Text(localized("ui.rendering_error", state.message), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.semantics(mergeDescendants = true) { testTag = "render.error" })
     }
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
         Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.dismiss")) }
@@ -346,13 +348,14 @@ private fun Description(text: String) {
 
 /** A picker of (value, shown) pairs: the value is what is chosen, the text is what the user reads. */
 @Composable
-private fun Picker(label: String, options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
+private fun Picker(label: String, options: List<Pair<String, String>>, selected: String, tag: String? = null, onSelect: (String) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = StarColors.textSecondary, fontSize = 12.sp)
         Box {
             Box(
                 Modifier
+                    .then(if (tag != null) Modifier.testTag(tag) else Modifier)
                     .width(300.dp)
                     .clip(StarShapes.picker)
                     .background(StarColors.cellDefault)

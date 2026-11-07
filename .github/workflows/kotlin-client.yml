@@ -95,7 +95,7 @@ jobs:
       platforms: windows
 
   # opencv.yml (cache, then the opencv-prebuilt release, then a build) for the two installers built here. Not for macos-signed: it
-  # runs on macos-14 and keeps its own opencv-macos- cache. Skipped on pull_request like the installers that need it.
+  # runs on macos-15 and keeps its own opencv-release-macos15- cache. Skipped on pull_request like the installers that need it.
   opencv-linux:
     name: OpenCV (linux)
     if: github.event_name != 'pull_request'
@@ -409,7 +409,7 @@ jobs:
   # ─── macOS signed + notarized installer ──────────────────────────────────────
   # Builds the Compose Desktop app, bundles a natively-built stard + ffmpeg/ffprobe,
   # signs with Developer ID (hardened runtime), then notarizes + staples the .dmg —
-  # reusing the same Apple secrets as cli.yml. Apple Silicon runner (macos-14) with
+  # reusing the same Apple secrets as cli.yml. Apple Silicon runner (macos-15) with
   # Xcode's Swift 6 (the proven cli.yml toolchain); the app + stard are arm64. Intel
   # is built/tested locally and is not produced here. The ffmpeg/ffprobe come from the
   # ffmpeg job (ffmpeg/build.sh) and are universal, so video import and export run natively
@@ -421,8 +421,8 @@ jobs:
   # Secrets (same as cli.yml): APPLE_CERTIFICATE_P12_BASE64, APPLE_CERTIFICATE_PASSWORD,
   # KEYCHAIN_PASSWORD, APPLE_API_KEY_P8_BASE64, APPLE_API_KEY_ID, APPLE_API_ISSUER_ID, APPLE_TEAM_ID.
   macos-signed:
-    name: macOS signed + notarized installer (macos-14)
-    runs-on: macos-14
+    name: macOS signed + notarized installer (macos-15)
+    runs-on: macos-15
     needs: ffmpeg-macos
     if: github.event_name != 'pull_request'
     steps:
@@ -469,16 +469,16 @@ jobs:
         shell: bash
         run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
 
-      # Same cache keys as cli.yml's macos-signed-release (also macos-14) so the
+      # Same cache keys as cli.yml's macos-signed-release (also macos-15) so the
       # universal OpenCV / StarDecisionTrees builds are shared instead of rebuilt.
-      # cli.yml's PR `macos` job moved to macos-15 and its own macos15 keys.
+      # (GitHub retired macos-14 on 2026-11-02 and cancels its jobs before they get a runner.)
       - name: Cache OpenCV
         uses: actions/cache@v4
         with:
           path: |
             opencv/lib/macos
             opencv/include
-          key: opencv-macos-${{ steps.opencv-key.outputs.key }}
+          key: opencv-release-macos15-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
         uses: actions/cache@v4
@@ -486,7 +486,7 @@ jobs:
           path: |
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
-          key: dt-macos-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+          key: dt-macos15-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
 
       - name: Build OpenCV (if not cached)
         run: |
@@ -705,7 +705,7 @@ jobs:
 
   macos-e2e:
     name: macOS end-to-end (installed app)
-    # macos-15, not the macos-14 the installer is built on: daemon/Package.swift declares
+    # macos-15, like the installer build: daemon/Package.swift declares
     # `platforms: [.macOS("15.0")]`, so the shipped stard needs macOS 15 and on 14 dyld aborts with
     # "Library not loaded: /usr/lib/swift/libswift_errno.dylib (built for macOS 15.0 which is newer
     # than running OS)". The test runs on the oldest OS the app claims to support.

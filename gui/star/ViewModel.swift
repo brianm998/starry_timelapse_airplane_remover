@@ -409,7 +409,17 @@ public final class ViewModel {
         showCloseConfirmation = true
     }
 
+    /// Test seam: `-StarUITestChoosePath <path>` is what File ▸ Open's panel answers with, since an open panel cannot be driven; nil in
+    /// every other launch.
+    static var uiTestChosenPath: String? {
+        UserDefaults.standard.string(forKey: "StarUITestChoosePath").flatMap { $0.isEmpty ? nil : $0 }
+    }
+
     private func chooseSourceToOpen(_ kind: OpenKind) {
+        if let path = Self.uiTestChosenPath {
+            openChosen(kind, path: path)
+            return
+        }
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         switch kind {
@@ -425,9 +435,11 @@ public final class ViewModel {
             panel.canChooseFiles = true
         }
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let path = url.path
         FolderAccess.remember(url)
+        openChosen(kind, path: url.path)
+    }
 
+    private func openChosen(_ kind: OpenKind, path: String) {
         // What is chosen replaces the open sequence: close it the way File ▸ Close does, back to the start screen, which is
         // where the sheets that ask about a video or a sequence are shown.
         if imageSequence != nil { unloadSequence() }

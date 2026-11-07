@@ -10,6 +10,7 @@ import asyncio
 import dataclasses
 import json
 import re
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -25,6 +26,8 @@ if TYPE_CHECKING:
 MAX_CI_FIX = 2
 GATE_ERROR_LIMIT = 5  # the same feature-gate error on the same head this many polls in a row parks the ticket
 TRANSIENT_ERROR = re.compile(r"HTTP 5\d\d|timed out|timeout|connection|network|temporar|rate limit|could not resolve", re.IGNORECASE)
+MACOS_GATE_FILE = "macos-gate.yml"  # dispatched by the landing train on a finished batch (workflow_dispatch, `title` input = run-name)
+JudgeRun = Callable[..., ci.Verdict]  # (jobs, reran, run_completed=, run_conclusion=, run_id=) -> Verdict
 FEATURE_RUN_WAIT_S = 600.0  # a dispatched feature run that has not appeared by then is dispatched again
 LANDING_STATES = ("ci", "landing")
 BYPASS_NOTE = "The owner landed this with land-now: CI, the overlap re-test and the stop-line wait were bypassed."
@@ -172,6 +175,16 @@ def dispatch_features_on(eng: Engine, key: int | str, branch: str, sha: str, tit
                  **({} if isinstance(key, int) else {"key": key}))
 
 
+def dispatch_macos_gate_on(eng: Engine, key: str, branch: str, sha: str, title: str) -> None:
+    """Dispatch macos-gate.yml on `branch` (already on origin), titled `title` (its `title` input is its run-name), and remember it
+    under kv macos_run:<key>. Worker thread."""
+    eng.gh.dispatch_workflow(MACOS_GATE_FILE, branch, {"title": title})
+    eng.db.put(f"macos_run:{key}", json.dumps({"sha": sha, "title": title, "at": eng.clock()}))
+    eng.db.put(f"macos_reran:{key}", None)
+    eng.db.put(f"macos_note:{key}", None)
+    eng.db.event("macos-gate-dispatched", None, sha=sha, key=key)
+
+
 def _dispatch_features(eng: Engine, t: Ticket, sha: str, title: str, features: list[str]) -> None:
     """Make the ticket's head exist on origin, then dispatch gherkin.yml there with the features. Worker thread."""
     pushed = push(eng, t)
@@ -180,7 +193,7 @@ def _dispatch_features(eng: Engine, t: Ticket, sha: str, title: str, features: l
     dispatch_features_on(eng, t.number, t.branch or "", sha, title, features)
 
 
-def _is_feature_run(run: dict[str, Any], sha: str, title: str, since: float) -> bool:
+def _is_feature_run(run: dict[str, Any], sha: str, title: str, since: float, workflow: str = gherkin_nightly.WORKFLOW_FILE) -> bool:
     """A dispatched run for this head: titled `title`, or, on a branch cut before gherkin.yml had a run-name, titled by the workflow's
     name (the REST API) or path (`gh`) and created no earlier than the dispatch (GitHub's title for a run-name-less workflow; matching only by title redispatched
     every ten minutes and each new run cancelled the last)."""
@@ -189,20 +202,23 @@ def _is_feature_run(run: dict[str, Any], sha: str, title: str, since: float) -> 
     if run.get("display_title") == title:
         return True
     created = str(run.get("created_at") or "")
-    return (run.get("display_title") in (gherkin_nightly.WORKFLOW_PATH, run.get("name")) and bool(created)
+    return (run.get("display_title") in (f".github/workflows/{workflow}", run.get("name")) and bool(created)
             and datetime.fromisoformat(created).timestamp() >= since)
 
 
-def feature_verdict_on(eng: Engine, branch: str, sha: str, title: str, since: float, reran: set[tuple[str, str]]) -> ci.Verdict | None:
-    """Judge the newest dispatched run on `branch` for this head and title; None when GitHub does not list one yet. Worker thread."""
-    runs = [r for r in eng.gh.workflow_file_runs(gherkin_nightly.WORKFLOW_FILE, branch) if _is_feature_run(r, sha, title, since)]
+def feature_verdict_on(eng: Engine, branch: str, sha: str, title: str, since: float, reran: set[tuple[str, str]],
+                       workflow: str = gherkin_nightly.WORKFLOW_FILE, judge: JudgeRun = ci.judge_feature_run,
+                       after_run: int = 0) -> ci.Verdict | None:
+    """Judge the newest dispatched run of `workflow` on `branch` for this head and title (with `judge`, ci.judge_feature_run unless the
+    caller has its own rules), ignoring runs with an id at or below `after_run` (ones the caller cancelled or gave up on, which still have this
+    head and title); None when GitHub does not list one yet. Worker thread."""
+    runs = [r for r in eng.gh.workflow_file_runs(workflow, branch) if int(r["id"]) > after_run and _is_feature_run(r, sha, title, since, workflow)]
     if not runs:
         return None
     run = max(runs, key=lambda r: int(r["id"]))
     rid = int(run["id"])
     jobs = ci.parse_jobs([run], {rid: eng.gh.run_jobs(rid, ci.run_version(run))})
-    return ci.judge_feature_run(jobs, reran, run_completed=run.get("status") == "completed",
-                                run_conclusion=run.get("conclusion"), run_id=rid)
+    return judge(jobs, reran, run_completed=run.get("status") == "completed", run_conclusion=run.get("conclusion"), run_id=rid)
 
 
 def _feature_verdict(eng: Engine, t: Ticket, sha: str, title: str, since: float, reran: set[tuple[str, str]]) -> ci.Verdict | None:

@@ -305,7 +305,7 @@ private fun ErrorOverlay(message: String, onDismiss: () -> Unit) {
                     modifier = Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState()),
                 )
             }
-            Button(onClick = onDismiss, modifier = Modifier.padding(top = 20.dp)) { Text(localized("ui.close")) }
+            Button(onClick = onDismiss, modifier = Modifier.padding(top = 20.dp).testTag("error.close")) { Text(localized("ui.close")) }
         }
     }
 }
@@ -323,7 +323,7 @@ private fun ConfirmCloseOverlay(confirmation: com.star.desktop.domain.CloseConfi
             Modifier.fillMaxWidth().padding(top = 8.dp),
             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp, Alignment.End),
         ) {
-            OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }
+            OutlinedButton(onClick = onCancel, modifier = Modifier.testTag("closeconfirm.cancel")) { Text(localized("ui.cancel")) }
             OutlinedButton(onClick = onConfirm, modifier = Modifier.testTag("closeconfirm.confirm"), colors = ButtonDefaults.outlinedButtonColors(contentColor = StarColors.red)) {
                 Text(localized(confirmation.action.confirmKey))
             }

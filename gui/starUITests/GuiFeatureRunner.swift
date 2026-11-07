@@ -39,9 +39,13 @@ final class GuiFeatureRunner {
     private var moving: Bool?
     private var clean: String?                 // auto | selective | autoSelective, the validator's spelling
 
-    init(testCase: XCTestCase) {
+    /// The scratch is outside the runner's container (`ScratchLocation`): the unsandboxed app under test reads and writes it, and touching another
+    /// app's container raises the macOS "access data from other apps" prompt.
+    init(testCase: XCTestCase) throws {
         self.testCase = testCase
-        scratch = FileManager.default.temporaryDirectory.appendingPathComponent("star-gherkin-\(UUID().uuidString)")
+        let scratch = try ScratchLocation.make()
+        try ScratchLocation.createRoot(scratch.deletingLastPathComponent())
+        self.scratch = scratch
     }
 
     // MARK: dispatch table
@@ -92,6 +96,11 @@ final class GuiFeatureRunner {
         .idSays: { try $0.expectSays($0.args[0], text: $0.args[1]) },
         .typeInto: { try $0.typeInto($0.args[0], into: $0.args[1]) },
         .idHolds: { try $0.expectHolds($0.args[0], number: Int($0.args[1]) ?? -1) },
+        .idEnabled: { try $0.expectEnabled($0.args[0], enabled: true) },
+        .idDisabled: { try $0.expectEnabled($0.args[0], enabled: false) },
+        .renderedVideoFrames: { try $0.renderedVideoHasEveryFrame(framesPerSecond: Int($0.args[0]) ?? -1) },
+        .noVideoLeft: { try $0.noVideoLeft() },
+        .slowEncoder: { try $0.slowEncoder() },
         .idFocused: { try $0.expectFocus($0.args[0], focused: true) },
         .idNotFocused: { try $0.expectFocus($0.args[0], focused: false) },
         .languageIs: { _ in },   // read by `language` when the app is launched
@@ -113,6 +122,7 @@ final class GuiFeatureRunner {
         .largeWindow: { try $0.makeWindowLarge() },
         .idStillSays: { try $0.expectStillSays($0.args[0], text: $0.args[1]) },
         .idStopsSaying: { try $0.expectStopsSaying($0.args[0], text: $0.args[1]) },
+        .idSaysSomethingWith: { try $0.expectSaysSomethingWith($0.args[0], text: $0.args[1]) },
         .processedCopy: { try $0.makeProcessedCopy() },
         .plantRunMarker: { try $0.plantRunMarker() },
         .openProcessed: { try $0.openProcessedCopy() },
@@ -123,6 +133,10 @@ final class GuiFeatureRunner {
         .openPreferences: { try $0.openPreferences() },
         .openLocationQuestion: { try $0.openCopiedSequenceAtItsLocationQuestion() },
         .openVideoImport: { try $0.openVideoAtItsImportDialog() },
+        .startLongVideoImport: { try $0.startLongVideoImport() },
+        .videoFramesExtracting: { try $0.expectVideoFramesBeingExtracted() },
+        .videoFramesGone: { try $0.expectVideoFramesGone() },
+        .chooserAnswersProcessed: { try $0.chooserAnswersWithProcessedCopy() },
         .openVideoHeld: { try $0.openVideoWithExtractionHeld() },
         .releaseExtraction: { try $0.releaseExtraction() },
         .paintBand: { try $0.paintBand(across: $0.args[0]) },
@@ -344,9 +358,11 @@ final class GuiFeatureRunner {
         let home = scratch.appendingPathComponent("home")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         app.launchEnvironment["HOME"] = home.path
-        if savesScreenshots || feature?.id == "uiRestartNow" { try keepGPUMergeOff() }
+        if savesScreenshots || startsRunsFromTheProcessedCopy || feature?.id == "uiRestartNow" { try keepGPUMergeOff() }
         // Ignore the windows the last run of the app left open (macOS restores them): a feature starts from the app as it opens, not from where an earlier one quit.
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"] + arguments
+        // File ▸ Open's open panel cannot be driven: when the feature says what it answers with, the app is told (`ViewModel.uiTestChosenPath`).
+        if let chosen = chosenPath { app.launchArguments += ["-StarUITestChoosePath", chosen] }
         // The parity gallery's window is 1400 by 1100 points, as the desktop client's test window is: XCUITest cannot size a window, so the app does (`ViewModel.uiTestWindowSize`).
         if savesScreenshots {
             app.launchArguments += ["-StarUITestWindowSize", "\(Self.galleryWindowSize)"]
@@ -539,6 +555,82 @@ final class GuiFeatureRunner {
         try waitFor("\(identifier) \(focused ? "to have" : "not to have") the keyboard", timeout: 20, detail: { "(hasKeyboardFocus: \(hasKeyboard()))" }) { hasKeyboard() == focused }
     }
 
+    /// The control takes clicks (a button that is not greyed out), or does not.
+    private func expectEnabled(_ identifier: String, enabled: Bool) throws {
+        try expectShown(identifier, shown: true)
+        let e = element(identifier)
+        try waitFor("\(identifier) \(enabled ? "enabled" : "disabled")", timeout: 20, detail: { "(isEnabled \(e.isEnabled))" }) { e.isEnabled == enabled }
+    }
+
+    /// The folder the processed copy's videos are written to: its config's `outputPath`.
+    private func processedOutputFolder() throws -> URL {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: config)) as? [String: Any], let path = object["outputPath"] as? String else {
+            throw RunnerError("\(config.path) has no outputPath")
+        }
+        return URL(fileURLWithPath: path)
+    }
+
+    /// The processed copy's video settings become VP9 in Matroska, which the Render Video dialog starts from (L12). A ten-frame ProRes render is done in a
+    /// few seconds, and a slow runner needs about that long to get from Render to Cancel; VP9 at this size takes far longer.
+    private func slowEncoder() throws {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        guard var object = try JSONSerialization.jsonObject(with: Data(contentsOf: config)) as? [String: Any] else { throw RunnerError("\(config.path) is not a JSON object") }
+        object["codec"] = "vp9"
+        object["encoder"] = "libvpx-vp9"
+        object["pixelFormat"] = "yuv420p"
+        object["muxer"] = "matroska"
+        try JSONSerialization.data(withJSONObject: object).write(to: config)
+    }
+
+    /// The videos in [folder] (not its subfolders), by the containers a render writes.
+    private func videos(in folder: URL) -> [URL] {
+        ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? [])
+            .filter { ["mov", "mp4", "mkv", "avi"].contains($0.pathExtension.lowercased()) }
+    }
+
+    /// The one video the render wrote has a frame for each image of the processed copy's sequence, at [framesPerSecond]. Read with the bundled ffprobe
+    /// (the @ui shard builds no star-output-verify).
+    private func renderedVideoHasEveryFrame(framesPerSecond: Int) throws {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        let folder = try processedOutputFolder()
+        var found: [URL] = []
+        try waitFor("a video in \(folder.path)", timeout: 60) { found = videos(in: folder); return !found.isEmpty }
+        guard found.count == 1 else { throw RunnerError("expected one rendered video in \(folder.path), found \(found.map(\.lastPathComponent))") }
+        // the frames: the sequence's images, beside its working folder (`input/<name>` for `input/star_temp_<name>`)
+        let working = config.deletingLastPathComponent()
+        let sequence = working.deletingLastPathComponent().appendingPathComponent(String(working.lastPathComponent.dropFirst("star_temp_".count)))
+        let images = ((try? FileManager.default.contentsOfDirectory(at: sequence, includingPropertiesForKeys: nil)) ?? [])
+            .filter { ["tif", "tiff", "jpg", "jpeg", "png"].contains($0.pathExtension.lowercased()) }
+        guard !images.isEmpty else { throw RunnerError("no images in \(sequence.path)") }
+        let ffprobe = Self.repoRoot.appendingPathComponent("external_binaries/bin/ffprobe")
+        let process = Process()
+        process.executableURL = ffprobe
+        process.arguments = ["-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames,r_frame_rate",
+                             "-of", "default=noprint_wrappers=1", found[0].path]
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = out
+        try process.run()
+        let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { throw RunnerError("ffprobe failed on \(found[0].path):\n\(text)") }
+        func value(_ key: String) -> String? {
+            text.split(whereSeparator: \.isNewline).first { $0.hasPrefix("\(key)=") }.map { String($0.dropFirst(key.count + 1)) }
+        }
+        guard let frames = value("nb_read_frames").flatMap({ Int($0) }), let rate = value("r_frame_rate") else {
+            throw RunnerError("ffprobe's answer has no frame count and rate:\n\(text)")
+        }
+        guard frames == images.count else { throw RunnerError("\(found[0].lastPathComponent) has \(frames) frames, the sequence \(images.count)") }
+        guard rate == "\(framesPerSecond)/1" else { throw RunnerError("\(found[0].lastPathComponent) is at \(rate), expected \(framesPerSecond)/1") }
+    }
+
+    /// No video is in the output folder, now or soon (a cancelled render's partial file goes when its process has ended).
+    private func noVideoLeft() throws {
+        let folder = try processedOutputFolder()
+        try waitFor("the output folder to hold no video", timeout: 30, detail: { "(\(self.videos(in: folder).map(\.lastPathComponent)))" }) { videos(in: folder).isEmpty }
+    }
+
     /// The first whole number in the control's text is [number]: "7" in an open field, "merge with 7 static neighbors" in one that is not.
     private func expectHolds(_ identifier: String, number: Int) throws {
         try expectShown(identifier, shown: true)
@@ -570,6 +662,14 @@ final class GuiFeatureRunner {
         let e = element(identifier)
         func texts() -> [String] { [e.label, e.title, (e.value as? String) ?? ""] }
         try waitFor("\(identifier) to stop saying \"\(unwanted)\"", timeout: 90, detail: { "(it says \(texts()))" }) { !texts().contains(unwanted) }
+    }
+
+    /// The element says something with [part] in it before long: for a line whose rest the feature does not pin (the steps a run is working on).
+    private func expectSaysSomethingWith(_ identifier: String, text part: String) throws {
+        try expectShown(identifier, shown: true)
+        let e = element(identifier)
+        func texts() -> [String] { [e.label, e.title, (e.value as? String) ?? ""] }
+        try waitFor("\(identifier) to say something with \"\(part)\"", timeout: 90, detail: { "(it says \(texts()))" }) { texts().contains { $0.contains(part) } }
     }
 
     /// The element's text is the catalogue's text for [key].
@@ -710,7 +810,12 @@ final class GuiFeatureRunner {
         let bar = app.menuBars.firstMatch
         let entryFrame = entry.frame
         let barFrame = bar.frame
-        if ready, Self.isFinite(entryFrame), Self.isFinite(barFrame) {
+        if ready, item.menu == fileMenuTitle {
+            // The File menu's items are clicked as XCUIElement does: a click at a point computed from the item's frame opened nothing for
+            // File ▸ Open Image Sequence with a run going (the menu closed and no question came: 0 of 10 runs of uiOpenWhileProcessing, 4 of 4
+            // with this click), where the Window menu's items took it.
+            entry.click()
+        } else if ready, Self.isFinite(entryFrame), Self.isFinite(barFrame) {
             let origin = bar.coordinate(withNormalizedOffset: .zero)
             origin.withOffset(CGVector(dx: entryFrame.midX - barFrame.minX, dy: entryFrame.midY - barFrame.minY)).click()
         } else {
@@ -719,6 +824,8 @@ final class GuiFeatureRunner {
             try press(shortcut)
         }
     }
+
+    private var fileMenuTitle: String { (try? menuTitle("file")) ?? "File" }
 
     /// A frame with real coordinates: not null, not infinite, not empty.
     private static func isFinite(_ frame: CGRect) -> Bool {
@@ -842,6 +949,77 @@ final class GuiFeatureRunner {
         start.press(forDuration: 0.2, thenDragTo: end)
     }
 
+    /// A feature from the processed sequence starts runs, and this Mac must never run the GPU merge (CLAUDE.md).
+    private var startsRunsFromTheProcessedCopy: Bool {
+        feature?.steps.contains(where: { $0.action == .processedCopy }) == true
+    }
+
+    /// What File ▸ Open's panel answers with, when the feature says (`-StarUITestChoosePath`).
+    private var chosenPath: String?
+
+    /// What File ▸ Open's panel answers: the processed copy's folder, which leads to the question of where its files go.
+    private func chooserAnswersWithProcessedCopy() throws {
+        guard processedConfig != nil else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        chosenPath = scratch.appendingPathComponent("processed").path
+    }
+
+    /// The folder the long video's frames are extracted into: beside the video, named for it (as `importVideo` finds them).
+    private var longVideoFrames: URL { scratch.appendingPathComponent("long-video") }
+
+    /// How many times the sequence's frames are played over again in the long video: 19 frames make 1900.
+    private static let longVideoLoops = 99
+
+    /// A video of 1900 frames (4K, about 13 s to extract on this Mac, where a click lands within 2 s), made from the copied sequence's frames with the bundled ffmpeg (scaled to 3840 wide, the frames looped), imported in
+    /// the foreground as a user does (JPEG, "extract in the background" off), so that the loading screen with its Cancel is what is on screen while
+    /// the frames are extracted. Stops once Import has been pressed.
+    private func startLongVideoImport() throws {
+        guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
+        let frames = try FileManager.default.contentsOfDirectory(atPath: copy.path).filter { $0.lowercased().hasSuffix(".jpg") }.count
+        guard frames > 0 else { throw RunnerError("no jpg frames in \(copy.path) to make a video from") }
+        let ffmpeg = Self.repoRoot.appendingPathComponent("external_binaries/bin/ffmpeg")
+        let video = scratch.appendingPathComponent("long-video.mp4")
+        let process = Process()
+        process.executableURL = ffmpeg
+        process.arguments = ["-y", "-loglevel", "error", "-framerate", "5", "-pattern_type", "glob", "-i", copy.appendingPathComponent("*.jpg").path,
+                             "-vf", "scale=3840:-2,loop=loop=\(Self.longVideoLoops):size=\(frames):start=0",
+                             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "40", "-pix_fmt", "yuv420p", video.path]
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0, FileManager.default.fileExists(atPath: video.path) else { throw RunnerError("could not make a video from \(copy.path)") }
+        try launch(arguments: ["-StarUITestOpenVideo", video.path])
+        guard element("videoimport.import").waitForExistence(timeout: 120) else {
+            throw RunnerError("the video import sheet did not appear\n\(app.debugDescription)")
+        }
+        let radio = element("videoimport.format.jpeg")
+        if radio.exists { radio.click() } else { app.radioGroups.firstMatch.radioButtons.element(boundBy: 2).click() }
+        // "Extract video in background" is on for a video the probe finds cheap to reach: off, so that the whole extraction is the loading screen.
+        let background = element("videoimport.background")
+        if background.waitForExistence(timeout: 30) {
+            let isOn = (background.value as? String) == "1" || (background.value as? Int) == 1
+            if isOn { background.click() }
+        }
+        // Return is Import's default action (see `importVideo`: the button can be where a click is lost).
+        app.typeKey(.return, modifierFlags: [])
+    }
+
+    /// Frames of the long video are on disk: the extraction has begun (so a folder found gone later was taken back, not never made).
+    private func expectVideoFramesBeingExtracted() throws {
+        var count = 0
+        try waitFor("frames to be extracted into \(longVideoFrames.path)", timeout: 120, interval: 0.25, detail: { "(\(count) files)" }) {
+            count = (try? FileManager.default.contentsOfDirectory(atPath: longVideoFrames.path).count) ?? 0
+            return count >= 5
+        }
+    }
+
+    private func expectVideoFramesGone() throws {
+        try waitFor("\(longVideoFrames.path) to be gone", timeout: 30, interval: 0.5, detail: {
+            let left = ((try? FileManager.default.contentsOfDirectory(atPath: longVideoFrames.path)) ?? []).sorted()
+            return "(left: \(left.prefix(8)) of \(left.count))"
+        }) {
+            !FileManager.default.fileExists(atPath: longVideoFrames.path)
+        }
+    }
+
     private var savesScreenshots: Bool {
         feature?.steps.contains(where: { $0.action == .saveScreenshot || $0.action == .saveWindowScreenshot }) == true
     }
@@ -860,6 +1038,7 @@ final class GuiFeatureRunner {
     /// `<dir>/<client>/<name>.png`, where dir is `STAR_GALLERY_DIR` (`TEST_RUNNER_STAR_GALLERY_DIR` under xcodebuild; the desktop's runner reads the
     /// same), else `<repo>/.test-data/gallery/latest`. The runner is sandboxed and on CI cannot write into the workspace (Code=513), so when that
     /// directory cannot be made the gallery goes to the runner container's tmp (`NSTemporaryDirectory()/gallery/latest`, as `saveArtifacts` does).
+    /// Only the runner and CI touch that fallback, never the app, so it is no container crossing (unlike the scratch, which is outside it).
     /// Returns the file, with its directory made.
     private func galleryFile(_ name: String) throws -> URL {
         let wanted: URL
@@ -1259,12 +1438,14 @@ final class GuiFeatureRunner {
     /// Copies the validator's reports and the run's config.json to `$STAR_GHERKIN_ARTIFACTS/<feature>` for CI to upload.
     private func saveArtifacts(of feature: Feature) {
         // Default: the runner's own container tmp (`~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gherkin-artifacts`), the only
-        // place a sandboxed runner can write; CI uploads that directory.
+        // place a sandboxed runner can write by default; CI uploads that directory. Only the runner writes it (the app never sees it), so it is no
+        // container crossing; the scratch the app does use is outside the container (`ScratchLocation`).
         let dir = ProcessInfo.processInfo.environment["STAR_GHERKIN_ARTIFACTS"].flatMap { $0.isEmpty ? nil : $0 }
             ?? (NSTemporaryDirectory() as NSString).appendingPathComponent("gherkin-artifacts")
         let fm = FileManager.default
         let dest = URL(fileURLWithPath: dir).appendingPathComponent(feature.id)
-        // The UI-test runner is sandboxed: it can only write inside its own container, so a directory outside it is skipped, not failed.
+        // The UI-test runner is sandboxed: besides its container it can write only where starUITests.entitlements allows (/private/tmp/), so a
+        // directory elsewhere is skipped, not failed.
         // (CI uploads the container's tmp directory instead; see the workflow.)
         do { try fm.createDirectory(at: dest, withIntermediateDirectories: true) } catch { print("artifacts: cannot write \(dest.path): \(error)"); return }
         for name in (try? fm.contentsOfDirectory(atPath: scratch.path)) ?? [] {
@@ -1289,7 +1470,7 @@ final class GuiFeatureRunner {
     // MARK: removal checks (star-removal-verify)
 
     /// Reports and crops go in the scratch directory as `report-removal-*`: the UI-test runner is sandboxed and cannot write into the
-    /// repository, and `saveArtifacts` copies every `report-*` entry out to the container's artifacts directory, which CI uploads.
+    /// repository (the scratch is /private/tmp/star-gherkin-<uid>/<run>, which its entitlements allow), and `saveArtifacts` copies every `report-*` entry out to the container's artifacts directory, which CI uploads.
     private func reportsDirectory() -> URL { scratch }
 
     private func verifierBinary() throws -> URL {

@@ -70,6 +70,7 @@ struct ImageSequenceLoadingView: View {
                   .font(.largeTitle)
             }
               .buttonStyle(ShrinkingButton())
+              .accessibilityIdentifier("loading.cancel")
             Spacer()
         }
           .frame(maxWidth: .infinity, maxHeight: .infinity)

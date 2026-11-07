@@ -6,8 +6,6 @@ import logging
 struct InitialView: View {
     @Environment(ViewModel.self) var viewModel: ViewModel
 
-    @State private var previously_opened_sheet_showing_item: String = ""
-
     @State private var url1: URL? = nil
     @State private var url2: URL? = nil
     
@@ -47,9 +45,6 @@ struct InitialView: View {
                       //self.url1 = _url1
                       self.url2 = _url2
                   }
-              }
-              if viewModel.userPreferences.sortedSequenceList.count > 0 {
-                  previously_opened_sheet_showing_item = viewModel.userPreferences.sortedSequenceList[0]
               }
           }
     }
@@ -101,34 +96,6 @@ struct InitialView: View {
                     Text(localized("ui.load_config")).font(.largeTitle)
                 }.buttonStyle(ShrinkingButton(.clear))
                   .help(localized("ui.load_a_json_config_file_from_a_previous_run"))
-                if viewModel.userPreferences.recentlyOpenedSequencelist.count > 0 {
-
-                    Button(action: self.loadRecent) {
-                        Text(localized("ui.open_recent")).font(.largeTitle)
-                    }.buttonStyle(ShrinkingButton(.clear))
-                      .help(localized("ui.open_a_recently_processed_sequence"))
-                      .accessibilityIdentifier("startup.recent.open")
-                    Picker("\u{27F6}", selection: $previously_opened_sheet_showing_item) {
-                        let array = viewModel.userPreferences.sortedSequenceList
-                        ForEach(array, id: \.self) { option in
-                            Text(option)
-                        }
-                    }//.frame(maxWidth: 500)
-                      .pickerStyle(.menu)
-                      // the initial view sits on a dark backdrop whatever the system
-                      // appearance is; without this the menu's text is dark on dark
-                      .environment(\.colorScheme, .dark)
-                      .foregroundColor(.white)
-                    // the desktop client lists the recents with a ✕ on each; here it takes off the one the picker shows
-                    Button(action: self.removeSelectedRecent) {
-                        Image(systemName: "xmark.circle")
-                          .foregroundColor(.white)
-                    }
-                      .buttonStyle(.plain)
-                      .accessibilityIdentifier("startup.recent.remove")
-                      .help(localized("ui.remove_from_recent"))
-                      .disabled(previously_opened_sheet_showing_item.isEmpty)
-                }
                 Spacer()
             }
               .sheet(item: $viewModel.pendingVideoImport) { pending in
@@ -153,15 +120,25 @@ struct InitialView: View {
                   NewReleaseSheetView(isVisible: $viewModel.newReleaseSheetShowing,
                                       viewModel: viewModel)
               }
+
+            // The desktop's list: a row per recent with its own ✕, each opened by what it is.
+            let recent = viewModel.userPreferences.sortedSequenceList
+            if !recent.isEmpty {
+                Text(localized("ui.open_recent"))
+                  .font(.caption)
+                  .foregroundColor(.white.opacity(0.7))
+                  .frame(maxWidth: .infinity, alignment: .leading)
+                  .padding(.horizontal, 40)
+                  .padding(.top, 4)
+                  .help(localized("ui.open_a_recently_processed_sequence"))
+                RecentsListView(recent: recent,
+                                onOpen: { loadRecent($0) },
+                                onRemove: { viewModel.userPreferences.removeFromRecent(filename: $0) })
+                  .padding(.horizontal, 40)
+            }
+            Space(height: 20)
         }
           .background(.clear)
-    }
-
-    private func removeSelectedRecent() {
-        let removed = previously_opened_sheet_showing_item
-        let list = viewModel.userPreferences.sortedSequenceList
-        viewModel.userPreferences.removeFromRecent(filename: removed)
-        previously_opened_sheet_showing_item = UserPreferences.recentSelection(afterRemoving: removed, from: list)
     }
 
     func handleDrop(providers: [NSItemProvider]) -> Bool {
@@ -397,28 +374,111 @@ struct InitialView: View {
         }
     }
 
-    func loadRecent() {
-        Log.d("load image sequence")
-        
-        viewModel.eraserTask = Task.detached(priority: .userInitiated) {
-            do {
-              try await viewModel.startup(withConfigFile: previously_opened_sheet_showing_item)
-                Task { @MainActor in
-                    viewModel.imageSequence?.initialLoadInProgress = true
-                }
-            } catch {
-                Log.e("\(error)")
-                await MainActor.run {
-                    self.handle(error: "\(error)")
+    /// How a recent entry is opened, from its path alone (the desktop's `inferOpenKind`; both read
+    /// `gherkin/ui/vectors/recentOpenKinds.json`): a `.json` resumes a config, a video extension imports, anything else is a
+    /// sequence folder.
+    enum OpenKind: String { case config, video, sequence }
+
+    nonisolated static let videoExtensions: Set<String> = ["mov", "mp4", "m4v", "avi", "mkv", "mpg", "mpeg"]
+
+    nonisolated static func openKind(for path: String) -> OpenKind {
+        if path.lowercased().hasSuffix(".json") { return .config }
+        if videoExtensions.contains(URL(fileURLWithPath: path).pathExtension.lowercased()) { return .video }
+        return .sequence
+    }
+
+    func loadRecent(_ path: String) {
+        Log.d("load recent \(path)")
+        switch Self.openKind(for: path) {
+        case .config:
+            // startup(withConfigFile:) asks for the access the config's folders need.
+            viewModel.eraserTask = Task.detached(priority: .userInitiated) {
+                do {
+                    try await viewModel.startup(withConfigFile: path)
+                    Task { @MainActor in
+                        viewModel.imageSequence?.initialLoadInProgress = true
+                    }
+                } catch {
+                    Log.e("\(error)")
+                    await MainActor.run {
+                        self.handle(error: "\(error)")
+                    }
                 }
             }
+        case .video:
+            guard FolderAccess.ensureAccess(to: path, writable: false) else {
+                handle(error: localized("ui.folder_access_denied", path))
+                return
+            }
+            startupWithVideoToProcess(path)
+        case .sequence:
+            startupWithSequenceDir(path)
         }
     }
 }
 
+/// The recents, one row each: the sequence's name (the folder, for a config.json), where it is, and a ✕ that takes just that
+/// row off the list.  The desktop's `RecentFilesList`.
+struct RecentsListView: View {
+    let recent: [String]
+    let onOpen: (String) -> Void
+    let onRemove: (String) -> Void
 
+    /// What a row is titled and where it is: a config.json is named for the folder it sits in, which names the sequence.
+    static func titleAndLocation(of path: String) -> (title: String, location: String) {
+        let url = URL(fileURLWithPath: path)
+        if path.lowercased().hasSuffix(".json") {
+            let folder = url.deletingLastPathComponent()
+            return (folder.lastPathComponent, folder.deletingLastPathComponent().path)
+        }
+        return (url.lastPathComponent, url.deletingLastPathComponent().path)
+    }
 
-
+    var body: some View {
+        ScrollView {
+            LazyVStack(spacing: 2) {
+                ForEach(recent, id: \.self) { path in
+                    let text = Self.titleAndLocation(of: path)
+                    HStack {
+                        Button(action: { onOpen(path) }) {
+                            VStack(alignment: .leading) {
+                                Text(text.title)
+                                  .font(.system(size: 13))
+                                  .foregroundColor(.white)
+                                  .lineLimit(1)
+                                Text(text.location)
+                                  .font(.system(size: 10))
+                                  .foregroundColor(.white.opacity(0.5))
+                                  .lineLimit(1)
+                                  .truncationMode(.middle)
+                            }
+                              .frame(maxWidth: .infinity, alignment: .leading)
+                              .contentShape(Rectangle())
+                        }
+                          .buttonStyle(.plain)
+                          .accessibilityIdentifier("startup.recent.open")
+                        Button(action: { onRemove(path) }) {
+                            Text("\u{2715}")
+                              .font(.system(size: 12))
+                              .foregroundColor(.white.opacity(0.5))
+                              .frame(width: 20, height: 20)
+                              .contentShape(Rectangle())
+                        }
+                          .buttonStyle(.plain)
+                          .accessibilityIdentifier("startup.recent.remove")
+                          .help(localized("ui.remove_from_recent"))
+                    }
+                      .padding(.horizontal, 10)
+                      .padding(.vertical, 6)
+                      .background(RoundedRectangle(cornerRadius: 4).fill(Color.white.opacity(0.12)))
+                }
+            }
+              .padding(.vertical, 2)
+        }
+          .frame(maxWidth: .infinity)
+          .frame(height: 220)
+    }
+}
 
 import SwiftUI
 @preconcurrency import AVFoundation

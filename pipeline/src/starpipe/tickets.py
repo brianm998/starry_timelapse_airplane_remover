@@ -291,6 +291,7 @@ class FilingError(RuntimeError):
 
 
 PROPOSED = "pipe:proposed"
+APPROVED = "pipe:approved"  # the owner approved a proposal: they took the ticket on, so it gets an owner's veto window
 DUPLICATE_RATIO = 0.8
 FILED_BY = re.compile(r"<!-- starpipe:filed-by:([\w .@-]+) -->")
 
@@ -378,7 +379,7 @@ def proposals(gh: GitHub) -> list[Proposal]:
 
 
 def approve(gh: GitHub, number: int, priority: str | None = None, max_open: int = 30) -> None:
-    """The owner's go-ahead for a proposal: `pipeline` goes on, `pipe:proposed` comes off."""
+    """The owner's go-ahead for a proposal: `pipeline` and `pipe:approved` go on, `pipe:proposed` comes off."""
     if priority is not None and priority not in PRIORITIES:
         raise FilingError(f"priority must be one of {', '.join(PRIORITIES)}")
     try:
@@ -392,7 +393,8 @@ def approve(gh: GitHub, number: int, priority: str | None = None, max_open: int 
             raise FilingError(f"#{number} is already approved")
         if len(_open_with(gh, "pipeline")) >= max_open:
             raise FilingError(f"{max_open} tickets are already open for the pipeline; wait, or raise max_open_tickets")
-        gh.add_labels(number, ["pipeline", *([priority] if priority else [])])
+        gh.ensure_label(APPROVED)
+        gh.add_labels(number, ["pipeline", APPROVED, *([priority] if priority else [])])
         gh.remove_label(number, PROPOSED)
     except GitHubError as exc:
         raise FilingError(f"could not approve #{number}: {exc}") from exc

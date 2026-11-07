@@ -204,6 +204,32 @@ Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<clie
   `-configuration Release` is what CI passes (the scheme's default stays Debug for development). Use `-scheme star`, never `-target Star`, and no `-destination`. Without automation mode `xcodebuild
   test` hangs at "Timed out while enabling automation mode".
 
+  **Scratch location, entitlements and the "access data from other apps" prompt.** The XCUITest runner (`com.star-guiUITests.xctrunner`) is
+  sandboxed; `Star.app` is not. A scratch in the runner's `NSTemporaryDirectory()` (inside `~/Library/Containers/…/Data/tmp`) made the app read and
+  write another app's container (input copies, `STAR_RUN_MARKER_DIR`, the `HOME` with `.star.userprefs.json`, the processed fixture), which macOS
+  guards with App Data protection (TCC `kTCCServiceSystemPolicyAppData`): "“Star” would like to access data from other apps". Pipeline and CI builds
+  are ad-hoc signed (`CODE_SIGN_IDENTITY=-`), whose code requirement is the cdhash, so it changes with every build and an Allow never persists.
+  Signing alone would make the grant stick but leave the crossing, so the crossing is removed instead: the scratch is
+  `/private/tmp/star-gherkin-<uid>/<run>` (`gui/starUITests/ScratchLocation.swift`; `STAR_GHERKIN_SCRATCH`, as `TEST_RUNNER_STAR_GHERKIN_SCRATCH`
+  under xcodebuild, overrides the root, and a path inside a container is rejected). The runner may write there through the
+  `com.apple.security.temporary-exception.files.absolute-path.read-write` entry for `/private/tmp/` in `gui/starUITests/starUITests.entitlements`
+  (the `starUITests` target's `CODE_SIGN_ENTITLEMENTS`; ad-hoc builds accept it). The app's own entitlements and release signing are unchanged.
+  Artifacts (`saveArtifacts`) and the gallery fallback stay in the runner's container tmp: only the runner and CI touch them, so CI's upload paths
+  are unchanged. To check a run for the prompt: `log stream --predicate 'subsystem == "com.apple.TCC"'` must show no `kTCCServiceSystemPolicyAppData`
+  request for `com.star`. Don't `ls` the runner's container in an interactive session: that read raises the same prompt. If the app (not the
+  runner) ever still prompts, give pipeline builds a stable signing identity instead of `-`.
+  Result on this Mac (2026-11-06, ad-hoc signed, GPU merge off): `log show --predicate 'subsystem == "com.apple.TCC"'` over the runs (all 61 @ui
+  features once, then reruns of the processed-fixture ones, and `starTests` via `run_checks`) holds no `kTCCServiceSystemPolicyAppData` request and
+  no entry naming `com.star` or the runner. The runner wrote its scratch under `/private/tmp` on every run (uiStartupDefaults and the
+  processed-copy features uiDecisionsSurviveClose, uiFindOutliersInline, uiFrameModeChange pass), so the entitlement is honoured and no stable
+  signing identity was needed. This was not reproduced before the change (no baseline capture), so it shows the prompt's source is gone, not that it
+  once fired from there. A runner cannot make the processed fixture itself (`xcrun: error: cannot be used within an App Sandbox`): make it first
+  with `gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10` (CI does) or those features fail.
+  In the full pass 39 of 61 passed; 19 failed only on that fixture, and 3 others (uiAutoSelectiveEnds, which timed out after 685 s, and two that
+  could not find a control) were not run against the base to see whether the change matters, so they are open.
+  `ScratchLocationTests` is not selected by the pipeline's gherkin run; run it with
+  `xcodebuild test -project gui/star.xcodeproj -scheme star -only-testing:starUITests/ScratchLocationTests CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=`.
+
 ## The seams the tests rely on
 
 * gui: launch arguments `-StarUITestOpenSequence <dir>` (`ViewModel.openSequenceFromUITestArgument`) opens a sequence the way
@@ -224,7 +250,7 @@ The full matrix takes about 3 hours, so it is not what a PR runs. What runs when
 
 | Workflow (name) | File | Runs on | The pipeline |
 |---|---|---|---|
-| **Gherkin smoke** | `gherkin-smoke.yml`, which calls `gherkin.yml` with `smoke: true` | every PR touching program code (without the Windows legs), pushes to `develop` (with them), by hand (with them) | waits for it and blocks on it |
+| **Gherkin smoke** | `gherkin-smoke.yml`, which calls `gherkin.yml` with `smoke: true` | every PR touching program code (without the Windows legs, and with only the mac gui leg of `smoke-macos` for macOS, when the PR touches a macOS-specific path), pushes to `develop` (with them), by hand (with them) | waits for it and blocks on it |
 | **Gherkin** (the full matrix) | `gherkin.yml` | pushes to `main`, the nightly dispatch, by hand (`workflow_dispatch`, optionally `features`) | does not wait for it on a PR (`ci_post_merge_workflows` in `pipeline/src/starpipe/config.py` lists this name only); the nightly reruns its failed jobs once and files the tickets (`Gherkin nightly red: …`, `Gherkin flaky: …`); the post-merge watch only updates its baseline |
 
 `gherkin/smoke.json` is the subset, a client name to a list of feature names:
@@ -238,16 +264,33 @@ one feature each, **except on a PR, which skips the two Windows jobs** (`cli-win
 every batch (MSVC install, the stard and validator builds), so Windows runs post-merge instead. `gherkin-smoke.yml` passes
 `windows: skip` to `gherkin.yml` on a `pull_request` and `windows: run` otherwise. On the push to `develop` the Windows jobs run
 even when "Already tested?" (`already-tested.yml`) skips the rest because the batch PR's green run covered the tree: the
-`smoke-windows` job then calls `gherkin.yml` with `windows: only`. A Windows-only break is therefore found on `develop` by the
+`smoke-post-merge` job then calls `gherkin.yml` with `windows: only` (no Linux legs: Windows and macOS). A Windows-only break is therefore found on `develop` by the
 post-merge watch (a ticket after two red runs), not on the PR; `workflow_dispatch` and the nightly still run every leg. `cli.yml`
-("CLI Build") does the same for `Windows (windows-2022)` and `windows-e2e`: skipped on a PR, run on every push. `autoHorizonJpeg` is the cheapest real flow (one 46 MB JPEG dataset, no video, no 16-bit, no trail verifier build). The
-target is about 30 minutes on a PR; the slow part is the queue for the macOS runners, which is why only three jobs are macOS.
+("CLI Build") does the same for `Windows (windows-2022)` and `windows-e2e`: skipped on a PR, run on every push.
+
+**macOS on a PR.** macOS runners are the scarce ones (queues of 40 minutes), so a PR starts a macOS job only for what is specific to
+macOS. `cli-macos` and `desktop-macos` run the same feature as `cli-linux` and `desktop-linux` on code that has no macOS guards, so
+they are skipped on a PR, as are pr-gate's `macos` and cli.yml's `macos` (the same `swift build` and StarCore tests as their `linux`
+jobs). The mac gui leg (the XCUITest of Star.app) runs on a PR only when it touches a macOS-specific path: `gui/`,
+`StarCpp/`, `wgpu/`, `cli/*.xcodeproj`, `ffmpeg/` or `.github/` (`.github/scripts/macos-paths.sh` is the one list; the `changes` jobs
+of `gherkin-smoke.yml`, `pr-gate.yml` and `cli.yml` call it). A PR that touches such a path also runs pr-gate's `macos` and cli.yml's
+`macos`. `gherkin-smoke.yml` passes `gherkin.yml` the `macos` input: `gui` (only the mac gui leg of `smoke-macos`) or `skip` on a PR, `run`
+otherwise. On the push to `develop` every macOS leg runs, **also when "Already tested?" skips the rest** (the PR's green run did not
+include them): `smoke-post-merge` covers Gherkin, and the `macos` job of cli.yml ignores `tested`. A macOS-only break in shared code
+is therefore found on `develop`, as a regression there, not on the PR; the nightly full run covers every leg. `autoHorizonJpeg` is the cheapest real flow (one 46 MB JPEG dataset, no video, no 16-bit, no trail verifier build). The
+target is about 30 minutes on a PR; the slow part is the queue for the macOS runners, which is why a PR runs at most one macOS job (below).
+
+**One macOS job in smoke mode.** All macOS work of a smoke run is the single job `smoke-macos` (`smoke (macos-15) · build, cli, mac gui, desktop`):
+it builds the output validator, the trail verifier (if a feature needs it) and stard in place, then runs the cli, mac gui and desktop features
+one after the other, so a run waits for one macOS runner instead of four (`build-macos`, `cli-macos`, `mac-gui` and `desktop-macos`, which wait
+for each other and each queued separately). It is slower end to end and needs one runner to be acquired. A red leg does not skip the later ones: the run
+and "prove" steps of each leg are `continue-on-error`, the legs' own "Prove the scenario ran" checks are unchanged, and the last step fails the job
+if any of them failed. With `macos: gui` it runs only the mac gui leg. The full matrix (`smoke` false) keeps the separate jobs and their shards.
 
 **Changing it:** edit `gherkin/smoke.json`. A name must be a feature of that client (a name in `generated/features-<client>.json`) and
 no list may be empty; the `feature matrix` job fails with an `::error::` otherwise, so a rename cannot leave the smoke run green having
 run nothing. To cover more, add a feature to a list (a `ui…` feature of mac-gui or desktop becomes its own `ui` shard and builds Star.app
-or stard a second time; `removeAirplanes` also builds the trail verifier). Nothing else needs to change: the matrix, the shard job
-names and the legs are the full matrix's.
+or stard a second time; `removeAirplanes` also builds the trail verifier). Nothing else needs to change: the matrix and the legs are the full matrix's, and `smoke-macos` adds every shard's features to its leg.
 
 **How the pipeline judges it:** like any workflow. A smoke job that is red on the PR and green on `develop` gets one rerun, then blocks
 the landing; one that is also red on `develop` does not block. The `develop` baseline comes from the push run of the same workflow, so
@@ -380,7 +423,7 @@ fails with its summary plus the report and crop paths, and refuses to pass if th
 pin, or every frame). Selective is judged on the pinned objects only (`--pins-only`, BUG-004), automatic:true by the fraction removed plus the pins.
 Reports and crops: the cli runner writes them to `removal-reports/<feature>/` (git-ignored; `STAR_REMOVAL_REPORTS` overrides, and CI points it into the
 uploaded `gherkin-artifacts`); the GUI and desktop runners write `report-removal-*` beside the run, and `saveArtifacts` copies them out like the
-validator's reports (the XCUITest runner is sandboxed: it can launch the verifier and read the output, but not write into the repo). The runners find the
+validator's reports (the XCUITest runner is sandboxed: it can launch the verifier and read the output, but not write into the repo, only its container and `/private/tmp/`). The runners find the
 verifier at `trail_tools/.build/release/star-removal-verify` (`STAR_REMOVAL_VERIFY` overrides; the Windows cli leg sets it).
 
 The desktop runner opens a removal feature's session at DETECTION_STRONG by seeding the remembered detection type before the view model starts (an

@@ -50,6 +50,15 @@ sealed interface MenuEntry {
 /** A menu: its title, the letter that opens it from the keyboard, and its entries in order. */
 class MenuSpec(val title: String, val mnemonic: Char, val entries: List<MenuEntry>)
 
+/**
+ * The enabled command whose accelerator is this key with exactly these modifiers, as an AWT menu bar would take it, or null. A UI test host has no
+ * menu bar to deliver accelerators, so its runner asks this and runs the command itself.
+ */
+fun menuCommandFor(menus: List<MenuSpec>, key: Key, ctrl: Boolean, meta: Boolean, alt: Boolean, shift: Boolean): MenuEntry.Command? =
+    KeyShortcut(key, ctrl = ctrl, meta = meta, alt = alt, shift = shift).let { wanted ->
+        menus.asSequence().flatMap { it.entries }.filterIsInstance<MenuEntry.Command>().firstOrNull { it.enabled && it.shortcut == wanted }
+    }
+
 /** What the menu code below says its menus are, in the form the Compose `MenuBar` DSL reads: the same words (`Menu`, `Item`, `Separator`), collected instead of drawn. */
 class MenuBuilder {
     val menus = mutableListOf<MenuSpec>()

@@ -104,6 +104,8 @@
 		D3FBFA272CEAC0FF00A23FC6 /* InfoDialogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBFA262CEAC0FF00A23FC6 /* InfoDialogView.swift */; };
 		D3FF93DF2C75745C00A98088 /* MultiChoiceSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */; };
 		D3F00D032F00000100A00003 /* StarGherkinKernel in Frameworks */ = {isa = PBXBuildFile; productRef = D3F00D022F00000100A00002 /* StarGherkinKernel */; };
+		D386FA41298B617400878B56 /* ScratchLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA40298B617400878B56 /* ScratchLocation.swift */; };
+		D386FA43298B617400878B56 /* ScratchLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA42298B617400878B56 /* ScratchLocationTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -234,6 +236,9 @@
 		D3FBFA222CE91B4700A23FC6 /* ImageSequenceLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSequenceLoadingView.swift; sourceTree = "<group>"; };
 		D3FBFA262CEAC0FF00A23FC6 /* InfoDialogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoDialogView.swift; sourceTree = "<group>"; };
 		D3FF93DE2C75745C00A98088 /* MultiChoiceSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiChoiceSheetView.swift; sourceTree = "<group>"; };
+		D386FA40298B617400878B56 /* ScratchLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScratchLocation.swift; sourceTree = "<group>"; };
+		D386FA42298B617400878B56 /* ScratchLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScratchLocationTests.swift; sourceTree = "<group>"; };
+		D386FA44298B617400878B56 /* starUITests.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = starUITests.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -428,6 +433,9 @@
 			children = (
 				D386FA2C298B617400878B56 /* GeneratedFeatureUITests.swift */,
 				D386FA2E298B617400878B56 /* GuiFeatureRunner.swift */,
+				D386FA40298B617400878B56 /* ScratchLocation.swift */,
+				D386FA42298B617400878B56 /* ScratchLocationTests.swift */,
+				D386FA44298B617400878B56 /* starUITests.entitlements */,
 			);
 			path = starUITests;
 			sourceTree = "<group>";
@@ -700,6 +708,8 @@
 			files = (
 				D386FA2F298B617400878B56 /* GuiFeatureRunner.swift in Sources */,
 				D386FA2D298B617400878B56 /* GeneratedFeatureUITests.swift in Sources */,
+				D386FA41298B617400878B56 /* ScratchLocation.swift in Sources */,
+				D386FA43298B617400878B56 /* ScratchLocationTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -977,6 +987,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_ENTITLEMENTS = starUITests/starUITests.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;
@@ -996,6 +1007,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_ENTITLEMENTS = starUITests/starUITests.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = G3L75S65V9;

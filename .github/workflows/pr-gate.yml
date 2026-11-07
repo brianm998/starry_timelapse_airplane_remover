@@ -43,7 +43,7 @@ jobs:
   opencv-macos:
     name: OpenCV (macos)
     needs: changes
-    if: needs.changes.outputs.program == 'true'
+    if: needs.changes.outputs.macos == 'true'
     permissions:
       contents: write
     uses: ./.github/workflows/opencv.yml
@@ -55,6 +55,9 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       program: ${{ steps.decide.outputs.program }}
+      # true on every event but a pull_request; on a PR only when it touches a macOS-specific path (.github/scripts/macos-paths.sh).
+      # Everything else the macOS jobs do, Linux does on the PR, and macOS runs post-merge on the push to develop.
+      macos: ${{ steps.decide.outputs.macos }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,6 +67,7 @@ jobs:
         id: decide
         run: |
           program=true
+          macos=true
           if [ "${{ github.event_name }}" = pull_request ]; then
             # the checkout is the PR's merge commit: HEAD^1 is the base tip, so this is the PR's own files.
             # --no-renames lists both sides of a move, so a file moved out of a program path still counts
@@ -77,10 +81,14 @@ jobs:
                   *) program=true; echo "Touches the program: $f"; break ;;
                 esac
               done <<< "$files"
+              macos=false
+              if [ "$program" = true ]; then macos=$(.github/scripts/macos-paths.sh <<< "$files"); fi
             fi
           fi
           echo "program=$program"
+          echo "macos=$macos"
           echo "program=$program" >> "$GITHUB_OUTPUT"
+          echo "macos=$macos" >> "$GITHUB_OUTPUT"
 
   # ─── static checks and the pipeline's own tests: seconds, no OpenCV ─────────────
   static:
@@ -223,12 +231,17 @@ jobs:
   # not restore what cli.yml's macos-14 jobs saved under the plain key.
   #
   # `macos` also needs `linux`, which builds and tests the same code: macOS runners are scarce (jobs have gone unacquired, see #388), and a
-  # red Linux job already fails the PR, so a PR that is red on Linux never joins the macOS queue. Both jobs run on exactly the same
-  # condition, so `linux` is never skipped while `macos` should run.
+  # red Linux job already fails the PR, so a PR that is red on Linux never joins the macOS queue. `linux` is skipped only when
+  # `program` is false, which on a PR also leaves `macos` false.
   macos:
     name: macOS build + tests (macos-15)
     needs: [changes, opencv-macos, linux]
-    if: needs.changes.outputs.program == 'true'
+    # `!cancelled()` stops a skipped `linux` (no program change on a push) from skipping this job with it: a failed `linux` still does.
+    if: >-
+      ${{ !cancelled()
+      && needs.changes.outputs.macos == 'true'
+      && needs.opencv-macos.result == 'success'
+      && contains(fromJSON('["success","skipped"]'), needs.linux.result) }}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
