@@ -71,5 +71,7 @@
   "uiStartupSpeedSharpness": [],
   "uiTranslatedScreen": [],
   "uiUpdateSettingsMidRun": [],
+  "uiVideoRender": [],
+  "uiVideoRenderCancel": [],
   "uiViewPickerNeedsAnImage": []
 }
