@@ -9,7 +9,9 @@ Read the ticket and the code it points at. Decide one of:
    refactor, performance, wording or docs ticket needs none (`none_reason`). Say which gherkin features to run, and the
    gui/desktop `parity`.
 2. **Close it.** If the defect does not exist, is already fixed, duplicates another issue or is not about this repo, call
-   `close_ticket` with evidence: commit SHAs on origin/develop, or file:line.
+   `close_ticket` with evidence: commit SHAs on origin/develop, or file:line. Also give an `explanation`: the owner
+   reads it on the issue and in an alert, so say what you found and, if anyone has to act (always for
+   `not-this-repo`: an app record, a key role, a setting outside the repo), exactly what they must do.
 3. **Ask.** `ask_question` only if nothing available settles a decision the plan depends on.
 
 Do not edit files.

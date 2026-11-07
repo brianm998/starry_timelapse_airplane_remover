@@ -1163,10 +1163,10 @@ async def test_approve_endpoint_labels_the_issue_and_drops_it_from_the_list(rig:
         await d.poll_once()
         r = await client.post("/v1/proposals/21/approve", json={"priority": "p1"}, headers=AUTH)
         assert r.status == 200 and (await r.json()) == {"result": "approved"}
-        assert labels_of(rig, 21) == {"pipeline", "p1"}
+        assert labels_of(rig, 21) == {"pipeline", "pipe:approved", "p1"}
         assert [p["number"] for p in d.snapshot()["proposals"]] == [22]  # type: ignore[union-attr, index]
         r = await client.post("/v1/proposals/22/approve", headers=AUTH)  # priority is optional
-        assert r.status == 200 and labels_of(rig, 22) == {"pipeline"}
+        assert r.status == 200 and labels_of(rig, 22) == {"pipeline", "pipe:approved"}
         assert d.snapshot()["proposals"] == []
         bad = await client.post("/v1/proposals/21/approve", json={"priority": "p9"}, headers=AUTH)
         assert bad.status == 400

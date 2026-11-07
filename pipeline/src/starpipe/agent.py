@@ -38,7 +38,8 @@ SESSION_ENV_DROP = ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_T
 TOOL_DESCRIPTIONS = {
     "submit_plan": "Submit the plan that ends EXPLORE. Returns what is wrong, or 'accepted'.",
     "close_ticket": "End EXPLORE by closing the ticket: reason (duplicate-of #n | already-done | no-defect | "
-                    "not-this-repo) and evidence (commit SHAs on origin/develop, or file:line).",
+                    "not-this-repo), evidence (commit SHAs on origin/develop, or file:line) and explanation (shown to the "
+                    "owner: what you found and, for not-this-repo, what they or an outside party must do).",
     "run_checks": "Run the T0/T1 checks for this worktree under the heavy lock. Blocks until done.",
     "submit_change": "Submit the finished change: summary, deviations [{what, evidence}], tests_added "
                      "[{target, id}], parity_reason, memory_notes.",
@@ -119,7 +120,8 @@ def tool_schema(name: str) -> dict[str, Any]:
         return models[name].model_json_schema()
     free = {"type": "object", "additionalProperties": True}
     props: dict[str, Any] = {
-        "close_ticket": {"reason": {"type": "string"}, "evidence": {"type": "array", "items": {"type": "string"}}},
+        "close_ticket": {"reason": {"type": "string"}, "evidence": {"type": "array", "items": {"type": "string"}},
+                         "explanation": {"type": "string"}},
         "ask_question": {"question": {"type": "string"}, "why_unanswerable": {"type": "string"},
                          "options": {"type": "array", "items": {"type": "string"}},
                          "recommendation": {"type": "string"}, "blocking": {"type": "boolean"}},
