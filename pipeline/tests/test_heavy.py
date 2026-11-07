@@ -539,11 +539,21 @@ def test_a_ui_job_is_held_until_idle_and_ui_now_skips_that(monkeypatch: pytest.M
     split_config(state_home)
     monkeypatch.delenv("STARPIPE_UI_NOW", raising=False)
     calls: list[float] = []
-    monkeypatch.setattr(idle, "wait_until_idle", lambda need, **_kw: calls.append(need) or 7.0)
-    monkeypatch.setattr(idle, "is_idle", lambda *_a, **_kw: True)
+    def fake_wait(need: float, **_kw: object) -> float:
+        calls.append(need)
+        return 7.0
+
+    def fake_is_idle(*_a: object, **_kw: object) -> bool:
+        return True
+
+    monkeypatch.setattr(idle, "wait_until_idle", fake_wait)
+    monkeypatch.setattr(idle, "is_idle", fake_is_idle)
     ui = [sys.executable, "-c", "pass"]
     assert heavy.run_job(ui).waited < 7.0 and calls == []  # not an xcodebuild test: no gate
-    monkeypatch.setattr("starpipe.adapter_star.drives_display", lambda _argv: True)
+    def fake_drives_display(_argv: object) -> bool:
+        return True
+
+    monkeypatch.setattr("starpipe.adapter_star.drives_display", fake_drives_display)
     assert heavy.run_job(ui).waited >= 7.0 and calls == [600.0]
     monkeypatch.setenv("STARPIPE_UI_NOW", "1")
     heavy.run_job(ui)
