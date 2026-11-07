@@ -39,9 +39,13 @@ final class GuiFeatureRunner {
     private var moving: Bool?
     private var clean: String?                 // auto | selective | autoSelective, the validator's spelling
 
-    init(testCase: XCTestCase) {
+    /// The scratch is outside the runner's container (`ScratchLocation`): the unsandboxed app under test reads and writes it, and touching another
+    /// app's container raises the macOS "access data from other apps" prompt.
+    init(testCase: XCTestCase) throws {
         self.testCase = testCase
-        scratch = FileManager.default.temporaryDirectory.appendingPathComponent("star-gherkin-\(UUID().uuidString)")
+        let scratch = try ScratchLocation.make()
+        try ScratchLocation.createRoot(scratch.deletingLastPathComponent())
+        self.scratch = scratch
     }
 
     // MARK: dispatch table
@@ -1033,6 +1037,7 @@ final class GuiFeatureRunner {
     /// `<dir>/<client>/<name>.png`, where dir is `STAR_GALLERY_DIR` (`TEST_RUNNER_STAR_GALLERY_DIR` under xcodebuild; the desktop's runner reads the
     /// same), else `<repo>/.test-data/gallery/latest`. The runner is sandboxed and on CI cannot write into the workspace (Code=513), so when that
     /// directory cannot be made the gallery goes to the runner container's tmp (`NSTemporaryDirectory()/gallery/latest`, as `saveArtifacts` does).
+    /// Only the runner and CI touch that fallback, never the app, so it is no container crossing (unlike the scratch, which is outside it).
     /// Returns the file, with its directory made.
     private func galleryFile(_ name: String) throws -> URL {
         let wanted: URL
@@ -1424,12 +1429,14 @@ final class GuiFeatureRunner {
     /// Copies the validator's reports and the run's config.json to `$STAR_GHERKIN_ARTIFACTS/<feature>` for CI to upload.
     private func saveArtifacts(of feature: Feature) {
         // Default: the runner's own container tmp (`~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gherkin-artifacts`), the only
-        // place a sandboxed runner can write; CI uploads that directory.
+        // place a sandboxed runner can write by default; CI uploads that directory. Only the runner writes it (the app never sees it), so it is no
+        // container crossing; the scratch the app does use is outside the container (`ScratchLocation`).
         let dir = ProcessInfo.processInfo.environment["STAR_GHERKIN_ARTIFACTS"].flatMap { $0.isEmpty ? nil : $0 }
             ?? (NSTemporaryDirectory() as NSString).appendingPathComponent("gherkin-artifacts")
         let fm = FileManager.default
         let dest = URL(fileURLWithPath: dir).appendingPathComponent(feature.id)
-        // The UI-test runner is sandboxed: it can only write inside its own container, so a directory outside it is skipped, not failed.
+        // The UI-test runner is sandboxed: besides its container it can write only where starUITests.entitlements allows (/private/tmp/), so a
+        // directory elsewhere is skipped, not failed.
         // (CI uploads the container's tmp directory instead; see the workflow.)
         do { try fm.createDirectory(at: dest, withIntermediateDirectories: true) } catch { print("artifacts: cannot write \(dest.path): \(error)"); return }
         for name in (try? fm.contentsOfDirectory(atPath: scratch.path)) ?? [] {
@@ -1454,7 +1461,7 @@ final class GuiFeatureRunner {
     // MARK: removal checks (star-removal-verify)
 
     /// Reports and crops go in the scratch directory as `report-removal-*`: the UI-test runner is sandboxed and cannot write into the
-    /// repository, and `saveArtifacts` copies every `report-*` entry out to the container's artifacts directory, which CI uploads.
+    /// repository (the scratch is /private/tmp/star-gherkin-<uid>/<run>, which its entitlements allow), and `saveArtifacts` copies every `report-*` entry out to the container's artifacts directory, which CI uploads.
     private func reportsDirectory() -> URL { scratch }
 
     private func verifierBinary() throws -> URL {

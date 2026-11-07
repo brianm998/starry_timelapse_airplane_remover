@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The UI-test runner is sandboxed. Its scratch directory (ScratchLocation) is /private/tmp/star-gherkin-<uid>, outside its container, so that
+	     the unsandboxed app under test never reaches into another app's container (macOS "access data from other apps" prompt). -->
+	<key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
+	<array>
+		<string>/private/tmp/</string>
+	</array>
+</dict>
+</plist>
