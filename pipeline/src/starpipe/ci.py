@@ -192,3 +192,30 @@ def judge_feature_run(jobs: list[Job], reran: set[tuple[str, str]], *, run_compl
     elif verdict.rerun:
         verdict.kind, verdict.reason = "rerun", "feature run red: " + ", ".join(f"{j.workflow}/{j.job}" for j in verdict.rerun)
     return verdict
+
+
+def judge_macos_gate(jobs: list[Job], reran: set[tuple[str, str]], *, run_completed: bool = False, run_conclusion: str | None = None,
+                     run_id: int = 0, waited_s: float = 0.0, wait_s: float = 3 * 3600.0, hard: bool = False) -> Verdict:
+    """The jobs of ONE dispatched macos-gate run: judged as a feature run (every job blocks, a red one is rerun once), except for the
+    macOS jobs that never got a runner, the shortage the gate has to say what to do about.
+
+    A job cancelled with no step run (`unscheduled`) is rerun once with the rest; still unscheduled after that, or a macOS job still
+    queued once `waited_s` has passed `wait_s`, is a pass whose `warnings` name it (the batch lands with a note). `hard` never
+    passes them: the verdict stays pending, and `kind == "pending"` with `warnings` set tells the caller why."""
+    never = [j for j in jobs if j.unscheduled and j.done]
+    stuck = [j for j in jobs if j.queued_for_macos and waited_s > wait_s]
+    rest = [j for j in jobs if j not in never and j not in stuck]
+    if not jobs or (rest and not (never or stuck)):
+        return judge_feature_run(jobs, reran, run_completed=run_completed, run_conclusion=run_conclusion, run_id=run_id)
+    verdict = judge_feature_run(rest, reran, run_completed=run_completed, run_conclusion=run_conclusion, run_id=run_id) if rest \
+        else Verdict("pass")
+    if verdict.kind != "pass":
+        return verdict
+    again = [j for j in never if j.key not in reran and j.run_done]
+    if again:
+        return Verdict("rerun", "macOS jobs got no runner: " + ", ".join(f"{j.workflow}/{j.job}" for j in again), rerun=again)
+    missing = [*never, *stuck]
+    names = ", ".join(f"{j.workflow}/{j.job}" for j in missing)
+    if hard:
+        return Verdict("pending", f"no macOS runner for {names} (macos_gate_hard: holding)", warnings=missing)
+    return Verdict("pass", f"no macOS runner for {names}", warnings=missing)
