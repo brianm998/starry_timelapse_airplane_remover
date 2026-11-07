@@ -147,6 +147,11 @@ def run_check(check_id: str, root: Path, base: str, log_dir: Path, *, allow_skip
         log.write_text(detail + "\n")
         result = ledger.Result(check_id, "pass" if ok else "fail", sha, time.monotonic() - started,
                                log=str(log), detail=detail)
+    elif star.drives_display(list(star.CHECKS[check_id].argv)) and load().ui_local == "ci":
+        detail = ("not run here: the mac gui's UI tests drive this Mac's mouse and keyboard, so GitHub's runners run them "
+                  "(config ui_local = \"ci\"). Set ui_local to \"idle\" to run them here when nobody is at the keyboard")
+        log.write_text(detail + "\n")
+        result = ledger.Result(check_id, "ci-only", sha, 0.0, log=str(log), detail=detail)
     else:
         result = _run_command(star.CHECKS[check_id], root, base, log, sha, allow_skips, say)
     ledger.record(result)

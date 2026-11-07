@@ -39,6 +39,7 @@
   "uiMultiSheetChoices": [],
   "uiNumberFieldMessage": [],
   "uiNumberFields": [],
+  "uiOpenWhileProcessing": [],
   "uiOutlierClickKeeps": [],
   "uiOutlierClickUndecided": [],
   "uiOutlierClicks": [],
@@ -47,6 +48,7 @@
   "uiPainterOpens": [],
   "uiPainterOpensInEditMode": [],
   "uiPainterWaitsForExtraction": [],
+  "uiProcessingModalPlanning": [],
   "uiRecentsRemove": [],
   "uiRemovalSelectiveChoice": [],
   "uiRenderAllFrames": [],
@@ -69,5 +71,9 @@
   "uiStartupReturnStarts": [],
   "uiStartupSpeedSharpness": [],
   "uiTranslatedScreen": [],
+  "uiUpdateSettingsMidRun": [],
+  "uiVideoImportCancel": [],
+  "uiVideoRender": [],
+  "uiVideoRenderCancel": [],
   "uiViewPickerNeedsAnImage": []
 }

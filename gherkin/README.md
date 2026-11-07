@@ -250,7 +250,7 @@ The full matrix takes about 3 hours, so it is not what a PR runs. What runs when
 
 | Workflow (name) | File | Runs on | The pipeline |
 |---|---|---|---|
-| **Gherkin smoke** | `gherkin-smoke.yml`, which calls `gherkin.yml` with `smoke: true` | every PR touching program code (without the Windows legs, and with only `build-macos` and `mac-gui` for macOS, when the PR touches a macOS-specific path), pushes to `develop` (with them), by hand (with them) | waits for it and blocks on it |
+| **Gherkin smoke** | `gherkin-smoke.yml`, which calls `gherkin.yml` with `smoke: true` | every PR touching program code (without the Windows legs, and with only the mac gui leg of `smoke-macos` for macOS, when the PR touches a macOS-specific path), pushes to `develop` (with them), by hand (with them) | waits for it and blocks on it |
 | **Gherkin** (the full matrix) | `gherkin.yml` | pushes to `main`, the nightly dispatch, by hand (`workflow_dispatch`, optionally `features`) | does not wait for it on a PR (`ci_post_merge_workflows` in `pipeline/src/starpipe/config.py` lists this name only); the nightly reruns its failed jobs once and files the tickets (`Gherkin nightly red: …`, `Gherkin flaky: …`); the post-merge watch only updates its baseline |
 
 `gherkin/smoke.json` is the subset, a client name to a list of feature names:
@@ -271,20 +271,26 @@ post-merge watch (a ticket after two red runs), not on the PR; `workflow_dispatc
 **macOS on a PR.** macOS runners are the scarce ones (queues of 40 minutes), so a PR starts a macOS job only for what is specific to
 macOS. `cli-macos` and `desktop-macos` run the same feature as `cli-linux` and `desktop-linux` on code that has no macOS guards, so
 they are skipped on a PR, as are pr-gate's `macos` and cli.yml's `macos` (the same `swift build` and StarCore tests as their `linux`
-jobs). `build-macos` and `mac-gui` (the XCUITest of Star.app) run on a PR only when it touches a macOS-specific path: `gui/`,
+jobs). The mac gui leg (the XCUITest of Star.app) runs on a PR only when it touches a macOS-specific path: `gui/`,
 `StarCpp/`, `wgpu/`, `cli/*.xcodeproj`, `ffmpeg/` or `.github/` (`.github/scripts/macos-paths.sh` is the one list; the `changes` jobs
 of `gherkin-smoke.yml`, `pr-gate.yml` and `cli.yml` call it). A PR that touches such a path also runs pr-gate's `macos` and cli.yml's
-`macos`. `gherkin-smoke.yml` passes `gherkin.yml` the `macos` input: `gui` (only `build-macos` and `mac-gui`) or `skip` on a PR, `run`
+`macos`. `gherkin-smoke.yml` passes `gherkin.yml` the `macos` input: `gui` (only the mac gui leg of `smoke-macos`) or `skip` on a PR, `run`
 otherwise. On the push to `develop` every macOS leg runs, **also when "Already tested?" skips the rest** (the PR's green run did not
 include them): `smoke-post-merge` covers Gherkin, and the `macos` job of cli.yml ignores `tested`. A macOS-only break in shared code
 is therefore found on `develop`, as a regression there, not on the PR; the nightly full run covers every leg. `autoHorizonJpeg` is the cheapest real flow (one 46 MB JPEG dataset, no video, no 16-bit, no trail verifier build). The
-target is about 30 minutes on a PR; the slow part is the queue for the macOS runners, which is why a PR runs at most two macOS jobs (above).
+target is about 30 minutes on a PR; the slow part is the queue for the macOS runners, which is why a PR runs at most one macOS job (below).
+
+**One macOS job in smoke mode.** All macOS work of a smoke run is the single job `smoke-macos` (`smoke (macos-15) · build, cli, mac gui, desktop`):
+it builds the output validator, the trail verifier (if a feature needs it) and stard in place, then runs the cli, mac gui and desktop features
+one after the other, so a run waits for one macOS runner instead of four (`build-macos`, `cli-macos`, `mac-gui` and `desktop-macos`, which wait
+for each other and each queued separately). It is slower end to end and needs one runner to be acquired. A red leg does not skip the later ones: the run
+and "prove" steps of each leg are `continue-on-error`, the legs' own "Prove the scenario ran" checks are unchanged, and the last step fails the job
+if any of them failed. With `macos: gui` it runs only the mac gui leg. The full matrix (`smoke` false) keeps the separate jobs and their shards.
 
 **Changing it:** edit `gherkin/smoke.json`. A name must be a feature of that client (a name in `generated/features-<client>.json`) and
 no list may be empty; the `feature matrix` job fails with an `::error::` otherwise, so a rename cannot leave the smoke run green having
 run nothing. To cover more, add a feature to a list (a `ui…` feature of mac-gui or desktop becomes its own `ui` shard and builds Star.app
-or stard a second time; `removeAirplanes` also builds the trail verifier). Nothing else needs to change: the matrix, the shard job
-names and the legs are the full matrix's.
+or stard a second time; `removeAirplanes` also builds the trail verifier). Nothing else needs to change: the matrix and the legs are the full matrix's, and `smoke-macos` adds every shard's features to its leg.
 
 **How the pipeline judges it:** like any workflow. A smoke job that is red on the PR and green on `develop` gets one rerun, then blocks
 the landing; one that is also red on `develop` does not block. The `develop` baseline comes from the push run of the same workflow, so

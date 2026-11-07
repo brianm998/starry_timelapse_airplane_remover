@@ -60,6 +60,23 @@ main.add_command(heavy_cmd, "heavy")
 
 
 @main.command()
+def freeze() -> None:
+    """Hold the whole heavy lock: no test, build or UI run starts until `starpipe thaw`. Works on every pipeline version."""
+    from . import pause as paused
+
+    pid = paused.pause()
+    click.echo(f"frozen (holder pid {pid}): nothing heavy starts; a run already going is not stopped. `starpipe thaw` lets go")
+
+
+@main.command()
+def thaw() -> None:
+    """Let go of the lock `starpipe freeze` holds."""
+    from . import pause as paused
+
+    click.echo("thawed" if paused.resume() else "was not frozen")
+
+
+@main.command()
 @click.option("--tier", type=click.Choice(["t0", "t1", "all"]), default="all", show_default=True)
 @click.option("--diff", "base", default=None, help="Base ref (default origin/develop, else develop).")
 @click.option("--paths", multiple=True, help="Explain / run for these paths instead of the git diff.")

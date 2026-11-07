@@ -1,0 +1,111 @@
+name: macOS gate
+
+# The one macOS-only check the landing train runs on a finished batch before it merges (pipeline/src/starpipe/train.py, `_macos_step`).
+# A pull request runs macOS only for macOS-specific paths (.github/scripts/macos-paths.sh, #389) and the rest runs on the push to develop,
+# so without this a macOS-only break in shared Swift or Kotlin code would first show up as a red develop. It is dispatched on the batch's
+# branch, once per head, and has no other trigger. The train dispatches it for any batch that changes a file of the program (not just a
+# macOS-specific one: shared StarCore, daemon and star-desktop code is the case it exists for); a docs-only batch skips it. It runs
+#   - `macos`: pr-gate.yml's macOS build and StarCore tests, and
+#   - `smoke`: gherkin.yml in smoke mode with the Linux and Windows legs skipped, so every macOS leg of gherkin/smoke.json:
+#     build-macos, cli-macos, desktop-macos and mac-gui (Linux has already passed on the PR).
+# The train finds the run by its display title (the `title` input) and the batch head's sha, judges every job of it (pipeline/src/starpipe/
+# ci.py, judge_macos_gate), and lands the batch only on green. macOS jobs that GitHub never found a runner for are the train's business
+# (`macos_gate_wait_s`, `macos_gate_hard`), not this file's.
+
+on:
+  workflow_dispatch:
+    inputs:
+      title:
+        description: 'The run name: how the landing train recognises its run'
+        required: false
+        default: 'macOS gate'
+
+run-name: "${{ inputs.title || 'macOS gate' }}"
+
+permissions:
+  contents: read
+
+# one gate per branch at a time, never cancelled by a newer one: the train decides what is stale
+concurrency:
+  group: macos-gate-caller-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  opencv-macos:
+    name: OpenCV (macos)
+    permissions:
+      contents: write
+    uses: ./.github/workflows/opencv.yml
+    with:
+      platforms: macos
+
+  # DUPLICATED ON PURPOSE from pr-gate.yml's `macos` job (keep them in step). It is not a reusable workflow both call: called from
+  # pr-gate its jobs would be named "<caller job> / <job>", the CI judge's baseline of develop would lose the `macOS build + tests
+  # (macos-15)` job it compares PRs against, and every PR would see it as new.
+  macos:
+    name: macOS build + tests (macos-15)
+    needs: opencv-macos
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install Eigen3 via Homebrew
+        run: brew install eigen
+
+      - name: Download OpenCV
+        uses: actions/download-artifact@v4
+        with:
+          name: opencv-macos
+          path: opencv
+
+      - name: Cache StarDecisionTrees
+        uses: actions/cache@v4
+        with:
+          path: |
+            StarDecisionTrees/lib/release/macos
+            StarDecisionTrees/include/release/macos
+          key: dt-macos15-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+
+      - name: Build StarDecisionTrees (if not cached)
+        run: |
+          if [ ! -f StarDecisionTrees/lib/release/macos/libStarDecisionTrees.a ]; then
+            cd StarDecisionTrees && ./release.sh
+          fi
+
+      - name: Build cli and daemon
+        run: |
+          swift build --package-path cli
+          swift build --package-path daemon
+
+      - name: StarCore tests
+        run: swift test --package-path StarCore 2>&1 | tee starcore-test.log
+
+      - name: Prove tests ran (not a vacuous green)
+        run: |
+          n=$(grep -Eo 'Executed [0-9]+ tests' starcore-test.log | tail -1 | grep -Eo '[0-9]+' || echo 0)
+          echo "StarCore: $n tests"
+          [ "$n" -ge 1 ] || { echo "::error::StarCore executed no tests"; exit 1; }
+
+      - name: Keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-gate-macos-log
+          path: starcore-test.log
+
+  # gherkin-smoke.yml's `smoke` job, with only the macOS legs. contents: write because opencv.yml's release tier uploads with the token.
+  smoke:
+    name: Gherkin smoke (macOS)
+    permissions:
+      contents: write
+    uses: ./.github/workflows/gherkin.yml
+    with:
+      smoke: true
+      linux: skip
+      windows: skip
+      macos: run

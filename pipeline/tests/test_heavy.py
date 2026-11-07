@@ -494,3 +494,73 @@ def test_a_holder_running_the_old_one_slot_lock_still_excludes_tests_and_exclusi
     finally:
         os.close(fd)
     assert granted([W(1, heavy.TEST)]) == [1]
+
+
+def test_ui_test_runs_are_told_from_unit_test_runs() -> None:
+    from starpipe.adapter_star import drives_display
+
+    ui = [
+        ["xcodebuild", "test", "-scheme", "star"],  # the whole scheme includes starUITests
+        ["xcodebuild", "test", "-only-testing:starUITests/GeneratedFeatureUITests/testFoo"],
+        ["xcodebuild", "test", "-only-testing:starTests", "-only-testing:starUITests"],
+        ["bash", "-c", "cd gui && FOO=1 xcodebuild test-without-building -scheme star | tail"],
+    ]
+    other = [
+        ["xcodebuild", "test", "-only-testing:starTests"],
+        ["xcodebuild", "-scheme", "star", "build"],
+        ["swift", "test", "--package-path", "cli"],
+        ["bash", "-c", "xcodebuild -scheme star build && echo done"],
+        ["bash", "-c", "unbalanced \"quote"],
+    ]
+    assert [a for a in ui if not drives_display(a)] == []
+    assert [a for a in other if drives_display(a)] == []
+
+
+def test_idle_gate_waits_for_the_owner_to_leave() -> None:
+    from starpipe import idle
+
+    now = [0.0]
+    slept: list[float] = []
+    said: list[str] = []
+
+    def sleep(s: float) -> None:
+        slept.append(s)
+        now[0] += s
+
+    waited = idle.wait_until_idle(600, poll_s=15, report=said.append, read=lambda: 2.0 if now[0] < 30 else 650.0, sleep=sleep, clock=lambda: now[0])
+    assert slept == [15, 15] and waited == 30 and len(said) == 1
+    assert idle.is_idle(600, lambda: None)  # unreadable: never hold work for ever
+    assert not idle.is_idle(600, lambda: 5.0)
+
+
+def test_a_ui_job_is_held_until_idle_and_ui_now_skips_that(monkeypatch: pytest.MonkeyPatch, state_home: Path) -> None:
+    from starpipe import idle
+
+    split_config(state_home)
+    monkeypatch.delenv("STARPIPE_UI_NOW", raising=False)
+    calls: list[float] = []
+    monkeypatch.setattr(idle, "wait_until_idle", lambda need, **_kw: calls.append(need) or 7.0)
+    monkeypatch.setattr(idle, "is_idle", lambda *_a, **_kw: True)
+    ui = [sys.executable, "-c", "pass"]
+    assert heavy.run_job(ui).waited < 7.0 and calls == []  # not an xcodebuild test: no gate
+    monkeypatch.setattr("starpipe.adapter_star.drives_display", lambda _argv: True)
+    assert heavy.run_job(ui).waited >= 7.0 and calls == [600.0]
+    monkeypatch.setenv("STARPIPE_UI_NOW", "1")
+    heavy.run_job(ui)
+    assert calls == [600.0]
+
+
+def test_freeze_holds_every_slot_until_thawed(state_home: Path) -> None:
+    from starpipe import pause
+    from starpipe.config import load
+
+    split_config(state_home)
+    names = heavy._all_slots(load())  # pyright: ignore[reportPrivateUsage]
+    pause.pause()
+    try:
+        assert wait_until(lambda: not heavy._free(names))  # pyright: ignore[reportPrivateUsage]
+        assert pause.paused_pid() is not None
+    finally:
+        assert pause.resume()
+    assert wait_until(lambda: heavy._free(names) == set(names))  # pyright: ignore[reportPrivateUsage]
+    assert pause.paused_pid() is None

@@ -39,6 +39,7 @@
   { "case": "largeWindow"           , "text": "I make the window large" },
   { "case": "idStillSays"           , "text": "\"<id>\" is still saying \"<text>\"" },
   { "case": "idStopsSaying"         , "text": "\"<id>\" stops saying \"<text>\"" },
+  { "case": "idSaysSomethingWith"   , "text": "\"<id>\" says something with \"<text>\"" },
   { "case": "idShown"               , "text": "\"<id>\" is shown" },
   { "case": "idNotShown"            , "text": "\"<id>\" is not shown" },
   { "case": "idAbove"               , "text": "\"<id>\" is above \"<id>\"" },
@@ -63,6 +64,8 @@
   { "case": "idSays"                , "text": "\"<id>\" says \"<text>\"" },
   { "case": "typeInto"              , "text": "I type \"<text>\" into \"<id>\"" },
   { "case": "idHolds"               , "text": "\"<id>\" holds the number <n:int>" },
+  { "case": "idEnabled"             , "text": "\"<id>\" is enabled" },
+  { "case": "idDisabled"            , "text": "\"<id>\" is disabled" },
   { "case": "idFocused"             , "text": "\"<id>\" has the keyboard" },
   { "case": "idNotFocused"          , "text": "\"<id>\" does not have the keyboard" },
   { "case": "languageIs"            , "text": "the language is \"<code>\"" },
@@ -79,5 +82,12 @@
   { "case": "releaseExtraction"     , "text": "the video's extraction is released" },
   { "case": "paintBand"             , "text": "I paint a band across \"<id>\"" },
   { "case": "saveScreenshot"        , "text": "I save a screenshot named \"<name>\"" },
-  { "case": "saveWindowScreenshot"  , "text": "I save a screenshot of the \"<window>\" window named \"<name>\"" }
+  { "case": "saveWindowScreenshot"  , "text": "I save a screenshot of the \"<window>\" window named \"<name>\"" },
+  { "case": "startLongVideoImport"  , "text": "I start importing a long video of the copied sequence" },
+  { "case": "videoFramesExtracting" , "text": "the video's frames are being extracted" },
+  { "case": "videoFramesGone"       , "text": "the video's frames folder is gone" },
+  { "case": "chooserAnswersProcessed", "text": "the file chooser answers with the processed copy" },
+  { "case": "renderedVideoFrames"   , "text": "the rendered video has one frame per frame of the sequence at <n:int> frames per second" },
+  { "case": "noVideoLeft"           , "text": "no video is left in the output folder" },
+  { "case": "slowEncoder"           , "text": "the processed copy renders with a slow encoder" }
 ]

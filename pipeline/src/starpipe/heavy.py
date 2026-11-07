@@ -39,6 +39,7 @@ from typing import Any
 import psutil
 
 from . import adapter_star
+from . import idle as input_idle
 from .config import Config, home, load
 
 INTERACTIVE, PIPELINE, NIGHTLY = 0, 1, 2
@@ -467,7 +468,16 @@ def run_job(
     cfg = config or load()
     cmd = " ".join(argv)
     kind = EXCLUSIVE if keep_display_awake else job_class or adapter_star.job_class(cmd)  # a UI run needs the display
-    held = acquire(cmd, priority=priority, config=cfg, report=report, job_class=kind)
+    gated = adapter_star.drives_display(argv) and cfg.ui_local != "always" and not os.environ.get("STARPIPE_UI_NOW")
+    idle_wait = 0.0
+    while True:
+        if gated:  # outside the lock: a held-back UI run must not keep every other job waiting for it
+            idle_wait += input_idle.wait_until_idle(cfg.ui_idle_s, poll_s=cfg.ui_idle_poll_s, report=report)
+        held = acquire(cmd, priority=priority, config=cfg, report=report, job_class=kind)
+        if not gated or input_idle.is_idle(cfg.ui_idle_s):
+            break
+        release(held)  # the owner came back while this job waited for its turn
+    held.waited += idle_wait
     try:
         who = current_requester()
         record: dict[str, Any] = {"pid": held.pid, "ticket": who.ticket, "cmd": cmd, "since": time.time(),

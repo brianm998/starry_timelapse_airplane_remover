@@ -13,7 +13,7 @@ from ..config import home
 @dataclass
 class Result:
     check: str
-    status: str  # pass | fail | hung | vacuous | skipped-tests | not-run
+    status: str  # pass | ci-only | fail | hung | vacuous | skipped-tests | not-run
     sha: str
     seconds: float
     lock_wait: float = 0.0
@@ -31,7 +31,7 @@ class Result:
 
     @property
     def green(self) -> bool:
-        return self.status == "pass"
+        return self.status in ("pass", "ci-only")  # ci-only: a UI check left to GitHub, not run here (config ui_local); not a claim it passed
 
 
 def ledger_path() -> Path:

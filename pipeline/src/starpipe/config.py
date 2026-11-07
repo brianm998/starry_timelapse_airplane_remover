@@ -59,6 +59,14 @@ class Config(BaseModel):
     digest_hour: int = 8
     nightly_enabled: bool = False  # a multi-hour job that has never run unattended: the owner turns it on
     nightly_ui: bool = False  # the mac gui @ui features: need UI automation permission and the display
+    # XCUITest drives the real mouse and keyboard and keeps a window on the display, so it cannot run while the owner uses this Mac.
+    # "ci": the checks a ticket runs leave the mac gui's UI tests to GitHub (recorded `ci-only`, which counts as green); "idle": they run
+    # here; "always": they run here and are not held back. Under "ci" and "idle" any UI run that does start (the nightly's, a session's
+    # own `xcodebuild test`) first waits, outside the heavy lock, until the keyboard and mouse have been idle `ui_idle_s`.
+    # STARPIPE_UI_NOW=1 skips the wait for one run.
+    ui_local: str = "ci"
+    ui_idle_s: float = 600.0
+    ui_idle_poll_s: float = 15.0
     # NOT the T4 nightly above: the daemon dispatches ONE full run of the "Gherkin" workflow on GitHub, local time, once a day, only
     # when code Gherkin covers changed since the last green full run (gherkin_nightly.py). A push to develop no longer runs Gherkin.
     gherkin_nightly_enabled: bool = True
@@ -77,6 +85,12 @@ class Config(BaseModel):
     # Pipeline section, or the plan's gherkin_features_to_run) additionally has ship.feature_gate dispatch gherkin.yml on its own branch
     # with just those features, recognise the run by its display_title, and wait for it.
     ci_post_merge_workflows: tuple[str, ...] = ("Gherkin",)
+    # The landing train's macOS gate (macos-gate.yml): PRs run macOS only for macOS-specific paths, so before a batch merges the train runs
+    # the macOS build, tests and Gherkin smoke legs once on the finished batch head. GitHub's macOS runner capacity is short (jobs "not
+    # acquired by Runner of type hosted"): a gate whose macOS jobs got no runner within `macos_gate_wait_s` of the dispatch (after one
+    # rerun) lets the batch land with a note on its PR. `macos_gate_hard` holds the batch instead (and dispatches the gate again each wait).
+    macos_gate_wait_s: float = 3 * 3600.0
+    macos_gate_hard: bool = False
     heavy_wait_report_s: float = 60.0
     # A heavy job whose process group used under 1% of a core and wrote nothing to its log for this long is killed and reported
     # as hung (0 turns it off). A wedged xctest sat 1h35m at 0% CPU on the only slot (2026-11-03).
