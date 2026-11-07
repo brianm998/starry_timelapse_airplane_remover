@@ -129,6 +129,7 @@ class DesktopFeatureRunner {
         StepAction.LARGE_WINDOW to { },   // the test host's window is large already (1400 by 1100 pixels)
         StepAction.ID_STILL_SAYS to { t -> expectStillSays(t, args[0], args[1]) },
         StepAction.ID_STOPS_SAYING to { t -> expectStopsSaying(t, args[0], args[1]) },
+        StepAction.ID_SAYS_SOMETHING_WITH to { t -> expectSaysSomethingWith(t, args[0], args[1]) },
         StepAction.ID_SHOWN to { t -> expectShown(t, args[0], shown = true) },
         StepAction.ID_NOT_SHOWN to { t -> expectShown(t, args[0], shown = false) },
         StepAction.ID_ABOVE to { t -> expectAbove(t, args[0], args[1]) },
@@ -535,8 +536,9 @@ class DesktopFeatureRunner {
         }
     }
 
+    /** The control's semantics: from the merged tree, else (a text under a merging parent) from the unmerged one. */
     private fun semanticsOf(t: ComposeUiTest, id: String) =
-        t.onAllNodes(hasTestTag(id)).fetchSemanticsNodes().firstOrNull()?.config
+        (t.onAllNodes(hasTestTag(id)).fetchSemanticsNodes().firstOrNull() ?: t.onAllNodes(hasTestTag(id), useUnmergedTree = true).fetchSemanticsNodes().firstOrNull())?.config
 
     /** The element is higher in the window than [other]: its top edge is above the other's (y grows down), for the order of a list. */
     private fun expectAbove(t: ComposeUiTest, id: String, other: String) {
@@ -677,6 +679,13 @@ class DesktopFeatureRunner {
         expectShown(t, id, shown = true)
         fun texts() = semanticsOf(t, id)?.getOrNull(SemanticsProperties.Text)?.map { it.text }.orEmpty()
         waitFor(t, "\"$id\" to stop saying \"$unwanted\"", UI_TIMEOUT_MS, { "(it says ${texts()})" }) { unwanted !in texts() && texts().joinToString("") != unwanted }
+    }
+
+    /** The control says something with [part] in it before long: for a line whose rest the feature does not pin (the steps a run is working on). */
+    private fun expectSaysSomethingWith(t: ComposeUiTest, id: String, part: String) {
+        expectShown(t, id, shown = true)
+        fun texts() = semanticsOf(t, id)?.getOrNull(SemanticsProperties.Text)?.map { it.text }.orEmpty()
+        waitFor(t, "\"$id\" to say something with \"$part\"", UI_TIMEOUT_MS, { "(it says ${texts()})" }) { texts().any { part in it } }
     }
 
     /** The control's text is the catalogue's English text for [key]. */
