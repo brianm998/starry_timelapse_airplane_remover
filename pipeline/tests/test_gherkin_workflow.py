@@ -13,7 +13,7 @@ WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "gher
 def job_text(name: str) -> str:
     """The text of one top-level job, from `  <name>:` to the next job (or the end)."""
     text = WORKFLOW.read_text()
-    m = re.search(rf"^  {re.escape(name)}:\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)", text, re.M | re.S)
+    m = re.search(rf"^  {re.escape(name)}:\n(.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)", text, re.MULTILINE | re.DOTALL)
     assert m, f"job {name} not found in {WORKFLOW}"
     return m.group(1)
 
@@ -21,9 +21,9 @@ def job_text(name: str) -> str:
 def job_if(name: str) -> str:
     """The job's `if:` expression, folded onto one line."""
     body = job_text(name)
-    m = re.search(r"^    if:[ \t]*(?:>-?)?[ \t]*\n?((?:(?:      .*|)\n?)+|.*)", body, re.M)
+    m = re.search(r"^    if:", body, re.MULTILINE)
     assert m, f"job {name} has no if:"
-    lines = body[m.start():].splitlines()
+    lines = body[m.start() :].splitlines()
     first = lines[0].split("if:", 1)[1].strip()
     parts = [first] if first and first not in (">", ">-") else []
     for line in lines[1:]:
@@ -35,7 +35,7 @@ def job_if(name: str) -> str:
 
 
 def job_needs(name: str) -> list[str]:
-    m = re.search(r"^    needs:\s*\[(.*?)\]", job_text(name), re.M)
+    m = re.search(r"^    needs:\s*\[(.*?)\]", job_text(name), re.MULTILINE)
     assert m, f"job {name} has no needs: [...]"
     return [n.strip() for n in m.group(1).split(",") if n.strip()]
 
@@ -44,7 +44,7 @@ def job_needs(name: str) -> list[str]:
 def test_macos_legs_run_whatever_the_linux_legs_did(job: str) -> None:
     cond = job_if(job)
     # without a status function GitHub ANDs in success(), which a red Linux ancestor makes false
-    assert cond.lstrip("${{ ").startswith("!cancelled()"), cond
+    assert cond.removeprefix("${{").lstrip().startswith("!cancelled()"), cond
     assert "needs.build-macos.result == 'success'" in cond
     for need in job_needs(job):
         assert f"needs.{need}.result == 'success'" in cond, f"{job}: if: does not check {need}"
