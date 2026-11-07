@@ -39,6 +39,7 @@
   "uiMultiSheetChoices": [],
   "uiNumberFieldMessage": [],
   "uiNumberFields": [],
+  "uiOpenWhileProcessing": [],
   "uiOutlierClickKeeps": [],
   "uiOutlierClickUndecided": [],
   "uiOutlierClicks": [],
@@ -71,6 +72,7 @@
   "uiStartupSpeedSharpness": [],
   "uiTranslatedScreen": [],
   "uiUpdateSettingsMidRun": [],
+  "uiVideoImportCancel": [],
   "uiVideoRender": [],
   "uiVideoRenderCancel": [],
   "uiViewPickerNeedsAnImage": []

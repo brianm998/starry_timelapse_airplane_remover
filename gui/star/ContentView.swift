@@ -104,6 +104,7 @@ struct ContentView: View {
                         viewModel.closeConfirmationAction = nil
                         viewModel.closeConfirmationConfirmKey = "ui.stop_and_close"
                     }
+                    .accessibilityIdentifier("closeconfirm.cancel")
                     Button(localized(viewModel.closeConfirmationConfirmKey)) {
                         let action = viewModel.closeConfirmationAction
                         viewModel.showCloseConfirmation = false
@@ -142,6 +143,7 @@ struct ContentView: View {
                 } label: {
                     Text(localized("ui.close"))
                 }
+                .accessibilityIdentifier("error.close")
             }
               .padding(40)
               .frame(maxWidth: 500)

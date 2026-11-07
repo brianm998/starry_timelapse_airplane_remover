@@ -83,6 +83,10 @@
   { "case": "paintBand"             , "text": "I paint a band across \"<id>\"" },
   { "case": "saveScreenshot"        , "text": "I save a screenshot named \"<name>\"" },
   { "case": "saveWindowScreenshot"  , "text": "I save a screenshot of the \"<window>\" window named \"<name>\"" },
+  { "case": "startLongVideoImport"  , "text": "I start importing a long video of the copied sequence" },
+  { "case": "videoFramesExtracting" , "text": "the video's frames are being extracted" },
+  { "case": "videoFramesGone"       , "text": "the video's frames folder is gone" },
+  { "case": "chooserAnswersProcessed", "text": "the file chooser answers with the processed copy" },
   { "case": "renderedVideoFrames"   , "text": "the rendered video has one frame per frame of the sequence at <n:int> frames per second" },
   { "case": "noVideoLeft"           , "text": "no video is left in the output folder" },
   { "case": "slowEncoder"           , "text": "the processed copy renders with a slow encoder" }
