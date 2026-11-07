@@ -51,6 +51,12 @@ apply to it: don't translate it and don't build a Kotlin twin.
   unrecognised commands get the machine to themselves (`pipeline/src/starpipe/heavy.py`). An
   interactive caller goes first; then the ticket furthest along the pipeline. `.claude/settings.json` wraps them for
   interactive sessions automatically (`STARPIPE_NO_WRAP=1` turns that off).
+- **UI tests do not run while you are at the keyboard.** The mac gui's XCUITest runs (`starUITests`) drive the real mouse and
+  keyboard and keep a window on the display. `heavy.run_job` recognises them (`adapter_star.drives_display`) and, outside the lock,
+  waits until the keyboard and mouse have been idle `ui_idle_s` (600 s; `idle.py`, IOHIDSystem's HIDIdleTime). The checks a ticket
+  runs go further under the default `ui_local = "ci"` (`~/.star-pipeline/config.toml`): UI checks are recorded `ci-only` (counts as
+  green) and left to GitHub; `"idle"` runs them here once idle, `"always"` skips the wait. `STARPIPE_UI_NOW=1` skips the wait for
+  one run. `test:gui` (`-only-testing:starTests`, never drives the cursor) still runs here.
 - `pipeline/bin/starpipe check --explain` says which builds and tests a change needs;
   `starpipe check` runs them and proves each from its own output.
 - To queue work for the pipeline, use the file-tickets skill (`.claude/skills/file-tickets`).

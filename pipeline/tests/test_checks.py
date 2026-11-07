@@ -365,3 +365,12 @@ def test_shard_table_names_only_real_test_classes() -> None:
         assert named and not set(named) - found, f"{check_id} names classes that do not exist: {set(named) - found}"
         assert len(named) == len(set(named)), "a class is in one shard only"
     assert "BackgroundExtractionSessionTests" in star.SHARDS["test:daemon"].serial
+
+
+def test_ci_only_counts_as_green_and_gui_unit_tests_are_not_ui_runs() -> None:
+    from starpipe import adapter_star as star
+    from starpipe.checks import ledger
+
+    unit = star.CHECKS["test:gui"]
+    assert not star.drives_display(list(unit.argv))  # the unit tests never drive the cursor, so they still run here
+    assert ledger.Result("x", "ci-only", "sha", 0.0).green and not ledger.Result("x", "fail", "sha", 0.0).green

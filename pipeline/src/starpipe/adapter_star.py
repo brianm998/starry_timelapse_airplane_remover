@@ -264,6 +264,33 @@ def _class_of_script(script: str) -> str:
     return found or EXCLUSIVE
 
 
+def _display_words(words: list[str]) -> bool:
+    """Whether one command is an xcodebuild test run that includes the UI tests (`starUITests`), which drive the mouse and keyboard.
+    One that names only `starTests` (the unit tests, hosted in the app but never driving the cursor) does not."""
+    while words and (_ENV_WORD.match(words[0]) or words[0] in _PREFIXES):
+        words = words[1:]
+    if not words or words[0].rsplit("/", 1)[-1] != "xcodebuild":
+        return False
+    if not {"test", "test-without-building"} & set(words[1:]):
+        return False
+    only = [w.split(":", 1)[1] for w in words if w.startswith("-only-testing:")]
+    return not only or any(not o.startswith("starTests") for o in only)  # no filter: the whole scheme, UI tests included
+
+
+def drives_display(argv: list[str]) -> bool:
+    """Whether a heavy job runs the mac gui's UI tests. A shell command (`bash -c "<script>"`, how the PreToolUse hook wraps a
+    session's Bash) counts when any command in its script does."""
+    if len(argv) > 2 and argv[0].rsplit("/", 1)[-1] in _SHELLS and argv[1] in ("-c", "-lc", "-ec"):
+        for part in _SEGMENT.split(argv[2]):
+            try:
+                if _display_words(shlex.split(part)):
+                    return True
+            except ValueError:
+                continue
+        return False
+    return _display_words(list(argv))
+
+
 def job_class(cmd: str) -> str:
     """`build` for a compile (swift build, xcodebuild build, a gradle compile), `test` for a test suite that only needs not to
     share the machine with another suite, `exclusive` for everything else: star/stard runs, Gherkin, xcodebuild test (the
