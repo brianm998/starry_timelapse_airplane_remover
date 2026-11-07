@@ -548,3 +548,19 @@ def test_a_ui_job_is_held_until_idle_and_ui_now_skips_that(monkeypatch: pytest.M
     monkeypatch.setenv("STARPIPE_UI_NOW", "1")
     heavy.run_job(ui)
     assert calls == [600.0]
+
+
+def test_freeze_holds_every_slot_until_thawed(state_home: Path) -> None:
+    from starpipe import pause
+    from starpipe.config import load
+
+    split_config(state_home)
+    names = heavy._all_slots(load())  # pyright: ignore[reportPrivateUsage]
+    pause.pause()
+    try:
+        assert wait_until(lambda: not heavy._free(names))  # pyright: ignore[reportPrivateUsage]
+        assert pause.paused_pid() is not None
+    finally:
+        assert pause.resume()
+    assert wait_until(lambda: heavy._free(names) == set(names))  # pyright: ignore[reportPrivateUsage]
+    assert pause.paused_pid() is None

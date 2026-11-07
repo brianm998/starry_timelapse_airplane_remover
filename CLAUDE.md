@@ -57,6 +57,9 @@ apply to it: don't translate it and don't build a Kotlin twin.
   runs go further under the default `ui_local = "ci"` (`~/.star-pipeline/config.toml`): UI checks are recorded `ci-only` (counts as
   green) and left to GitHub; `"idle"` runs them here once idle, `"always"` skips the wait. `STARPIPE_UI_NOW=1` skips the wait for
   one run. `test:gui` (`-only-testing:starTests`, never drives the cursor) still runs here.
+- **To stop all automated testing at once: `pipeline/bin/starpipe freeze`** (`thaw` lets go). It holds every heavy-lock slot,
+  including the one-slot file older code uses, so the daemon, the agents in ticket worktrees (which run their own older
+  `heavy.py`) and wrapped session commands all wait instead of starting. It does not stop a run already going: kill that first.
 - `pipeline/bin/starpipe check --explain` says which builds and tests a change needs;
   `starpipe check` runs them and proves each from its own output.
 - To queue work for the pipeline, use the file-tickets skill (`.claude/skills/file-tickets`).
