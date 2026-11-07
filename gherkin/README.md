@@ -204,6 +204,32 @@ Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<clie
   `-configuration Release` is what CI passes (the scheme's default stays Debug for development). Use `-scheme star`, never `-target Star`, and no `-destination`. Without automation mode `xcodebuild
   test` hangs at "Timed out while enabling automation mode".
 
+  **Scratch location, entitlements and the "access data from other apps" prompt.** The XCUITest runner (`com.star-guiUITests.xctrunner`) is
+  sandboxed; `Star.app` is not. A scratch in the runner's `NSTemporaryDirectory()` (inside `~/Library/Containers/…/Data/tmp`) made the app read and
+  write another app's container (input copies, `STAR_RUN_MARKER_DIR`, the `HOME` with `.star.userprefs.json`, the processed fixture), which macOS
+  guards with App Data protection (TCC `kTCCServiceSystemPolicyAppData`): "“Star” would like to access data from other apps". Pipeline and CI builds
+  are ad-hoc signed (`CODE_SIGN_IDENTITY=-`), whose code requirement is the cdhash, so it changes with every build and an Allow never persists.
+  Signing alone would make the grant stick but leave the crossing, so the crossing is removed instead: the scratch is
+  `/private/tmp/star-gherkin-<uid>/<run>` (`gui/starUITests/ScratchLocation.swift`; `STAR_GHERKIN_SCRATCH`, as `TEST_RUNNER_STAR_GHERKIN_SCRATCH`
+  under xcodebuild, overrides the root, and a path inside a container is rejected). The runner may write there through the
+  `com.apple.security.temporary-exception.files.absolute-path.read-write` entry for `/private/tmp/` in `gui/starUITests/starUITests.entitlements`
+  (the `starUITests` target's `CODE_SIGN_ENTITLEMENTS`; ad-hoc builds accept it). The app's own entitlements and release signing are unchanged.
+  Artifacts (`saveArtifacts`) and the gallery fallback stay in the runner's container tmp: only the runner and CI touch them, so CI's upload paths
+  are unchanged. To check a run for the prompt: `log stream --predicate 'subsystem == "com.apple.TCC"'` must show no `kTCCServiceSystemPolicyAppData`
+  request for `com.star`. Don't `ls` the runner's container in an interactive session: that read raises the same prompt. If the app (not the
+  runner) ever still prompts, give pipeline builds a stable signing identity instead of `-`.
+  Result on this Mac (2026-11-06, ad-hoc signed, GPU merge off): `log show --predicate 'subsystem == "com.apple.TCC"'` over the runs (all 61 @ui
+  features once, then reruns of the processed-fixture ones, and `starTests` via `run_checks`) holds no `kTCCServiceSystemPolicyAppData` request and
+  no entry naming `com.star` or the runner. The runner wrote its scratch under `/private/tmp` on every run (uiStartupDefaults and the
+  processed-copy features uiDecisionsSurviveClose, uiFindOutliersInline, uiFrameModeChange pass), so the entitlement is honoured and no stable
+  signing identity was needed. This was not reproduced before the change (no baseline capture), so it shows the prompt's source is gone, not that it
+  once fired from there. A runner cannot make the processed fixture itself (`xcrun: error: cannot be used within an App Sandbox`): make it first
+  with `gherkin/ui/make-processed-fixture.sh test_data/test_a7sii_10` (CI does) or those features fail.
+  In the full pass 39 of 61 passed; 19 failed only on that fixture, and 3 others (uiAutoSelectiveEnds, which timed out after 685 s, and two that
+  could not find a control) were not run against the base to see whether the change matters, so they are open.
+  `ScratchLocationTests` is not selected by the pipeline's gherkin run; run it with
+  `xcodebuild test -project gui/star.xcodeproj -scheme star -only-testing:starUITests/ScratchLocationTests CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=`.
+
 ## The seams the tests rely on
 
 * gui: launch arguments `-StarUITestOpenSequence <dir>` (`ViewModel.openSequenceFromUITestArgument`) opens a sequence the way
@@ -397,7 +423,7 @@ fails with its summary plus the report and crop paths, and refuses to pass if th
 pin, or every frame). Selective is judged on the pinned objects only (`--pins-only`, BUG-004), automatic:true by the fraction removed plus the pins.
 Reports and crops: the cli runner writes them to `removal-reports/<feature>/` (git-ignored; `STAR_REMOVAL_REPORTS` overrides, and CI points it into the
 uploaded `gherkin-artifacts`); the GUI and desktop runners write `report-removal-*` beside the run, and `saveArtifacts` copies them out like the
-validator's reports (the XCUITest runner is sandboxed: it can launch the verifier and read the output, but not write into the repo). The runners find the
+validator's reports (the XCUITest runner is sandboxed: it can launch the verifier and read the output, but not write into the repo, only its container and `/private/tmp/`). The runners find the
 verifier at `trail_tools/.build/release/star-removal-verify` (`STAR_REMOVAL_VERIFY` overrides; the Windows cli leg sets it).
 
 The desktop runner opens a removal feature's session at DETECTION_STRONG by seeding the remembered detection type before the view model starts (an
