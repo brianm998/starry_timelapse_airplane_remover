@@ -118,6 +118,7 @@ final class GuiFeatureRunner {
         .largeWindow: { try $0.makeWindowLarge() },
         .idStillSays: { try $0.expectStillSays($0.args[0], text: $0.args[1]) },
         .idStopsSaying: { try $0.expectStopsSaying($0.args[0], text: $0.args[1]) },
+        .idSaysSomethingWith: { try $0.expectSaysSomethingWith($0.args[0], text: $0.args[1]) },
         .processedCopy: { try $0.makeProcessedCopy() },
         .plantRunMarker: { try $0.plantRunMarker() },
         .openProcessed: { try $0.openProcessedCopy() },
@@ -650,6 +651,14 @@ final class GuiFeatureRunner {
         let e = element(identifier)
         func texts() -> [String] { [e.label, e.title, (e.value as? String) ?? ""] }
         try waitFor("\(identifier) to stop saying \"\(unwanted)\"", timeout: 90, detail: { "(it says \(texts()))" }) { !texts().contains(unwanted) }
+    }
+
+    /// The element says something with [part] in it before long: for a line whose rest the feature does not pin (the steps a run is working on).
+    private func expectSaysSomethingWith(_ identifier: String, text part: String) throws {
+        try expectShown(identifier, shown: true)
+        let e = element(identifier)
+        func texts() -> [String] { [e.label, e.title, (e.value as? String) ?? ""] }
+        try waitFor("\(identifier) to say something with \"\(part)\"", timeout: 90, detail: { "(it says \(texts()))" }) { texts().contains { $0.contains(part) } }
     }
 
     /// The element's text is the catalogue's text for [key].
