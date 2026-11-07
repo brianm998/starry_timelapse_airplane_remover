@@ -1014,7 +1014,18 @@ jobs:
     name: cli (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos, opencv-macos, build-macos]
-    if: needs.features.outputs.cli != '[]' && inputs.macos != 'skip' && inputs.macos != 'gui' && !inputs.smoke
+    # `!cancelled()`: a plain `if:` gets an implicit success() ANDed in, which is false when any ancestor failed (here the Linux legs build-macos
+    # waits for), so one red Linux leg skipped every macOS leg.  The results of the jobs this one needs are checked by hand instead.
+    if: >-
+      ${{ !cancelled()
+      && needs.features.result == 'success'
+      && needs.build-macos.result == 'success'
+      && needs.ffmpeg-macos.result == 'success'
+      && needs.opencv-macos.result == 'success'
+      && needs.features.outputs.cli != '[]'
+      && inputs.macos != 'skip'
+      && inputs.macos != 'gui'
+      && !inputs.smoke }}
     strategy:
       fail-fast: false
       matrix:
@@ -1186,7 +1197,17 @@ jobs:
     name: mac gui (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos, opencv-macos, build-macos]
-    if: needs.features.outputs.macgui != '[]' && inputs.macos != 'skip' && !inputs.smoke
+    # `!cancelled()`: a plain `if:` gets an implicit success() ANDed in, which is false when any ancestor failed (here the Linux legs build-macos
+    # waits for), so one red Linux leg skipped every macOS leg.  The results of the jobs this one needs are checked by hand instead.
+    if: >-
+      ${{ !cancelled()
+      && needs.features.result == 'success'
+      && needs.build-macos.result == 'success'
+      && needs.ffmpeg-macos.result == 'success'
+      && needs.opencv-macos.result == 'success'
+      && needs.features.outputs.macgui != '[]'
+      && inputs.macos != 'skip'
+      && !inputs.smoke }}
     strategy:
       fail-fast: false
       matrix:
@@ -1814,7 +1835,17 @@ jobs:
     name: desktop (macos-15) · ${{ matrix.shard.label }}
     runs-on: macos-15
     needs: [features, ffmpeg-macos, build-macos]
-    if: needs.features.outputs.desktop != '[]' && inputs.macos != 'skip' && inputs.macos != 'gui' && !inputs.smoke
+    # `!cancelled()`: a plain `if:` gets an implicit success() ANDed in, which is false when any ancestor failed (here the Linux legs build-macos
+    # waits for), so one red Linux leg skipped every macOS leg.  The results of the jobs this one needs are checked by hand instead.
+    if: >-
+      ${{ !cancelled()
+      && needs.features.result == 'success'
+      && needs.build-macos.result == 'success'
+      && needs.ffmpeg-macos.result == 'success'
+      && needs.features.outputs.desktop != '[]'
+      && inputs.macos != 'skip'
+      && inputs.macos != 'gui'
+      && !inputs.smoke }}
     strategy:
       fail-fast: false
       matrix:
