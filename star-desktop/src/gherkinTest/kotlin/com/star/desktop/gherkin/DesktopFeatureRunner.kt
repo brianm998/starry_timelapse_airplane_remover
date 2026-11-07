@@ -185,6 +185,76 @@ class DesktopFeatureRunner {
         StepAction.SAVE_WINDOW_SCREENSHOT to { t -> saveScreenshot(t, args[1], window = args[0]) },
     )
 
+    private var watchdog: StepWatchdog? = null
+
+    /**
+     * The longest one step of a @ui feature may run: past this it is hung, not slow. Every wait in a step has a deadline of its own that is
+     * shorter (15 s to 10 min), and checks it from inside the wait; a step that never gets back to its wait is what this catches. Waits for
+     * processing and the video render have the longest limits of their own, so they get those, plus a margin. `STAR_GHERKIN_STEP_HANG_SECONDS`
+     * overrides it (a test of the watchdog itself).
+     */
+    private fun stepHangLimitMs(action: StepAction): Long {
+        System.getenv("STAR_GHERKIN_STEP_HANG_SECONDS")?.toLongOrNull()?.let { return it * 1000 }
+        return when (action) {
+            StepAction.PROCESSING_FINISHES, StepAction.PROCESSING_STOPS -> PROCESS_TIMEOUT_MS + HANG_MARGIN_MS
+            StepAction.RENDER_OUTPUT_VIDEO -> RENDER_TIMEOUT_MS + HANG_MARGIN_MS
+            else -> OPEN_TIMEOUT_MS + HANG_MARGIN_MS
+        }
+    }
+
+    /**
+     * Fails a feature whose step never returns. [enter] is called as each step starts; a daemon thread polls, and when one step has run past
+     * its limit it prints `STEP HUNG: <step>` and every thread's stack (so the log says what the step was blocked in), interrupts the test
+     * thread and, if that does nothing, ends the JVM, which Gradle reports as a failed test run so the job goes on to its next feature.
+     */
+    private class StepWatchdog(private val testThread: Thread) {
+        @Volatile private var step = ""
+        @Volatile private var limitMs = 0L
+        @Volatile private var startedNs = 0L
+        @Volatile private var stopped = false
+        private val thread = Thread(::watch, "gherkin-step-watchdog").apply { isDaemon = true }
+
+        fun start() = thread.start()
+        fun stop() { stopped = true; thread.interrupt() }
+
+        fun enter(name: String, limit: Long) {
+            step = name
+            limitMs = limit
+            startedNs = System.nanoTime()
+        }
+
+        private fun watch() {
+            while (!stopped) {
+                try { Thread.sleep(POLL_MS) } catch (_: InterruptedException) { if (stopped) return }
+                val name = step
+                if (name.isEmpty()) continue
+                val ranMs = (System.nanoTime() - startedNs) / 1_000_000
+                if (ranMs <= limitMs) continue
+                System.out.println("STEP HUNG: $name after ${ranMs / 1000}s (limit ${limitMs / 1000}s). Stacks of every thread:\n${allStacks()}")
+                System.out.flush()
+                testThread.interrupt()
+                try { Thread.sleep(GRACE_MS) } catch (_: InterruptedException) { if (stopped) return }
+                if (stopped) return
+                System.out.println("STEP HUNG: $name ignored the interrupt for ${GRACE_MS / 1000}s; ending the test JVM")
+                System.out.flush()
+                Runtime.getRuntime().halt(1)
+            }
+        }
+
+        private fun allStacks(): String = buildString {
+            for ((t, frames) in Thread.getAllStackTraces().entries.sortedBy { it.key.name }) {
+                append("\"${t.name}\" ${if (t.isDaemon) "daemon " else ""}prio=${t.priority} ${t.state}\n")
+                frames.forEach { append("    at $it\n") }
+                append('\n')
+            }
+        }
+
+        private companion object {
+            const val POLL_MS = 5_000L
+            const val GRACE_MS = 20_000L
+        }
+    }
+
     fun run(feature: Feature) {
         this.feature = feature
         // The pre-processing prompt asks whether to render afterwards, which is where this client chooses it.
@@ -208,6 +278,9 @@ class DesktopFeatureRunner {
             // entry is removed (the parity backlog is that file, and it only shrinks).
             val gap = if ("@ui" in feature.tags) knownGap(feature.id) else null
             var failure: Throwable? = null
+            // A @ui feature's step that never returns (a wait with no deadline of its own, a blocked UI thread, a waitForIdle that never goes
+            // idle) would hold the job until its timeout: the watchdog dumps every thread and ends the JVM instead (ticket #415).
+            watchdog = if ("@ui" in feature.tags) StepWatchdog(Thread.currentThread()).also { it.start() } else null
             runDesktopComposeUiTest(width = 1400, height = 1100) {
                 try {
                     for (step in feature.steps) {
@@ -215,6 +288,7 @@ class DesktopFeatureRunner {
                             "no method for step \"$step\". Implemented steps:\n" +
                                 methodMap.keys.map { "  ${it.text}" }.sorted().joinToString("\n"))
                         println("STEP: $step")
+                        watchdog?.enter(step.toString(), stepHangLimitMs(step.action))
                         args = step.args
                         try {
                             method(this)
@@ -233,6 +307,7 @@ class DesktopFeatureRunner {
             }
             if (gap != null) throw RunnerError("${feature.id} passes on $CLIENT, and gherkin/ui/known-gaps.json still lists it as a gap ($gap): remove the entry")
         } finally {
+            watchdog?.stop()
             saveArtifacts(feature)
             plantedMarker?.let { runCatching { it.delete() } }
             plantedMarker = null
@@ -1528,6 +1603,7 @@ class DesktopFeatureRunner {
         const val PROCESS_TIMEOUT_MS = 50L * 60_000   // auto selective on a 4-core runner took over 25 minutes
         const val STALL_LIMIT_MS = 10L * 60_000   // longest a processing wait may sit on one progress line; see the survey in the commit message
         const val RENDER_TIMEOUT_MS = 10L * 60_000
+        const val HANG_MARGIN_MS = 2L * 60_000   // a step is hung this long after the longest wait it contains should have timed out
         val REMOVAL_ACTIONS = setOf(StepAction.AIRPLANES_REMOVED, StepAction.SATELLITES_REMOVED, StepAction.STARS_PRESERVED, StepAction.NOTHING_ELSE_CHANGED)
         val VIDEO_EXTS = setOf("mov", "mp4", "m4v", "avi", "mkv", "mpg", "mpeg")
     }

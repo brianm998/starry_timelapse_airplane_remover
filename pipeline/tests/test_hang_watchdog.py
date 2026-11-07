@@ -170,3 +170,48 @@ def testWatchdogDumpsStardOnWindows(fake_stard: tuple[subprocess.Popen[bytes], P
     assert "== jvm 4999999" in out, out
     assert "JSTACK-SHIM 4999999" in out, out
     assert "--- gdb backtrace" not in out
+
+
+def dump_now(path_prefix: str = "", why: str = "") -> str:
+    env = {**os.environ, "HANG_WATCHDOG_PGREP": f"-f {NAME}"}
+    if path_prefix:
+        env["PATH"] = path_prefix + os.pathsep + env["PATH"]
+    args = ["bash", str(SCRIPT), "--dump-now"] + ([why] if why else [])
+    return subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, timeout=120).stdout
+
+
+def testDumpNowDumpsAtOnceWithStardQuiet(fake_stard: tuple[subprocess.Popen[bytes], Path], tmp_path: Path) -> None:
+    """--dump-now (ticket #415) dumps once and exits without waiting for stard's log to go quiet; here it is not even stale."""
+    proc, _log = fake_stard
+    shims = tmp_path / "nojvms"
+    shims.mkdir()
+    (shims / "jps").write_text("#!/bin/bash\nexit 0\n")
+    (shims / "jps").chmod(0o755)
+    start = time.time()
+    out = dump_now(str(shims), "uiX ran 5s")
+    assert time.time() - start < 30
+    assert out.count(BANNER) == 1, out
+    assert f"pid {proc.pid}" in out and "uiX ran 5s" in out, out
+    assert "ResourceGovernor: CPU gate 2/2" in out  # the log tail
+    assert "--- jstack of every JVM" in out
+    assert "::endgroup::" in out
+
+
+def testDumpNowWithoutStardStillDumpsTheJvms(tmp_path: Path) -> None:
+    """The Windows hang had no wedged stard to find: the dump must still list the JVMs' stacks."""
+    jvm = subprocess.Popen(["sleep", "60"])  # off Windows the dump skips a pid that is not alive
+    try:
+        shims = tmp_path / "shims"
+        shims.mkdir()
+        for name, body in {"jps": f"echo {jvm.pid}\n", "jstack": 'echo "JSTACK-SHIM $1"\n', "pgrep": "exit 1\n"}.items():
+            (shims / name).write_text("#!/bin/bash\n" + body)
+            (shims / name).chmod(0o755)
+        out = dump_now(str(shims))
+    finally:
+        jvm.kill()
+        jvm.wait()
+    assert BANNER in out and "pid none" in out, out
+    assert "no stard is running" in out, out
+    assert f"JSTACK-SHIM {jvm.pid}" in out, out
+    assert "::endgroup::" in out
+    assert "--- tail of" not in out
