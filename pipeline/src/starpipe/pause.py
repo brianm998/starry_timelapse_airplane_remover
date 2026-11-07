@@ -35,12 +35,16 @@ def paused_pid() -> int | None:
         return None
 
 
+def _stop(_signum: int, _frame: object) -> None:
+    sys.exit(0)
+
+
 def hold() -> None:
     """Take every slot (retrying until each is free: a job that is running lets go when it ends) and sit on them."""
     names = heavy._all_slots(load())  # pyright: ignore[reportPrivateUsage]
     held: dict[str, int] = {}
     pidfile().write_text(str(os.getpid()))
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    signal.signal(signal.SIGTERM, _stop)
     while len(held) < len(names):
         for name in names:
             if name not in held and (fd := heavy._try_slot(name)) is not None:  # pyright: ignore[reportPrivateUsage]
