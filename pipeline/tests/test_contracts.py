@@ -85,10 +85,18 @@ def test_review_verdict_rules(tmp_path: Path) -> None:
 
 def test_close_needs_verifiable_evidence(tmp_path: Path) -> None:
     c = contract(tmp_path)
-    assert "reason must be" in c.close_ticket({"reason": "because", "evidence": ["docs/a.md:1"]})
-    assert "evidence is required" in c.close_ticket({"reason": "no-defect", "evidence": []})
-    assert "not verifiable" in c.close_ticket({"reason": "no-defect", "evidence": ["deadbeef", "docs/a.md:50"]})
-    assert "accepted" in c.close_ticket({"reason": "no-defect", "evidence": ["docs/a.md:1"]})
+    assert "reason must be" in c.close_ticket({"reason": "because", "evidence": ["docs/a.md:1"], "explanation": "x"})
+    assert "evidence is required" in c.close_ticket({"reason": "no-defect", "evidence": [], "explanation": "x"})
+    assert "not verifiable" in c.close_ticket({"reason": "no-defect", "evidence": ["deadbeef", "docs/a.md:50"], "explanation": "x"})
+    assert "accepted" in c.close_ticket({"reason": "no-defect", "evidence": ["docs/a.md:1"], "explanation": "x"})
+
+
+def test_close_needs_an_explanation(tmp_path: Path) -> None:
+    c = contract(tmp_path)
+    for args in ({}, {"explanation": ""}, {"explanation": "  "}):
+        msg = c.close_ticket({"reason": "no-defect", "evidence": ["docs/a.md:1"], **args})
+        assert "explanation" in msg and "accepted" not in msg
+    assert "accepted" in c.close_ticket({"reason": "no-defect", "evidence": ["docs/a.md:1"], "explanation": "It works."})
 
 
 def test_resolution_answer_must_cite(tmp_path: Path) -> None:

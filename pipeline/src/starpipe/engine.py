@@ -122,6 +122,8 @@ class Engine:
             labels = {lab["name"] for lab in issue.get("labels", [])}
             if "pipe:filed-by-pipeline" in labels:
                 self.db.put(f"auto:{n}", "1")  # filed by the pipeline with the owner's token: not the owner's own ticket
+            if "pipe:approved" in labels:
+                self.db.put(f"approved:{n}", "1")  # ...but the owner approved it, which is taking it on
             prio = min((PRIORITY[lab] for lab in labels if lab in PRIORITY), default=2)
             if self.db.upsert_ticket(n, issue["title"], issue.get("body") or "", issue["user"]["login"], prio, blockers):
                 self._label(n, "queued")
@@ -732,8 +734,13 @@ class Engine:
 
     def _close(self, t: Ticket, value: dict[str, Any]) -> bool:
         evidence = ", ".join(value["evidence"])
-        text = f"{trust.marker('close', t.number)}\nClosing: {value['reason']}. Evidence: {evidence}"
-        if value.get("owner_filed"):
+        reason, explanation = value["reason"], value["explanation"]
+        text = f"{trust.marker('close', t.number)}\nClosing: {reason}. Evidence: {evidence}\n\n{explanation}"
+        if self.notifier:
+            # not-this-repo means someone outside the repo (in practice the owner) must act, so it pages
+            kind = "ticket-closed-owner-action" if reason == "not-this-repo" else "ticket-closed"
+            self.notifier.alert(kind, t.number, f"#{t.number} {t.title}: closed ({reason}): {explanation[:300]}")
+        if value.get("owner_filed") or self.db.get(f"approved:{t.number}"):
             # an owner-filed ticket waits 24 h for a veto comment (checked by close_due)
             self.gh.comment(t.number, text + "\n\nI will close this in 24 h unless you comment.")
             self.db.put(f"close_at:{t.number}", str(self.clock() + 24 * 3600))

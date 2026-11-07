@@ -118,6 +118,10 @@ class Contract:
             return f"reason must be one of {', '.join(CLOSE_REASONS)} (duplicate-of needs '#n')"
         if not evidence:
             return "evidence is required: commit SHAs on origin/develop, or file:line"
+        explanation = str(args.get("explanation") or "").strip()
+        if not explanation:
+            return ("explanation is required: what you found and, for not-this-repo, what the owner or an outside party "
+                    "must do (the owner reads it on the issue)")
         bad: list[str] = []
         for item in evidence:
             if re.fullmatch(r"[0-9a-f]{7,40}", item):
@@ -130,7 +134,8 @@ class Contract:
                 bad.append(item)
         if bad:
             return "evidence not verifiable (not an ancestor of the base, or no such file:line): " + ", ".join(bad)
-        return self._accept("close", {"reason": reason, "evidence": evidence, "owner_filed": self.owner_filed})
+        return self._accept("close", {"reason": reason, "evidence": evidence, "explanation": explanation,
+                                    "owner_filed": self.owner_filed})
 
     # DEVELOP / FIX ----------------------------------------------------------------------------------------------------
     def run_checks(self, args: dict[str, Any]) -> str:
