@@ -49,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
+import com.star.desktop.ui.app.menuCommandFor
 import com.star.desktop.ui.app.starMenusNow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -730,6 +731,18 @@ class DesktopFeatureRunner {
         if (t.onAllNodes(isRoot()).fetchSemanticsNodes().size > 1) {
             t.onAllNodes(isRoot())[0].performMouseInput { moveTo(Offset(1f, 1f)) }
             runCatching { waitFor(t, "a hover tip to close", 5_000) { t.onAllNodes(isRoot()).fetchSemanticsNodes().size == 1 } }
+        }
+        // A real window hands a key that is a menu item's accelerator to the menu bar; this host has none, so the command is run here instead and
+        // the key does not also go to Compose (a press acts once).
+        val pressed = vm?.let { model ->
+            val has = { k: Key -> k in modifiers }
+            val menus = t.runOnUiThread { starMenusNow(model) }
+            menuCommandFor(menus, key, has(Key.CtrlLeft), has(Key.MetaLeft), has(Key.AltLeft), has(Key.ShiftLeft))
+        }
+        if (pressed != null) {
+            t.runOnUiThread { pressed.onClick() }
+            t.waitForIdle()
+            return
         }
         t.onAllNodes(isRoot())[0].performKeyInput {
             modifiers.forEach { keyDown(it) }

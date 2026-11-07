@@ -1,11 +1,13 @@
 package com.star.desktop.ui.app
 
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyShortcut
 import com.star.desktop.domain.ToolType
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -37,5 +39,29 @@ class MenuShortcutsTest {
         val handler = keys.substringAfter("fun handleGlobalKey")
         assertFalse(Regex("""Key\.R\b""").containsMatchIn(handler), "handleGlobalKey still handles R")
         assertFalse(Regex("""Key\.(One|Two|Three|Four|Five|Six|Seven|Eight)\b|DIGIT_KEYS|forShortcut""").containsMatchIn(handler), "handleGlobalKey still handles the tool digits")
+    }
+
+    /** The UI test host has no menu bar, so the runner finds the command a key is the accelerator of itself: same key, same modifiers, and only if enabled. */
+    @Test fun test_menu_command_for_shortcut() {
+        val keep = MenuEntry.Command("Keep", true, KeyShortcut(Key.Two)) {}
+        val multi = MenuEntry.Command("Multi", false, KeyShortcut(Key.Seven)) {}
+        val reopen = MenuEntry.Command("Reopen", true, KeyShortcut(Key.R, ctrl = true, shift = true)) {}
+        val plain = MenuEntry.Command("No shortcut", true, null) {}
+        val menus = listOf(
+            MenuSpec("A", 'A', listOf(plain, MenuEntry.Divider, keep)),
+            MenuSpec("B", 'B', listOf(MenuEntry.Choice("Choice", true) {}, multi, reopen)),
+        )
+        fun find(key: Key, ctrl: Boolean = false, meta: Boolean = false, alt: Boolean = false, shift: Boolean = false) =
+            menuCommandFor(menus, key, ctrl, meta, alt, shift)
+
+        assertEquals(keep, find(Key.Two))
+        assertEquals(reopen, find(Key.R, ctrl = true, shift = true))
+
+        assertNull(find(Key.Seven), "a disabled command's key does nothing")
+        assertNull(find(Key.Three), "a key no command has")
+        assertNull(find(Key.Two, shift = true), "an extra modifier is a different shortcut")
+        assertNull(find(Key.R, ctrl = true), "a missing modifier is a different shortcut")
+        assertNull(find(Key.R, meta = true, shift = true), "Meta is not Ctrl")
+        assertNull(find(Key.R), "R alone is not Ctrl+Shift+R")
     }
 }
