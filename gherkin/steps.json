@@ -31,6 +31,7 @@
   { "case": "pressKey"              , "text": "I press \"<key>\"" },
   { "case": "dragAround"            , "text": "I drag around \"<id>\"" },
   { "case": "commandClickId"        , "text": "I command-click \"<id>\"" },
+  { "case": "shiftClickId"          , "text": "I shift-click \"<id>\"" },
   { "case": "rightClickId"          , "text": "I right-click \"<id>\"" },
   { "case": "clickLabel"            , "text": "I click the label \"<key>\"" },
   { "case": "processingFinishes"    , "text": "I wait for processing to finish" },

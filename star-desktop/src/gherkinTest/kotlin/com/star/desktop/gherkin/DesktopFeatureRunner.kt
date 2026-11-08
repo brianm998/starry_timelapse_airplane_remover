@@ -120,6 +120,7 @@ class DesktopFeatureRunner {
         StepAction.OPEN_COPIED_NO_QUESTIONS to { t -> openCopiedSequence(t, askingTheStartupQuestions = false) },
         StepAction.CLICK_ID to { t -> clickId(t, args[0]) },
         StepAction.COMMAND_CLICK_ID to { t -> clickWith(t, args[0], command = true) },
+        StepAction.SHIFT_CLICK_ID to { t -> clickWith(t, args[0], shift = true) },
         StepAction.RIGHT_CLICK_ID to { t -> clickWith(t, args[0], right = true) },
         StepAction.PROCESSING_FINISHES to { t -> waitForProcessingToFinish(t) },
         StepAction.PROCESSING_STOPS to { t -> waitForProcessingToStop(t) },
@@ -437,18 +438,18 @@ class DesktopFeatureRunner {
     }
 
     /** A click with the command (control off a Mac) key held, or a right click: by the pointer, which is what a cell reads them from. */
-    private fun clickWith(t: ComposeUiTest, id: String, command: Boolean = false, right: Boolean = false) {
+    private fun clickWith(t: ComposeUiTest, id: String, command: Boolean = false, shift: Boolean = false, right: Boolean = false) {
         scrollGridToCell(t, id)
         waitFor(t, "\"$id\"", UI_TIMEOUT_MS) { t.onAllNodesWithTagExists(id) }
         t.waitForIdle()
         val mac = System.getProperty("os.name").orEmpty().startsWith("Mac", ignoreCase = true)
-        val modifier = if (mac) Key.MetaLeft else Key.CtrlLeft
+        val modifier = if (shift) Key.ShiftLeft else if (mac) Key.MetaLeft else Key.CtrlLeft
         // the key is held through the key scope (the mouse one has none), and the pointer events carry it
-        if (command) t.onRoot().performKeyInput { keyDown(modifier) }
+        if (command || shift) t.onRoot().performKeyInput { keyDown(modifier) }
         try {
             t.onAllNodes(hasTestTag(id))[0].performMouseInput { if (right) rightClick() else click() }
         } finally {
-            if (command) t.onRoot().performKeyInput { keyUp(modifier) }
+            if (command || shift) t.onRoot().performKeyInput { keyUp(modifier) }
         }
         t.waitForIdle()
     }
