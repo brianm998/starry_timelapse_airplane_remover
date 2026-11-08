@@ -97,10 +97,17 @@ fun ExtractionStrip(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 @Composable
 fun FrameWaitPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val index by vm.currentIndex.collectAsState()
+    val seekable = vm.extraction.collectAsState().value?.seekable ?: true
+    FrameWaitPanelContent(index, seekable, { vm.frameEta(it) }, modifier)
+}
+
+/** The panel itself, with the engine's answer passed in so a test can drive it without a view model. */
+@Composable
+fun FrameWaitPanelContent(index: Int, seekable: Boolean, etaOf: suspend (Int) -> FrameEtaResponse?, modifier: Modifier = Modifier) {
     var eta by remember(index) { mutableStateOf<FrameEtaResponse?>(null) }
     LaunchedEffect(index) {
         while (true) {
-            eta = vm.frameEta(index)
+            eta = etaOf(index)
             delay(1000)
         }
     }
@@ -126,7 +133,6 @@ fun FrameWaitPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             ) {
                 Text(localized("ui.frame_not_extracted", "%,d".format(index)), color = StarColors.white, fontSize = 18.sp)
                 val e = eta
-                val seekable = vm.extraction.collectAsState().value?.seekable ?: true
                 val now = e?.jump == true || seekable
                 if (e != null && e.known) {
                     if (now) {
