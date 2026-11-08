@@ -560,7 +560,19 @@ jobs:
             xcrun notarytool log "$SUB" --key "$KEY_PATH" --key-id "$KEY_ID" --issuer "$ISSUER" || true
             exit 1
           fi
-          xcrun stapler staple "$DMG"
+          # Accepted, but stapler fetches the ticket from Apple's CloudKit endpoint, which drops the
+          # connection now and then (NSURLErrorDomain -1005, exit 68) or has not got the ticket yet.
+          # Retry with a pause, as gui/release.sh does.
+          STAPLED=0
+          for ATTEMPT in 1 2 3 4 5 6 7 8; do
+            echo "stapler staple attempt $ATTEMPT/8"
+            if xcrun stapler staple "$DMG"; then STAPLED=1; break; fi
+            if [ "$ATTEMPT" -lt 8 ]; then sleep 30; fi
+          done
+          if [ "$STAPLED" != "1" ]; then
+            echo "::error::stapler staple failed after 8 attempts"
+            exit 1
+          fi
           xcrun stapler validate "$DMG"
           echo "Notarized + stapled: $DMG"
 
