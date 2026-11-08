@@ -81,6 +81,7 @@ final class GuiFeatureRunner {
         .openCopiedNoQuestions: { try $0.openCopiedSequence(askingTheStartupQuestions: false) },
         .clickId: { try $0.clickId($0.args[0]) },
         .commandClickId: { try $0.clickId($0.args[0], how: .command) },
+        .shiftClickId: { try $0.clickId($0.args[0], how: .shift) },
         .rightClickId: { try $0.clickId($0.args[0], how: .right) },
         .processingFinishes: { try $0.waitForProcessingToFinish() },
         .processingStops: { try $0.waitForProcessingToStop() },
@@ -395,7 +396,7 @@ final class GuiFeatureRunner {
 
     /// Clicks the control once it can be hit: a control that is there for a moment while a screen is still being put up (the startup questions
     /// come up over the loading view) is not one to click, and a click on one that has gone fails the whole test.
-    private enum Click { case plain, command, right }
+    private enum Click { case plain, command, shift, right }
 
     /// What a failed wait for a click target prints before the tree: whether the element is there, how big it is on screen, whether it can be
     /// hit and what display it is on. (A group that was 0.9 x 0.3 pt was there for the whole wait and never hittable; the tree alone did not say.)
@@ -428,6 +429,7 @@ final class GuiFeatureRunner {
         switch how {
         case .plain: e.click()
         case .command: XCUIElement.perform(withKeyModifiers: .command) { e.click() }
+        case .shift: XCUIElement.perform(withKeyModifiers: .shift) { e.click() }
         case .right: e.rightClick()
         }
     }
