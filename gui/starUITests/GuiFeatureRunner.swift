@@ -87,6 +87,7 @@ final class GuiFeatureRunner {
         .processingStops: { try $0.waitForProcessingToStop() },
         .pressKey: { try $0.press($0.args[0]) },
         .idShown: { try $0.expectShown($0.args[0], shown: true) },
+        .idShownAtEnd: { try $0.expectShownAtEndOfProcessing($0.args[0]) },
         .idNotShown: { try $0.expectShown($0.args[0], shown: false) },
         .idAbove: { try $0.expectAbove($0.args[0], above: $0.args[1]) },
         .idSelected: { try $0.expectSelected($0.args[0], selected: true) },
@@ -412,7 +413,9 @@ final class GuiFeatureRunner {
         let e = element(identifier)
         var scroller = Scroller()
         var gridSteps = 0
-        try waitFor("\(identifier) to be clickable", timeout: 60, detail: { self.whyNotClickable(e, identifier) }) {
+        // a grid cell may have to be scrolled to a row at a time, each step taking the app seconds to settle
+        let timeout: TimeInterval = identifier.hasPrefix("grid.cell.") ? 120 : 60
+        try waitFor("\(identifier) to be clickable", timeout: timeout, detail: { self.whyNotClickable(e, identifier) }) {
             if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller) }
             else if !e.exists && identifier.hasPrefix("grid.cell.") { self.scrollGridToBuild(&gridSteps) }
             return e.exists && e.isHittable
@@ -454,6 +457,25 @@ final class GuiFeatureRunner {
         }
     }
 
+    /// Waits for the element to come up while the run goes on: for the post-render prompt, which covers the progress line the moment the run ends,
+    /// so the end cannot be read from it. Bounded by progress as the wait for processing to finish is: the progress line and the processing
+    /// modal's overall and headline text are watched for change, and a run whose every one of them sits still for the stall limit fails.
+    private func expectShownAtEndOfProcessing(_ identifier: String) throws {
+        let target = element(identifier)
+        let progress = element("processing.progress")
+        let overall = element("processing.overall")
+        let headline = element("processing.headline")
+        var last = "(none)"
+        var stall = ProgressStall(limit: stallLimit)
+        try waitFor("\(identifier) at the end of processing", timeout: 20 * 60, interval: 3, detail: { "(last progress: \(last))" }) {
+            if target.exists { return true }
+            func text(_ e: XCUIElement) -> String { e.exists ? e.label : "(not shown)" }
+            last = "progress \(text(progress)), overall \(text(overall)), headline \(text(headline))"
+            try stall.observe(last)
+            return false
+        }
+    }
+
     /// Waits for the run to be idle, whether or not every frame is complete (a run that another start put an end to leaves the frames it cleared
     /// unfinished). Idle has to be read twice, a poll apart, so the moment between a run being stopped and the next one starting is not taken
     /// for the end; the line is only in the left panel of the edit and scrub screens.
@@ -492,9 +514,10 @@ final class GuiFeatureRunner {
     private func scrollGridToBuild(_ steps: inout Int) {
         let holder = app.scrollViews.containing(NSPredicate(format: "identifier BEGINSWITH %@", "grid.cell.")).firstMatch
         guard holder.exists, holder.isHittable else { return }
-        // down for eight steps, then back up for eight, so a grid that has scrolled past is not left there
-        let down = (steps / 8) % 2 == 0
-        holder.scroll(byDeltaX: 0, deltaY: down ? -200 : 200)
+        // down for 24 steps, then back up for 24, so a grid that has scrolled past is not left there: the rows of a narrow window's
+        // one-column grid are about 350 pt tall, so 24 steps of 300 pt reach the 20th or so
+        let down = (steps / 24) % 2 == 0
+        holder.scroll(byDeltaX: 0, deltaY: down ? -300 : 300)
         steps += 1
     }
 
