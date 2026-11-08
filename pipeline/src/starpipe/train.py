@@ -218,12 +218,24 @@ class Train:
             if bid in self._drivers and not self._drivers[bid].done():
                 continue
             if b["state"] == "asking" and (q := self.eng.db.batch_question(bid)) is not None and q["answer"] is None:
-                continue  # waiting for the owner
+                if not any(ship.land_now(self.eng, n) for n in self.eng.db.batch_members(bid)):
+                    continue  # waiting for the owner
+                self._land_now_answers(bid, q)  # the owner's land-now mark is the answer: the driver's land-now branches take over
             task = asyncio.create_task(self._driven(bid))
             self._drivers[bid] = task
             task.add_done_callback(lambda t, bid=bid: self._driver_ended(bid, t))
             started = True
         return started
+
+    def _land_now_answers(self, bid: int, q: Any) -> None:
+        """Close an asking batch's question because a member was land-now flagged, and put the batch back to CI so the driver's
+        owner-landed / partly-flagged branches (which come before any CI judging) run instead of asking again."""
+        eng = self.eng
+        anchor = int(q["ticket"])
+        eng.db.answer_question(int(q["id"]), "land-now", "owner")
+        eng.notifier.clear("needs-input", anchor)
+        eng.db.event("batch-answered", anchor, batch=bid, choice="land-now")
+        eng.db.batch_update(bid, state="ci")
 
     def _driver_ended(self, bid: int, task: asyncio.Task[None]) -> None:
         if self._drivers.get(bid) is task:
