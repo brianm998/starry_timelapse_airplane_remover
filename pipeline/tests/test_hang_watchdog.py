@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 import time
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -11,7 +12,7 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "gherkin" / "hang-watchdog.sh"
 BANNER = "stard hang watchdog: dump"
-NAME = "fakestardwd-unique-token"
+NAME = f"fakestardwd-{uuid.uuid4().hex}"  # per run: another ticket's checks run this file at the same time, and pgrep -f matches theirs too
 
 
 @pytest.fixture
