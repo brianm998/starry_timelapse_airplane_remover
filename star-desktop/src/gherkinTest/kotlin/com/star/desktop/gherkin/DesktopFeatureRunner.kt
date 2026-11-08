@@ -123,6 +123,7 @@ class DesktopFeatureRunner {
         StepAction.SHIFT_CLICK_ID to { t -> clickWith(t, args[0], shift = true) },
         StepAction.RIGHT_CLICK_ID to { t -> clickWith(t, args[0], right = true) },
         StepAction.PROCESSING_FINISHES to { t -> waitForProcessingToFinish(t) },
+        StepAction.ID_SHOWN_AT_END to { t -> expectShownAtEndOfProcessing(t, args[0]) },
         StepAction.PROCESSING_STOPS to { t -> waitForProcessingToStop(t) },
         StepAction.PRESS_KEY to { t -> pressKey(t, args[0]) },
         StepAction.DRAG_AROUND to { t -> dragAround(t, args[0]) },
@@ -197,7 +198,7 @@ class DesktopFeatureRunner {
     private fun stepHangLimitMs(action: StepAction): Long {
         System.getenv("STAR_GHERKIN_STEP_HANG_SECONDS")?.toLongOrNull()?.let { return it * 1000 }
         return when (action) {
-            StepAction.PROCESSING_FINISHES, StepAction.PROCESSING_STOPS -> PROCESS_TIMEOUT_MS + HANG_MARGIN_MS
+            StepAction.PROCESSING_FINISHES, StepAction.PROCESSING_STOPS, StepAction.ID_SHOWN_AT_END -> PROCESS_TIMEOUT_MS + HANG_MARGIN_MS
             StepAction.RENDER_OUTPUT_VIDEO -> RENDER_TIMEOUT_MS + HANG_MARGIN_MS
             else -> OPEN_TIMEOUT_MS + HANG_MARGIN_MS
         }
@@ -547,6 +548,28 @@ class DesktopFeatureRunner {
             if (parts.size != 3) return@waitFor false
             if (parts[2] == "running") sawRunning = true
             sawRunning && parts[2] == "idle" && (parts[1].toIntOrNull() ?: 0) > 0 && parts[0] == parts[1]
+        }
+    }
+
+    /**
+     * Waits for [id] to come up while the run goes on: for the post-render prompt, which covers the progress line the moment the run ends, so the
+     * end cannot be read from it. The wait is bounded by progress as the wait for processing to finish is: the progress line, with the processing
+     * modal's overall and headline text, is watched for change, and a run whose every one of them sits still for the stall limit fails.
+     */
+    private fun expectShownAtEndOfProcessing(t: ComposeUiTest, id: String) {
+        val model = vm ?: throw RunnerError("nothing has been opened")
+        var last = "(none)"
+        val stall = ProgressStall(STALL_LIMIT_MS * 1_000_000)
+        waitFor(t, "\"$id\" at the end of processing", 20L * 60_000, { "(last progress: $last)" }) {
+            if (t.onAllNodes(hasTestTag(id), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) return@waitFor true
+            model.error.value?.let { throw RunnerError("the app reported an error while processing: $it") }
+            model.engineDown.value?.let { throw RunnerError("the engine stopped while processing: $it") }
+            val progress = semanticsOf(t, "processing.progress")?.getOrNull(SemanticsProperties.StateDescription)
+            val overall = semanticsOf(t, "processing.overall")?.getOrNull(SemanticsProperties.Text)?.joinToString { it.text }
+            val headline = semanticsOf(t, "processing.headline")?.getOrNull(SemanticsProperties.Text)?.joinToString { it.text }
+            last = "progress $progress, overall $overall, headline $headline"
+            stall.observe(last)
+            false
         }
     }
 
