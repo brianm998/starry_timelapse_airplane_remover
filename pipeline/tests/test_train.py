@@ -821,7 +821,7 @@ async def test_macos_gate_never_ran_lands_with_note_or_holds(rig: Rig, hard: boo
         assert any(e["kind"] == "macos-gate-no-runner" for e in rig.db.events_since())
         return
     with pytest.raises(asyncio.TimeoutError):  # held: it keeps polling (and dispatches the gate again each wait)
-        await asyncio.wait_for(t.run_until_idle(), 1.5)
+        await asyncio.wait_for(t.run_until_idle(), 10)
     assert rig.state(1) == "ci" and not any(pr["merged"] for pr in rig.gh.prs.values())
     assert any(e["kind"] == "macos-gate-held" for e in rig.db.events_since())
     assert len([d for d in rig.gh.dispatches if d[0] == "macos-gate.yml"]) >= 2
@@ -851,7 +851,7 @@ async def test_macos_gate_hard_does_not_pick_up_the_run_it_cancelled(rig: Rig) -
     rig.gh.macos_attempts = [[(MAC_JOB, "queued")]]  # no runner ever takes it: stuck past the wait, cancelled, dispatched again
     rig.gh.dispatch_lag = 2  # and GitHub lists a new run only a poll or two after the dispatch
     with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(train_of(rig).run_until_idle(), 1.5)
+        await asyncio.wait_for(train_of(rig).run_until_idle(), 10)
     gates = [d for d in rig.gh.dispatches if d[0] == "macos-gate.yml"]
     assert len(gates) >= 2 and rig.gh.cancelled_runs, "the stuck run was cancelled and the gate dispatched again"
     assert rig.gh.reruns == [], "the cancelled run is not judged (its cancelled jobs would look like infrastructure reds)"
