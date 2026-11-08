@@ -6,7 +6,9 @@ Feature: Changing a setting during a run and choosing Process Now restarts it, a
   render question again, as Process All does, and the answer starts the run over. That run is the one Process All started, so its end asks whether to
   render a video; the first run, which was stopped, ended with no question. The feature looks for a question at the two points the stopped run could have raised one (once the pre-render question is up, and once the restart's screen is);
   a question after the first run's natural end cannot be looked for, because the restart stops that run. `AppViewModel` cannot be built in a test, so this had only source scans before.
-  The post-render prompt covers the progress line, so the feature does not wait for processing to finish after it. Starts from the processed sequence the
+  The post-render prompt covers the progress line, so the feature does not wait for processing to finish after it, and presses no key after the restart:
+  Return then would be Render Now if the prompt had come up. The first run is held live over frames 0 to 7, as `uiOpenWhileProcessing` does (on frame 0 alone
+  it was over in 9 s, before Update), and `cancelProcessing` being enabled before Update shows it still is. Starts from the processed sequence the
   cli made once.
 
   Scenario: Update then No over a live run restarts it and the render question comes at the end of the restart
@@ -16,7 +18,14 @@ Feature: Changing a setting during a run and choosing Process Now restarts it, a
       And I click "sequenceprogress.close"
       And I click "mode.grid"
       And I click "grid.cell.0"
-      And I right-click "grid.cell.0"
+      And I command-click "grid.cell.1"
+      And I command-click "grid.cell.2"
+      And I command-click "grid.cell.3"
+      And I command-click "grid.cell.4"
+      And I command-click "grid.cell.5"
+      And I command-click "grid.cell.6"
+      And I command-click "grid.cell.7"
+      And I right-click "grid.cell.7"
       And I click the label "ui.re_process_everything"
     Then  "processing.modal" is shown
     When  I press "return"
@@ -26,12 +35,12 @@ Feature: Changing a setting during a run and choosing Process Now restarts it, a
       And I click "settings.tab.alignment"
       And I type "50" into "settings.alignment.maxkeypoints"
       And I press "return"
-      And I click the label "ui.update"
+    Then  the menu command "cancelProcessing" is enabled
+    When  I click the label "ui.update"
       And I click the label "ui.no"
     Then  "prompt.pre.no" is shown
       And "prompt.post.cancel" is not shown
     When  I click "prompt.pre.no"
     Then  "processing.modal" is shown
       And "prompt.post.cancel" is not shown
-    When  I press "return"
     Then  "prompt.post.cancel" is shown
