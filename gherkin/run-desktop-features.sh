@@ -17,6 +17,10 @@
 # STAR_HANG_WATCHDOG_SECONDS is set (the Linux and Windows legs), gherkin/hang-watchdog.sh runs beside the features and dumps stard's and
 # the test JVM's stacks into the log, and into build/gherkin-each/hang-watchdog.log, once stard has been silent that long (tickets #54,
 # #53); unset, nothing changes.
+#
+# When STAR_FEATURE_TIMEOUT_SECONDS is set (the ui shard of every desktop leg, ticket #415), one feature's gradlew is cut off after that
+# long: the stacks of every JVM go into the log, the process tree is killed, and the feature counts as failed (exit status 124), so a
+# feature that blocks where no step timeout reaches cannot hold the leg until the job's own timeout.  Unset, a feature runs unbounded.
 
 set -u
 
@@ -32,15 +36,66 @@ cd "$here/../star-desktop" || exit 2
 
 each=build/gherkin-each
 
+watchdog=""   # the hang watchdog's pid
+gradle_pid="" # the feature's gradlew while run_bounded waits on it
+
+# Kills a process and everything below it: gradlew starts the build JVM, that starts the test worker, and that starts stard.  On Windows
+# (Git Bash) MSYS cannot signal native pids: taskkill takes the Windows pid, and /T the tree.
+kill_tree() {
+    local pid=$1 child win
+    if [ -r "/proc/$pid/winpid" ] && command -v taskkill >/dev/null 2>&1; then
+        win=$(cat "/proc/$pid/winpid" 2>/dev/null)
+        [ -z "$win" ] || taskkill //F //T //PID "$win" >/dev/null 2>&1
+        kill -9 "$pid" 2>/dev/null
+        return 0
+    fi
+    for child in $(pgrep -P "$pid" 2>/dev/null); do kill_tree "$child"; done
+    kill -9 "$pid" 2>/dev/null
+}
+
+cleanup() {
+    [ -z "$watchdog" ] || kill "$watchdog" 2>/dev/null
+    [ -z "$gradle_pid" ] || kill_tree "$gradle_pid"
+}
+trap cleanup EXIT
+trap 'exit 143' TERM
+
 if [ -n "${STAR_HANG_WATCHDOG_SECONDS:-}" ]; then
     # The dumps also go to a file the reports artifact carries (a cancelled job's log is lost); per-feature dirs are removed one by
     # one below, so this file survives retries.
     mkdir -p "$each"
     HANG_WATCHDOG_OUT="$each/hang-watchdog.log" "$here/hang-watchdog.sh" "$STAR_HANG_WATCHDOG_SECONDS" &
     watchdog=$!
-    trap 'kill "$watchdog" 2>/dev/null' EXIT
-    trap 'exit 143' TERM
 fi
+
+# gradlew for one feature, cut off after $1 seconds (STAR_FEATURE_TIMEOUT_SECONDS).  A feature that blocks where no step timeout reaches
+# (ticket #415: a Windows feature was silent for two hours, until the job's own timeout) is dumped (hang-watchdog.sh --dump-now: every
+# JVM's stacks and the process table), killed with everything it started, and counted as failed, so the features after it still run.
+# The runner's own step watchdog (DesktopFeatureRunner.StepWatchdog) normally ends a hung feature first, naming the step.
+run_bounded() {
+    local limit=$1 feature=$2 deadline status=0
+    ./gradlew gherkinTest --tests "com.star.desktop.gherkin.generated.GeneratedFeatureTests.${feature}Feature" \
+        --no-daemon --stacktrace -Pstar.stard.path="$stard" &
+    gradle_pid=$!
+    deadline=$(($(date +%s) + limit))
+    while kill -0 "$gradle_pid" 2>/dev/null; do
+        if [ "$(date +%s)" -ge "$deadline" ]; then
+            echo "::error::$feature: still running after ${limit}s (STAR_FEATURE_TIMEOUT_SECONDS): dumping stacks, then killing it"
+            HANG_WATCHDOG_OUT="$each/hang-watchdog.log" "$here/hang-watchdog.sh" --dump-now "$feature ran ${limit}s"
+            kill_tree "$gradle_pid"
+            # a stard that outlived its client, and the run marker that would make the next feature's stard raise a crash alert
+            if command -v taskkill >/dev/null 2>&1; then taskkill //F //IM stard.exe >/dev/null 2>&1; else pkill -x stard 2>/dev/null; fi
+            rm -rf build/run-markers
+            wait "$gradle_pid" 2>/dev/null
+            gradle_pid=""
+            return 124
+        fi
+        sleep 5
+    done
+    wait "$gradle_pid" || status=$?
+    gradle_pid=""
+    return "$status"
+}
 
 # One test, ran, not skipped, no failures: the same three greps over the Gradle XML as ever, on this feature's copy of it.
 proved() {
@@ -65,8 +120,12 @@ for f in "$@"; do
     mkdir -p "$dir/results" "$dir/reports"
 
     echo "::group::$f"
-    ./gradlew gherkinTest --tests "com.star.desktop.gherkin.generated.GeneratedFeatureTests.${f}Feature" \
-        --no-daemon --stacktrace -Pstar.stard.path="$stard"
+    if [ -n "${STAR_FEATURE_TIMEOUT_SECONDS:-}" ]; then
+        run_bounded "$STAR_FEATURE_TIMEOUT_SECONDS" "$f"
+    else
+        ./gradlew gherkinTest --tests "com.star.desktop.gherkin.generated.GeneratedFeatureTests.${f}Feature" \
+            --no-daemon --stacktrace -Pstar.stard.path="$stard"
+    fi
     status=$?
     echo "::endgroup::"
 

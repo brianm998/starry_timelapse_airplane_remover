@@ -332,6 +332,23 @@ minute process timeout) and the 25 minute attempt cut. Threads parked in `Decode
 stuck means the stderr pipe. It never kills or fails anything; a missing tool is a one-line note. Run it by hand with
 `gherkin/hang-watchdog.sh <quiet-seconds> [poll-seconds]`; `HANG_WATCHDOG_PGREP` changes the `pgrep` arguments that find stard (the tests use it).
 
+### One desktop feature cannot hold the leg (tickets #415, #364)
+
+The quiet-log watchdog never kills anything, and fires only while a stard is silent. On the Windows ui shard
+`uiPainterWaitsForExtraction` (Gradle test `GeneratedFeatureTests.uiPainterWaitsForExtractionFeature`, still red on Windows until
+its `STEP HUNG` dump names the call) went silent for two hours with no step timeout reached (they are checked from inside each wait, so a
+blocked UI thread or a `waitForIdle` that never returns bypasses them) until the 180 minute job timeout cancelled the job, and every
+feature after it never ran. Two bounds now stop that:
+
+- **Per step, in the runner.** A @ui feature's `DesktopFeatureRunner.StepWatchdog` notes when each step starts. A step that runs past 12
+  minutes (52 for a processing wait; each is the longest wait inside the step plus 2 minutes) prints `STEP HUNG: <step> after Ns` and every
+  thread's stack, interrupts the test thread and, if that does not end it within 20 s, halts the test JVM, which Gradle reports as a
+  failed test, so the feature fails by itself and says which step and call it was in. `STAR_GHERKIN_STEP_HANG_SECONDS` overrides the limit.
+- **Per feature, in the script.** When `STAR_FEATURE_TIMEOUT_SECONDS` is set (the ui shard of the desktop-linux, desktop-windows and
+  desktop-macos legs set 1200), `run-desktop-features.sh` cuts one feature's `gradlew` off after that long: `hang-watchdog.sh --dump-now`
+  prints the process table and a `jstack` of every JVM (whether or not a stard is running), then the process tree is killed
+  (`taskkill //T` on Windows), the feature counts as failed, and the shard goes on to the next feature. Unset, a feature runs unbounded.
+
 ## Checking airplane and satellite removal
 
 Features that must prove trails are actually gone use `trail_tools/` (a standalone SwiftPM package: `RemovalCore`,

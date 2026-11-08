@@ -1528,6 +1528,7 @@ jobs:
       - name: Run the Gherkin features in the Compose UI
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
+          STAR_FEATURE_TIMEOUT_SECONDS: ${{ matrix.shard.name == 'ui' && '1200' || '' }}
           STAR_HANG_WATCHDOG_SECONDS: '360'
         uses: nick-fields/retry@v3
         with:
@@ -1782,6 +1783,7 @@ jobs:
       - name: Run the Gherkin features in the Compose UI
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
+          STAR_FEATURE_TIMEOUT_SECONDS: ${{ matrix.shard.name == 'ui' && '1200' || '' }}
           STAR_HANG_WATCHDOG_SECONDS: '360'
         # cygpath -m: the JVM wants C:/... , not Git Bash's /d/a/...
         run: gherkin/run-desktop-features.sh "$(cygpath -m "$GITHUB_WORKSPACE/daemon/.build/release/stard.exe")" ${{ matrix.shard.features }}
@@ -1917,6 +1919,7 @@ jobs:
       - name: Run the Gherkin features in the Compose UI
         env:
           STAR_GHERKIN_ARTIFACTS: ${{ runner.temp }}/gherkin-artifacts
+          STAR_FEATURE_TIMEOUT_SECONDS: ${{ matrix.shard.name == 'ui' && '1200' || '' }}
         uses: nick-fields/retry@v3
         with:
           # an attempt of a shard is all its features; a retry runs only those that failed (the script keeps what passed)
