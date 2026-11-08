@@ -335,7 +335,8 @@ stuck means the stderr pipe. It never kills or fails anything; a missing tool is
 ### One desktop feature cannot hold the leg (tickets #415, #364)
 
 The quiet-log watchdog never kills anything, and fires only while a stard is silent. On the Windows ui shard
-`uiPainterWaitsForExtraction` went silent for two hours with no step timeout reached (they are checked from inside each wait, so a
+`uiPainterWaitsForExtraction` (Gradle test `GeneratedFeatureTests.uiPainterWaitsForExtractionFeature`, still red on Windows until
+its `STEP HUNG` dump names the call) went silent for two hours with no step timeout reached (they are checked from inside each wait, so a
 blocked UI thread or a `waitForIdle` that never returns bypasses them) until the 180 minute job timeout cancelled the job, and every
 feature after it never ran. Two bounds now stop that:
 
