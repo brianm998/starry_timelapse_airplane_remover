@@ -31,15 +31,28 @@ def fake_stard(tmp_path: Path) -> Iterator[tuple[subprocess.Popen[bytes], Path]]
     proc.wait()
 
 
-def watch(seconds: float, limit: int = 2, path_prefix: str = "") -> str:
-    """Run the watchdog for `seconds`, then stop it and return its output."""
+def watch(seconds: float, limit: int = 2, path_prefix: str = "", expect_dump: bool = True) -> str:
+    """Run the watchdog for `seconds`, then stop it and return its output.  With `expect_dump`, a dump that has begun by then (or has not,
+    on a machine so loaded that the poll loop is late) is given up to 90 s more to reach its `::endgroup::`: the fixed window alone made
+    these tests fail whenever the machine's load average was in the tens."""
     env = {**os.environ, "HANG_WATCHDOG_PGREP": f"-f {NAME}"}
     if path_prefix:
         env["PATH"] = path_prefix + os.pathsep + env["PATH"]
-    p = subprocess.Popen(["bash", str(SCRIPT), str(limit), "1"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
-    time.sleep(seconds)
-    p.terminate()
-    out, _ = p.communicate(timeout=30)
+    out_file = Path(env.get("TMPDIR", "/tmp")) / f"hang-watchdog-{uuid.uuid4().hex}.out"
+    with out_file.open("w") as sink:
+        p = subprocess.Popen(["bash", str(SCRIPT), str(limit), "1"], stdout=sink, stderr=subprocess.STDOUT, text=True, env=env)
+        time.sleep(seconds)
+        if expect_dump:
+            late = time.time() + 90
+            while time.time() < late:
+                text = out_file.read_text()
+                if text.count(BANNER) >= 1 and text.count("::endgroup::") >= text.count(BANNER):
+                    break
+                time.sleep(0.5)
+        p.terminate()
+        p.wait(timeout=30)
+    out = out_file.read_text()
+    out_file.unlink()
     return out
 
 
@@ -107,7 +120,7 @@ def testWatchdogStaysSilentWhileStardLogGrows(fake_stard: tuple[subprocess.Popen
     _proc, log = fake_stard
     grower = subprocess.Popen(["bash", "-c", f"while :; do echo tick >> '{log}'; sleep 0.5; done"])
     try:
-        out = watch(7)
+        out = watch(7, expect_dump=False)
     finally:
         grower.kill()
         grower.wait()
