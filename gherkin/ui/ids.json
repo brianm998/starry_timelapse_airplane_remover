@@ -37,6 +37,7 @@
     "multiselect.range.*",
     "multiselect.summary",
     "outlier.first",
+    "outlier.rows",
     "painter.band",
     "painter.canvas",
     "painter.computing",
