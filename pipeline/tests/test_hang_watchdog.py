@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import subprocess
 import time
+import uuid
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -11,7 +12,7 @@ import pytest
 
 SCRIPT = Path(__file__).resolve().parents[2] / "gherkin" / "hang-watchdog.sh"
 BANNER = "stard hang watchdog: dump"
-NAME = "fakestardwd-unique-token"
+NAME = f"fakestardwd-{uuid.uuid4().hex}"  # per run: another ticket's checks run this file at the same time, and pgrep -f matches theirs too
 
 
 @pytest.fixture
@@ -30,15 +31,28 @@ def fake_stard(tmp_path: Path) -> Iterator[tuple[subprocess.Popen[bytes], Path]]
     proc.wait()
 
 
-def watch(seconds: float, limit: int = 2, path_prefix: str = "") -> str:
-    """Run the watchdog for `seconds`, then stop it and return its output."""
+def watch(seconds: float, limit: int = 2, path_prefix: str = "", expect_dump: bool = True) -> str:
+    """Run the watchdog for `seconds`, then stop it and return its output.  With `expect_dump`, a dump that has begun by then (or has not,
+    on a machine so loaded that the poll loop is late) is given up to 90 s more to reach its `::endgroup::`: the fixed window alone made
+    these tests fail whenever the machine's load average was in the tens."""
     env = {**os.environ, "HANG_WATCHDOG_PGREP": f"-f {NAME}"}
     if path_prefix:
         env["PATH"] = path_prefix + os.pathsep + env["PATH"]
-    p = subprocess.Popen(["bash", str(SCRIPT), str(limit), "1"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
-    time.sleep(seconds)
-    p.terminate()
-    out, _ = p.communicate(timeout=30)
+    out_file = Path(env.get("TMPDIR", "/tmp")) / f"hang-watchdog-{uuid.uuid4().hex}.out"
+    with out_file.open("w") as sink:
+        p = subprocess.Popen(["bash", str(SCRIPT), str(limit), "1"], stdout=sink, stderr=subprocess.STDOUT, text=True, env=env)
+        time.sleep(seconds)
+        if expect_dump:
+            late = time.time() + 90
+            while time.time() < late:
+                text = out_file.read_text()
+                if text.count(BANNER) >= 1 and text.count("::endgroup::") >= text.count(BANNER):
+                    break
+                time.sleep(0.5)
+        p.terminate()
+        p.wait(timeout=30)
+    out = out_file.read_text()
+    out_file.unlink()
     return out
 
 
@@ -95,7 +109,7 @@ def testWatchdogRunsGdbAndStacksThroughTimeout(fake_stard: tuple[subprocess.Pope
         shim = shims / name
         shim.write_text("#!/bin/bash\n" + body)
         shim.chmod(0o755)
-    out = watch(7, path_prefix=str(shims))
+    out = watch(25, path_prefix=str(shims))
     gdb = out.split("--- gdb backtrace", 1)[1].split("--- tail of", 1)[0]
     assert "GDB-SHIM-RAN -p" in gdb, out
     assert "failed to run command" not in out, out
@@ -106,7 +120,7 @@ def testWatchdogStaysSilentWhileStardLogGrows(fake_stard: tuple[subprocess.Popen
     _proc, log = fake_stard
     grower = subprocess.Popen(["bash", "-c", f"while :; do echo tick >> '{log}'; sleep 0.5; done"])
     try:
-        out = watch(7)
+        out = watch(7, expect_dump=False)
     finally:
         grower.kill()
         grower.wait()
@@ -122,7 +136,7 @@ def testWatchdogWritesDumpsToOutFile(fake_stard: tuple[subprocess.Popen[bytes], 
     dumps = tmp_path / "out" / "hang-watchdog.log"
     dumps.parent.mkdir()
     monkeypatch.setenv("HANG_WATCHDOG_OUT", str(dumps))
-    out = watch(7, path_prefix=str(shims))
+    out = watch(25, path_prefix=str(shims))
     assert BANNER in out, out
     text = dumps.read_text()
     assert BANNER in text
@@ -132,7 +146,7 @@ def testWatchdogWritesDumpsToOutFile(fake_stard: tuple[subprocess.Popen[bytes], 
 
     monkeypatch.delenv("HANG_WATCHDOG_OUT")
     dumps.unlink()
-    assert BANNER in watch(7, path_prefix=str(shims))
+    assert BANNER in watch(25, path_prefix=str(shims))
     assert not dumps.exists()
 
 
@@ -161,7 +175,7 @@ def testWatchdogDumpsStardOnWindows(fake_stard: tuple[subprocess.Popen[bytes], P
         shim = shims / name
         shim.write_text("#!/bin/bash\n" + body)
         shim.chmod(0o755)
-    out = watch(9, path_prefix=str(shims))
+    out = watch(25, path_prefix=str(shims))
     assert BANNER in out, out
     assert f"pid {proc.pid}" in out
     assert "THREAD-TABLE-SHIM" in out, out
@@ -170,3 +184,48 @@ def testWatchdogDumpsStardOnWindows(fake_stard: tuple[subprocess.Popen[bytes], P
     assert "== jvm 4999999" in out, out
     assert "JSTACK-SHIM 4999999" in out, out
     assert "--- gdb backtrace" not in out
+
+
+def dump_now(path_prefix: str = "", why: str = "") -> str:
+    env = {**os.environ, "HANG_WATCHDOG_PGREP": f"-f {NAME}"}
+    if path_prefix:
+        env["PATH"] = path_prefix + os.pathsep + env["PATH"]
+    args = ["bash", str(SCRIPT), "--dump-now"] + ([why] if why else [])
+    return subprocess.run(args, check=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, timeout=120).stdout
+
+
+def testDumpNowDumpsAtOnceWithStardQuiet(fake_stard: tuple[subprocess.Popen[bytes], Path], tmp_path: Path) -> None:
+    """--dump-now (ticket #415) dumps once and exits without waiting for stard's log to go quiet; here it is not even stale."""
+    proc, _log = fake_stard
+    shims = tmp_path / "nojvms"
+    shims.mkdir()
+    (shims / "jps").write_text("#!/bin/bash\nexit 0\n")
+    (shims / "jps").chmod(0o755)
+    start = time.time()
+    out = dump_now(str(shims), "uiX ran 5s")
+    assert time.time() - start < 30
+    assert out.count(BANNER) == 1, out
+    assert f"pid {proc.pid}" in out and "uiX ran 5s" in out, out
+    assert "ResourceGovernor: CPU gate 2/2" in out  # the log tail
+    assert "--- jstack of every JVM" in out
+    assert "::endgroup::" in out
+
+
+def testDumpNowWithoutStardStillDumpsTheJvms(tmp_path: Path) -> None:
+    """The Windows hang had no wedged stard to find: the dump must still list the JVMs' stacks."""
+    jvm = subprocess.Popen(["sleep", "60"])  # off Windows the dump skips a pid that is not alive
+    try:
+        shims = tmp_path / "shims"
+        shims.mkdir()
+        for name, body in {"jps": f"echo {jvm.pid}\n", "jstack": 'echo "JSTACK-SHIM $1"\n', "pgrep": "exit 1\n"}.items():
+            (shims / name).write_text("#!/bin/bash\n" + body)
+            (shims / name).chmod(0o755)
+        out = dump_now(str(shims))
+    finally:
+        jvm.kill()
+        jvm.wait()
+    assert BANNER in out and "pid none" in out, out
+    assert "no stard is running" in out, out
+    assert f"JSTACK-SHIM {jvm.pid}" in out, out
+    assert "::endgroup::" in out
+    assert "--- tail of" not in out

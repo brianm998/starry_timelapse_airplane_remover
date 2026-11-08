@@ -2,6 +2,7 @@
 # Prints what a wedged stard looks like into the job log, so the next intermittent hang can be root-caused (ticket #54).
 #
 #   gherkin/hang-watchdog.sh <quiet-seconds> [poll-seconds]
+#   gherkin/hang-watchdog.sh --dump-now [why]
 #
 # Runs beside the desktop Gherkin features (gherkin/run-desktop-features.sh starts it when STAR_HANG_WATCHDOG_SECONDS is set).  The
 # Kotlin client appends every line stard writes to stderr to <scratch>/logs/stard.log (DaemonProcess.kt), and stard's ResourceGovernor
@@ -19,17 +20,31 @@
 # stard/java/gradle, a table of stard's threads (state and wait reason: all in Wait/UserRequest is pool starvation or a blocked pipe,
 # one spinning is not), the tail of stard.log and the same jstack of every JVM.  No native stacks of stard there.
 #
+# --dump-now makes one dump straight away and exits, whether or not a stard is running or its log has stopped growing: ps / the process
+# table, a jstack of every JVM and, when a stard is found, its sections.  gherkin/run-desktop-features.sh calls it when one feature has
+# run past STAR_FEATURE_TIMEOUT_SECONDS (ticket #415: a Windows feature went silent for two hours without stard's log going quiet, so
+# the quiet-log trigger never fired).
+#
 # HANG_WATCHDOG_PGREP (default "-x stard") is the pgrep argument list that finds the process; the tests use it (macOS has no stard).
 # HANG_WATCHDOG_OUT, when set, is a file every dump is also appended to (CI uploads it with the reports; a cancelled job's log is lost).
 
 set -u
 
 if [ $# -lt 1 ]; then
-    echo "usage: $0 <quiet-seconds> [poll-seconds]" >&2
+    echo "usage: $0 <quiet-seconds> [poll-seconds] | --dump-now [why]" >&2
     exit 2
 fi
-limit=$1
-poll=${2:-15}
+dump_now=0
+why=""
+if [ "$1" = "--dump-now" ]; then
+    dump_now=1
+    why=${2:-}
+    limit=0
+    poll=0
+else
+    limit=$1
+    poll=${2:-15}
+fi
 pgrep_args=${HANG_WATCHDOG_PGREP:--x stard}
 out=${HANG_WATCHDOG_OUT:-}
 windows=0
@@ -89,6 +104,7 @@ windows_sections() {
     echo "--- processes (stard, java, gradle)"
     bounded 60 powershell -NoProfile -NonInteractive -Command \
         "Get-Process | Where-Object { \$_.Name -match 'stard|java|gradle' } | Format-Table Id,Name,CPU,WS,HandleCount -AutoSize | Out-String -Width 200" 2>&1 | tr -d '\r' | head -n 40
+    if [ -z "$pid" ]; then echo "(no stard.exe is running)"; return 0; fi
     echo "--- threads of $pid (state, wait reason, cpu)"
     bounded 60 powershell -NoProfile -NonInteractive -Command \
         "(Get-Process -Id $pid).Threads | Format-Table Id,ThreadState,WaitReason,TotalProcessorTime -AutoSize | Out-String -Width 200" 2>&1 | tr -d '\r' | head -n 200
@@ -96,7 +112,11 @@ windows_sections() {
 
 dump() {
     local pid=$1 log=$2 n=$3
-    echo "::group::stard hang watchdog: dump $n for pid $pid ($(date -u +%H:%M:%S)), $log quiet for at least $((limit + (n - 1) * second))s"
+    if [ "$dump_now" -eq 1 ]; then
+        echo "::group::stard hang watchdog: dump now for pid ${pid:-none} ($(date -u +%H:%M:%S))${why:+: $why}"
+    else
+        echo "::group::stard hang watchdog: dump $n for pid $pid ($(date -u +%H:%M:%S)), $log quiet for at least $((limit + (n - 1) * second))s"
+    fi
     date -u
     uptime || true
     free -m 2>/dev/null || true
@@ -108,8 +128,10 @@ dump() {
         linux_sections "$pid"
     fi
 
-    echo "--- tail of $log"
-    tail -n 60 "$log" 2>/dev/null || echo "($log unreadable)"
+    if [ -n "$log" ]; then
+        echo "--- tail of $log"
+        tail -n 60 "$log" 2>/dev/null || echo "($log unreadable)"
+    fi
 
     echo "--- jstack of every JVM"
     if command -v jps >/dev/null 2>&1; then
@@ -132,6 +154,8 @@ linux_sections() {
     local pid=$1 task tid
     echo "--- ps"
     t ps -eo pid,ppid,stat,pcpu,etime,args --sort=-pcpu 2>/dev/null | head -40 || t ps -eo pid,ppid,stat,pcpu,etime,args | head -40 || true
+
+    if [ -z "$pid" ]; then echo "(no stard is running)"; return 0; fi
 
     echo "--- threads of $pid (top -H)"
     t top -H -b -n1 -p "$pid" 2>/dev/null | head -60 || echo "(top -H unavailable)"
@@ -160,14 +184,8 @@ linux_sections() {
     fi
 }
 
-watched=""   # pid being watched
-size=""      # its log's size at the last poll
-since=0      # when that size was first seen
-dumped=0     # dumps made for this pid
-
-trap 'exit 0' TERM INT
-
-while :; do
+# Sets pid and scratch for the first stard: both empty when there is none.
+find_stard() {
     scratch=""
     if [ "$windows" -eq 1 ]; then
         row=$(windows_stard)
@@ -179,6 +197,25 @@ while :; do
         pid=$(pgrep $pgrep_args 2>/dev/null | head -n 1)
         [ -z "$pid" ] || scratch=$(scratch_of "$pid")
     fi
+}
+
+if [ "$dump_now" -eq 1 ]; then
+    find_stard
+    log=""
+    [ -z "$scratch" ] || log="$scratch/logs/stard.log"
+    if [ -n "$out" ]; then dump "$pid" "$log" 1 2>&1 | tee -a "$out"; else dump "$pid" "$log" 1; fi
+    exit 0
+fi
+
+watched=""   # pid being watched
+size=""      # its log's size at the last poll
+since=0      # when that size was first seen
+dumped=0     # dumps made for this pid
+
+trap 'exit 0' TERM INT
+
+while :; do
+    find_stard
     if [ -z "$pid" ]; then
         watched=""
     else
