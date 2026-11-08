@@ -14,9 +14,11 @@ Feature: A decision made just before Close is still there when the sequence is o
       And I choose the menu command "keepAll"
       And I choose the menu command "removeAll"
     Then  "status.keep" says "0 will keep"
+      And "status.remove" stops saying "0 will remove"
     When  I choose the menu command "closeSequence"
       And I confirm closing if it is asked
       And I click "startup.recent.open"
       And I click "sequenceprogress.close"
       And I click "mode.edit"
     Then  "status.keep" says "0 will keep"
+      And "status.remove" stops saying "0 will remove"
