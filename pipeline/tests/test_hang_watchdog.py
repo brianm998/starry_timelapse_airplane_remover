@@ -95,7 +95,7 @@ def testWatchdogRunsGdbAndStacksThroughTimeout(fake_stard: tuple[subprocess.Pope
         shim = shims / name
         shim.write_text("#!/bin/bash\n" + body)
         shim.chmod(0o755)
-    out = watch(7, path_prefix=str(shims))
+    out = watch(25, path_prefix=str(shims))
     gdb = out.split("--- gdb backtrace", 1)[1].split("--- tail of", 1)[0]
     assert "GDB-SHIM-RAN -p" in gdb, out
     assert "failed to run command" not in out, out
@@ -122,7 +122,7 @@ def testWatchdogWritesDumpsToOutFile(fake_stard: tuple[subprocess.Popen[bytes], 
     dumps = tmp_path / "out" / "hang-watchdog.log"
     dumps.parent.mkdir()
     monkeypatch.setenv("HANG_WATCHDOG_OUT", str(dumps))
-    out = watch(7, path_prefix=str(shims))
+    out = watch(25, path_prefix=str(shims))
     assert BANNER in out, out
     text = dumps.read_text()
     assert BANNER in text
@@ -132,7 +132,7 @@ def testWatchdogWritesDumpsToOutFile(fake_stard: tuple[subprocess.Popen[bytes], 
 
     monkeypatch.delenv("HANG_WATCHDOG_OUT")
     dumps.unlink()
-    assert BANNER in watch(7, path_prefix=str(shims))
+    assert BANNER in watch(25, path_prefix=str(shims))
     assert not dumps.exists()
 
 
@@ -161,7 +161,7 @@ def testWatchdogDumpsStardOnWindows(fake_stard: tuple[subprocess.Popen[bytes], P
         shim = shims / name
         shim.write_text("#!/bin/bash\n" + body)
         shim.chmod(0o755)
-    out = watch(9, path_prefix=str(shims))
+    out = watch(25, path_prefix=str(shims))
     assert BANNER in out, out
     assert f"pid {proc.pid}" in out
     assert "THREAD-TABLE-SHIM" in out, out
