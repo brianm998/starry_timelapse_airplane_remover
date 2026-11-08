@@ -1105,6 +1105,29 @@ async def test_red_batch_asks_owner(rig: Rig) -> None:
     assert rig.db.question_for(2) == q, "the other member sees the batch's question too"
 
 
+async def test_land_now_lands_a_batch_that_is_asking(rig: Rig) -> None:
+    t = await red_batch(rig)
+    assert batch_state(rig, 1) == "asking"
+    for n in (1, 2):
+        rig.db.put(f"land_now:{n}", "1")
+    await t.run_until_idle()  # no answer to the question: the marks are the answer
+    assert [rig.state(n) for n in (1, 2)] == ["landed"] * 2 and develop_has(rig, "docs/f1.md") and batch_state(rig, 1) == "landed"
+    q = rig.db.batch_question(1)
+    assert q and q["answer"] is not None, "marked answered, so it is not posted again"
+    assert rig.db.open_alerts() == []
+    assert len([c for c in rig.gh.comments(1) if "starpipe:question" in c["body"]]) == 1
+
+
+async def test_land_now_on_one_member_of_an_asking_batch_rebuilds_without_the_rest(rig: Rig) -> None:
+    t = await red_batch(rig)
+    rig.db.put("land_now:2", "1")
+    await t.run_until_idle()
+    assert batch_state(rig, 1) == "abandoned" and rig.db.batch_members(2) == [2]
+    assert rig.state(2) == "landed" and rig.state(1) != "landed"
+    q = rig.db.batch_question(1)
+    assert q and q["answer"] is not None, "the abandoned batch's question is closed"
+
+
 async def test_bypass_lands_and_files_followup(rig: Rig) -> None:
     t = await red_batch(rig)
     rig.gh.say(1, OWNER, "bypass please")  # the owner replies on the issue the question was posted on
