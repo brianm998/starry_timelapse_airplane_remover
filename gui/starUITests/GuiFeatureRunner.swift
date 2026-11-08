@@ -931,6 +931,7 @@ final class GuiFeatureRunner {
 
     /// Paints a band across the element: one drag from its left edge to its right, at 80% of its height (higher if the painter's toolbar covers
     /// that), where the horizon of a frame is. The band is complete when it spans the width, and the painter then starts looking for the horizon in it.
+    /// If that drag leaves no stroke in the painter, two other ways of painting the same band follow it (below).
     private func paintBand(across identifier: String, timeout: TimeInterval = 120) throws {
         let e = element(identifier)
         guard e.waitForExistence(timeout: timeout) else {
@@ -945,9 +946,55 @@ final class GuiFeatureRunner {
             let clearOfToolbar = (label.frame.minY - 12 - 8 - frame.minY) / frame.height
             dy = max(0.1, min(dy, clearOfToolbar))
         }
-        let start = e.coordinate(withNormalizedOffset: CGVector(dx: 0.002, dy: dy))
-        let end = e.coordinate(withNormalizedOffset: CGVector(dx: 0.998, dy: dy))
-        start.press(forDuration: 0.2, thenDragTo: end)
+        let bandY = dy
+        func at(_ x: CGFloat, _ y: CGFloat) -> XCUICoordinate { e.coordinate(withNormalizedOffset: CGVector(dx: x, dy: y)) }
+
+        // What the painter shows once a stroke has registered: Reset (disabled until there is one), or, when the stroke completed the band,
+        // the computing toolbar and then the Sky choice of the refinement.
+        func strokeRegistered() -> Bool {
+            element("painter.sky").exists || element("painter.computing").exists
+                || (element("painter.reset").exists && element("painter.reset").isEnabled)
+        }
+        func bandTaken() -> Bool { element("painter.sky").exists || element("painter.computing").exists }
+        func settle(_ seconds: TimeInterval, _ done: () -> Bool) -> Bool {
+            let deadline = Date().addingTimeInterval(seconds)
+            while !done() {
+                if Date() > deadline { return false }
+                _ = XCTWaiter.wait(for: [XCTestExpectation(description: "poll")], timeout: 0.5)
+            }
+            return true
+        }
+        func state() -> String {
+            let reset = element("painter.reset"), band = element("painter.band")
+            return "canvas \(e.frame), band label \"\(band.value as? String ?? band.label)\" at \(band.frame), reset exists \(reset.exists) enabled \(reset.isEnabled), "
+                + "sky \(element("painter.sky").exists), computing \(element("painter.computing").exists)"
+        }
+
+        // The band is one drag across the canvas. A drag has not always reached the painter on the mac gui's CI runners (the first one, at
+        // `bandY`, left Reset disabled and no Sky choice in uiPainterOpens), so a drag that leaves no stroke is tried again a different way,
+        // and what each try left is in the error if none takes, which is what says why: a drag in the middle of the canvas, away from the
+        // toolbar and the edges; then the same stroke as a row of clicks, each of which is a stroke of its own on the same band.
+        let attempts: [(name: String, run: () -> Void)] = [
+            ("a drag at \(bandY)", {
+                at(0.002, bandY).press(forDuration: 0.2, thenDragTo: at(0.998, bandY))
+            }),
+            ("a slow drag at 0.4", {
+                at(0.002, 0.4).press(forDuration: 0.2, thenDragTo: at(0.998, 0.4), withVelocity: .slow, thenHoldForDuration: 0.3)
+            }),
+            ("a row of clicks at 0.4", {
+                let steps = 24 // 19 points apart on a 460 point canvas, where the brush is 27 points in radius
+                for i in 0...steps { at(0.002 + 0.996 * CGFloat(i) / CGFloat(steps), 0.4).click() }
+            }),
+        ]
+        var tried: [String] = []
+        for attempt in attempts {
+            attempt.run()
+            let registered = settle(5) { strokeRegistered() }
+            tried.append("\(attempt.name): \(registered ? "stroke registered" : "no stroke"); \(state())")
+            // a stroke that did not complete the band gets the next attempt on top of it: the band is the union of all of them
+            if registered, settle(10, { bandTaken() }) { return }
+        }
+        throw RunnerError("the band painted across \(identifier) did not take. Tried:\n" + tried.joined(separator: "\n") + "\n\(app.debugDescription)")
     }
 
     /// A feature from the processed sequence starts runs, and this Mac must never run the GPU merge (CLAUDE.md).
