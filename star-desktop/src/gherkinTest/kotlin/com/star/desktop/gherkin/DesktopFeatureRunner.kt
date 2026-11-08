@@ -1414,6 +1414,17 @@ class DesktopFeatureRunner {
     }
 
     /**
+     * A concat-demuxer list of the frames at 5 fps (0.2 s each), written to [name] in the scratch folder. The concat demuxer drops the duration of
+     * the last file, so that one is listed again without one (an `-frames:v` keeps that repeat out of a video, or it is one frame more).
+     */
+    private fun writeConcatList(frames: List<File>, name: String): File {
+        val list = File(scratch, name)
+        fun entry(f: File) = "file '${f.absolutePath.replace('\\', '/')}'"
+        list.writeText(frames.joinToString("") { "${entry(it)}\nduration 0.2\n" } + entry(frames.last()) + "\n")
+        return list
+    }
+
+    /**
      * A short video made from the copied sequence's frames with the bundled ffmpeg: 5 fps, the frames in name order. The frames go in through a
      * concat list, not `-pattern_type glob`, which the Windows ffmpeg build does not have.
      */
@@ -1421,10 +1432,7 @@ class DesktopFeatureRunner {
         if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
         val frames = (sequenceCopy.listFiles { f -> f.isFile && f.name.endsWith(".jpg") } ?: emptyArray()).sortedBy { it.name }
         if (frames.isEmpty()) throw RunnerError("no .jpg frames in $sequenceCopy to make a video from")
-        val list = File(scratch, "gallery-video-frames.txt")
-        fun entry(f: File) = "file '${f.absolutePath.replace('\\', '/')}'"
-        // the concat demuxer drops the duration of the last file, so that one is listed again without one (and -frames:v keeps that repeat out of the video)
-        list.writeText(frames.joinToString("") { "${entry(it)}\nduration 0.2\n" } + entry(frames.last()) + "\n")
+        val list = writeConcatList(frames, "gallery-video-frames.txt")
         val video = File(scratch, "gallery-video.mp4")
         val process = ProcessBuilder(
             ffmpegExecutable().path, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list.path,
@@ -1454,13 +1462,15 @@ class DesktopFeatureRunner {
      */
     private fun startLongVideoImport(t: ComposeUiTest) {
         if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
-        val ffmpeg = File(repoRoot(), "external_binaries/bin/ffmpeg").takeIf { it.canExecute() } ?: File("ffmpeg")
         val video = File(scratch, "long-video.mp4")
-        val frames = sequenceCopy.listFiles { f -> f.extension.lowercase() == "jpg" }?.size ?: 0
-        if (frames == 0) throw RunnerError("no jpg frames in $sequenceCopy to make a video from")
+        val jpgs = (sequenceCopy.listFiles { f -> f.isFile && f.extension.lowercase() == "jpg" } ?: emptyArray()).sortedBy { it.name }
+        if (jpgs.isEmpty()) throw RunnerError("no jpg frames in $sequenceCopy to make a video from")
+        val frames = jpgs.size
+        // a concat list, not `-pattern_type glob`, which the Windows ffmpeg build does not have
+        val list = writeConcatList(jpgs, "long-video-frames.txt")
         val process = ProcessBuilder(
-            ffmpeg.path, "-y", "-loglevel", "error", "-framerate", "5", "-pattern_type", "glob", "-i", File(sequenceCopy, "*.jpg").path,
-            "-vf", "scale=3840:-2,loop=loop=${LONG_VIDEO_LOOPS}:size=$frames:start=0",
+            ffmpegExecutable().path, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list.path,
+            "-vf", "scale=3840:-2,loop=loop=${LONG_VIDEO_LOOPS}:size=$frames:start=0", "-r", "5",
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "40", "-pix_fmt", "yuv420p", video.path,
         ).redirectErrorStream(true).start()
         val log = process.inputStream.bufferedReader().readText()
