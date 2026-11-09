@@ -661,14 +661,14 @@ final class GuiFeatureRunner {
     }
 
     /// `hasKeyboardFocus` is the attribute the accessibility API reports for it; XCUIElement has no public property on macOS.
-    private func hasKeyboardFocus(_ e: XCUIElement) -> Bool { (e.value(forKey: "hasKeyboardFocus") as? Bool) ?? false }
+    private func hasKeyboardFocus(_ e: XCUIElement) -> Bool { e.exists && ((e.value(forKey: "hasKeyboardFocus") as? Bool) ?? false) }
 
     /// The control has the keyboard (a text field being typed into), or not.
     private func expectFocus(_ identifier: String, focused: Bool) throws {
         try expectShown(identifier, shown: true)
         let e = element(identifier)
         // elementType says whether a field never opened (StaticText) or opened but is unfocused (TextField).
-        try waitFor("\(identifier) \(focused ? "to have" : "not to have") the keyboard", timeout: 20, detail: { "(hasKeyboardFocus: \(hasKeyboardFocus(e)), elementType: \(e.elementType.rawValue))" }) { hasKeyboardFocus(e) == focused }
+        try waitFor("\(identifier) \(focused ? "to have" : "not to have") the keyboard", timeout: 20, detail: { "(hasKeyboardFocus: \(hasKeyboardFocus(e)), elementType: \(e.exists ? String(e.elementType.rawValue) : "absent"))" }) { hasKeyboardFocus(e) == focused }
     }
 
     /// The control takes clicks (a button that is not greyed out), or does not.
