@@ -65,14 +65,21 @@ public final class MonitorStore {
     private let lastNotifiedUpdate: () -> String?
     private let setLastNotifiedUpdate: (String) -> Void
 
+    /// How long snapshot timeouts may go on, with no success, before the daemon shows as down.
+    public static let timeoutGrace: TimeInterval = 30
+    private let now: () -> Date
+    /// When the current run of snapshot timeouts began; nil after any success.
+    private var timedOutSince: Date?
+
     private var client: APIClient?
     private var tasks: [Task<Void, Never>] = []
 
-    public init(client: APIClient? = nil, sourceSHA: String? = nil,
+    public init(client: APIClient? = nil, sourceSHA: String? = nil, now: @escaping () -> Date = Date.init,
                 lastNotifiedUpdate: @escaping () -> String? = { nil },
                 setLastNotifiedUpdate: @escaping (String) -> Void = { _ in }) {
         self.client = client
         self.sourceSHA = sourceSHA
+        self.now = now
         self.lastNotifiedUpdate = lastNotifiedUpdate
         self.setLastNotifiedUpdate = setLastNotifiedUpdate
     }
@@ -142,6 +149,7 @@ public final class MonitorStore {
         Alerts.diff(old: snapshot, new: new).forEach { onAlert?($0) }
         snapshot = new
         connection = .live
+        timedOutSince = nil
         if let selected, !isShowable(selected, in: new) {
             // a snapshot-driven reset is not a navigation
             navigating = true
@@ -159,7 +167,16 @@ public final class MonitorStore {
 
     public func refresh() async {
         guard let client else { return }
-        do { apply(try await client.snapshot()) } catch { connection = .down("\(error.localizedDescription)") }
+        do {
+            apply(try await client.snapshot())
+        } catch APIError.timedOut {
+            // a slow reply is not a dead daemon: judge by elapsed time, since the poll loop and the event stream both call this
+            let since = timedOutSince ?? now()
+            timedOutSince = since
+            if now().timeIntervalSince(since) >= Self.timeoutGrace { connection = .down(APIError.timedOut.localizedDescription) }
+        } catch {
+            connection = .down("\(error.localizedDescription)")
+        }
     }
 
     /// Ask the daemon whether develop has newer monitor code than this build; notify once per new `latest`.
