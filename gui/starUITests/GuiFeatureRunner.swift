@@ -3,6 +3,27 @@ import StarGherkinKernel
 import AppKit
 import XCTest
 
+/// Which way to scroll a lazy grid to build a cell that is not in the tree: towards the target's number from the cells that are built. The
+/// grid builds only the cells in view, so the built numbers say where the view is; a target below them is up, a target above them down.
+struct GridScrollPlan {
+    enum Direction: Equatable { case up, down }
+
+    /// The N of "grid.cell.N", or nil for any other identifier.
+    static func cellNumber(_ identifier: String) -> Int? {
+        let prefix = "grid.cell."
+        guard identifier.hasPrefix(prefix) else { return nil }
+        return Int(identifier.dropFirst(prefix.count))
+    }
+
+    /// The way to scroll for [target] given the identifiers of what is built; nil when [target] is not a grid cell. With no grid cell built
+    /// (the grid is still coming up) there is nothing to go by and the answer is down.
+    static func direction(towards target: String, built: [String]) -> Direction? {
+        guard let wanted = cellNumber(target) else { return nil }
+        guard let lowest = built.compactMap(cellNumber).min() else { return .down }
+        return wanted < lowest ? .up : .down
+    }
+}
+
 /// Runs a generated `Feature` against the real `Star.app` with XCUITest. The step vocabulary is
 /// `StepAction`; every case has to appear in `methodMap` or the run fails naming what is implemented.
 ///
@@ -28,6 +49,7 @@ final class GuiFeatureRunner {
     private var completeFrames: Int?
     private var rendersVideo = false
     private var finishedReview = false
+    private var pendingRightClick: String?     // the cell the last step right-clicked, until another click step
     /// What the step being run was given for its inline arguments (`I click "<id>"`).
     private var args: [String] = []
     private var settledOnce = false
@@ -242,20 +264,37 @@ final class GuiFeatureRunner {
         let text = try english(key)
         let predicate = NSPredicate(format: "label == %@ OR title == %@", text, text)
         let types: [XCUIElement.ElementType] = [.radioButton, .button, .checkBox, .menuItem, .staticText]
-        var found: XCUIElement?
-        try waitFor("a control labelled \"\(text)\"", timeout: timeout, detail: { self.menuItemsDescription() }) {
+        func look() -> XCUIElement? {
             let scopes: [XCUIElement] = self.app.sheets.firstMatch.exists ? [self.app.sheets.firstMatch] : [self.app.windows.firstMatch]
             for scope in scopes {
                 for type in types {
                     let matches = scope.descendants(matching: type).matching(predicate)
-                    if matches.count > 0 { found = matches.element(boundBy: matches.count - 1); return true }
+                    if matches.count > 0 { return matches.element(boundBy: matches.count - 1) }
                 }
             }
             // a context menu belongs to no window
             let items = self.app.menuItems.matching(predicate)
-            if items.count > 0 { found = items.element(boundBy: items.count - 1); return true }
-            return false
+            if items.count > 0 { return items.element(boundBy: items.count - 1) }
+            return nil
         }
+        // after a right-click the menu may not have opened (or a redraw closed it): look for a third of the time, and right-click again
+        // before looking once more, up to three attempts
+        let attempts = pendingRightClick == nil ? 1 : 3
+        var found: XCUIElement?
+        for attempt in 1...attempts {
+            let last = attempt == attempts
+            do {
+                try waitFor("a control labelled \"\(text)\"", timeout: last ? timeout : 8, detail: { self.menuItemsDescription() + self.rightClickDescription() }) {
+                    found = look()
+                    return found != nil
+                }
+                break
+            } catch {
+                if last { throw error }
+                try repeatPendingRightClick()
+            }
+        }
+        pendingRightClick = nil
         found?.click()
     }
 
@@ -420,12 +459,19 @@ final class GuiFeatureRunner {
     private func clickId(_ identifier: String, how: Click = .plain) throws {
         let e = element(identifier)
         var scroller = Scroller()
-        var gridSteps = 0
+        var centreSteps = 0
+        let isCell = identifier.hasPrefix("grid.cell.")
         // a grid cell may have to be scrolled to a row at a time, each step taking the app seconds to settle
-        let timeout: TimeInterval = identifier.hasPrefix("grid.cell.") ? 120 : 60
+        let timeout: TimeInterval = isCell ? 120 : 60
         try waitFor("\(identifier) to be clickable", timeout: timeout, detail: { self.whyNotClickable(e, identifier) }) {
             if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller) }
-            else if !e.exists && identifier.hasPrefix("grid.cell.") { self.scrollGridToBuild(&gridSteps) }
+            else if !e.exists && isCell { self.scrollGridToBuild(towards: identifier) }
+            else if e.exists && isCell && how == .right && centreSteps < 6 && !self.isCentredInGrid(e) {
+                // best effort: a cell at either end of the grid cannot be brought to the middle
+                centreSteps += 1
+                self.scroll(towards: e, identifier, &scroller)
+                return false
+            }
             return e.exists && e.isHittable
         }
         // ...and one that is still moving into place takes a click that is lost: wait until its frame has stopped changing
@@ -437,12 +483,33 @@ final class GuiFeatureRunner {
             steady = now == frame ? steady + 1 : 0
             frame = now
         }
+        pendingRightClick = how == .right ? identifier : nil
         switch how {
         case .plain: e.click()
         case .command: XCUIElement.perform(withKeyModifiers: .command) { e.click() }
         case .shift: XCUIElement.perform(withKeyModifiers: .shift) { e.click() }
         case .right: e.rightClick()
         }
+        // a cell holds its single tap back for the double-click interval, and only a selected cell has a context menu to open: let the
+        // selection land before the next step clicks again
+        if isCell && how != .right { _ = XCTWaiter.wait(for: [XCTestExpectation(description: "tap settles")], timeout: 1) }
+    }
+
+    /// Right-clicks the cell of the last right-click step again, scrolling to it if need be: for a menu that did not open, or was closed by a
+    /// redraw of the app, before the label the step is waiting for was found.
+    private func repeatPendingRightClick() throws {
+        guard let identifier = pendingRightClick else { return }
+        try clickId(identifier, how: .right)
+    }
+
+    /// What a failed wait for a menu item prints on top of the menu items: whether a non-empty context menu is open, and the cell that was
+    /// right-clicked (its frame and whether it can be hit), so the next failure says whether the menu or the click is at fault.
+    private func rightClickDescription() -> String {
+        guard let identifier = pendingRightClick else { return "" }
+        let cell = element(identifier)
+        let there = cell.exists
+        let menus = app.menus.allElementsBoundByIndex.prefix(5).map { "\($0.exists ? $0.menuItems.count : 0) items" }
+        return "\nright-clicked \(identifier): exists \(there), hittable \(there && cell.isHittable), frame \(there ? "\(cell.frame)" : "none"), selected \(there && cell.isSelected); menus open: \(menus)"
     }
 
     /// Waits for the run that has begun to end: the progress line says "<complete>/<total>/idle" with every frame complete, once it has said
@@ -517,17 +584,24 @@ final class GuiFeatureRunner {
         holder.scroll(byDeltaX: 0, deltaY: (gap > 0 ? -1 : 1) * scroller.direction * min(abs(gap), 300))
     }
 
-    /// A lazy grid builds only the cells in view, so a cell below the fold of a small window is not in the tree and cannot be scrolled to by
-    /// its own frame: scroll the grid's scroll view down a step until the row comes into being, and back up once it has reached the end. The
-    /// steps are big: on the hosted runner the grid is one column of cells about 350 pt tall, so a cell 17 is some 6000 pt down.
-    private func scrollGridToBuild(_ steps: inout Int) {
+    /// A lazy grid builds only the cells in view, so a cell outside them is not in the tree and cannot be scrolled to by its own frame: scroll
+    /// the grid's scroll view a step towards the target (up when it is below the lowest cell built, else down) until the row comes into being.
+    /// The steps are big: on the hosted runner the grid is one column of cells about 350 pt tall, so a cell 17 is some 6000 pt down, and each
+    /// step takes the app seconds to settle.
+    private func scrollGridToBuild(towards identifier: String) {
         let holder = app.scrollViews.containing(NSPredicate(format: "identifier BEGINSWITH %@", "grid.cell.")).firstMatch
         guard holder.exists, holder.isHittable else { return }
-        // down for 24 steps, then back up for 24, so a grid that has scrolled past is not left there: the rows of a narrow window's
-        // one-column grid are about 350 pt tall, so 24 steps of 300 pt reach the 20th or so
-        let down = (steps / 24) % 2 == 0
-        holder.scroll(byDeltaX: 0, deltaY: down ? -300 : 300)
-        steps += 1
+        let built = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "grid.cell.")).allElementsBoundByIndex.map { $0.identifier }
+        let direction = GridScrollPlan.direction(towards: identifier, built: built) ?? .down
+        holder.scroll(byDeltaX: 0, deltaY: direction == .down ? -300 : 300)
+    }
+
+    /// Whether the middle of the cell is in the middle third of the grid's scroll view, where a right-click on it cannot fall on the edge.
+    private func isCentredInGrid(_ e: XCUIElement) -> Bool {
+        let holder = app.scrollViews.containing(NSPredicate(format: "identifier BEGINSWITH %@", "grid.cell.")).firstMatch
+        guard holder.exists, e.exists else { return true }
+        let third = holder.frame.height / 3
+        return abs(e.frame.midY - holder.frame.midY) <= third / 2
     }
 
     private func expectShown(_ identifier: String, shown: Bool) throws {

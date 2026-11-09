@@ -30,3 +30,26 @@ final class ScratchLocationTests: XCTestCase {
         XCTAssertThrowsError(try ScratchLocation.make(environment: [key: "/Users/x/Library/Group Containers/g/s"], uid: 501))
     }
 }
+
+/// Which way the runner scrolls the lazy grid to build a cell that is not in the tree.
+final class GridScrollPlanTests: XCTestCase {
+    func testScrollsTowardsTheTargetFromTheBuiltCells() {
+        // a grid at the bottom (cells 16-18 built) is scrolled up for cell 2, not down for 24 steps first
+        XCTAssertEqual(GridScrollPlan.direction(towards: "grid.cell.2", built: ["grid.cell.16", "grid.cell.17", "grid.cell.18"]), .up)
+        // a grid at the top is scrolled down for cell 17
+        XCTAssertEqual(GridScrollPlan.direction(towards: "grid.cell.17", built: ["grid.cell.0", "grid.cell.1"]), .down)
+        // numbers compare as numbers, not as text ("grid.cell.9" sorts after "grid.cell.17")
+        XCTAssertEqual(GridScrollPlan.direction(towards: "grid.cell.5", built: ["grid.cell.9", "grid.cell.17"]), .up)
+        // nothing built yet: nothing to go by, so down
+        XCTAssertEqual(GridScrollPlan.direction(towards: "grid.cell.2", built: []), .down)
+    }
+
+    func testIgnoresIdentifiersThatAreNotGridCells() {
+        XCTAssertNil(GridScrollPlan.direction(towards: "mode.grid", built: ["grid.cell.3"]))
+        XCTAssertNil(GridScrollPlan.direction(towards: "grid.cell.x", built: ["grid.cell.3"]))
+        // built identifiers that are not cells (the badges beside them) do not count as the lowest cell
+        XCTAssertEqual(GridScrollPlan.direction(towards: "grid.cell.2", built: ["grid.badge.0", "grid.cell.16", "grid.cellar", "grid.cell.18"]), .up)
+        XCTAssertEqual(GridScrollPlan.cellNumber("grid.cell.17"), 17)
+        XCTAssertNil(GridScrollPlan.cellNumber("grid.badge.17"))
+    }
+}
