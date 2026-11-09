@@ -373,4 +373,5 @@ def test_ci_only_counts_as_green_and_gui_unit_tests_are_not_ui_runs() -> None:
 
     unit = star.CHECKS["test:gui"]
     assert not star.drives_display(list(unit.argv))  # the unit tests never drive the cursor, so they still run here
+    assert not unit.ui  # ui=True is `caffeinate -d -u`, and -u turns a sleeping display on at the start of every run
     assert ledger.Result("x", "ci-only", "sha", 0.0).green and not ledger.Result("x", "fail", "sha", 0.0).green

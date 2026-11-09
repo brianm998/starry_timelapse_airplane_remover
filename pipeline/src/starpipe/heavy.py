@@ -28,6 +28,7 @@ import math
 import os
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -324,7 +325,7 @@ class Hung:
 
 @dataclass(frozen=True)
 class RunResult:
-    code: int
+    code: int  # UI_TESTS_REFUSED when the job never started
     waited: float
     hung: Hung | None = None
     seconds: float = 0.0  # how long the job held the lock
@@ -451,6 +452,9 @@ def _kill_group(proc: subprocess.Popen[bytes], grace: float) -> None:
     proc.wait()
 
 
+UI_TESTS_REFUSED = 69  # sysexits' EX_UNAVAILABLE, the same code pipeline/shims/xcodebuild exits with
+
+
 def run_job(
     argv: list[str],
     *,
@@ -468,7 +472,16 @@ def run_job(
     cfg = config or load()
     cmd = " ".join(argv)
     kind = EXCLUSIVE if keep_display_awake else job_class or adapter_star.job_class(cmd)  # a UI run needs the display
-    gated = adapter_star.drives_display(argv) and cfg.ui_local != "always" and not os.environ.get("STARPIPE_UI_NOW")
+    owner_said_now = bool(os.environ.get("STARPIPE_UI_NOW")) and not os.environ.get("STARPIPE_TICKET")  # never a ticket agent's call
+    gated = adapter_star.drives_display(argv) and cfg.ui_local != "always" and not owner_said_now
+    if gated and cfg.ui_local == "ci":  # no wait for "idle" here: being idle is exactly when the display is asleep and must stay so
+        message = (f"NOT RUN: {cmd}: UI tests (starUITests) take over this Mac's display, mouse and keyboard, so they do not run here. "
+                   "GitHub's runners run them: push the change and read CI's result.")
+        if report:
+            report(message)
+        else:
+            print(message, file=sys.stderr, flush=True)
+        return RunResult(UI_TESTS_REFUSED, 0.0)
     idle_wait = 0.0
     while True:
         if gated:  # outside the lock: a held-back UI run must not keep every other job waiting for it

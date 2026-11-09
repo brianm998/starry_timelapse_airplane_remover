@@ -535,6 +535,7 @@ def test_idle_gate_waits_for_the_owner_to_leave() -> None:
 
 def test_a_ui_job_is_held_until_idle_and_ui_now_skips_that(monkeypatch: pytest.MonkeyPatch, state_home: Path) -> None:
     from starpipe import idle
+    from starpipe.config import load
 
     split_config(state_home)
     monkeypatch.delenv("STARPIPE_UI_NOW", raising=False)
@@ -555,10 +556,64 @@ def test_a_ui_job_is_held_until_idle_and_ui_now_skips_that(monkeypatch: pytest.M
     ui = [sys.executable, "-c", "pass"]
     assert heavy.run_job(ui).waited < 7.0 and calls == []  # not an xcodebuild test: no gate
     monkeypatch.setattr("starpipe.adapter_star.drives_display", fake_drives_display)
-    assert heavy.run_job(ui).waited >= 7.0 and calls == [600.0]
+    idle_mode = load().model_copy(update={"ui_local": "idle"})
+    assert heavy.run_job(ui, config=idle_mode).waited >= 7.0 and calls == [600.0]
     monkeypatch.setenv("STARPIPE_UI_NOW", "1")
-    heavy.run_job(ui)
+    monkeypatch.delenv("STARPIPE_TICKET", raising=False)
+    heavy.run_job(ui, config=idle_mode)
     assert calls == [600.0]
+
+
+def test_a_ui_job_is_refused_by_default_and_a_ticket_cannot_override_that(monkeypatch: pytest.MonkeyPatch, state_home: Path, tmp_path: Path) -> None:
+    def fake_drives_display(_argv: list[str]) -> bool:
+        return True
+
+    split_config(state_home)
+    monkeypatch.setattr("starpipe.adapter_star.drives_display", fake_drives_display)
+    monkeypatch.delenv("STARPIPE_UI_NOW", raising=False)
+    monkeypatch.delenv("STARPIPE_TICKET", raising=False)
+    ran = tmp_path / "ran"
+    job = [sys.executable, "-c", f"open({str(ran)!r}, 'w')"]
+    said: list[str] = []
+    assert heavy.run_job(job, report=said.append).code == heavy.UI_TESTS_REFUSED
+    assert not ran.exists() and "NOT RUN" in said[0]
+    monkeypatch.setenv("STARPIPE_UI_NOW", "1")
+    monkeypatch.setenv("STARPIPE_TICKET", "430")
+    assert heavy.run_job(job, report=said.append).code == heavy.UI_TESTS_REFUSED and not ran.exists()
+    monkeypatch.delenv("STARPIPE_TICKET")
+    assert heavy.run_job(job).code == 0 and ran.exists()  # the owner, deliberately
+
+
+def _shim(name: str, args: list[str], home: Path, **env: str) -> subprocess.CompletedProcess[str]:
+    shim = Path(__file__).resolve().parent.parent / "shims" / name
+    fake = home / "fake-tool"
+    fake.write_text('#!/bin/bash\necho "ran: $*"\n')
+    fake.chmod(0o755)
+    full = {"PATH": f"{home}:/usr/bin:/bin", "STARPIPE_HOME": str(home), "STARPIPE_REAL_XCODEBUILD": str(fake),
+            "STARPIPE_REAL_CAFFEINATE": str(fake), **env}
+    return subprocess.run([str(shim), *args], capture_output=True, text=True, env=full, check=False)
+
+
+def test_the_xcodebuild_shim_refuses_ui_runs_and_passes_the_rest(tmp_path: Path) -> None:
+    ui = ["test", "-only-testing:starUITests/GeneratedFeatureUITests/testFoo"]
+    assert _shim("xcodebuild", ui, tmp_path).returncode == 69
+    assert _shim("xcodebuild", ["test", "-scheme", "star"], tmp_path).returncode == 69  # the whole scheme includes the UI tests
+    assert _shim("xcodebuild", ui, tmp_path, STARPIPE_UI_NOW="1", STARPIPE_TICKET="430").returncode == 69
+    assert "ran:" in _shim("xcodebuild", ui, tmp_path, STARPIPE_UI_NOW="1").stdout
+    assert "ran:" in _shim("xcodebuild", ["-only-testing:starTests", "test"], tmp_path).stdout
+    assert "ran:" in _shim("xcodebuild", ["-scheme", "star", "build"], tmp_path).stdout
+    (tmp_path / "config.toml").write_text('ui_local = "always"\n')
+    assert "ran:" in _shim("xcodebuild", ui, tmp_path).stdout
+
+
+def test_the_caffeinate_shim_never_wakes_the_display_for_unit_tests(tmp_path: Path) -> None:
+    (tmp_path / "xcodebuild").write_text('#!/bin/bash\necho "bare: $*"\n')
+    (tmp_path / "xcodebuild").chmod(0o755)
+    unit = ["-d", "-u", "xcodebuild", "-only-testing:starTests", "test"]
+    assert _shim("caffeinate", unit, tmp_path).stdout.strip() == "bare: -only-testing:starTests test"
+    assert _shim("caffeinate", ["-i", "-w", "928"], tmp_path).stdout.strip() == "ran: -i -w 928"
+    ui = ["-d", "-u", "xcodebuild", "-only-testing:starUITests/X", "test"]
+    assert _shim("caffeinate", ui, tmp_path).stdout.strip().startswith("ran: -d -u")
 
 
 def test_freeze_holds_every_slot_until_thawed(state_home: Path) -> None:
