@@ -59,11 +59,11 @@ class Config(BaseModel):
     digest_hour: int = 8
     nightly_enabled: bool = False  # a multi-hour job that has never run unattended: the owner turns it on
     nightly_ui: bool = False  # the mac gui @ui features: need UI automation permission and the display
-    # XCUITest drives the real mouse and keyboard and keeps a window on the display, so it cannot run while the owner uses this Mac.
-    # "ci": the checks a ticket runs leave the mac gui's UI tests to GitHub (recorded `ci-only`, which counts as green); "idle": they run
-    # here; "always": they run here and are not held back. Under "ci" and "idle" any UI run that does start (the nightly's, a session's
-    # own `xcodebuild test`) first waits, outside the heavy lock, until the keyboard and mouse have been idle `ui_idle_s`.
-    # STARPIPE_UI_NOW=1 skips the wait for one run.
+    # XCUITest drives the real mouse and keyboard, keeps a window on the display and wakes it, so by default it never runs on this Mac.
+    # "ci": GitHub runs the mac gui's UI tests. A ticket's checks record them `ci-only` (which counts as green) and any other UI run (the
+    # nightly's, an agent's or session's own `xcodebuild test`) is refused. "idle": they run here once the keyboard and mouse have been
+    # idle `ui_idle_s`, which is when the display is likely asleep, so they will wake it. "always": they run here, not held back.
+    # STARPIPE_UI_NOW=1 lets the owner run one regardless; it is ignored for a ticket.
     ui_local: str = "ci"
     ui_idle_s: float = 600.0
     ui_idle_poll_s: float = 15.0
