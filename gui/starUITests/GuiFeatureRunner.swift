@@ -1020,8 +1020,16 @@ final class GuiFeatureRunner {
         // and what each try left is in the error if none takes, which is what says why: a drag in the middle of the canvas, away from the
         // toolbar and the edges; then the same stroke as a row of clicks, each of which is a stroke of its own on the same band.
         let attempts: [(name: String, run: () -> Void)] = [
-            ("a drag at \(bandY)", {
-                at(0.002, bandY).press(forDuration: 0.2, thenDragTo: at(0.998, bandY))
+            ("a drag at \(bandY), up to 3 times", {
+                // Reset is enabled once a stroke is there: if the drag did not register, drag again
+                let reset = element("painter.reset")
+                for _ in 0..<3 {
+                    let start = e.coordinate(withNormalizedOffset: CGVector(dx: 0.002, dy: dy))
+                    let end = e.coordinate(withNormalizedOffset: CGVector(dx: 0.998, dy: dy))
+                    start.press(forDuration: 0.2, thenDragTo: end)
+                    let painted = (try? waitFor("a stroke on \(identifier)", timeout: 5, interval: 0.5) { reset.exists && reset.isEnabled }) != nil
+                    if painted { return }
+                }
             }),
             ("a slow drag at 0.4", {
                 at(0.002, 0.4).press(forDuration: 0.2, thenDragTo: at(0.998, 0.4), withVelocity: .slow, thenHoldForDuration: 0.3)
