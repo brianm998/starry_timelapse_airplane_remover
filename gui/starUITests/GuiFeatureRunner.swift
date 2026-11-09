@@ -853,16 +853,19 @@ final class GuiFeatureRunner {
         let bar = app.menuBars.firstMatch
         let entryFrame = entry.frame
         let barFrame = bar.frame
-        if ready, item.menu == fileMenuTitle {
-            // The File menu's items are clicked as XCUIElement does: a click at a point computed from the item's frame opened nothing for
-            // File ▸ Open Image Sequence with a run going (the menu closed and no question came: 0 of 10 runs of uiOpenWhileProcessing, 4 of 4
-            // with this click), where the Window menu's items took it.
+        // The first item of a menu sits within one item height of the menu bar's bottom edge; the second is a full item lower.
+        let isFirstItem = Self.isFinite(entryFrame) && Self.isFinite(barFrame) && entryFrame.minY - barFrame.maxY < entryFrame.height
+        if ready, item.menu == fileMenuTitle || isFirstItem {
+            // The File menu's items, and the first item of any menu, are clicked as XCUIElement does: a click at a point computed from the
+            // item's frame opened nothing for File ▸ Open Image Sequence with a run going (the menu closed and no question came: 0 of 10 runs
+            // of uiOpenWhileProcessing, 4 of 4 with this click). The same coordinate click on Actions ▸ Remove All, the first item of its
+            // menu ("Hover over MenuBar ... -> (375.5, 41.0)", "Click MenuBar ... -> (375.5, 41.0)" in CI run 42557075209), changed nothing:
+            // status.remove stayed "0 will remove". Items further down (Process All Frames, Find Outliers, the Window menu's) took it.
             entry.click()
         } else if ready, Self.isFinite(entryFrame), Self.isFinite(barFrame) {
             let origin = bar.coordinate(withNormalizedOffset: .zero)
             let point = origin.withOffset(CGVector(dx: entryFrame.midX - barFrame.minX, dy: entryFrame.midY - barFrame.minY))
-            // XCUIElement.click() hovers the item first (the log says "Hover menu item"), which is what highlights it; a bare click on the
-            // first item of Actions (Remove All) did nothing on the hosted runner, where one that was hovered first worked
+            // XCUIElement.click() hovers the item first (the log says "Hover menu item"), which is what highlights it
             point.hover()
             _ = XCTWaiter.wait(for: [XCTestExpectation(description: "highlight")], timeout: 0.3)
             point.click()
