@@ -95,6 +95,7 @@ final class PipelineStateTests: XCTestCase {
         down.apply(s)
         XCTAssertEqual(down.pipelineState, .green)
         await down.refresh()
+        // a refused connection is down on the first failure, with no 30 s timeout grace
         XCTAssertTrue(down.daemonDown)
         XCTAssertEqual(down.pipelineState, .red)
     }
