@@ -1,0 +1,12 @@
+#!/bin/bash
+# PATH shim for caffeinate: `caffeinate -u` turns the display on. Pipeline code older than the fix (ticket worktrees carry their own
+# copy) still wraps the mac gui's unit tests in `caffeinate -d -u`, which woke a sleeping screen at the start of every run. Those
+# tests need no display, so they run bare here. Everything else passes straight through. Install: pipeline/shims/install.sh
+if [[ "${1:-} ${2:-} ${3:-}" == "-d -u xcodebuild" ]]; then
+  for a in "${@:4}"; do
+    case "$a" in
+      -only-testing:starTests*) shift 2; exec "$@" ;;
+    esac
+  done
+fi
+exec "${STARPIPE_REAL_CAFFEINATE:-/usr/bin/caffeinate}" "$@"
