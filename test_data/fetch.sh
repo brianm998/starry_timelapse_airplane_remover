@@ -64,7 +64,10 @@ for name in "$@"; do
   tmp="$(mktemp -d "$cache/.fetch-$name.XXXXXX")"
   trap 'rm -rf "$tmp"' EXIT
   echo "fetch.sh: $name: downloading $url"
-  curl -fL --retry 3 --retry-delay 5 -sS -o "$tmp/$asset" "$url" || die "$name: download failed: $url"
+  # --retry-all-errors: with -f a transient HTTP 504 from the GitHub release CDN exits 56, which plain
+  # --retry does not retry, so one blip failed the whole Gherkin job. The sha256 check below still
+  # rejects a truncated or corrupt tarball, so retrying every error is safe.
+  curl -fL --retry 5 --retry-all-errors --retry-delay 10 -sS -o "$tmp/$asset" "$url" || die "$name: download failed: $url"
   got="$(sha "$tmp/$asset")"
   [ "$got" = "$want" ] || die "$name: checksum mismatch for $asset: manifest says $want, downloaded file is $got"
 

@@ -406,6 +406,36 @@ final class FrameOutlierProcessorTests: FrameHarnessTestCase {
         }
     }
 
+    /// A decision is user intent and has to be saved even when `writeOutlierGroupFiles` is off (the
+    /// harness, like a cli run without -w, has it off). Only OutlierGroupPaintData.json holds decisions,
+    /// and that write was gated on the option, so a Remove All was gone after Close and reopen.
+    func testADecisionIsSavedWithoutWriteOutlierGroupFiles() async throws {
+        let h = try await FrameHarness.make(frameCount: 1, width: 128, height: 128, named: "decisionsaved")
+        harness = h
+        XCTAssertFalse(h.config.writeOutlierGroupFiles, "this test is about the option being off")
+        let outlier = await processor(h)
+
+        let saved = OutlierGroups(frameIndex: 0, config: h.config)
+        await saved.add(group(id: 1, x: 10, y: 10))
+        await saved.add(group(id: 2, x: 40, y: 40))
+        try await saved.writeOutliersBinary(to: await outlier.outliersDirname)
+
+        let changed = await outlier.userSelectAllOutliers(toShouldRemove: true, includingTrash: false)
+        XCTAssertTrue(changed)
+        await outlier.writeOutliersRemoveReasons()
+
+        // what reopening the sequence does: a fresh load from disk
+        let reloaded = try await OutlierGroups(at: 0,
+                                               fromOutlierDir: h.config.outlierOutputDirname + "/0",
+                                               config: h.config)
+        let members = await reloaded.getMembers()
+        XCTAssertEqual(Set(members.keys), [1, 2])
+        for group in members.values {
+            let reason = await group.shouldRemove()
+            XCTAssertEqual(reason?.willRemove, true, "group \(group.id) lost its Remove All decision")
+        }
+    }
+
     /// While another load is running `loadOutliers` returns at once ("Not loading twice"), so a bulk
     /// decision that merely called it would still find nothing. It has to wait for the load.
     func testRemoveAllWaitsForALoadInFlight() async throws {
