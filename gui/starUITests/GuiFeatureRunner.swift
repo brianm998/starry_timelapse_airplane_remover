@@ -1033,12 +1033,12 @@ final class GuiFeatureRunner {
         let attempts: [(name: String, run: () -> Void)] = [
             ("a drag at \(bandY), up to 3 times", {
                 // Reset is enabled once a stroke is there: if the drag did not register, drag again
-                let reset = element("painter.reset")
+                let reset = self.element("painter.reset")
                 for _ in 0..<3 {
                     let start = e.coordinate(withNormalizedOffset: CGVector(dx: 0.002, dy: dy))
                     let end = e.coordinate(withNormalizedOffset: CGVector(dx: 0.998, dy: dy))
                     start.press(forDuration: 0.2, thenDragTo: end)
-                    let painted = (try? waitFor("a stroke on \(identifier)", timeout: 5, interval: 0.5) { reset.exists && reset.isEnabled }) != nil
+                    let painted = (try? self.waitFor("a stroke on \(identifier)", timeout: 5, interval: 0.5) { reset.exists && reset.isEnabled }) != nil
                     if painted { return }
                 }
             }),
