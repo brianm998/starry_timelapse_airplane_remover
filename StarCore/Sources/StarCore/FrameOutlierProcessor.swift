@@ -887,16 +887,18 @@ final public actor FrameOutlierProcessor {
         Log.d("frame \(frameIndex) DONE writeOutlierValuesCSV")
     }
 
+    /// Saves the keep/remove decisions (OutlierGroupPaintData.json, tiny), the only place they are
+    /// persisted: the outlier binary carries none. They are user intent, so they are saved whether or
+    /// not `writeOutlierGroupFiles` is on. Gating this on that debug-ish option lost every decision
+    /// on a sequence made by the cli without -w, which showed as "0 will remove" after Close and reopen.
     public func writeOutliersRemoveReasons() async {
         let config = await configManager.config()
-        if config.writeOutlierGroupFiles {
-            do {
-                try await fileSystemMonitor.save() {
-                    try await outlierGroups?.write(to: config.outlierOutputDirname)
-                }
-            } catch {
-                Log.e("error \(error)")
-            }                
+        do {
+            try await fileSystemMonitor.save() {
+                try await outlierGroups?.write(to: config.outlierOutputDirname)
+            }
+        } catch {
+            Log.e("error \(error)")
         }
     }
 

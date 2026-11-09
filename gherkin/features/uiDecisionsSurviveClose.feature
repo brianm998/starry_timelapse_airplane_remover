@@ -6,6 +6,9 @@ Feature: A decision made just before Close is still there when the sequence is o
   one), open the sequence again from the recent list (past the panel that says where it left off, and in edit mode), and the frame has none to keep.
   Keep All goes first so that Remove All has something to change whatever the frame started with.
 
+  # uiDecisionsSurviveClose also needs the decision on disk, not only in the daemon's memory: it is saved to OutlierGroupPaintData.json whether or
+  # not the sequence was made with write-outlier-group-files (the cli fixture is made without it). The second status.remove check proves it.
+
   Scenario: Remove every group of a frame, close at once, open it again
     Given a processed copy of the sequence {sequence}
     When  I open the processed copy
