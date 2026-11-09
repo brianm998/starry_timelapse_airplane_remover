@@ -1068,9 +1068,9 @@ final class WarningAlertTests: XCTestCase {
         let host = NSHostingView(rootView: ContentView().environment(viewModel))
         host.sizingOptions = [.minSize, .intrinsicContentSize, .maxSize]
 
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
-                              styleMask: [.titled, .resizable, .closable],
-                              backing: .buffered, defer: false)
+        let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
+                                      styleMask: [.titled, .resizable, .closable],
+                                      backing: .buffered, defer: false)
         window.contentView = host
         window.setContentSize(NSSize(width: 900, height: 600))
         settle()
@@ -1081,6 +1081,7 @@ final class WarningAlertTests: XCTestCase {
         viewModel.report(warning: warning(.memoryPressure, .critical))
         XCTAssertTrue(viewModel.showWarningAlert, "a critical warning should reach the alert")
         settle()
+        OffDisplayWindow.assertNothingShowsOnADisplay()
 
         XCTAssertEqual(window.contentMinSize, quietMinimum,
                        "the alert must not raise the window's minimum size")
@@ -1308,9 +1309,9 @@ final class WarningAlertTests: XCTestCase {
         let host = NSHostingView(rootView: ContentView().environment(viewModel))
         host.sizingOptions = [.minSize, .intrinsicContentSize, .maxSize]
 
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
-                              styleMask: [.titled, .resizable, .closable],
-                              backing: .buffered, defer: false)
+        let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
+                                      styleMask: [.titled, .resizable, .closable],
+                                      backing: .buffered, defer: false)
         window.contentView = host
         window.setContentSize(NSSize(width: 900, height: 600))
         settle()
@@ -1321,6 +1322,7 @@ final class WarningAlertTests: XCTestCase {
         viewModel.report(warning: warning(.memoryPressure, .warning))
         XCTAssertNotNil(viewModel.bannerWarning)
         settle()
+        OffDisplayWindow.assertNothingShowsOnADisplay()
 
         XCTAssertEqual(window.contentMinSize, quietMinimum,
                        "the banner must not raise the window's minimum size")
@@ -5368,5 +5370,40 @@ final class ProcessingColumnsTests: XCTestCase {
         XCTAssertEqual(Panel.width(steps: steps, extraction: true), max(640, columns.required + 40))
         XCTAssertEqual(SequenceProgressPanel.width(for: steps),
                        Panel.width(steps: steps, extraction: false))
+    }
+}
+
+/// A real window for a test that needs AppKit to lay out or present on one. Presenting a SwiftUI alert orders its window and the alert
+/// on screen even in a background-only app, and centers the window on a display as it does, so every way of moving this one keeps its
+/// origin beyond all the displays (its size still changes, which is what the tests measure). The alert is centered on this window, so
+/// it stays out there with it, where neither can be seen or light a display up.
+final class OffDisplayWindow: NSWindow {
+    static let farAway = NSRect(x: -30000, y: -30000, width: 900, height: 600)
+
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
+    override func center() {}
+    override func setFrameOrigin(_ point: NSPoint) { super.setFrameOrigin(Self.farAway.origin) }
+    override func setFrameTopLeftPoint(_ point: NSPoint) { super.setFrameOrigin(Self.farAway.origin) }
+    override func setFrame(_ frameRect: NSRect, display flag: Bool) {
+        super.setFrame(NSRect(origin: Self.farAway.origin, size: frameRect.size), display: flag)
+    }
+    override func setFrame(_ frameRect: NSRect, display displayFlag: Bool, animate animateFlag: Bool) {
+        super.setFrame(NSRect(origin: Self.farAway.origin, size: frameRect.size), display: displayFlag, animate: animateFlag)
+    }
+
+    @MainActor static func assertNothingShowsOnADisplay(file: StaticString = #filePath, line: UInt = #line) {
+        let shown = NSApp.windows.filter { window in
+            window.isVisible && NSScreen.screens.contains { $0.frame.intersects(window.frame) }
+        }
+        XCTAssertEqual(shown.map(\.frame), [], "a test window is showing on a display", file: file, line: line)
+    }
+}
+
+/// XCTest launches the app to host these tests on whatever machine runs them, often while someone is using it or while its display is
+/// asleep. The host must never show up there.
+final class TestHostStaysOffScreenTests: XCTestCase {
+    @MainActor func testTheHostIsBackgroundOnlyAndShowsNoWindow() {
+        XCTAssertEqual(NSApp.activationPolicy(), .prohibited)
+        XCTAssertEqual(NSApp.windows.filter(\.isVisible).map(\.title), [])
     }
 }

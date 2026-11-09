@@ -123,6 +123,7 @@ class DesktopFeatureRunner {
         StepAction.SHIFT_CLICK_ID to { t -> clickWith(t, args[0], shift = true) },
         StepAction.RIGHT_CLICK_ID to { t -> clickWith(t, args[0], right = true) },
         StepAction.PROCESSING_FINISHES to { t -> waitForProcessingToFinish(t) },
+        StepAction.ID_SHOWN_AT_END to { t -> expectShownAtEndOfProcessing(t, args[0]) },
         StepAction.PROCESSING_STOPS to { t -> waitForProcessingToStop(t) },
         StepAction.PRESS_KEY to { t -> pressKey(t, args[0]) },
         StepAction.DRAG_AROUND to { t -> dragAround(t, args[0]) },
@@ -197,7 +198,7 @@ class DesktopFeatureRunner {
     private fun stepHangLimitMs(action: StepAction): Long {
         System.getenv("STAR_GHERKIN_STEP_HANG_SECONDS")?.toLongOrNull()?.let { return it * 1000 }
         return when (action) {
-            StepAction.PROCESSING_FINISHES, StepAction.PROCESSING_STOPS -> PROCESS_TIMEOUT_MS + HANG_MARGIN_MS
+            StepAction.PROCESSING_FINISHES, StepAction.PROCESSING_STOPS, StepAction.ID_SHOWN_AT_END -> PROCESS_TIMEOUT_MS + HANG_MARGIN_MS
             StepAction.RENDER_OUTPUT_VIDEO -> RENDER_TIMEOUT_MS + HANG_MARGIN_MS
             else -> OPEN_TIMEOUT_MS + HANG_MARGIN_MS
         }
@@ -547,6 +548,28 @@ class DesktopFeatureRunner {
             if (parts.size != 3) return@waitFor false
             if (parts[2] == "running") sawRunning = true
             sawRunning && parts[2] == "idle" && (parts[1].toIntOrNull() ?: 0) > 0 && parts[0] == parts[1]
+        }
+    }
+
+    /**
+     * Waits for [id] to come up while the run goes on: for the post-render prompt, which covers the progress line the moment the run ends, so the
+     * end cannot be read from it. The wait is bounded by progress as the wait for processing to finish is: the progress line, with the processing
+     * modal's overall and headline text, is watched for change, and a run whose every one of them sits still for the stall limit fails.
+     */
+    private fun expectShownAtEndOfProcessing(t: ComposeUiTest, id: String) {
+        val model = vm ?: throw RunnerError("nothing has been opened")
+        var last = "(none)"
+        val stall = ProgressStall(STALL_LIMIT_MS * 1_000_000)
+        waitFor(t, "\"$id\" at the end of processing", 20L * 60_000, { "(last progress: $last)" }) {
+            if (t.onAllNodes(hasTestTag(id), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()) return@waitFor true
+            model.error.value?.let { throw RunnerError("the app reported an error while processing: $it") }
+            model.engineDown.value?.let { throw RunnerError("the engine stopped while processing: $it") }
+            val progress = semanticsOf(t, "processing.progress")?.getOrNull(SemanticsProperties.StateDescription)
+            val overall = semanticsOf(t, "processing.overall")?.getOrNull(SemanticsProperties.Text)?.joinToString { it.text }
+            val headline = semanticsOf(t, "processing.headline")?.getOrNull(SemanticsProperties.Text)?.joinToString { it.text }
+            last = "progress $progress, overall $overall, headline $headline"
+            stall.observe(last)
+            false
         }
     }
 
@@ -1391,6 +1414,17 @@ class DesktopFeatureRunner {
     }
 
     /**
+     * A concat-demuxer list of the frames at 5 fps (0.2 s each), written to [name] in the scratch folder. The concat demuxer drops the duration of
+     * the last file, so that one is listed again without one (an `-frames:v` keeps that repeat out of a video, or it is one frame more).
+     */
+    private fun writeConcatList(frames: List<File>, name: String): File {
+        val list = File(scratch, name)
+        fun entry(f: File) = "file '${f.absolutePath.replace('\\', '/')}'"
+        list.writeText(frames.joinToString("") { "${entry(it)}\nduration 0.2\n" } + entry(frames.last()) + "\n")
+        return list
+    }
+
+    /**
      * A short video made from the copied sequence's frames with the bundled ffmpeg: 5 fps, the frames in name order. The frames go in through a
      * concat list, not `-pattern_type glob`, which the Windows ffmpeg build does not have.
      */
@@ -1398,10 +1432,7 @@ class DesktopFeatureRunner {
         if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
         val frames = (sequenceCopy.listFiles { f -> f.isFile && f.name.endsWith(".jpg") } ?: emptyArray()).sortedBy { it.name }
         if (frames.isEmpty()) throw RunnerError("no .jpg frames in $sequenceCopy to make a video from")
-        val list = File(scratch, "gallery-video-frames.txt")
-        fun entry(f: File) = "file '${f.absolutePath.replace('\\', '/')}'"
-        // the concat demuxer drops the duration of the last file, so that one is listed again without one (and -frames:v keeps that repeat out of the video)
-        list.writeText(frames.joinToString("") { "${entry(it)}\nduration 0.2\n" } + entry(frames.last()) + "\n")
+        val list = writeConcatList(frames, "gallery-video-frames.txt")
         val video = File(scratch, "gallery-video.mp4")
         val process = ProcessBuilder(
             ffmpegExecutable().path, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list.path,
@@ -1431,13 +1462,15 @@ class DesktopFeatureRunner {
      */
     private fun startLongVideoImport(t: ComposeUiTest) {
         if (!::sequenceCopy.isInitialized) throw RunnerError("\"a fresh copy of the sequence\" has not run")
-        val ffmpeg = File(repoRoot(), "external_binaries/bin/ffmpeg").takeIf { it.canExecute() } ?: File("ffmpeg")
         val video = File(scratch, "long-video.mp4")
-        val frames = sequenceCopy.listFiles { f -> f.extension.lowercase() == "jpg" }?.size ?: 0
-        if (frames == 0) throw RunnerError("no jpg frames in $sequenceCopy to make a video from")
+        val jpgs = (sequenceCopy.listFiles { f -> f.isFile && f.extension.lowercase() == "jpg" } ?: emptyArray()).sortedBy { it.name }
+        if (jpgs.isEmpty()) throw RunnerError("no jpg frames in $sequenceCopy to make a video from")
+        val frames = jpgs.size
+        // a concat list, not `-pattern_type glob`, which the Windows ffmpeg build does not have
+        val list = writeConcatList(jpgs, "long-video-frames.txt")
         val process = ProcessBuilder(
-            ffmpeg.path, "-y", "-loglevel", "error", "-framerate", "5", "-pattern_type", "glob", "-i", File(sequenceCopy, "*.jpg").path,
-            "-vf", "scale=3840:-2,loop=loop=${LONG_VIDEO_LOOPS}:size=$frames:start=0",
+            ffmpegExecutable().path, "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list.path,
+            "-vf", "scale=3840:-2,loop=loop=${LONG_VIDEO_LOOPS}:size=$frames:start=0", "-r", "5",
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "40", "-pix_fmt", "yuv420p", video.path,
         ).redirectErrorStream(true).start()
         val log = process.inputStream.bufferedReader().readText()

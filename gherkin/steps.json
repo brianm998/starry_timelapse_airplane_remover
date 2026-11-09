@@ -42,6 +42,7 @@
   { "case": "idStopsSaying"         , "text": "\"<id>\" stops saying \"<text>\"" },
   { "case": "idSaysSomethingWith"   , "text": "\"<id>\" says something with \"<text>\"" },
   { "case": "idShown"               , "text": "\"<id>\" is shown" },
+  { "case": "idShownAtEnd"         , "text": "\"<id>\" is shown at the end of processing" },
   { "case": "idNotShown"            , "text": "\"<id>\" is not shown" },
   { "case": "idAbove"               , "text": "\"<id>\" is above \"<id>\"" },
   { "case": "idSelected"            , "text": "\"<id>\" is selected" },
