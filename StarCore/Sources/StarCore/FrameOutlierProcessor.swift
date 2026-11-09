@@ -733,9 +733,29 @@ final public actor FrameOutlierProcessor {
         Log.d("frame \(frameIndex) DONE applyDecisionTreeToAllOutliers")
     }
     
+    /// Make sure this frame's saved outlier groups are in memory before a bulk user decision.
+    ///
+    /// `foreachOutlierGroupMulti` does nothing while `outlierGroups` is nil, so Remove All, Keep All
+    /// and Clear Undecided used on a frame whose groups are still being read from disk (the gui
+    /// loads them asynchronously after a frame is shown) silently changed nothing. A load already in
+    /// flight is waited for, because `loadOutliers` returns at once when another is running.
+    /// Never calculates outliers: a frame with none on disk stays as it is.
+    private func ensureOutliersLoaded() async {
+        // bounded, so a load that never finishes cannot hang the menu command
+        var waits = 0
+        while outlierGroups == nil && isLoadingOutliers && waits < 600 {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            waits += 1
+        }
+        if outlierGroups == nil && !isLoadingOutliers {
+            try? await loadOutliers(loadOnly: true)
+        }
+    }
+
     public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool,
                                       includingTrash: Bool) async -> Bool
     {
+        await ensureOutliersLoaded()
         let didChange = await Task.detached(priority: .userInitiated) {
             await self.foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
                 var didChange = false
@@ -759,6 +779,7 @@ final public actor FrameOutlierProcessor {
     public func userSelectUndecidedOutliers(toShouldRemove shouldRemove: Bool,
                                             includingTrash: Bool) async -> Bool
     {
+        await ensureOutliersLoaded()
         let didChange = await Task.detached(priority: .userInitiated) {
             await self.foreachOutlierGroupMulti(includingTrash: includingTrash) { group, isInTrash in
                 var didChange = false

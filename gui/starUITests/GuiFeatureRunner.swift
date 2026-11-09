@@ -103,6 +103,7 @@ final class GuiFeatureRunner {
         .renderedVideoFrames: { try $0.renderedVideoHasEveryFrame(framesPerSecond: Int($0.args[0]) ?? -1) },
         .noVideoLeft: { try $0.noVideoLeft() },
         .slowEncoder: { try $0.slowEncoder() },
+        .slowFrames: { try $0.slowFrames() },
         .idFocused: { try $0.expectFocus($0.args[0], focused: true) },
         .idNotFocused: { try $0.expectFocus($0.args[0], focused: false) },
         .languageIs: { _ in },   // read by `language` when the app is launched
@@ -615,6 +616,16 @@ final class GuiFeatureRunner {
         try JSONSerialization.data(withJSONObject: object).write(to: config)
     }
 
+    /// The processed copy's run takes one frame at a time: the Custom profile with a pipeline depth of 1 (`Config.resources` reads the depth only under
+    /// Custom). A run over the 19-frame sequence is then about 19 serial frames, which outlasts the UI steps between two starts on a slow runner.
+    private func slowFrames() throws {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        guard var object = try JSONSerialization.jsonObject(with: Data(contentsOf: config)) as? [String: Any] else { throw RunnerError("\(config.path) is not a JSON object") }
+        object["resourceProfile"] = "custom"
+        object["numberOfFramesToProcessConcurrently"] = 1
+        try JSONSerialization.data(withJSONObject: object).write(to: config)
+    }
+
     /// The videos in [folder] (not its subfolders), by the containers a render writes.
     private func videos(in folder: URL) -> [URL] {
         ((try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? [])
@@ -1022,12 +1033,12 @@ final class GuiFeatureRunner {
         let attempts: [(name: String, run: () -> Void)] = [
             ("a drag at \(bandY), up to 3 times", {
                 // Reset is enabled once a stroke is there: if the drag did not register, drag again
-                let reset = element("painter.reset")
+                let reset = self.element("painter.reset")
                 for _ in 0..<3 {
                     let start = e.coordinate(withNormalizedOffset: CGVector(dx: 0.002, dy: dy))
                     let end = e.coordinate(withNormalizedOffset: CGVector(dx: 0.998, dy: dy))
                     start.press(forDuration: 0.2, thenDragTo: end)
-                    let painted = (try? waitFor("a stroke on \(identifier)", timeout: 5, interval: 0.5) { reset.exists && reset.isEnabled }) != nil
+                    let painted = (try? self.waitFor("a stroke on \(identifier)", timeout: 5, interval: 0.5) { reset.exists && reset.isEnabled }) != nil
                     if painted { return }
                 }
             }),
