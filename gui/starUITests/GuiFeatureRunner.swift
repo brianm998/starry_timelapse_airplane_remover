@@ -520,8 +520,16 @@ final class GuiFeatureRunner {
         guard let identifier = pendingRightClick else { return "" }
         let cell = element(identifier)
         let there = cell.exists
-        let menus = app.menus.allElementsBoundByIndex.prefix(5).map { "\($0.exists ? $0.menuItems.count : 0) items" }
-        return "\nright-clicked \(identifier): exists \(there), hittable \(there && cell.isHittable), frame \(there ? "\(cell.frame)" : "none"), selected \(there && cell.isSelected); menus open: \(menus)"
+        // the menu bar's menus are in app.menus too (the 36, 45, 5, 14 and 4 items of a failure were those), so say how many there are and print
+        // the frame and the item titles of each, a context menu being the one whose frame is not in the menu bar
+        let barMenus = app.menuBars.descendants(matching: .menu).count
+        let menus = app.menus.allElementsBoundByIndex.prefix(12).map { menu -> String in
+            guard menu.exists else { return "gone" }
+            let titles = menu.menuItems.allElementsBoundByIndex.prefix(8).map { $0.exists ? ($0.title.isEmpty ? $0.label : $0.title) : "?" }
+            return "\(menu.menuItems.count) items at \(menu.frame) \(titles)"
+        }
+        // an element's isSelected is false for a grid cell whatever the selection is (it carries no selected trait): not evidence of one
+        return "\nright-clicked \(identifier): exists \(there), hittable \(there && cell.isHittable), frame \(there ? "\(cell.frame)" : "none"), selected \(there && cell.isSelected) (a cell never reports it); menu bar menus \(barMenus); menus open: \(menus)"
     }
 
     /// Waits for the run that has begun to end: the progress line says "<complete>/<total>/idle" with every frame complete, once it has said
