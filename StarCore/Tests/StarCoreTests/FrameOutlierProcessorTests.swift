@@ -377,6 +377,58 @@ final class FrameOutlierProcessorTests: FrameHarnessTestCase {
         XCTAssertTrue(visitedIds.isEmpty)
     }
 
+    /// Remove All used on a frame whose groups are saved but not yet in memory (the gui loads them
+    /// asynchronously after showing a frame) changed nothing, because the iteration skips a nil
+    /// collection. The bulk decision has to load them first.
+    func testRemoveAllLoadsGroupsThatAreOnlyOnDisk() async throws {
+        let h = try await FrameHarness.make(frameCount: 1, width: 128, height: 128, named: "removealldisk")
+        harness = h
+        let outlier = await processor(h)
+
+        // saved by a collection the processor never saw, so the processor's own is still nil
+        let saved = OutlierGroups(frameIndex: 0, config: h.config)
+        await saved.add(group(id: 1, x: 10, y: 10))
+        await saved.add(group(id: 2, x: 40, y: 40))
+        try await saved.writeOutliersBinary(to: await outlier.outliersDirname)
+        let before = await outlier.getOutlierGroups()
+        XCTAssertNil(before, "the groups are on disk only")
+
+        let changed = await outlier.userSelectAllOutliers(toShouldRemove: true, includingTrash: false)
+        XCTAssertTrue(changed, "Remove All must act on the saved groups")
+
+        let loadedOptional = await outlier.getOutlierGroups()
+        let loaded = try XCTUnwrap(loadedOptional, "and must have loaded them")
+        let members = await loaded.getMembers()
+        XCTAssertEqual(Set(members.keys), [1, 2])
+        for group in members.values {
+            let reason = await group.shouldRemove()
+            XCTAssertEqual(reason?.willRemove, true, "group \(group.id) must be marked for removal")
+        }
+    }
+
+    /// While another load is running `loadOutliers` returns at once ("Not loading twice"), so a bulk
+    /// decision that merely called it would still find nothing. It has to wait for the load.
+    func testRemoveAllWaitsForALoadInFlight() async throws {
+        let h = try await FrameHarness.make(frameCount: 1, width: 128, height: 128, named: "removeallwait")
+        harness = h
+        let outlier = await processor(h)
+        await outlier.holdLoading(true)
+
+        let removal = Task {
+            await outlier.userSelectAllOutliers(toShouldRemove: true, includingTrash: false)
+        }
+        // the "load" finishes a little later and publishes its groups
+        try await Task.sleep(nanoseconds: 300_000_000)
+        let late = OutlierGroups(frameIndex: 0, config: h.config)
+        await late.add(group(id: 7, x: 10, y: 10))
+        await outlier.finishLoading(with: late)
+
+        let changed = await removal.value
+        XCTAssertTrue(changed, "Remove All must wait for the load in flight, then act on its groups")
+        let reason = await late.getMembers()[7]?.shouldRemove()
+        XCTAssertEqual(reason?.willRemove, true)
+    }
+
     /// The concurrent variant has to visit the same set as the serial one — it exists for speed, not
     /// for different semantics.
     func testTheConcurrentIterationVisitsTheSameGroups() async throws {
@@ -702,5 +754,16 @@ private actor VisitRecorder {
     /// Order-independent view, since both iterators walk a dictionary.
     func flagsById() -> [UInt16: Bool] {
         Dictionary(visits.map { ($0.id, $0.isTrash) }, uniquingKeysWith: { a, _ in a })
+    }
+}
+
+extension FrameOutlierProcessor {
+    /// Pretend a load is running, so the in-flight path can be driven without a real read.
+    func holdLoading(_ loading: Bool) { isLoadingOutliers = loading }
+
+    /// What a load does when it finishes: publish the groups and stop being "in flight".
+    func finishLoading(with groups: OutlierGroups) {
+        outlierGroups = groups
+        isLoadingOutliers = false
     }
 }
