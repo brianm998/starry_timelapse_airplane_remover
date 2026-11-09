@@ -87,6 +87,7 @@ final class GuiFeatureRunner {
         .processingStops: { try $0.waitForProcessingToStop() },
         .pressKey: { try $0.press($0.args[0]) },
         .idShown: { try $0.expectShown($0.args[0], shown: true) },
+        .idShownAtEnd: { try $0.expectShownAtEndOfProcessing($0.args[0]) },
         .idNotShown: { try $0.expectShown($0.args[0], shown: false) },
         .idAbove: { try $0.expectAbove($0.args[0], above: $0.args[1]) },
         .idSelected: { try $0.expectSelected($0.args[0], selected: true) },
@@ -241,7 +242,7 @@ final class GuiFeatureRunner {
         let predicate = NSPredicate(format: "label == %@ OR title == %@", text, text)
         let types: [XCUIElement.ElementType] = [.radioButton, .button, .checkBox, .menuItem, .staticText]
         var found: XCUIElement?
-        try waitFor("a control labelled \"\(text)\"", timeout: timeout) {
+        try waitFor("a control labelled \"\(text)\"", timeout: timeout, detail: { self.menuItemsDescription() }) {
             let scopes: [XCUIElement] = self.app.sheets.firstMatch.exists ? [self.app.sheets.firstMatch] : [self.app.windows.firstMatch]
             for scope in scopes {
                 for type in types {
@@ -255,6 +256,13 @@ final class GuiFeatureRunner {
             return false
         }
         found?.click()
+    }
+
+    /// What a failed wait for a label prints: the window's frame and the label of every menu item on screen (a context menu belongs to no window).
+    private func menuItemsDescription() -> String {
+        let window = app.windows.firstMatch
+        let items = app.menuItems.allElementsBoundByIndex.prefix(60).map { "\($0.exists ? $0.label : "?")" }
+        return "\nwindow \(window.exists ? "\(window.frame)" : "none"); menu items: \(items)"
     }
 
     /// Zooms the main window to what the screen allows: the grid in the window the app opens at (900 by 450 points) is one cell tall, with the
@@ -412,7 +420,9 @@ final class GuiFeatureRunner {
         let e = element(identifier)
         var scroller = Scroller()
         var gridSteps = 0
-        try waitFor("\(identifier) to be clickable", timeout: 60, detail: { self.whyNotClickable(e, identifier) }) {
+        // a grid cell may have to be scrolled to a row at a time, each step taking the app seconds to settle
+        let timeout: TimeInterval = identifier.hasPrefix("grid.cell.") ? 120 : 60
+        try waitFor("\(identifier) to be clickable", timeout: timeout, detail: { self.whyNotClickable(e, identifier) }) {
             if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller) }
             else if !e.exists && identifier.hasPrefix("grid.cell.") { self.scrollGridToBuild(&gridSteps) }
             return e.exists && e.isHittable
@@ -454,6 +464,25 @@ final class GuiFeatureRunner {
         }
     }
 
+    /// Waits for the element to come up while the run goes on: for the post-render prompt, which covers the progress line the moment the run ends,
+    /// so the end cannot be read from it. Bounded by progress as the wait for processing to finish is: the progress line and the processing
+    /// modal's overall and headline text are watched for change, and a run whose every one of them sits still for the stall limit fails.
+    private func expectShownAtEndOfProcessing(_ identifier: String) throws {
+        let target = element(identifier)
+        let progress = element("processing.progress")
+        let overall = element("processing.overall")
+        let headline = element("processing.headline")
+        var last = "(none)"
+        var stall = ProgressStall(limit: stallLimit)
+        try waitFor("\(identifier) at the end of processing", timeout: 20 * 60, interval: 3, detail: { "(last progress: \(last))" }) {
+            if target.exists { return true }
+            func text(_ e: XCUIElement) -> String { e.exists ? e.label : "(not shown)" }
+            last = "progress \(text(progress)), overall \(text(overall)), headline \(text(headline))"
+            try stall.observe(last)
+            return false
+        }
+    }
+
     /// Waits for the run to be idle, whether or not every frame is complete (a run that another start put an end to leaves the frames it cleared
     /// unfinished). Idle has to be read twice, a poll apart, so the moment between a run being stopped and the next one starting is not taken
     /// for the end; the line is only in the left panel of the edit and scrub screens.
@@ -488,13 +517,15 @@ final class GuiFeatureRunner {
     }
 
     /// A lazy grid builds only the cells in view, so a cell below the fold of a small window is not in the tree and cannot be scrolled to by
-    /// its own frame: scroll the grid's scroll view down a step (and back to the top once it has run out) until the row comes into being.
+    /// its own frame: scroll the grid's scroll view down a step until the row comes into being, and back up once it has reached the end. The
+    /// steps are big: on the hosted runner the grid is one column of cells about 350 pt tall, so a cell 17 is some 6000 pt down.
     private func scrollGridToBuild(_ steps: inout Int) {
         let holder = app.scrollViews.containing(NSPredicate(format: "identifier BEGINSWITH %@", "grid.cell.")).firstMatch
         guard holder.exists, holder.isHittable else { return }
-        // down for eight steps, then back up for eight, so a grid that has scrolled past is not left there
-        let down = (steps / 8) % 2 == 0
-        holder.scroll(byDeltaX: 0, deltaY: down ? -200 : 200)
+        // down for 24 steps, then back up for 24, so a grid that has scrolled past is not left there: the rows of a narrow window's
+        // one-column grid are about 350 pt tall, so 24 steps of 300 pt reach the 20th or so
+        let down = (steps / 24) % 2 == 0
+        holder.scroll(byDeltaX: 0, deltaY: down ? -300 : 300)
         steps += 1
     }
 
@@ -818,7 +849,12 @@ final class GuiFeatureRunner {
             entry.click()
         } else if ready, Self.isFinite(entryFrame), Self.isFinite(barFrame) {
             let origin = bar.coordinate(withNormalizedOffset: .zero)
-            origin.withOffset(CGVector(dx: entryFrame.midX - barFrame.minX, dy: entryFrame.midY - barFrame.minY)).click()
+            let point = origin.withOffset(CGVector(dx: entryFrame.midX - barFrame.minX, dy: entryFrame.midY - barFrame.minY))
+            // XCUIElement.click() hovers the item first (the log says "Hover menu item"), which is what highlights it; a bare click on the
+            // first item of Actions (Remove All) did nothing on the hosted runner, where one that was hovered first worked
+            point.hover()
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "highlight")], timeout: 0.3)
+            point.click()
         } else {
             app.typeKey(.escape, modifierFlags: [])
             guard let shortcut = try commandShortcut(command) else { throw RunnerError("\"\(item.label)\" never got a hit point and has no shortcut") }
@@ -945,9 +981,24 @@ final class GuiFeatureRunner {
             let clearOfToolbar = (label.frame.minY - 12 - 8 - frame.minY) / frame.height
             dy = max(0.1, min(dy, clearOfToolbar))
         }
-        let start = e.coordinate(withNormalizedOffset: CGVector(dx: 0.002, dy: dy))
-        let end = e.coordinate(withNormalizedOffset: CGVector(dx: 0.998, dy: dy))
-        start.press(forDuration: 0.2, thenDragTo: end)
+        // the canvas is still laying out when the painter opens, and a drag on one that is moving paints nothing: wait for its frame to be steady
+        var last = frame
+        var steady = 0
+        while steady < 2 {
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 0.4)
+            let now = e.frame
+            steady = now == last ? steady + 1 : 0
+            last = now
+        }
+        // Reset is enabled once a stroke is there: if the drag did not register, drag again
+        let reset = element("painter.reset")
+        for _ in 0..<3 {
+            let start = e.coordinate(withNormalizedOffset: CGVector(dx: 0.002, dy: dy))
+            let end = e.coordinate(withNormalizedOffset: CGVector(dx: 0.998, dy: dy))
+            start.press(forDuration: 0.2, thenDragTo: end)
+            let painted = (try? waitFor("a stroke on \(identifier)", timeout: 5, interval: 0.5) { reset.exists && reset.isEnabled }) != nil
+            if painted { return }
+        }
     }
 
     /// A feature from the processed sequence starts runs, and this Mac must never run the GPU merge (CLAUDE.md).

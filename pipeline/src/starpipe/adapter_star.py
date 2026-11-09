@@ -372,7 +372,7 @@ CHECKS: dict[str, CheckSpec] = {
             "test:gui", "xcodebuild test gui starTests",
             ("xcodebuild", "-project", "gui/star.xcodeproj", "-scheme", "star", "-configuration", "Debug",
              "-derivedDataPath", GUI_DD, "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "-only-testing:starTests", "test"),
-            parser="xctest", ui=True,
+            parser="xctest",  # never ui=True: that is `caffeinate -u`, which turns a sleeping display on, and these tests need no display
         ),
         CheckSpec(
             "test:desktop", "gradle test star-desktop",

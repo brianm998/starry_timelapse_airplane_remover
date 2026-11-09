@@ -19,7 +19,7 @@ Feature: File > Open while a run is going asks first
       And I click "mode.grid"
       And I click "grid.cell.0"
       And I command-click "grid.cell.6"
-      And I right-click "grid.cell.6"
+      And I right-click "grid.cell.0"
       And I click the label "ui.re_process_everything"
     Then  "processing.modal" is shown
     When  I press "return"

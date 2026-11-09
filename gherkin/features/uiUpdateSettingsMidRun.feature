@@ -6,7 +6,9 @@ Feature: Changing a setting during a run and choosing Process Now restarts it, a
   render question again, as Process All does, and the answer starts the run over. That run is the one Process All started, so its end asks whether to
   render a video; the first run, which was stopped, ended with no question. The feature looks for a question at the two points the stopped run could have raised one (once the pre-render question is up, and once the restart's screen is);
   a question after the first run's natural end cannot be looked for, because the restart stops that run. `AppViewModel` cannot be built in a test, so this had only source scans before.
-  The post-render prompt covers the progress line, so the feature does not wait for processing to finish after it, and presses no key after the restart:
+  The post-render prompt covers the progress line, so the feature cannot wait for processing to finish after it: it waits for the prompt itself, watching
+  the progress line and the processing modal's own text for change (the way the wait for processing to finish does) rather than for a fixed time, since the
+  restart's 19 frames take longer than a fixed wait on the slower runners. It presses no key after the restart:
   Return then would be Render Now if the prompt had come up. The first run has to still be going when Update is clicked, which `cancelProcessing` being enabled shows. On
   frame 0 alone it was over in 9 s, before Update; on frames 0 to 7 it was over in 38 s on the hosted Windows runner, where the window is slow while the engine
   has every core and the steps after the run began took longer than that (a keypress alone took 13 s). So the setting is changed before the run, where the window is quick
@@ -42,4 +44,4 @@ Feature: Changing a setting during a run and choosing Process Now restarts it, a
     When  I click "prompt.pre.no"
     Then  "processing.modal" is shown
       And "prompt.post.cancel" is not shown
-    Then  "prompt.post.cancel" is shown
+    Then  "prompt.post.cancel" is shown at the end of processing

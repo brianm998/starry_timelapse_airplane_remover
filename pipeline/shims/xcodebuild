@@ -1,34 +1,44 @@
 #!/bin/bash
-# PATH shim for xcodebuild: a run of the mac gui's UI tests (starUITests) drives the real mouse and keyboard, so it waits here until
-# they have been idle STARPIPE_UI_IDLE_S (600) seconds. It works for any version of the pipeline code, because they all call
-# `xcodebuild` through PATH, including the older code ticket agents run from their own worktrees. Everything else passes straight
-# through. STARPIPE_UI_NOW=1 skips the wait. Install: pipeline/shims/install.sh
+# PATH shim for xcodebuild: a run of the mac gui's UI tests (starUITests) drives the real mouse and keyboard and wakes the display, so
+# on this Mac it is refused, and GitHub's runners run it instead. It works for any version of the pipeline code, because they all
+# call `xcodebuild` through PATH, including the older code ticket agents run from their own worktrees. Everything else passes straight
+# through. The owner can opt in with ui_local = "idle" or "always" in the pipeline's config.toml, or STARPIPE_UI_NOW=1 for one run
+# (ignored for a ticket: an agent must not be able to put a test on the owner's screen). Install: pipeline/shims/install.sh
 real="${STARPIPE_REAL_XCODEBUILD:-/usr/bin/xcodebuild}"
 need="${STARPIPE_UI_IDLE_S:-600}"
 
 ui=0
-if [[ -z "${STARPIPE_UI_NOW:-}" ]]; then
-  test_action=0; only=0; other=0
-  for a in "$@"; do
-    case "$a" in
-      test|test-without-building) test_action=1 ;;
-      -only-testing:starTests*) only=1 ;;
-      -only-testing:*) only=1; other=1 ;;
-    esac
-  done
-  # a test run with no -only-testing is the whole scheme, UI tests included
-  if [[ $test_action == 1 && ( $only == 0 || $other == 1 ) ]]; then ui=1; fi
-fi
+test_action=0; only=0; other=0
+for a in "$@"; do
+  case "$a" in
+    test|test-without-building) test_action=1 ;;
+    -only-testing:starTests*) only=1 ;;
+    -only-testing:*) only=1; other=1 ;;
+  esac
+done
+# a test run with no -only-testing is the whole scheme, UI tests included
+if [[ $test_action == 1 && ( $only == 0 || $other == 1 ) ]]; then ui=1; fi
+if [[ -n "${STARPIPE_UI_NOW:-}" && -z "${STARPIPE_TICKET:-}" ]]; then ui=0; fi
 
 idle_s() {
   ioreg -c IOHIDSystem -d 4 2>/dev/null | awk '/"HIDIdleTime"/ { printf "%d\n", $NF / 1000000000; found = 1; exit } END { if (!found) print 999999 }'
 }
 
 if [[ $ui == 1 ]]; then
-  while [[ "$(idle_s)" -lt "$need" ]]; do
-    # a line each minute: the pipeline's hang watchdog kills a job that writes nothing for 15 minutes
-    echo "xcodebuild shim: holding a UI test run until the keyboard and mouse have been idle ${need}s (idle $(idle_s)s)"
-    sleep 60
-  done
+  mode="$(sed -n 's/^[[:space:]]*ui_local[[:space:]]*=[[:space:]]*"\([a-z]*\)".*/\1/p' "${STARPIPE_HOME:-$HOME/.star-pipeline}/config.toml" 2>/dev/null | tail -n 1)"
+  case "$mode" in
+    always) ;;
+    idle)
+      while [[ "$(idle_s)" -lt "$need" ]]; do
+        # a line each minute: the pipeline's hang watchdog kills a job that writes nothing for 15 minutes
+        echo "xcodebuild shim: holding a UI test run until the keyboard and mouse have been idle ${need}s (idle $(idle_s)s)"
+        sleep 60
+      done
+      ;;
+    *)
+      echo "xcodebuild shim: NOT RUN: UI tests (starUITests) take over this Mac's display, mouse and keyboard, so they do not run here. GitHub's runners run them: push the change and read CI's result." >&2
+      exit 69
+      ;;
+  esac
 fi
 exec "$real" "$@"
