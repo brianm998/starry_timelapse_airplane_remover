@@ -91,5 +91,6 @@
   { "case": "chooserAnswersProcessed", "text": "the file chooser answers with the processed copy" },
   { "case": "renderedVideoFrames"   , "text": "the rendered video has one frame per frame of the sequence at <n:int> frames per second" },
   { "case": "noVideoLeft"           , "text": "no video is left in the output folder" },
-  { "case": "slowEncoder"           , "text": "the processed copy renders with a slow encoder" }
+  { "case": "slowEncoder"           , "text": "the processed copy renders with a slow encoder" },
+  { "case": "slowFrames"            , "text": "the processed copy processes one frame at a time" }
 ]
