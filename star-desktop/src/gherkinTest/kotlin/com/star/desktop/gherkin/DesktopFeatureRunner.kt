@@ -149,6 +149,7 @@ class DesktopFeatureRunner {
         StepAction.RENDERED_VIDEO_FRAMES to { t -> renderedVideoHasEveryFrame(t, args[0].toInt()) },
         StepAction.NO_VIDEO_LEFT to { t -> noVideoLeft(t) },
         StepAction.SLOW_ENCODER to { slowEncoder() },
+        StepAction.SLOW_FRAMES to { slowFrames() },
         StepAction.ID_FOCUSED to { t -> expectFocus(t, args[0], focused = true) },
         StepAction.ID_NOT_FOCUSED to { t -> expectFocus(t, args[0], focused = false) },
         StepAction.LANGUAGE_IS to { },   // read when the run starts
@@ -707,6 +708,18 @@ class DesktopFeatureRunner {
         json.addProperty("encoder", "libvpx-vp9")
         json.addProperty("pixelFormat", "yuv420p")
         json.addProperty("muxer", "matroska")
+        config.writeText(Gson().toJson(json))
+    }
+
+    /**
+     * The processed copy's run takes one frame at a time: the Custom profile with a pipeline depth of 1 (`Config.resources` reads the depth only
+     * under Custom). A run over the 19-frame sequence is then about 19 serial frames, which outlasts the UI steps between two starts on a slow runner.
+     */
+    private fun slowFrames() {
+        val config = processedConfig ?: throw RunnerError("\"a processed copy of the sequence\" has not run")
+        val json = JsonParser.parseString(config.readText()).asJsonObject
+        json.addProperty("resourceProfile", "custom")
+        json.addProperty("numberOfFramesToProcessConcurrently", 1)
         config.writeText(Gson().toJson(json))
     }
 
