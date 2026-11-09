@@ -976,6 +976,9 @@ final class GuiFeatureRunner {
         try FileManager.default.removeItem(at: hold)
     }
 
+    /// The index of the way `paintBand` painted a band that took, which the next band in the scenario tries first.
+    private var paintMethodThatTookTheBand: Int?
+
     /// Paints a band across the element: one drag from its left edge to its right, at 80% of its height (higher if the painter's toolbar covers
     /// that), where the horizon of a frame is. The band is complete when it spans the width, and the painter then starts looking for the horizon in it.
     /// If that drag leaves no stroke in the painter, two other ways of painting the same band follow it (below).
@@ -1021,9 +1024,12 @@ final class GuiFeatureRunner {
             return true
         }
         func state() -> String {
+            // an element that is gone has no value to read: the query would record a test failure of its own (the band label is gone once
+            // the band is complete and the painter has left band selection)
             let reset = element("painter.reset"), band = element("painter.band")
-            return "canvas \(e.frame), band label \"\(band.value as? String ?? band.label)\" at \(band.frame), reset exists \(reset.exists) enabled \(reset.isEnabled), "
-                + "sky \(element("painter.sky").exists), computing \(element("painter.computing").exists)"
+            let bandText = band.exists ? "band label \"\(band.value as? String ?? band.label)\" at \(band.frame)" : "band label gone"
+            let resetText = reset.exists ? "reset exists true enabled \(reset.isEnabled)" : "reset absent"
+            return "canvas \(e.frame), \(bandText), \(resetText), sky \(element("painter.sky").exists), computing \(element("painter.computing").exists)"
         }
 
         // The band is one drag across the canvas. A drag has not always reached the painter on the mac gui's CI runners (the first one, at
@@ -1051,12 +1057,19 @@ final class GuiFeatureRunner {
             }),
         ]
         var tried: [String] = []
-        for attempt in attempts {
+        // the way that took the band last time goes first: a scenario that paints a band twice should not spend the failed ways again
+        var order = Array(attempts.indices)
+        if let worked = paintMethodThatTookTheBand, let position = order.firstIndex(of: worked) { order.remove(at: position); order.insert(worked, at: 0) }
+        for index in order {
+            let attempt = attempts[index]
             attempt.run()
             let registered = settle(5) { strokeRegistered() }
             tried.append("\(attempt.name): \(registered ? "stroke registered" : "no stroke"); \(state())")
             // a stroke that did not complete the band gets the next attempt on top of it: the band is the union of all of them
-            if registered, settle(10, { bandTaken() }) { return }
+            if registered, settle(10, { bandTaken() }) {
+                paintMethodThatTookTheBand = index
+                return
+            }
         }
         throw RunnerError("the band painted across \(identifier) did not take. Tried:\n" + tried.joined(separator: "\n") + "\n\(app.debugDescription)")
     }
