@@ -5,17 +5,23 @@ Feature: File > Open while a run is going asks first
   they ask the work-in-progress question, with "Stop and Open" as the red button, before the file chooser is shown. Cancel keeps the run, and
   Stop and Open goes on to the chooser. The chooser is the system's own and cannot be driven, so the runner answers it with the processed copy's
   folder (gui: `-StarUITestChoosePath`; desktop: the `star.ui.choosePath` property), which leads on to the question of where its files go.
-  The run is the start of `uiStartDuringRun`, longer: Re-Process Everything on frames 0 to 7 of the processed sequence the cli made once (on frames 0, 1 and 3 it was over before the feature's second Open, on a loaded machine, and then nothing is asked).
+  The run is the start of `uiStartDuringRun`, longer: Re-Process Everything on frames 0 and 6 of the processed sequence the cli made once: the run spans 0 to 6 (the frames between are run, only not cleared), where on frames 0, 1 and 3 it
+  was over before the feature's second Open, on a loaded machine, and then nothing is asked. Only the two ends are clicked: on the hosted macOS runner's small screen
+  the grid shows about one cell, a cell below the fold (frame 7) takes a click that lands outside the grid, in the Dock, and the context menu never opens, and on
+  the hosted Windows runner every UI step costs seconds, with the engine using every core. The run must still outlast the steps: in the last CI run (Windows) the seven
+  frames were all complete 17 s after the start (stard: 03:20:12 to 03:20:29) while the steps between took 18 s, so the second Open at 03:20:31 found no run and nothing was
+  asked ("closeconfirm.confirm" never shown; the macOS job failed at the same step), so "the processed copy processes one frame at a time" makes the run slower per frame, as `uiStartDuringRun` does.
 
   Scenario: Open Image Sequence during a run, cancelled and then confirmed
     Given a processed copy of the sequence {sequence}
+      And the processed copy processes one frame at a time
       And the file chooser answers with the processed copy
     When  I open the processed copy
       And I make the window large
       And I click "sequenceprogress.close"
       And I click "mode.grid"
       And I click "grid.cell.0"
-      And I shift-click "grid.cell.7"
+      And I command-click "grid.cell.6"
       And I right-click "grid.cell.0"
       And I click the label "ui.re_process_everything"
     Then  "processing.modal" is shown
