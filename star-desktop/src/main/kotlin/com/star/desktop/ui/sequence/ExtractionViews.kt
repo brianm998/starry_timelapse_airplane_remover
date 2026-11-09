@@ -16,12 +16,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,7 +35,11 @@ import com.star.desktop.i18n.localized
 import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.FrameEtaResponse
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 
 /**
  * The band along the scrub slider showing which frames are extracted, as a video player shows what is buffered: where the user can go without
@@ -91,19 +92,32 @@ fun ExtractionStrip(vm: SequenceViewModel, modifier: Modifier = Modifier) {
 }
 
 /**
+ * The engine's answer about [index], asked again every [periodMs]. The waiting is done on a real dispatcher: a `delay` in a `LaunchedEffect` is on
+ * the composition clock, which a test then never sees idle (`waitForIdle` spins for as long as the panel is shown).
+ */
+fun frameEtaPolls(index: Int, etaOf: suspend (Int) -> FrameEtaResponse?, periodMs: Long): Flow<FrameEtaResponse?> =
+    flow {
+        while (true) {
+            emit(etaOf(index))
+            delay(periodMs)
+        }
+    }.flowOn(Dispatchers.Default)
+
+/**
  * What the main frame area shows over a frame that is not extracted yet: how long it will probably be, with a progress indicator. The tools that
  * need the original cannot be used on it (the panel takes the pointer), and it goes when the frame lands. Asked of the engine about once a second.
  */
 @Composable
 fun FrameWaitPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
     val index by vm.currentIndex.collectAsState()
-    var eta by remember(index) { mutableStateOf<FrameEtaResponse?>(null) }
-    LaunchedEffect(index) {
-        while (true) {
-            eta = vm.frameEta(index)
-            delay(1000)
-        }
-    }
+    val seekable = vm.extraction.collectAsState().value?.seekable ?: true
+    FrameWaitPanelContent(index, seekable, { vm.frameEta(it) }, modifier)
+}
+
+/** The panel itself, with the engine's answer passed in so a test can drive it without a view model. */
+@Composable
+fun FrameWaitPanelContent(index: Int, seekable: Boolean, etaOf: suspend (Int) -> FrameEtaResponse?, modifier: Modifier = Modifier) {
+    val eta by remember(index) { frameEtaPolls(index, etaOf, 1000) }.collectAsState(null)
     HoverTip(localized("ui.tool_needs_extracted_frame")) {
         Box(
             modifier.fillMaxSize().background(StarColors.appBackground.copy(alpha = 0.85f))
@@ -126,7 +140,6 @@ fun FrameWaitPanel(vm: SequenceViewModel, modifier: Modifier = Modifier) {
             ) {
                 Text(localized("ui.frame_not_extracted", "%,d".format(index)), color = StarColors.white, fontSize = 18.sp)
                 val e = eta
-                val seekable = vm.extraction.collectAsState().value?.seekable ?: true
                 val now = e?.jump == true || seekable
                 if (e != null && e.known) {
                     if (now) {
