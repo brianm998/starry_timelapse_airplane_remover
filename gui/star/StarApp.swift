@@ -151,7 +151,23 @@ import StarCppBridge
     
  */
 
+/// The real entry point. The unit tests (`starTests`) are hosted in this executable, and they must not put anything on the screen of
+/// the machine running them, so when XCTest is the one launching it there is no `StarApp`: no main window, Dock icon, activation, crash
+/// alert or `RunMarker` from a run that is not the user's. Only the unit-test host has `XCTestConfigurationFilePath` set; an app
+/// launched by the UI tests (`XCUIApplication`) does not, and comes up as normal.
 @main
+enum StarMain {
+    @MainActor static func main() {
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            let host = NSApplication.shared
+            host.setActivationPolicy(.prohibited)
+            host.run()
+        } else {
+            StarApp.main()
+        }
+    }
+}
+
 struct StarApp: App {
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate

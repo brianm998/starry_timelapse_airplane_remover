@@ -51,12 +51,13 @@ apply to it: don't translate it and don't build a Kotlin twin.
   unrecognised commands get the machine to themselves (`pipeline/src/starpipe/heavy.py`). An
   interactive caller goes first; then the ticket furthest along the pipeline. `.claude/settings.json` wraps them for
   interactive sessions automatically (`STARPIPE_NO_WRAP=1` turns that off).
-- **UI tests do not run while you are at the keyboard.** The mac gui's XCUITest runs (`starUITests`) drive the real mouse and
-  keyboard and keep a window on the display. `heavy.run_job` recognises them (`adapter_star.drives_display`) and, outside the lock,
-  waits until the keyboard and mouse have been idle `ui_idle_s` (600 s; `idle.py`, IOHIDSystem's HIDIdleTime). The checks a ticket
-  runs go further under the default `ui_local = "ci"` (`~/.star-pipeline/config.toml`): UI checks are recorded `ci-only` (counts as
-  green) and left to GitHub; `"idle"` runs them here once idle, `"always"` skips the wait. `STARPIPE_UI_NOW=1` skips the wait for
-  one run. `test:gui` (`-only-testing:starTests`, never drives the cursor) still runs here.
+- **Tests never wake this Mac's display or appear on it.** The mac gui's XCUITest runs (`starUITests`) drive the real mouse and
+  keyboard and wake the display, so under the default `ui_local = "ci"` (`~/.star-pipeline/config.toml`) they do not run here:
+  `heavy.run_job` and the PATH shim `pipeline/shims/xcodebuild` refuse them (exit 69), and a ticket's UI checks are recorded `ci-only`
+  (counts as green) and left to GitHub. `"idle"` runs them here once the keyboard and mouse have been idle `ui_idle_s` (which will
+  wake a sleeping display), `"always"` runs them unconditionally. `STARPIPE_UI_NOW=1` lets the owner run one; it is ignored for a
+  ticket. `test:gui` (`-only-testing:starTests`) still runs here, unseen: `StarMain` hosts it in a background-only app with no windows.
+  Never give it `ui=True`: that wraps it in `caffeinate -d -u`, and `-u` turns a sleeping display on.
 - **To stop all automated testing at once: `pipeline/bin/starpipe freeze`** (`thaw` lets go). It holds every heavy-lock slot,
   including the one-slot file older code uses, so the daemon, the agents in ticket worktrees (which run their own older
   `heavy.py`) and wrapped session commands all wait instead of starting. It does not stop a run already going: kill that first.

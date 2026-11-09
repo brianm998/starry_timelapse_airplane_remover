@@ -243,7 +243,7 @@ final class GuiFeatureRunner {
         let predicate = NSPredicate(format: "label == %@ OR title == %@", text, text)
         let types: [XCUIElement.ElementType] = [.radioButton, .button, .checkBox, .menuItem, .staticText]
         var found: XCUIElement?
-        try waitFor("a control labelled \"\(text)\"", timeout: timeout) {
+        try waitFor("a control labelled \"\(text)\"", timeout: timeout, detail: { self.menuItemsDescription() }) {
             let scopes: [XCUIElement] = self.app.sheets.firstMatch.exists ? [self.app.sheets.firstMatch] : [self.app.windows.firstMatch]
             for scope in scopes {
                 for type in types {
@@ -257,6 +257,13 @@ final class GuiFeatureRunner {
             return false
         }
         found?.click()
+    }
+
+    /// What a failed wait for a label prints: the window's frame and the label of every menu item on screen (a context menu belongs to no window).
+    private func menuItemsDescription() -> String {
+        let window = app.windows.firstMatch
+        let items = app.menuItems.allElementsBoundByIndex.prefix(60).map { "\($0.exists ? $0.label : "?")" }
+        return "\nwindow \(window.exists ? "\(window.frame)" : "none"); menu items: \(items)"
     }
 
     /// Zooms the main window to what the screen allows: the grid in the window the app opens at (900 by 450 points) is one cell tall, with the
@@ -511,7 +518,8 @@ final class GuiFeatureRunner {
     }
 
     /// A lazy grid builds only the cells in view, so a cell below the fold of a small window is not in the tree and cannot be scrolled to by
-    /// its own frame: scroll the grid's scroll view down a step (and back to the top once it has run out) until the row comes into being.
+    /// its own frame: scroll the grid's scroll view down a step until the row comes into being, and back up once it has reached the end. The
+    /// steps are big: on the hosted runner the grid is one column of cells about 350 pt tall, so a cell 17 is some 6000 pt down.
     private func scrollGridToBuild(_ steps: inout Int) {
         let holder = app.scrollViews.containing(NSPredicate(format: "identifier BEGINSWITH %@", "grid.cell.")).firstMatch
         guard holder.exists, holder.isHittable else { return }
@@ -852,7 +860,12 @@ final class GuiFeatureRunner {
             entry.click()
         } else if ready, Self.isFinite(entryFrame), Self.isFinite(barFrame) {
             let origin = bar.coordinate(withNormalizedOffset: .zero)
-            origin.withOffset(CGVector(dx: entryFrame.midX - barFrame.minX, dy: entryFrame.midY - barFrame.minY)).click()
+            let point = origin.withOffset(CGVector(dx: entryFrame.midX - barFrame.minX, dy: entryFrame.midY - barFrame.minY))
+            // XCUIElement.click() hovers the item first (the log says "Hover menu item"), which is what highlights it; a bare click on the
+            // first item of Actions (Remove All) did nothing on the hosted runner, where one that was hovered first worked
+            point.hover()
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "highlight")], timeout: 0.3)
+            point.click()
         } else {
             app.typeKey(.escape, modifierFlags: [])
             guard let shortcut = try commandShortcut(command) else { throw RunnerError("\"\(item.label)\" never got a hit point and has no shortcut") }
@@ -965,6 +978,7 @@ final class GuiFeatureRunner {
 
     /// Paints a band across the element: one drag from its left edge to its right, at 80% of its height (higher if the painter's toolbar covers
     /// that), where the horizon of a frame is. The band is complete when it spans the width, and the painter then starts looking for the horizon in it.
+    /// If that drag leaves no stroke in the painter, two other ways of painting the same band follow it (below).
     private func paintBand(across identifier: String, timeout: TimeInterval = 120) throws {
         let e = element(identifier)
         guard e.waitForExistence(timeout: timeout) else {
@@ -979,9 +993,72 @@ final class GuiFeatureRunner {
             let clearOfToolbar = (label.frame.minY - 12 - 8 - frame.minY) / frame.height
             dy = max(0.1, min(dy, clearOfToolbar))
         }
-        let start = e.coordinate(withNormalizedOffset: CGVector(dx: 0.002, dy: dy))
-        let end = e.coordinate(withNormalizedOffset: CGVector(dx: 0.998, dy: dy))
-        start.press(forDuration: 0.2, thenDragTo: end)
+        // the canvas is still laying out when the painter opens, and a drag on one that is moving paints nothing: wait for its frame to be steady
+        var last = frame
+        var steady = 0
+        while steady < 2 {
+            _ = XCTWaiter.wait(for: [XCTestExpectation(description: "settle")], timeout: 0.4)
+            let now = e.frame
+            steady = now == last ? steady + 1 : 0
+            last = now
+        }
+        let bandY = dy
+        func at(_ x: CGFloat, _ y: CGFloat) -> XCUICoordinate { e.coordinate(withNormalizedOffset: CGVector(dx: x, dy: y)) }
+
+        // What the painter shows once a stroke has registered: Reset (disabled until there is one), or, when the stroke completed the band,
+        // the computing toolbar and then the Sky choice of the refinement.
+        func strokeRegistered() -> Bool {
+            element("painter.sky").exists || element("painter.computing").exists
+                || (element("painter.reset").exists && element("painter.reset").isEnabled)
+        }
+        func bandTaken() -> Bool { element("painter.sky").exists || element("painter.computing").exists }
+        func settle(_ seconds: TimeInterval, _ done: () -> Bool) -> Bool {
+            let deadline = Date().addingTimeInterval(seconds)
+            while !done() {
+                if Date() > deadline { return false }
+                _ = XCTWaiter.wait(for: [XCTestExpectation(description: "poll")], timeout: 0.5)
+            }
+            return true
+        }
+        func state() -> String {
+            let reset = element("painter.reset"), band = element("painter.band")
+            return "canvas \(e.frame), band label \"\(band.value as? String ?? band.label)\" at \(band.frame), reset exists \(reset.exists) enabled \(reset.isEnabled), "
+                + "sky \(element("painter.sky").exists), computing \(element("painter.computing").exists)"
+        }
+
+        // The band is one drag across the canvas. A drag has not always reached the painter on the mac gui's CI runners (the first one, at
+        // `bandY`, left Reset disabled and no Sky choice in uiPainterOpens), so a drag that leaves no stroke is tried again a different way,
+        // and what each try left is in the error if none takes, which is what says why: a drag in the middle of the canvas, away from the
+        // toolbar and the edges; then the same stroke as a row of clicks, each of which is a stroke of its own on the same band.
+        let attempts: [(name: String, run: () -> Void)] = [
+            ("a drag at \(bandY), up to 3 times", {
+                // Reset is enabled once a stroke is there: if the drag did not register, drag again
+                let reset = element("painter.reset")
+                for _ in 0..<3 {
+                    let start = e.coordinate(withNormalizedOffset: CGVector(dx: 0.002, dy: dy))
+                    let end = e.coordinate(withNormalizedOffset: CGVector(dx: 0.998, dy: dy))
+                    start.press(forDuration: 0.2, thenDragTo: end)
+                    let painted = (try? waitFor("a stroke on \(identifier)", timeout: 5, interval: 0.5) { reset.exists && reset.isEnabled }) != nil
+                    if painted { return }
+                }
+            }),
+            ("a slow drag at 0.4", {
+                at(0.002, 0.4).press(forDuration: 0.2, thenDragTo: at(0.998, 0.4), withVelocity: .slow, thenHoldForDuration: 0.3)
+            }),
+            ("a row of clicks at 0.4", {
+                let steps = 24 // 19 points apart on a 460 point canvas, where the brush is 27 points in radius
+                for i in 0...steps { at(0.002 + 0.996 * CGFloat(i) / CGFloat(steps), 0.4).click() }
+            }),
+        ]
+        var tried: [String] = []
+        for attempt in attempts {
+            attempt.run()
+            let registered = settle(5) { strokeRegistered() }
+            tried.append("\(attempt.name): \(registered ? "stroke registered" : "no stroke"); \(state())")
+            // a stroke that did not complete the band gets the next attempt on top of it: the band is the union of all of them
+            if registered, settle(10, { bandTaken() }) { return }
+        }
+        throw RunnerError("the band painted across \(identifier) did not take. Tried:\n" + tried.joined(separator: "\n") + "\n\(app.debugDescription)")
     }
 
     /// A feature from the processed sequence starts runs, and this Mac must never run the GPU merge (CLAUDE.md).
