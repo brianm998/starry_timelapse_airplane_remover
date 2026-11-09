@@ -851,11 +851,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         mkdir(await outlierProcessor.outliersDirname)
         
-        await outlierProcessor.writeOutliersRemoveReasons()
+        let config = await configManager.config()
+        if config.writeOutlierGroupFiles {
+            await outlierProcessor.writeOutliersRemoveReasons()
+        }
 
         self.set(state: .finishing)
 
-        let config = await configManager.config()
         
         if config.writeOutlierClassificationValues {
             // THIS MOFO IS SLOW
@@ -2081,11 +2083,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             mkdir(await outlierProcessor.outliersDirname)
             
-            await outlierProcessor.writeOutliersRemoveReasons()
+            let config = await configManager.config()
+            if config.writeOutlierGroupFiles {
+                await outlierProcessor.writeOutliersRemoveReasons()
+            }
 
             self.set(state: .finishing)
 
-            let config = await configManager.config()
             
             if config.writeOutlierClassificationValues {
                 // THIS MOFO IS SLOW
