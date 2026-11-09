@@ -650,9 +650,15 @@ final class ConfigTests: XCTestCase {
 
 final class StubProtocol: URLProtocol, @unchecked Sendable {
     nonisolated(unsafe) static var handler: (@Sendable (URLRequest) -> (Int, Data))?
+    /// When set, every request fails with this error instead of reaching the handler.
+    nonisolated(unsafe) static var failure: URLError.Code?
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
+        if let code = Self.failure {
+            client?.urlProtocol(self, didFailWithError: URLError(code))
+            return
+        }
         let (status, body) = Self.handler!(request)
         let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
@@ -1363,5 +1369,69 @@ final class QuestionChoicesTests: XCTestCase {
         XCTAssertFalse(QuestionChoices.hasOptions(plain))
         XCTAssertEqual(QuestionChoices.rows(for: plain), [], "no option rows and no Other: the view shows the plain text field")
         XCTAssertTrue(QuestionChoices.hasOptions(full))
+    }
+}
+
+@MainActor
+final class TimeoutTests: XCTestCase {
+    final class Clock: @unchecked Sendable { var t = Date(timeIntervalSince1970: 1000) }
+
+    override func tearDown() { StubProtocol.failure = nil }
+
+    private func make(_ clock: Clock) throws -> MonitorStore {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [StubProtocol.self]
+        let api = APIClient(config: APIConfig(baseURL: URL(string: "http://127.0.0.1:1")!, token: "tok"), session: URLSession(configuration: cfg))
+        let store = MonitorStore(client: api, now: { clock.t })
+        store.apply(try FixtureTests.snapshot())
+        return store
+    }
+
+    func testOneTimedOutSnapshotDoesNotShowTheDaemonDown() async throws {
+        let clock = Clock()
+        let store = try make(clock)
+        StubProtocol.failure = .timedOut
+        await store.refresh()
+        clock.t += 10
+        await store.refresh()
+        XCTAssertEqual(store.connection, .live)
+        XCTAssertNotNil(store.snapshot)
+        XCTAssertFalse(store.daemonDown)
+    }
+
+    func testTimeoutsLastingThirtySecondsShowTheDaemonDown() async throws {
+        let clock = Clock()
+        let store = try make(clock)
+        StubProtocol.failure = .timedOut
+        await store.refresh()
+        clock.t += 29
+        await store.refresh()
+        XCTAssertFalse(store.daemonDown)
+        clock.t += 1
+        await store.refresh()
+        XCTAssertTrue(store.daemonDown)
+        XCTAssertNotNil(store.snapshot, "the last snapshot stays for the views")
+    }
+
+    func testASuccessRestartsTheTimeoutWindow() async throws {
+        let clock = Clock()
+        let store = try make(clock)
+        let body = try FixtureTests.fixture()
+        StubProtocol.failure = .timedOut
+        await store.refresh()
+        clock.t += 25
+        StubProtocol.failure = nil
+        StubProtocol.handler = { _ in (200, body) }
+        await store.refresh()
+        XCTAssertEqual(store.connection, .live)
+        StubProtocol.failure = .timedOut
+        clock.t += 25
+        await store.refresh()
+        clock.t += 25
+        await store.refresh()
+        XCTAssertFalse(store.daemonDown, "50 s since the first timeout, but only 25 s since the new run began")
+        clock.t += 5
+        await store.refresh()
+        XCTAssertTrue(store.daemonDown)
     }
 }
