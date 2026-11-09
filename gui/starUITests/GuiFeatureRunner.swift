@@ -690,13 +690,20 @@ final class GuiFeatureRunner {
         try JSONSerialization.data(withJSONObject: object).write(to: config)
     }
 
-    /// The processed copy's run takes one frame at a time: the Custom profile with a pipeline depth of 1 (`Config.resources` reads the depth only under
-    /// Custom). A run over the 19-frame sequence is then about 19 serial frames, which outlasts the UI steps between two starts on a slow runner.
+    /// The processed copy's run takes one frame at a time: the Custom profile with a pipeline depth of 1 and a CPU gate width of 1 (`Config.resources`
+    /// reads both only under Custom). A run over the 19-frame sequence is then about 19 serial frames, each with one native (OpenCV) operation at a time,
+    /// which outlasts the UI steps between two starts on a slow runner and leaves the other cores to the UI, so those steps are quicker too.
     private func slowFrames() throws {
         guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
         guard var object = try JSONSerialization.jsonObject(with: Data(contentsOf: config)) as? [String: Any] else { throw RunnerError("\(config.path) is not a JSON object") }
         object["resourceProfile"] = "custom"
         object["numberOfFramesToProcessConcurrently"] = 1
+        // CustomResourceLimits has six required keys, so keep the object's others and change only the width (Full's values if it is absent)
+        var limits = object["customResources"] as? [String: Any] ?? [
+            "qos": "userInitiated", "gpuWidth": 8, "gpuDutyCycle": 1.0, "diskStreamsPerVolume": 4, "ioPolicy": "default",
+        ]
+        limits["cpuWidth"] = 1
+        object["customResources"] = limits
         try JSONSerialization.data(withJSONObject: object).write(to: config)
     }
 

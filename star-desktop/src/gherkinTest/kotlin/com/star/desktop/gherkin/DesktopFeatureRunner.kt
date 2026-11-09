@@ -712,14 +712,25 @@ class DesktopFeatureRunner {
     }
 
     /**
-     * The processed copy's run takes one frame at a time: the Custom profile with a pipeline depth of 1 (`Config.resources` reads the depth only
-     * under Custom). A run over the 19-frame sequence is then about 19 serial frames, which outlasts the UI steps between two starts on a slow runner.
+     * The processed copy's run takes one frame at a time: the Custom profile with a pipeline depth of 1 and a CPU gate width of 1 (`Config.resources`
+     * reads both only under Custom). A run over the 19-frame sequence is then about 19 serial frames, each with one native (OpenCV) operation at a time,
+     * which outlasts the UI steps between two starts on a slow runner and leaves the other cores to the UI, so those steps are quicker too.
      */
     private fun slowFrames() {
         val config = processedConfig ?: throw RunnerError("\"a processed copy of the sequence\" has not run")
         val json = JsonParser.parseString(config.readText()).asJsonObject
         json.addProperty("resourceProfile", "custom")
         json.addProperty("numberOfFramesToProcessConcurrently", 1)
+        // CustomResourceLimits has six required keys, so keep the object's others and change only the width (Full's values if it is absent)
+        val limits = json["customResources"]?.takeIf { it.isJsonObject }?.asJsonObject ?: JsonObject().also {
+            it.addProperty("qos", "userInitiated")
+            it.addProperty("gpuWidth", 8)
+            it.addProperty("gpuDutyCycle", 1.0)
+            it.addProperty("diskStreamsPerVolume", 4)
+            it.addProperty("ioPolicy", "default")
+        }
+        limits.addProperty("cpuWidth", 1)
+        json.add("customResources", limits)
         config.writeText(Gson().toJson(json))
     }
 
