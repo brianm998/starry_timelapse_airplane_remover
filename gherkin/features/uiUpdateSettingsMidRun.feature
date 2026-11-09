@@ -13,7 +13,7 @@ Feature: Changing a setting during a run and choosing Process Now restarts it, a
   frame 0 alone it was over in 9 s, before Update; on frames 0 to 7 it was over in 38 s on the hosted Windows runner, where the window is slow while the engine
   has every core and the steps after the run began took longer than that (a keypress alone took 13 s). So the setting is changed before the run, where the window is quick
   (Dismiss applies it, and the frames on disk, which the run is only partly rebuilding, still do not have it, so Update still asks), the run is over frames 0 to 17 (the first cell, then shift-click on the one before the last, rather than a click for each; a run
-  of the whole sequence takes the settings baseline anew, L11, and Update would then have nothing to ask), and only the menu, Update and No come between its start and the check. Starts from the processed sequence the cli made once.
+  of the whole sequence takes the settings baseline anew, L11, and Update would then have nothing to ask), and only the menu, Update and No come between its start and the check. The menu is opened on cell 16, another cell of the selected range, and not on the cell 17 the shift-click has just hit: on the mac gui a right-click there showed no menu (runs 42557075209 and 42629928385), while every right-click that did open one went to a cell other than the one last clicked. Starts from the processed sequence the cli made once.
 
   Scenario: Update then No over a live run restarts it and the render question comes at the end of the restart
     Given a processed copy of the sequence {sequence}
@@ -29,7 +29,7 @@ Feature: Changing a setting during a run and choosing Process Now restarts it, a
       And I click "mode.grid"
       And I click "grid.cell.0"
       And I shift-click "grid.cell.17"
-      And I right-click "grid.cell.17"
+      And I right-click "grid.cell.16"
       And I click the label "ui.re_process_everything"
     Then  "processing.modal" is shown
     When  I press "return"
