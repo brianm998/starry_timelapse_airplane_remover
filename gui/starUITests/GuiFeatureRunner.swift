@@ -465,8 +465,10 @@ final class GuiFeatureRunner {
         // a grid cell may have to be scrolled to a row at a time, each step taking the app seconds to settle
         let timeout: TimeInterval = isCell ? 120 : 60
         try waitFor("\(identifier) to be clickable", timeout: timeout, detail: { self.whyNotClickable(e, identifier) }) {
-            if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller) }
-            else if !e.exists && isCell { self.scrollGridToBuild(towards: identifier) }
+            // a cell scrolled into being or into reach is at the grid's edge (uiReprocessNonContiguous: cell 1 hittable 11 pt below the top of the
+            // grid, "centred false after 0 steps", and the click on it did not move the frame): look again, so the centring below gets its turn
+            if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller); if isCell { return false } }
+            else if !e.exists && isCell { self.scrollGridToBuild(towards: identifier); return false }
             else if e.exists && isCell && centreSteps < 6 && !self.isCentredInGrid(e) {
                 // best effort: a cell at either end of the grid cannot be brought to the middle
                 centreSteps += 1
