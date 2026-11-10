@@ -58,6 +58,19 @@ final class FrameSourceTests: XCTestCase {
         XCTAssertEqual(source.filenames, ["b_0001.jpg", "b_0002.tiff", "b_0003.png", "b_0004.jpeg", "b_0010.tif"].map { "\(scratch.path)/\($0)" })
     }
 
+    func testUnpaddedNumbersSortNumerically() throws {
+        touch(["frame_10.tif", "frame_2.tif", "frame_11.tif", "frame_1.tif"])
+        let source = try DirectoryFrameSource(dirname: scratch.path, supportedImageFileTypes: listedTypes)
+        XCTAssertEqual(source.filenames, ["frame_1.tif", "frame_2.tif", "frame_10.tif", "frame_11.tif"].map { "\(scratch.path)/\($0)" })
+    }
+
+    func testPaddedNamesKeepTheirOrder() throws {
+        let names = (80...98).map { "LRT_\(String(format: "%05d", $0)).tif" }
+        touch(names.reversed())
+        let source = try DirectoryFrameSource(dirname: scratch.path, supportedImageFileTypes: listedTypes)
+        XCTAssertEqual(source.filenames, names.map { "\(scratch.path)/\($0)" })
+    }
+
     func testADirectorySourceWaitReturnsAtOnceAndAnOutOfRangeFrameFails() async throws {
         FileManager.default.createFile(atPath: scratch.appendingPathComponent("image_0001.tiff").path, contents: Data([0]))
         let source = try DirectoryFrameSource(dirname: scratch.path, supportedImageFileTypes: [".tiff"])

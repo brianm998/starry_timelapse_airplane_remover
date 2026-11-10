@@ -486,7 +486,18 @@ public final class DirectoryFrameSource: FrameSource, @unchecked Sendable {
                 imageFiles.append("\(dirname)/\(file)")
             }
         }
-        imageFiles.sort { removePathAndSuffix(fromString: $0) < removePathAndSuffix(fromString: $1) }
+        // Runs of digits compare as numbers (`frame_2` before `frame_10`).  `.numeric` without a locale is not locale dependent
+        // (unlike `localizedStandardCompare`), so the order is the same everywhere.  Names equal numerically (`a_01`, `a_1`)
+        // fall back to the plain comparison so the order stays total and stable.
+        imageFiles.sort { a, b in
+            let nameA = removePathAndSuffix(fromString: a)
+            let nameB = removePathAndSuffix(fromString: b)
+            switch nameA.compare(nameB, options: [.numeric]) {
+            case .orderedAscending: return true
+            case .orderedDescending: return false
+            case .orderedSame: return nameA < nameB
+            }
+        }
         self.filenames = imageFiles
     }
 
