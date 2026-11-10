@@ -21,8 +21,8 @@ final class ReleaseManagerTests: XCTestCase {
     }
 
     func testDraftIsIgnored() throws {
-        let draft = try release("v0.12.0", id: 1, draft: true)
-        let published = try release("v0.11.5", id: 2)
+        let draft = try release("release/0.12.0", id: 1, draft: true)
+        let published = try release("release/0.11.5", id: 2)
         XCTAssertEqual(newerRelease(than: "0.11.4", in: [draft, published])?.id, 2)
         XCTAssertNil(newerRelease(than: "0.11.4", in: [draft]))
     }
