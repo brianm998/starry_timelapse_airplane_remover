@@ -656,18 +656,27 @@ final class GuiFeatureRunner {
     /// The element's text is exactly [text] (English: the runs of a @ui feature are in English).
     /// Clicks the field (which opens a tap-to-edit one), replaces what it holds with [text] and leaves it focused, as a user does before pressing Return.
     private func typeInto(_ text: String, into identifier: String) throws {
-        try clickId(identifier)
+        // A click can be lost or undone at once (the field stays a StaticText), and the typed keys would then go to the app.
+        // Click again, up to 3 times, until the field has the keyboard; never throw here, the step's own expectation reports a failure.
+        for _ in 1...3 {
+            try clickId(identifier)
+            let deadline = Date().addingTimeInterval(3)
+            while Date() < deadline && !hasKeyboardFocus(element(identifier)) { Thread.sleep(forTimeInterval: 0.1) }
+            if hasKeyboardFocus(element(identifier)) { break }
+        }
         app.typeKey("a", modifierFlags: .command)
         app.typeText(text)
     }
+
+    /// `hasKeyboardFocus` is the attribute the accessibility API reports for it; XCUIElement has no public property on macOS.
+    private func hasKeyboardFocus(_ e: XCUIElement) -> Bool { e.exists && ((e.value(forKey: "hasKeyboardFocus") as? Bool) ?? false) }
 
     /// The control has the keyboard (a text field being typed into), or not.
     private func expectFocus(_ identifier: String, focused: Bool) throws {
         try expectShown(identifier, shown: true)
         let e = element(identifier)
-        // `hasKeyboardFocus` is the attribute the accessibility API reports for it; XCUIElement has no public property on macOS.
-        func hasKeyboard() -> Bool { (e.value(forKey: "hasKeyboardFocus") as? Bool) ?? false }
-        try waitFor("\(identifier) \(focused ? "to have" : "not to have") the keyboard", timeout: 20, detail: { "(hasKeyboardFocus: \(hasKeyboard()))" }) { hasKeyboard() == focused }
+        // elementType says whether a field never opened (StaticText) or opened but is unfocused (TextField).
+        try waitFor("\(identifier) \(focused ? "to have" : "not to have") the keyboard", timeout: 20, detail: { "(hasKeyboardFocus: \(hasKeyboardFocus(e)), elementType: \(e.exists ? String(e.elementType.rawValue) : "absent"))" }) { hasKeyboardFocus(e) == focused }
     }
 
     /// The control takes clicks (a button that is not greyed out), or does not.
