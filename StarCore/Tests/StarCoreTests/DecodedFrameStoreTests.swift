@@ -72,6 +72,35 @@ final class DecodedFrameStoreTests: XCTestCase {
     }
 }
 
+final class DecodedFrameStoreSourceTests: XCTestCase {
+    private func source(in folder: String) -> VideoFrameSource {
+        VideoFrameSource(videoPath: "\(folder)/nothing.mov", outputFolder: folder, format: .tiff16, frameCount: 10,
+                         countIsExact: true, accessKind: .longGOP, times: nil, settings: .sweepOnly, digits: 4,
+                         existingFrames: IndexSet(), createdOutputFolder: false)
+    }
+
+    func testStoppedSourceIsForgotten() async {
+        let folder = "/tmp/DecodedFrameStoreTests-stopped-\(UUID().uuidString)"
+        let source = source(in: folder)
+        DecodedFrameStore.shared.register(source: source, folder: folder)
+        XCTAssertTrue(DecodedFrameStore.shared.hasSource(forFolder: folder))
+        await source.stopAndWaitForTheWriters()
+        XCTAssertFalse(DecodedFrameStore.shared.hasSource(forFolder: folder))
+    }
+
+    func testNewerSourceForTheSameFolderIsKept() {
+        let store = DecodedFrameStore()
+        let folder = "/tmp/DecodedFrameStoreTests-newer"
+        let older = source(in: folder), newer = source(in: folder)
+        store.register(source: older, folder: folder)
+        store.register(source: newer, folder: folder)
+        store.unregister(source: older, folder: folder)
+        XCTAssertTrue(store.hasSource(forFolder: folder), "the newer source is still registered")
+        store.unregister(source: newer, folder: folder)
+        XCTAssertFalse(store.hasSource(forFolder: folder))
+    }
+}
+
 final class DecodedFrameStoreStatsTests: XCTestCase {
     func testCountersSeparateDecodesFromPinnedHits() {
         let store = DecodedFrameStore()

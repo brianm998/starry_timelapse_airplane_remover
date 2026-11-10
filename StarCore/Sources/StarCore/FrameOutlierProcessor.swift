@@ -410,7 +410,7 @@ final public actor FrameOutlierProcessor {
         {
             switch image.imageData {
             case .thirtyTwoBit(_):
-                fatalError("frame \(frameIndex) cannot load 32 bit validation image")
+                throw "frame \(frameIndex) cannot load 32 bit validation image"
                 
             case .eightBit(let validationArr):
                 await classifyOutliers(with: validationArr)
