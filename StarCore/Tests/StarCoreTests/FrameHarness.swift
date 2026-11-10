@@ -77,6 +77,9 @@ final class FrameHarness {
     /// - Parameter shiftPerFrame: how many rows the horizon moves between consecutive frames.  Zero
     ///   is a tripod sequence, non-zero stands in for a moving-camera one, which is the case the
     ///   homography paths care about.
+    /// - Parameter staticStars: a tripod sky: many bright 3x3 stars at the same place in every
+    ///   frame, enough for star alignment to find keypoints and a homography.  The default single
+    ///   pixel stars drift per frame and do not align, which the per-frame tests do not need.
     /// - Parameter frameSizes: per-frame width/height overrides, for a sequence with a stray
     ///   frame of another size.  The sequence format is still read from frame 0, as in a real run.
     static func make(frameCount: Int = 3,
@@ -86,6 +89,7 @@ final class FrameHarness {
                      shiftPerFrame: Int = 0,
                      writePreviews: Bool = false,
                      frameSizes: [Int: (width: Int, height: Int)] = [:],
+                     staticStars: Bool = false,
                      named name: String = "harness",
                      file: StaticString = #filePath,
                      line: UInt = #line) async throws -> FrameHarness {
@@ -103,7 +107,8 @@ final class FrameHarness {
             let image = syntheticFrame(width: size.width,
                                        height: size.height,
                                        horizonRow: truthRow * size.height / height + index * shiftPerFrame,
-                                       seed: index)
+                                       seed: index,
+                                       staticStars: staticStars)
             // zero padded so the glob's lexicographic sort matches frame order
             let path = sequenceDir.appendingPathComponent(String(format: "frame_%03d.tiff", index)).path
             image.mat.write(to: path)
@@ -260,7 +265,8 @@ final class FrameHarness {
     static func syntheticFrame(width: Int,
                                height: Int,
                                horizonRow: Int,
-                               seed: Int = 0) -> PixelatedImage {
+                               seed: Int = 0,
+                               staticStars: Bool = false) -> PixelatedImage {
         let components = 3
         let count = width * height * components
         let data = UnsafeMutablePointer<UInt16>.allocate(capacity: count)
@@ -291,6 +297,22 @@ final class FrameHarness {
                 for c in 0..<components {
                     data[(y * width + x) * components + c] = value
                 }
+            }
+        }
+
+        if staticStars, clampedHorizon > 8 {
+            // a fixed pattern, scaled to the frame, so a half size frame is the same sky
+            var star = UInt64(12345)
+            for _ in 0..<max(80, width * height / 1500) {
+                star = star &* 6364136223846793005 &+ 1442695040888963407
+                let sx = 2 + Int((star >> 33) % UInt64(max(1, width - 4)))
+                star = star &* 6364136223846793005 &+ 1442695040888963407
+                let sy = 2 + Int((star >> 33) % UInt64(max(1, clampedHorizon - 4)))
+                for dy in -1...1 { for dx in -1...1 {
+                    for c in 0..<components {
+                        data[((sy + dy) * width + sx + dx) * components + c] = 62000
+                    }
+                } }
             }
         }
 

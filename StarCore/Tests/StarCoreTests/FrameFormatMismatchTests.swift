@@ -16,8 +16,9 @@ final class FrameFormatMismatchTests: FrameHarnessTestCase {
     /// Runs the real frame graph over a 3 frame sequence whose middle frame is half size and
     /// returns the error list `Processor.process` would return.
     private func run(cleanMethod: CleanMethod, name: String) async throws -> (FrameHarness, [String]) {
-        let h = try await FrameHarness.make(frameCount: 3,
-                                            frameSizes: [1: (width: 64, height: 48)],
+        let h = try await FrameHarness.make(frameCount: 3, width: 640, height: 480,
+                                            frameSizes: [1: (width: 320, height: 240)],
+                                            staticStars: true,
                                             named: name)
         harness = h
         // CLAUDE.md: the GPU median merge crashes this machine
@@ -41,9 +42,9 @@ final class FrameFormatMismatchTests: FrameHarnessTestCase {
     func testAHalfSizeMiddleFrameIsAFrameErrorAndTheOtherTwoAreWritten() async throws {
         let (h, errors) = try await run(cleanMethod: .automatic(false), name: "formatdefault")
 
-        XCTAssertTrue(errors.contains { $0.contains("frame 1") },
+        XCTAssertTrue(errors.contains { $0.hasPrefix("frame 1") },
                       "the half size frame must be a frame error, got \(errors)")
-        XCTAssertFalse(errors.contains { $0.contains("frame 0") || $0.contains("frame 2") },
+        XCTAssertFalse(errors.contains { $0.hasPrefix("frame 0") || $0.hasPrefix("frame 2") },
                        "the uniform frames must not be errors, got \(errors)")
         XCTAssertTrue(h.imageAccessor.imageExists(frameIndex: 0, ofType: .final, atSize: .original))
         XCTAssertTrue(h.imageAccessor.imageExists(frameIndex: 2, ofType: .final, atSize: .original))
@@ -54,7 +55,7 @@ final class FrameFormatMismatchTests: FrameHarnessTestCase {
     func testASelectiveRunWithAHalfSizeMiddleFrameDoesNotTerminateTheProcess() async throws {
         let (_, errors) = try await run(cleanMethod: .selective, name: "formatselective")
 
-        XCTAssertTrue(errors.contains { $0.contains("frame 1") },
+        XCTAssertTrue(errors.contains { $0.hasPrefix("frame 1") },
                       "the half size frame must be a frame error, got \(errors)")
     }
 }
