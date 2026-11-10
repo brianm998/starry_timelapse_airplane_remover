@@ -1267,5 +1267,6 @@
   "ui.frame_mode_desc_dirty_earth": "Behält nur, was sich am Boden dieses Bildes bewegt hat (das Original minus der ausgerichteten Referenz); der Himmel ist schwarz. Bei diesem Bild gibt es nichts zu prüfen.",
   "ui.this_frame_uses_dirty_sky": "Dieses Bild verwendet den Modus „Ungereinigter Himmel“",
   "ui.this_frame_uses_dirty_earth": "Dieses Bild verwendet den Modus „Ungereinigter Boden“",
-  "ui.change": "Ändern"
+  "ui.change": "Ändern",
+  "ui.unsupported_bit_depth": "Diese Bildsequenz hat {0} Bit pro Komponente, was star nicht unterstützt. star unterstützt 8-Bit- und 16-Bit-Bilder."
 }

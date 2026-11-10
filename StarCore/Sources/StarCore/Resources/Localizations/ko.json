@@ -1267,5 +1267,6 @@
   "ui.frame_mode_desc_dirty_earth": "이 프레임의 지상에서 움직인 것만 남깁니다 (원본에서 정렬된 기준을 뺀 값). 하늘은 검게 표시됩니다. 이 프레임에는 검토할 항목이 없습니다.",
   "ui.this_frame_uses_dirty_sky": "이 프레임은 정리하지 않은 하늘 모드를 사용합니다",
   "ui.this_frame_uses_dirty_earth": "이 프레임은 정리하지 않은 지상 모드를 사용합니다",
-  "ui.change": "변경"
+  "ui.change": "변경",
+  "ui.unsupported_bit_depth": "이 이미지 시퀀스는 구성 요소당 {0}비트이며 star에서 지원하지 않습니다. star는 8비트 및 16비트 이미지를 지원합니다."
 }

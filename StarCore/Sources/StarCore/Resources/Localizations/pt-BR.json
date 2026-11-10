@@ -1267,5 +1267,6 @@
   "ui.frame_mode_desc_dirty_earth": "Mantém só o que se moveu no solo deste quadro (o original menos a referência alinhada); o céu fica preto. Não há nada para revisar neste quadro.",
   "ui.this_frame_uses_dirty_sky": "Este quadro usa o modo céu sem limpeza",
   "ui.this_frame_uses_dirty_earth": "Este quadro usa o modo solo sem limpeza",
-  "ui.change": "Alterar"
+  "ui.change": "Alterar",
+  "ui.unsupported_bit_depth": "Esta sequência de imagens tem {0} bits por componente, o que o star não suporta. O star suporta imagens de 8 e 16 bits."
 }

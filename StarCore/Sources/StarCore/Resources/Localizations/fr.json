@@ -1267,5 +1267,6 @@
   "ui.frame_mode_desc_dirty_earth": "Ne garde que ce qui a bougé au sol dans cette image (l'original moins la référence alignée) ; le ciel est noir. Il n'y a rien à examiner sur cette image.",
   "ui.this_frame_uses_dirty_sky": "Cette image utilise le mode ciel non nettoyé",
   "ui.this_frame_uses_dirty_earth": "Cette image utilise le mode sol non nettoyé",
-  "ui.change": "Changer"
+  "ui.change": "Changer",
+  "ui.unsupported_bit_depth": "Cette séquence d'images a {0} bits par composante, ce que star ne prend pas en charge. star prend en charge les images 8 bits et 16 bits."
 }

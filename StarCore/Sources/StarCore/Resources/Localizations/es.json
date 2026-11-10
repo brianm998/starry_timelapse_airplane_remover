@@ -1267,5 +1267,6 @@
   "ui.frame_mode_desc_dirty_earth": "Conserva solo lo que se movió en la tierra de este fotograma (el original menos la referencia alineada); el cielo queda en negro. No hay nada que revisar en este fotograma.",
   "ui.this_frame_uses_dirty_sky": "Este fotograma usa el modo cielo sin limpiar",
   "ui.this_frame_uses_dirty_earth": "Este fotograma usa el modo tierra sin limpiar",
-  "ui.change": "Cambiar"
+  "ui.change": "Cambiar",
+  "ui.unsupported_bit_depth": "Esta secuencia de imágenes tiene {0} bits por componente, algo que star no admite. star admite imágenes de 8 y 16 bits."
 }
