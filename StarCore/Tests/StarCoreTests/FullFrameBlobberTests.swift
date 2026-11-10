@@ -26,14 +26,14 @@ final class FullFrameBlobberTests: XCTestCase {
     private func blobber(width: Int, height: Int,
                          args: BlobFinder.Args? = nil,
                          neighborType: FullFrameBlobber.NeighborType = .eight,
-                         value: (Int, Int) -> UInt16) async -> FullFrameBlobber
+                         value: (Int, Int) -> UInt16) async throws -> FullFrameBlobber
     {
         var subtraction = [UInt16](repeating: 0, count: width * height)
         for y in 0..<height {
             for x in 0..<width { subtraction[y * width + x] = value(x, y) }
         }
 
-        return await FullFrameBlobber(config: Config(),
+        return try await FullFrameBlobber(config: Config(),
                                       args: args ?? strongArgs(),
                                       imageWidth: width,
                                       imageHeight: height,
@@ -48,35 +48,55 @@ final class FullFrameBlobberTests: XCTestCase {
         return blobber.blobs
     }
 
+    // MARK: - bad input
+
+    /// Subtraction data whose count is not width*height used to `fatalError`, taking the whole
+    /// process down for one bad frame.  It is now an error the caller can handle.
+    func testMismatchedSubtractionDataIsRejectedWithoutTerminating() async {
+        for count in [0, 32 * 32 - 1, 32 * 32 + 1] {
+            do {
+                _ = try await FullFrameBlobber(config: Config(), args: strongArgs(),
+                                               imageWidth: 32, imageHeight: 32,
+                                               subtractionPixelData: [UInt16](repeating: 0, count: count),
+                                               frameIndex: 0, neighborType: .eight)
+                XCTFail("data of count \(count) was accepted for a 32 x 32 image")
+            } catch let error as FullFrameBlobber.InitError {
+                XCTAssertEqual(error, .subtractionSizeMismatch(count: count, width: 32, height: 32))
+            } catch {
+                XCTFail("unexpected error \(error)")
+            }
+        }
+    }
+
     // MARK: - what gets picked up at all
 
     /// A subtraction image with nothing in it produces no blobs.  If this ever found something, the
     /// whole pipeline would be chasing noise on every frame.
-    func testAnEmptySubtractionImageFindsNothing() async {
-        let blobs = await run(await blobber(width: 32, height: 32) { _, _ in 0 })
+    func testAnEmptySubtractionImageFindsNothing() async throws {
+        let blobs = await run(try await blobber(width: 32, height: 32) { _, _ in 0 })
         XCTAssertTrue(blobs.isEmpty, "found \(blobs.count) blobs in a blank frame")
     }
 
     /// Pixels below `minPixelIntensity` cannot start a blob — that threshold is what keeps sensor
     /// noise out.
-    func testPixelsBelowTheIntensityThresholdAreIgnored() async {
+    func testPixelsBelowTheIntensityThresholdAreIgnored() async throws {
         // 5999 is just under the strong processor's 6000
-        let blobs = await run(await blobber(width: 32, height: 32) { x, y in
+        let blobs = await run(try await blobber(width: 32, height: 32) { x, y in
             (10...14).contains(x) && y == 10 ? 5999 : 0
         })
         XCTAssertTrue(blobs.isEmpty, "a streak below the threshold should not blob")
     }
 
-    func testPixelsAboveTheIntensityThresholdAreFound() async {
-        let blobs = await run(await blobber(width: 32, height: 32) { x, y in
+    func testPixelsAboveTheIntensityThresholdAreFound() async throws {
+        let blobs = await run(try await blobber(width: 32, height: 32) { x, y in
             (10...14).contains(x) && y == 10 ? 20000 : 0
         })
         XCTAssertFalse(blobs.isEmpty, "a bright streak should produce a blob")
     }
 
     /// The headline behaviour: one bright streak becomes one blob holding its pixels.
-    func testABrightStreakBecomesOneBlob() async {
-        let blobs = await run(await blobber(width: 40, height: 40) { x, y in
+    func testABrightStreakBecomesOneBlob() async throws {
+        let blobs = await run(try await blobber(width: 40, height: 40) { x, y in
             (10...19).contains(x) && y == 20 ? 30000 : 0
         })
 
@@ -90,16 +110,16 @@ final class FullFrameBlobberTests: XCTestCase {
     }
 
     /// Two streaks far apart stay separate — the blobber must not join unrelated signal.
-    func testTwoDistantStreaksBecomeTwoBlobs() async {
-        let blobs = await run(await blobber(width: 64, height: 64) { x, y in
+    func testTwoDistantStreaksBecomeTwoBlobs() async throws {
+        let blobs = await run(try await blobber(width: 64, height: 64) { x, y in
             ((5...9).contains(x) && y == 10) || ((50...54).contains(x) && y == 50) ? 30000 : 0
         })
         XCTAssertEqual(blobs.count, 2, "got \(blobs.count)")
     }
 
     /// Eight-way connectivity is what the production path uses, so a diagonal run is one blob.
-    func testADiagonalRunIsOneBlobUnderEightWayConnectivity() async {
-        let blobs = await run(await blobber(width: 40, height: 40, neighborType: .eight) { x, y in
+    func testADiagonalRunIsOneBlobUnderEightWayConnectivity() async throws {
+        let blobs = await run(try await blobber(width: 40, height: 40, neighborType: .eight) { x, y in
             (5...14).contains(x) && y == x ? 30000 : 0
         })
         XCTAssertEqual(blobs.count, 1, "a diagonal should hold together, got \(blobs.count)")
@@ -109,8 +129,8 @@ final class FullFrameBlobberTests: XCTestCase {
 
     /// Under four-way connectivity the same diagonal falls apart, which is the difference between
     /// the two modes.
-    func testADiagonalRunFragmentsUnderFourWayConnectivity() async {
-        let blobs = await run(await blobber(width: 40, height: 40,
+    func testADiagonalRunFragmentsUnderFourWayConnectivity() async throws {
+        let blobs = await run(try await blobber(width: 40, height: 40,
                                            neighborType: .fourCardinal) { x, y in
             (5...14).contains(x) && y == x ? 30000 : 0
         })
@@ -118,8 +138,8 @@ final class FullFrameBlobberTests: XCTestCase {
                              "four way connectivity should not bridge a diagonal")
     }
 
-    func testASolidBlockIsOneBlob() async {
-        let blobs = await run(await blobber(width: 40, height: 40) { x, y in
+    func testASolidBlockIsOneBlob() async throws {
+        let blobs = await run(try await blobber(width: 40, height: 40) { x, y in
             (10...19).contains(x) && (10...19).contains(y) ? 30000 : 0
         })
         XCTAssertEqual(blobs.count, 1)
@@ -131,8 +151,8 @@ final class FullFrameBlobberTests: XCTestCase {
 
     /// Blob ids have to be unique and non-zero: zero means "no blob" in the id image the connector
     /// reads, so a blob with id 0 would be invisible to it.
-    func testEveryBlobGetsAUniqueNonZeroId() async {
-        let blobs = await run(await blobber(width: 64, height: 64) { x, y in
+    func testEveryBlobGetsAUniqueNonZeroId() async throws {
+        let blobs = await run(try await blobber(width: 64, height: 64) { x, y in
             // four separated dots
             ((x == 5 && y == 5) || (x == 30 && y == 5) ||
              (x == 5 && y == 30) || (x == 30 && y == 30)) ? 30000 : 0
@@ -146,12 +166,12 @@ final class FullFrameBlobberTests: XCTestCase {
 
     /// The starting id is configurable so a second blobbing pass can continue where the first left
     /// off rather than reusing ids that are already spoken for.
-    func testTheStartingIdIsHonoured() async {
+    func testTheStartingIdIsHonoured() async throws {
         var subtraction = [UInt16](repeating: 0, count: 32 * 32)
         subtraction[10 * 32 + 10] = 30000
 
 
-        let blobber = await FullFrameBlobber(config: Config(), args: strongArgs(),
+        let blobber = try await FullFrameBlobber(config: Config(), args: strongArgs(),
                                             imageWidth: 32, imageHeight: 32,
                                             subtractionPixelData: subtraction,
                                                   frameIndex: 0, neighborType: .eight,
@@ -165,8 +185,8 @@ final class FullFrameBlobberTests: XCTestCase {
 
     /// `blobMap` is how every later stage looks a blob up by the id in the label image, so it has to
     /// agree with the blob list.
-    func testTheBlobMapIsKeyedByEachBlobsOwnId() async {
-        let blobber = await blobber(width: 64, height: 64) { x, y in
+    func testTheBlobMapIsKeyedByEachBlobsOwnId() async throws {
+        let blobber = try await blobber(width: 64, height: 64) { x, y in
             ((x == 5 && y == 5) || (x == 30 && y == 30) || (x == 50 && y == 10)) ? 30000 : 0
         }
         let blobs = await run(blobber)
@@ -183,8 +203,8 @@ final class FullFrameBlobberTests: XCTestCase {
 
     /// The blobber grows blobs outward from the brightest pixels, so the sort has to put them first.
     /// Getting it backwards would seed every blob from its dimmest edge.
-    func testPixelsAreSortedBrightestFirst() async {
-        let blobber = await blobber(width: 16, height: 16) { x, y in
+    func testPixelsAreSortedBrightestFirst() async throws {
+        let blobber = try await blobber(width: 16, height: 16) { x, y in
             y == 8 ? UInt16(7000 + x * 1000) : 0
         }
         blobber.sortPixels()
@@ -197,8 +217,8 @@ final class FullFrameBlobberTests: XCTestCase {
 
     /// Only pixels the blobber could actually use are kept — anything under the intensity threshold
     /// is not worth carrying through the sort.
-    func testTheSortOnlyKeepsPixelsWorthConsidering() async {
-        let blobber = await blobber(width: 16, height: 16) { x, y in
+    func testTheSortOnlyKeepsPixelsWorthConsidering() async throws {
+        let blobber = try await blobber(width: 16, height: 16) { x, y in
             y == 8 ? (x < 8 ? 100 : 30000) : 0
         }
         blobber.sortPixels()
@@ -213,14 +233,14 @@ final class FullFrameBlobberTests: XCTestCase {
 
     /// The blobber can be restricted to a region, which is how a reprocess only redoes part of a
     /// frame.  Signal outside the region must be left alone.
-    func testRestrictingToBoundsIgnoresSignalOutsideIt() async {
+    func testRestrictingToBoundsIgnoresSignalOutsideIt() async throws {
         var subtraction = [UInt16](repeating: 0, count: 64 * 64)
         // one dot inside the region, one well outside
         subtraction[10 * 64 + 10] = 30000
         subtraction[50 * 64 + 50] = 30000
 
 
-        let blobber = await FullFrameBlobber(
+        let blobber = try await FullFrameBlobber(
           config: Config(), args: strongArgs(),
           imageWidth: 64, imageHeight: 64,
           within: BoundingBox(min: Coord(x: 0, y: 0), max: Coord(x: 31, y: 31)),
@@ -244,7 +264,7 @@ final class FullFrameBlobberTests: XCTestCase {
     /// image — the ids the connector reads come from `OutlierGroups.outlierImageData` — and reading
     /// a blob id out of this would get a brightness instead.
     func testTheOutputImagePaintsBlobPixelsBrightAndLeavesTheRestBlack() async throws {
-        let blobber = await blobber(width: 32, height: 32) { x, y in
+        let blobber = try await blobber(width: 32, height: 32) { x, y in
             (10...14).contains(x) && y == 10 ? 30000 : 0
         }
         let blobs = await run(blobber)
@@ -268,7 +288,7 @@ final class FullFrameBlobberTests: XCTestCase {
 
     /// Consecutive blobs get distinguishable brightnesses, which is the whole point of the stepping.
     func testSeparateBlobsArePaintedDifferentBrightnesses() async throws {
-        let blobber = await blobber(width: 64, height: 64) { x, y in
+        let blobber = try await blobber(width: 64, height: 64) { x, y in
             ((x == 5 && y == 5) || (x == 30 && y == 30) || (x == 50 && y == 10)) ? 30000 : 0
         }
         let blobs = await run(blobber)
@@ -291,7 +311,7 @@ final class FullFrameBlobberTests: XCTestCase {
     /// value cannot be treated as an identity.
     func testTheOutputBrightnessesWrapOnAFrameWithManyBlobs() async throws {
         // sixteen well separated dots
-        let blobber = await blobber(width: 128, height: 128) { x, y in
+        let blobber = try await blobber(width: 128, height: 128) { x, y in
             (x % 16 == 4) && (y % 16 == 4) && x < 64 && y < 64 ? 30000 : 0
         }
         let blobs = await run(blobber)
@@ -314,9 +334,9 @@ final class FullFrameBlobberTests: XCTestCase {
 
     /// The blobber walks a sorted pixel list, so the same subtraction image has to give the same
     /// blobs every time — the outlier features derived from them feed the classifier.
-    func testTheSameImageBlobsTheSameWayTwice() async {
-        func fingerprint() async -> [String] {
-            let blobs = await run(await blobber(width: 48, height: 48) { x, y in
+    func testTheSameImageBlobsTheSameWayTwice() async throws {
+        func fingerprint() async throws -> [String] {
+            let blobs = await run(try await blobber(width: 48, height: 48) { x, y in
                 if (5...15).contains(x) && y == 10 { return 30000 }
                 if (20...25).contains(x) && y == x { return 25000 }
                 if x == 40 && y == 40 { return 40000 }
@@ -330,10 +350,10 @@ final class FullFrameBlobberTests: XCTestCase {
             return out.sorted()
         }
 
-        let first = await fingerprint()
+        let first = try await fingerprint()
         XCTAssertFalse(first.isEmpty)
         for run in 1...5 {
-            let again = await fingerprint()
+            let again = try await fingerprint()
             XCTAssertEqual(again, first, "run \(run) blobbed differently")
         }
     }

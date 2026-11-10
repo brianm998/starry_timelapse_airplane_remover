@@ -68,7 +68,7 @@ public class AbstractBlobProcessor {
                 
             case .findBlobs(let args):
                 Log.i("frame \(frame.frameIndex) finding blobs with startingBlobID \(startingBlobID)")
-                blobMap = await BlobFinder().process(
+                blobMap = try await BlobFinder().process(
                   args,
                   subtractionArray: subtractionArray,
                   frame: frame,
@@ -214,8 +214,16 @@ public class AbstractBlobProcessor {
     // use the subtraction image for this frame to find an initial set of blobs.
     // (the original used to be loaded here and handed to the blobber, which never read it)
 
+    // ensure16Bits would quietly rescale a 32 bit image (x256, saturating) into garbage, so
+    // refuse it here: the frame fails with an error that names it
+    private static func rejectThirtyTwoBit(_ image: PixelatedImage, frameIndex: Int) throws {
+        if case .thirtyTwoBit(_) = image.imageData {
+            throw "frame \(frameIndex) 32 bit subtraction image is not supported here"
+        }
+    }
+
     internal func setup() async throws -> [UInt16] {
-        guard let frame else { fatalError("need frame") } // XXX ???
+        guard let frame else { throw "blob setup needs a frame, but none was set" }
         let frameIndex = frame.frameIndex
         let imageAccessor = frame.imageAccessor
       
@@ -229,6 +237,7 @@ public class AbstractBlobProcessor {
                                                         atSize: .original)
             {
                 Log.d("frame \(frameIndex) loaded subtraction image")
+                try Self.rejectThirtyTwoBit(image, frameIndex: frameIndex)
                 image = image.ensure16Bits
                 subtractionImage = image
                 switch image.imageData {
@@ -236,9 +245,9 @@ public class AbstractBlobProcessor {
                     subtractionArray = Array(buffer)
 
                 case .eightBit(_):
-                    fatalError("not implemented")
+                    throw "frame \(frameIndex) 8 bit subtraction image is not supported here"
                 case .thirtyTwoBit(_):
-                    fatalError("frame \(frameIndex) 32 bit images not supported here yet")
+                    throw "frame \(frameIndex) 32 bit subtraction image is not supported here"
                 }
                 Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
 
@@ -257,6 +266,7 @@ public class AbstractBlobProcessor {
             Log.d("frame \(frameIndex) creating subtraction image") 
             var image = try await frame.loadOrCreateSubtractionImage()
             Log.d("frame \(frameIndex) created subtraction image") 
+            try Self.rejectThirtyTwoBit(image, frameIndex: frameIndex)
             image = image.ensure16Bits
             subtractionImage = image
             switch image.imageData {
@@ -264,9 +274,9 @@ public class AbstractBlobProcessor {
             case .sixteenBit(let buffer):
                 subtractionArray = Array(buffer)
             case .eightBit(_):
-                fatalError("not implemented")
+                throw "frame \(frameIndex) 8 bit subtraction image is not supported here"
             case .thirtyTwoBit(_):
-                fatalError("NOT SUPPORTED YET")
+                throw "frame \(frameIndex) 32 bit subtraction image is not supported here"
             }
             Log.d("frame \(frameIndex) loaded subtractionArray with \(subtractionArray.count) items")
         }

@@ -337,12 +337,23 @@ final class LineTests: XCTestCase {
         }
     }
 
+    // MARK: - degenerate
+
+    /// a == 0 && b == 0 is not a line, and NaN coefficients cross neither axis either.  Both used
+    /// to trap in `polarLine`; they now have no polar form.
+    func testADegenerateStandardLineHasNoPolarForm() {
+        XCTAssertNil(StandardLine(a: 0, b: 0, c: 5).polarLine, "a == b == 0")
+        XCTAssertNil(StandardLine(a: 0, b: 0, c: 0).polarLine, "a == b == c == 0")
+        XCTAssertNil(StandardLine(a: .nan, b: .nan, c: 1).polarLine, "NaN a and b")
+        XCTAssertNil(StandardLine(a: .nan, b: 1, c: .nan).polarLine, "NaN a and c")
+    }
+
     // MARK: - round trip
 
-    func testAPolarLineSurvivesATripThroughStandardForm() {
+    func testAPolarLineSurvivesATripThroughStandardForm() throws {
         for theta in stride(from: 10.0, to: 350.0, by: 20.0) {
             let original = Line(theta: theta, rho: 30)
-            let viaStandard = original.standardLine.polarLine
+            let viaStandard = try XCTUnwrap(original.standardLine.polarLine)
 
             XCTAssertEqual(viaStandard.rho, original.rho, accuracy: 1e-6,
                            "rho drifted at theta \(theta)")

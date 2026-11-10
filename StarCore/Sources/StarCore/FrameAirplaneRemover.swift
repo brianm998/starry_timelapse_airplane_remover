@@ -956,7 +956,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         switch format {
         case .thirtyTwoBit(_):
-            fatalError("frame \(self.frameIndex) cannot load 32 bit image here now")
+            throw "frame \(self.frameIndex) cannot load 32 bit image here now"
                 
         case .eightBit(_):
             Log.e("8 bit not supported here now")
@@ -1346,12 +1346,12 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         if alpha > 1 { alpha = 1 }
 
 
-                        self.updatePixel(
+                        try self.updatePixel(
                           x: x, y: y,
                           alpha: alpha,
                           toData: &data,
                           image: image,
-                          with: originalImage.readPixel(atX: x, andY: y)
+                          with: try originalImage.readPixel(atX: x, andY: y)
                         )
                     }
                 }
@@ -1439,7 +1439,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                     if alpha > 0 {
                         if alpha > 1 { alpha = 1 }
 
-                        updatePixel(
+                        try updatePixel(
                           x: x,
                           y: y,
                           alpha: alpha,
@@ -1605,40 +1605,40 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
       starAlignedImage: PixelatedImage,
       earthAlignedImage: PixelatedImage?,
       horizonMask: PixelatedImage?
-    ) {
+    ) throws {
 
         guard let horizonMask,
               let earthAlignedImage
         else {
             //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as star aligned")
             // use star aligned image because that's all we've been given
-            self.updatePixel(x: x, y: y,
+            try self.updatePixel(x: x, y: y,
                              alpha: alpha,
                              toData: &data,
                              image: image,
-                             with: starAlignedImage.readPixel(atX: x, andY: y))
+                             with: try starAlignedImage.readPixel(atX: x, andY: y))
             return
         }
         
         if horizonMask.isMax(atX: x, andY: y) {
             // we are in the sky
             //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as sky aligned")
-            self.updatePixel(
+            try self.updatePixel(
               x: x, y: y,
               alpha: alpha,
               toData: &data,
               image: image,
-              with: starAlignedImage.readPixel(atX: x, andY: y)
+              with: try starAlignedImage.readPixel(atX: x, andY: y)
             )
         } else {
             // we are in the ground
             //Log.d("frame \(frameIndex) updating pixel [\(x), \(y)] as earth aligned")
-            self.updatePixel(
+            try self.updatePixel(
               x: x, y: y,
               alpha: alpha,
               toData: &data,
               image: image,
-              with: earthAlignedImage.readPixel(atX: x, andY: y)
+              with: try earthAlignedImage.readPixel(atX: x, andY: y)
             )
         } 
     }
@@ -1648,10 +1648,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                               alpha: Double,
                               toData data: inout ImageBuffer<UInt16>,
                               image: PixelatedImage,
-                              with overwritingPixel: Pixel)
+                              with overwritingPixel: Pixel) throws
     {
         var overwritingPixel = overwritingPixel
-        let op = image.readPixel(atX: x, andY: y)
+        let op = try image.readPixel(atX: x, andY: y)
 
         //Log.d("frame \(frameIndex) updating pixel @ (\(x), \(y)) from \(op) to \(overwritingPixel) with alpha \(alpha)")
         
@@ -2121,7 +2121,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             switch format {
             case .thirtyTwoBit(_):
-                fatalError("frame \(self.frameIndex) cannot load 32 bit image here now")
+                throw "frame \(self.frameIndex) cannot load 32 bit image here now"
 
             case .eightBit(_):
                 Log.e("8 bit not supported here now")
