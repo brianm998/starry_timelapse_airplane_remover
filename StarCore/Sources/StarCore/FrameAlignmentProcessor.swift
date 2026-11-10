@@ -184,7 +184,9 @@ final public actor FrameAlignmentProcessor {
         }
         var ret: [Int:String] = [:]
         for alignmentFrame in alignmentFrames {
-            if alignmentFrame < imageSequence.filenames.count {
+            // a frame whose original is not the sequence's format cannot be aligned against
+            if alignmentFrame < imageSequence.filenames.count,
+               !imageAccessor.originalMismatchesSequence(frameIndex: alignmentFrame) {
                 ret[alignmentFrame] = imageSequence.filenames[alignmentFrame]
             }
         }

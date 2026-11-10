@@ -671,9 +671,19 @@ final public actor FrameHorizonProcessor {
             func addNext() {
                 guard let index = pending.popFirst() else { return }
                 group.addTask {
-                    guard let original = try await imageAccessor.load(
-                            frameIndex: index, type: .original, atSize: .original)
-                    else { return (index, nil, 0, 0) }
+                    // A sampled frame that does not match the sequence's format is skipped,
+                    // not an error of this frame: it is reported as the sampled frame's own.
+                    let loaded: PixelatedImage?
+                    do {
+                        loaded = try await imageAccessor.load(
+                          frameIndex: index, type: .original, atSize: .original)
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
+                        Log.w("static horizon: skipping frame \(index): \(error)")
+                        loaded = nil
+                    }
+                    guard let original = loaded else { return (index, nil, 0, 0) }
                     let small = await NativeWork.run {
                         TemporalHorizonDetector.workingImage(of: original)
                     }
