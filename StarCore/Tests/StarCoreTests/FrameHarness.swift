@@ -80,6 +80,9 @@ final class FrameHarness {
     /// - Parameter staticStars: a tripod sky: many bright 3x3 stars at the same place in every
     ///   frame, enough for star alignment to find keypoints and a homography.  The default single
     ///   pixel stars drift per frame and do not align, which the per-frame tests do not need.
+    /// - Parameter frameWriter: replaces the synthetic sky with the image to write for each frame
+    ///   index, for a test that needs another depth or flat content.  The sequence format is read
+    ///   from what is written, as a real run reads it, so an 8-bit writer is an 8-bit sequence.
     /// - Parameter frameSizes: per-frame width/height overrides, for a sequence with a stray
     ///   frame of another size.  The sequence format is still read from frame 0, as in a real run.
     static func make(frameCount: Int = 3,
@@ -90,6 +93,7 @@ final class FrameHarness {
                      writePreviews: Bool = false,
                      frameSizes: [Int: (width: Int, height: Int)] = [:],
                      staticStars: Bool = false,
+                     frameWriter: ((Int) -> PixelatedImage)? = nil,
                      named name: String = "harness",
                      file: StaticString = #filePath,
                      line: UInt = #line) async throws -> FrameHarness {
@@ -104,7 +108,7 @@ final class FrameHarness {
 
         for index in 0..<frameCount {
             let size = frameSizes[index] ?? (width: width, height: height)
-            let image = syntheticFrame(width: size.width,
+            let image = frameWriter?(index) ?? syntheticFrame(width: size.width,
                                        height: size.height,
                                        horizonRow: truthRow * size.height / height + index * shiftPerFrame,
                                        seed: index,
