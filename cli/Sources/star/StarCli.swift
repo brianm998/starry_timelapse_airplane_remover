@@ -506,28 +506,25 @@ struct StarCli: AsyncParsableCommand {
                 // here we are reading a previously saved config
                 inputImageSequencePath = inputImageSequenceDirname
 
-                do {
-                    configManager =
-                      try await ConfigManager(configFilename: inputImageSequenceDirname)
-                    var config = await configManager.config()
-                    // the saved config supplies the defaults, the command line overrides
-                    // them — the same overrides the image sequence path below applies
-                    configOverrides.apply(to: &config)
-                    // update() saves, as it always has here, so an override is written
-                    // back into the config file and a later resume without the flag
-                    // keeps it
-                    await configManager.update(config)
-                    // update()'s write is async and coalesced, and the cli can
-                    // reach its exit before one lands, so make this one wait.
-                    await configManager.flush()
-                    // overwrite global constants constant
-                    // not really thread safe,
-                    // but we only do it here before starting any other threads.
-                    await constants.set(detectionType: config.detectionType)
-
-                } catch {
-                    print("\(error)")
-                }
+                // A config that cannot be loaded ends the run here, with the file and the
+                // reason: carrying on with the empty ConfigManager made at the top of run()
+                // fails later with a message about a folder the user never named.
+                configManager = try await loadSavedConfig(at: inputImageSequenceDirname)
+                var config = await configManager.config()
+                // the saved config supplies the defaults, the command line overrides
+                // them — the same overrides the image sequence path below applies
+                configOverrides.apply(to: &config)
+                // update() saves, as it always has here, so an override is written
+                // back into the config file and a later resume without the flag
+                // keeps it
+                await configManager.update(config)
+                // update()'s write is async and coalesced, and the cli can
+                // reach its exit before one lands, so make this one wait.
+                await configManager.flush()
+                // overwrite global constants constant
+                // not really thread safe,
+                // but we only do it here before starting any other threads.
+                await constants.set(detectionType: config.detectionType)
 
             } else {
                 // here we are processing a new image sequence 
@@ -912,6 +909,23 @@ func frameErrorSummary(_ errors: [String], resumePath: String) -> String {
     message += localized("cli.errors.resume_header") + "\n"
     message += "  star \(resumePath)\n"
     return message
+}
+
+/// Load the saved `config.json` that `star <dir>/config.json` resumes from.
+///
+/// Throws a `ValidationError` naming the file and the underlying read or decode failure, so
+/// `run()` ends there with that on stderr and a non-zero exit. A missing file is an error
+/// too: `ConfigManager(configFilename:)` quietly substitutes an empty `Config` for one,
+/// which is right for the gui creating a new session but here would mean resuming nothing.
+func loadSavedConfig(at path: String) async throws -> ConfigManager {
+    guard FileManager.default.fileExists(atPath: path) else {
+        throw ValidationError("\(path): no such file")
+    }
+    do {
+        return try await ConfigManager(configFilename: path)
+    } catch {
+        throw ValidationError("could not load \(path): \(error)")
+    }
 }
 
 /// Print the crash report for each run that ended without clearing its marker.
