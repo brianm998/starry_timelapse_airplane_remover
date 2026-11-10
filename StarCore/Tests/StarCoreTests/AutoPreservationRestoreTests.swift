@@ -106,9 +106,9 @@ final class AutoPreservationRestoreTests: FrameHarnessTestCase {
     }
 
     private func assertRestoredExactlyTheKeepGroups(_ output: PixelatedImage,
-                                                    original: UInt16, auto: UInt16) {
+                                                    original: UInt16, auto: UInt16) throws {
         for p in placements {
-            let value = output.readPixel(atX: p.x + 2, andY: p.y + 2).red
+            let value = try output.readPixel(atX: p.x + 2, andY: p.y + 2).red
             if p.restored {
                 XCTAssertEqual(value, original, "\(p.name) group was not restored from the original")
             } else {
@@ -116,14 +116,14 @@ final class AutoPreservationRestoreTests: FrameHarnessTestCase {
             }
         }
         // well clear of every group
-        XCTAssertEqual(output.readPixel(atX: 100, andY: 80).red, auto,
+        XCTAssertEqual(try output.readPixel(atX: 100, andY: 80).red, auto,
                        "a pixel far from every group changed")
     }
 
     func testRestoresTheGroupsDecidedKeepAndNotTheOnesDecidedRemove() async throws {
         let output = try await render(bits: 16, originalValue: 50000, autoValue: 1000, named: "autokeep16")
         XCTAssertEqual(output.bitsPerComponent, 16)
-        assertRestoredExactlyTheKeepGroups(output, original: 50000, auto: 1000)
+        try assertRestoredExactlyTheKeepGroups(output, original: 50000, auto: 1000)
     }
 
     /// An 8-bit sequence used to trap reading the original; it must also come back out at 8 bits.
@@ -131,6 +131,6 @@ final class AutoPreservationRestoreTests: FrameHarnessTestCase {
         let output8 = try await render(bits: 8, originalValue: 200, autoValue: 10, named: "autokeep8")
         XCTAssertEqual(output8.bitsPerComponent, 8, "an 8-bit sequence was written out at another depth")
         // readPixel reads 16-bit images; the 8 -> 16 conversion is exact (x256), so compare there
-        assertRestoredExactlyTheKeepGroups(output8.ensure16Bits, original: 200 * 256, auto: 10 * 256)
+        try assertRestoredExactlyTheKeepGroups(output8.ensure16Bits, original: 200 * 256, auto: 10 * 256)
     }
 }
