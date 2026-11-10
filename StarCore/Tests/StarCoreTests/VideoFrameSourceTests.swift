@@ -467,3 +467,39 @@ final class VideoFrameSourceTests: XCTestCase {
         XCTAssertTrue(finished, "extraction stuck at \(source.progress.extracted) of 600 (sweep head \(String(describing: source.sweepHead)), ffmpeg processes: \(processCount(containing: source.outputFolder)))")
     }
 }
+
+/// Which ffmpegs the start-up cleanup kills, over a sample `ps -axo pid=,ppid=,command=` listing.  Pure: needs no ffmpeg.
+final class OrphanedFFmpegDecisionTests: XCTestCase {
+
+    private let marker = "/frames/.extracting/"
+    private let me: Int32 = 500
+
+    private func ffmpeg(_ pid: Int, parent: Int, folder: String = "/frames") -> String {
+        "  \(pid)  \(parent) /opt/star/ffmpeg -i /v/a.mov \(folder)/.extracting/ab12cd34-0/image_%04d.tiff"
+    }
+
+    func testAnFFmpegWhoseParentIsAnotherLiveProcessIsNotAnOrphan() {
+        let listing = [
+            "    1     0 /sbin/launchd",
+            "  700     1 /Applications/star.app/Contents/MacOS/star",
+            ffmpeg(701, parent: 700),
+            "  500     1 /Applications/star.app/Contents/MacOS/star",
+        ].joined(separator: "\n")
+        XCTAssertEqual(VideoFrameSource.orphanedFFmpegPids(inListing: listing, stagingMarker: marker, ownPid: me), [])
+    }
+
+    func testAnFFmpegReparentedToInitOrWithADeadParentIsAnOrphan() {
+        let listing = [
+            "    1     0 /sbin/launchd",
+            "  700     1 /Applications/star.app/Contents/MacOS/star",
+            ffmpeg(701, parent: 700),     // another star's, alive: spared
+            ffmpeg(702, parent: 1),       // reparented to launchd: its star is gone
+            ffmpeg(703, parent: 999),     // 999 is not running
+            ffmpeg(704, parent: 500),     // an earlier source of this process
+            ffmpeg(500, parent: 700),     // our own pid is never a target
+            ffmpeg(705, parent: 1, folder: "/other"),   // another folder
+            "  706     1 /usr/bin/vi /frames/.extracting/notes",   // not an ffmpeg
+        ].joined(separator: "\n")
+        XCTAssertEqual(VideoFrameSource.orphanedFFmpegPids(inListing: listing, stagingMarker: marker, ownPid: me), [702, 703, 704])
+    }
+}
