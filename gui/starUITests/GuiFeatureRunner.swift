@@ -50,6 +50,7 @@ final class GuiFeatureRunner {
     private var rendersVideo = false
     private var finishedReview = false
     private var pendingRightClick: String?     // the cell the last step right-clicked, until another click step
+    private var lastCellClick = ""              // where the last click on a grid cell landed, for the detail of a failed `says` wait
     /// What the step being run was given for its inline arguments (`I click "<id>"`).
     private var args: [String] = []
     private var settledOnce = false
@@ -464,9 +465,11 @@ final class GuiFeatureRunner {
         // a grid cell may have to be scrolled to a row at a time, each step taking the app seconds to settle
         let timeout: TimeInterval = isCell ? 120 : 60
         try waitFor("\(identifier) to be clickable", timeout: timeout, detail: { self.whyNotClickable(e, identifier) }) {
-            if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller) }
-            else if !e.exists && isCell { self.scrollGridToBuild(towards: identifier) }
-            else if e.exists && isCell && how == .right && centreSteps < 6 && !self.isCentredInGrid(e) {
+            // a cell scrolled into being or into reach is at the grid's edge (uiReprocessNonContiguous: cell 1 hittable 11 pt below the top of the
+            // grid, "centred false after 0 steps", and the click on it did not move the frame): look again, so the centring below gets its turn
+            if e.exists && !e.isHittable { self.scroll(towards: e, identifier, &scroller); if isCell { return false } }
+            else if !e.exists && isCell { self.scrollGridToBuild(towards: identifier); return false }
+            else if e.exists && isCell && centreSteps < 6 && !self.isCentredInGrid(e) {
                 // best effort: a cell at either end of the grid cannot be brought to the middle
                 centreSteps += 1
                 self.scroll(towards: e, identifier, &scroller)
@@ -484,6 +487,7 @@ final class GuiFeatureRunner {
             frame = now
         }
         pendingRightClick = how == .right ? identifier : nil
+        if isCell { lastCellClick = describeCellClick(e, identifier, how: how, centreSteps: centreSteps) }
         switch how {
         case .plain: e.click()
         case .command: XCUIElement.perform(withKeyModifiers: .command) { e.click() }
@@ -493,6 +497,14 @@ final class GuiFeatureRunner {
         // a cell holds its single tap back for the double-click interval, and only a selected cell has a context menu to open: let the
         // selection land before the next step clicks again
         if isCell && how != .right { _ = XCTWaiter.wait(for: [XCTestExpectation(description: "tap settles")], timeout: 1) }
+    }
+
+    /// Where a click on a grid cell is about to land: the element's frame (a cell's identifier is on a small text at its top-left, not the whole
+    /// cell), the grid's scroll view and whether the cell had been brought to the middle, for a `says` wait that the click did not satisfy.
+    private func describeCellClick(_ e: XCUIElement, _ identifier: String, how: Click, centreSteps: Int) -> String {
+        let holder = app.scrollViews.containing(NSPredicate(format: "identifier BEGINSWITH %@", "grid.cell.")).firstMatch
+        let grid = holder.exists ? "\(holder.frame)" : "none"
+        return "\nlast cell click: \(how) on \(identifier), element frame \(e.exists ? "\(e.frame)" : "none"), grid scroll view \(grid), centred \(isCentredInGrid(e)) after \(centreSteps) steps"
     }
 
     /// Right-clicks the cell of the last right-click step again, scrolling to it if need be: for a menu that did not open, or was closed by a
@@ -768,7 +780,7 @@ final class GuiFeatureRunner {
         try expectShown(identifier, shown: true)
         let e = element(identifier)
         func texts() -> [String] { [e.label, e.title, (e.value as? String) ?? ""] }
-        try waitFor("\(identifier) to say \"\(expected)\"", timeout: 90, detail: { "(it says \(texts()))" }) { texts().contains(expected) }
+        try waitFor("\(identifier) to say \"\(expected)\"", timeout: 90, detail: { "(it says \(texts()))\(self.lastCellClick)" }) { texts().contains(expected) }
     }
 
     /// The element says [expected] now, with no waiting for it to: for a state that must have been there all along, which a check that waits
@@ -785,7 +797,7 @@ final class GuiFeatureRunner {
         try expectShown(identifier, shown: true)
         let e = element(identifier)
         func texts() -> [String] { [e.label, e.title, (e.value as? String) ?? ""] }
-        try waitFor("\(identifier) to stop saying \"\(unwanted)\"", timeout: 90, detail: { "(it says \(texts()))" }) { !texts().contains(unwanted) }
+        try waitFor("\(identifier) to stop saying \"\(unwanted)\"", timeout: 90, detail: { "(it says \(texts()))\(self.lastCellClick)" }) { !texts().contains(unwanted) }
     }
 
     /// The element says something with [part] in it before long: for a line whose rest the feature does not pin (the steps a run is working on).
