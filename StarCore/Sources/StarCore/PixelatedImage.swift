@@ -262,7 +262,18 @@ extension PixelatedImage {
         }
     }
     
-    public func readPixel(atX x: Int, andY y: Int) -> Pixel {
+    public enum ReadPixelError: Error, CustomStringConvertible {
+        case unsupportedBitDepth(Int)
+
+        public var description: String {
+            switch self {
+            case .unsupportedBitDepth(let bits):
+                return "reading a pixel from \(bits) bit image data is not supported, only 16 bit"
+            }
+        }
+    }
+
+    public func readPixel(atX x: Int, andY y: Int) throws -> Pixel {
         switch imageData {
         case .sixteenBit(let buffer):
             let offset = (y * width*self.componentsPerPixel) + (x * self.componentsPerPixel)
@@ -280,12 +291,10 @@ extension PixelatedImage {
             return pixel
             
         case .thirtyTwoBit(_):
-            fatalError("not supported yet")
-            break
+            throw ReadPixelError.unsupportedBitDepth(32)
 
         case .eightBit(_):
-            fatalError("not supported yet")
-            break
+            throw ReadPixelError.unsupportedBitDepth(8)
         }
     }
 

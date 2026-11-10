@@ -50,7 +50,7 @@ public struct StandardLine {
     }
     
     // gives a line with polar coordinates with origin at [0, 0]
-    public var polarLine: Line {
+    public var polarLine: Line? {
         let x_intercept = DoubleCoord(x: 0, y: self.y(forX: 0))
         let y_intercept = DoubleCoord(x: self.x(forY: 0), y: 0)
 
@@ -72,8 +72,9 @@ public struct StandardLine {
                 return Line(point1: DoubleCoord(x: self.x(forY: 10), y: 10),
                             point2: y_intercept)
             } else {
-                // this line doesn't intersect either access? WTF
-                fatalError("somehow this line a = \(a) b = \(b) c = \(c) does not cross either the y or x axes")
+                // a == 0 && b == 0, or NaN coefficients: not a line at all
+                Log.e("line a = \(a) b = \(b) c = \(c) does not cross either the y or x axes")
+                return nil
             }
         }
     }
