@@ -277,12 +277,16 @@ public final class ImageSequenceViewModel {
     }
     var renderingCurrentFrame = false
 
-    var isProcessingFrames = false
+    var isProcessingFrames = false {
+        didSet { sleepHold.set(.run, active: isProcessingFrames) }
+    }
     /// What "Processing N more frames" says: the frames that are not complete yet.  It counted from a number nothing ever
     /// set, so it said the whole sequence's length for the whole run.
     var framesLeftToProcess: Int { max(0, frames.count - count(for: .complete)) }
 
-    var isRenderingVideo = false
+    var isRenderingVideo = false {
+        didSet { sleepHold.set(.render, active: isRenderingVideo) }
+    }
 
     /// How far the video render has got, 0...1, for the menu-bar wand; the render sheet keeps
     /// its own copy for its bar.  Only meaningful while `isRenderingVideo`.
@@ -690,9 +694,18 @@ public final class ImageSequenceViewModel {
     /// The frames that are extracted.  Everything, for an image sequence.
     var extractedFrames = IndexSet()
     /// How far the extraction has got; nil for an image sequence.
-    var extractionProgress: FrameExtractionProgress?
+    var extractionProgress: FrameExtractionProgress? {
+        didSet { updateExtractionSleepHold() }
+    }
     /// Why the extraction failed, when it did.
-    var extractionError: String?
+    var extractionError: String? {
+        didSet { updateExtractionSleepHold() }
+    }
+    /// An extraction that is going holds off system sleep; one that is complete or has failed does not.
+    private func updateExtractionSleepHold() {
+        let running = extractionProgress.map { !$0.isComplete } ?? false
+        sleepHold.set(.extraction, active: running && extractionError == nil)
+    }
     @ObservationIgnored private var extractionWatch: Task<Void, Never>?
 
     /// Whether a video is still being extracted (the progress strip is up, and frames may be missing).
@@ -2076,7 +2089,7 @@ public final class ImageSequenceViewModel {
     }
 
     public func disable() {
-        self.appNapDisabler.end()
+        sleepHold.release()
         // What is extracted stays, and the folder says it is not complete, so reopening carries on.
         extractionWatch?.cancel()
         extractionWatch = nil
@@ -2089,7 +2102,10 @@ public final class ImageSequenceViewModel {
     
     private var matInstancesTask: Task<Void,Never>? = nil
 
-    private var appNapDisabler: AppNapDisabler
+    /// Holds off system sleep while a run, a video render or a frame extraction is going, and not merely because a
+    /// sequence is open.  Fed by the `didSet`s of `isProcessingFrames`, `isRenderingVideo`, `extractionProgress` and
+    /// `extractionError`; `disable()` lets go of it.
+    @ObservationIgnored private let sleepHold = WorkSleepHold(blocker: AppNapDisabler())
     
     init(
       viewModel: ViewModel,
@@ -2101,8 +2117,6 @@ public final class ImageSequenceViewModel {
         self.trashLevel = await constants.getTrashLevel()
         self.smallTrashMax = await constants.getSmallTrashMax()
 
-        self.appNapDisabler = AppNapDisabler()
-        
         var config = configManager.config()
 
         // turn on previews if they're off as the gui needs them
@@ -2238,7 +2252,9 @@ public final class ImageSequenceViewModel {
         
         Log.d("loaded imageInfo \(imageInfo)")
 
-        self.appNapDisabler.begin(light: config.resourceProfile == .light)
+        // The Light profile asks for the weaker, background activity; read each time work begins.
+        let configManager = self.config
+        sleepHold.light = { configManager.config().resourceProfile == .light }
         
         self.matInstancesTask = Task { [weak self] in 
             while(self != nil) { 
@@ -3983,13 +3999,58 @@ public final class ImageSequenceViewModel {
     }*/
 }
 
-final class AppNapDisabler {
+/// Something that holds off idle system sleep between `begin` and `end`.
+protocol SleepBlocking: AnyObject {
+    func begin(light: Bool)
+    func end()
+}
+
+/// Holds a `SleepBlocking` for as long as any kind of work is going, and not otherwise: it begins on the first kind to
+/// become active and ends when the last one stops, so a sequence that is merely open never holds it.  The Light profile's
+/// weaker activity is chosen by `light`, read when the hold begins.
+@MainActor
+final class WorkSleepHold {
+    enum Kind: Hashable { case run, render, extraction }
+
+    private let blocker: SleepBlocking
+    var light: () -> Bool
+    private var active = Set<Kind>()
+    private(set) var isHolding = false
+
+    init(blocker: SleepBlocking, light: @escaping () -> Bool = { false }) {
+        self.blocker = blocker
+        self.light = light
+    }
+
+    func set(_ kind: Kind, active isActive: Bool) {
+        if isActive { active.insert(kind) } else { active.remove(kind) }
+        if !active.isEmpty && !isHolding {
+            isHolding = true
+            blocker.begin(light: light())
+        } else if active.isEmpty && isHolding {
+            isHolding = false
+            blocker.end()
+        }
+    }
+
+    /// Lets go whatever is still going, for when the sequence is closed.
+    func release() {
+        active.removeAll()
+        if isHolding {
+            isHolding = false
+            blocker.end()
+        }
+    }
+}
+
+final class AppNapDisabler: SleepBlocking {
     private var activity: NSObjectProtocol?
 
     /// `.userInitiated` keeps the machine's full attention on a run in Full and Balanced.
     /// Under Light it drops to a background activity — still holding off idle system sleep,
     /// which a long run needs, but no longer asking the system to favour star over other apps.
     func begin(light: Bool = false) {
+        end()
         let options: ProcessInfo.ActivityOptions = light
             ? [.background, .idleSystemSleepDisabled, .suddenTerminationDisabled]
             : [.userInitiated, .idleSystemSleepDisabled, .suddenTerminationDisabled]

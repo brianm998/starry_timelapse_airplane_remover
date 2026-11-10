@@ -551,8 +551,8 @@ class AppViewModel(
     fun openAlignmentWindow() { _showAlignmentWindow.value = true }
     fun closeAlignmentWindow() { _showAlignmentWindow.value = false }
 
-    /** Keeps the machine from sleeping while a sequence is open; a replacement can be given for a test. */
-    internal var sleepInhibitor: com.star.desktop.util.SleepInhibitor = com.star.desktop.util.SleepInhibitor()
+    /** Keeps the machine from sleeping while work is running; a replacement can be given for a test. */
+    internal var sleepInhibitor: com.star.desktop.util.SleepBlocker = com.star.desktop.util.SleepInhibitor()
 
     private val _showBlobWindow = MutableStateFlow(false)
     val showBlobWindow: StateFlow<Boolean> = _showBlobWindow.asStateFlow()
@@ -1383,8 +1383,13 @@ class AppViewModel(
         svm.openOutlierWindow = { _showOutlierWindow.value = true }
         currentSequence = svm
         _screen.value = AppScreen.Sequence(svm)
-        // The machine is not to fall asleep under a long run for as long as a sequence is open (macOS does the same).
-        sleepInhibitor.acquire()
+        // The machine is not to fall asleep under a run, a render or a video extraction, but may when a sequence is merely open (macOS does the same).
+        val sleepGuard = com.star.desktop.util.WorkSleepGuard(sleepInhibitor)
+        sessionScope.launch {
+            kotlinx.coroutines.flow.combine(svm.isProcessing, renderState, svm.extraction, svm.extractedFrames) { processing, render, extraction, frames ->
+                Triple(processing, render.isRendering, extraction != null && !extraction.complete && extraction.error.isEmpty() && frames != null)
+            }.collect { (processing, rendering, extracting) -> sleepGuard.update(processing, rendering, extracting) }
+        }
         // Fresh source → walk the startup prompts (skipped for config resume + dev auto-open hooks).
         if (promptStartup && autoMode == null) {
             _startupStep.value = StartupStep.HORIZON

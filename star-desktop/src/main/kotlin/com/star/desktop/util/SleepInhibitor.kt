@@ -1,7 +1,45 @@
 package com.star.desktop.util
 
+/** Something that holds off idle system sleep between [acquire] and [release]; both are safe to repeat. */
+interface SleepBlocker {
+    /** Start holding. False if there is no way to on this system. */
+    fun acquire(): Boolean
+
+    /** Let the system sleep when it would. */
+    fun release()
+}
+
 /**
- * Holds off the system's idle sleep while a sequence is open, so that a long run is not cut off by the machine going to sleep (the macOS app does
+ * Starts and stops [blocker] by what is going: it is acquired when the first of a processing run, a video render or a frame extraction starts,
+ * and released when the last of them has ended, failed or been cancelled. A sequence that is merely open holds nothing, so an idle laptop can
+ * sleep (the macOS app does the same with `WorkSleepHold`).
+ */
+class WorkSleepGuard(private val blocker: SleepBlocker) {
+    private var holding = false
+
+    /** Say which kinds of work are going now. */
+    @Synchronized fun update(processing: Boolean, rendering: Boolean, extracting: Boolean) {
+        val working = processing || rendering || extracting
+        if (working && !holding) {
+            holding = true
+            blocker.acquire()
+        } else if (!working && holding) {
+            holding = false
+            blocker.release()
+        }
+    }
+
+    /** Let go whatever is going, for when the sequence is closed. */
+    @Synchronized fun release() {
+        if (holding) {
+            holding = false
+            blocker.release()
+        }
+    }
+}
+
+/**
+ * Holds off the system's idle sleep while work is running (see [WorkSleepGuard]), so that a long run is not cut off by the machine going to sleep (the macOS app does
  * the same with `ProcessInfo.beginActivity(.idleSystemSleepDisabled)`). Only idle sleep: the screen may still turn off, and the user can still
  * put the machine to sleep.
  *
@@ -13,14 +51,14 @@ class SleepInhibitor(
     private val osName: String = System.getProperty("os.name").orEmpty(),
     private val pid: Long = ProcessHandle.current().pid(),
     private val start: (List<String>) -> Process? = ::startProcess,
-) {
+) : SleepBlocker {
     private var holder: Process? = null
 
     /** Whether idle sleep is being held off now. */
     @get:Synchronized val isHolding: Boolean get() = holder?.isAlive == true
 
     /** Start holding. Does nothing if it already is; false if there is no way to on this system or it would not start. */
-    @Synchronized fun acquire(): Boolean {
+    @Synchronized override fun acquire(): Boolean {
         if (isHolding) return true
         val command = commandFor(osName, pid) ?: run {
             Log.d("Sleep") { "no way to hold off idle sleep on '$osName'" }
@@ -37,7 +75,7 @@ class SleepInhibitor(
     }
 
     /** Let the system sleep when it would. */
-    @Synchronized fun release() {
+    @Synchronized override fun release() {
         holder?.let {
             runCatching { it.destroy() }
             Log.d("Sleep") { "idle sleep is allowed again" }
