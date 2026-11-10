@@ -335,7 +335,7 @@ final class FullFrameBlobberTests: XCTestCase {
     /// The blobber walks a sorted pixel list, so the same subtraction image has to give the same
     /// blobs every time — the outlier features derived from them feed the classifier.
     func testTheSameImageBlobsTheSameWayTwice() async throws {
-        func fingerprint() async -> [String] {
+        func fingerprint() async throws -> [String] {
             let blobs = await run(try await blobber(width: 48, height: 48) { x, y in
                 if (5...15).contains(x) && y == 10 { return 30000 }
                 if (20...25).contains(x) && y == x { return 25000 }
@@ -350,10 +350,10 @@ final class FullFrameBlobberTests: XCTestCase {
             return out.sorted()
         }
 
-        let first = await fingerprint()
+        let first = try await fingerprint()
         XCTAssertFalse(first.isEmpty)
         for run in 1...5 {
-            let again = await fingerprint()
+            let again = try await fingerprint()
             XCTAssertEqual(again, first, "run \(run) blobbed differently")
         }
     }
