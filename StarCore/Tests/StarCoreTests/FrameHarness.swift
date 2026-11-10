@@ -77,12 +77,15 @@ final class FrameHarness {
     /// - Parameter shiftPerFrame: how many rows the horizon moves between consecutive frames.  Zero
     ///   is a tripod sequence, non-zero stands in for a moving-camera one, which is the case the
     ///   homography paths care about.
+    /// - Parameter frameSizes: per-frame width/height overrides, for a sequence with a stray
+    ///   frame of another size.  The sequence format is still read from frame 0, as in a real run.
     static func make(frameCount: Int = 3,
                      width: Int = 128,
                      height: Int = 96,
                      horizonRow: Int? = nil,
                      shiftPerFrame: Int = 0,
                      writePreviews: Bool = false,
+                     frameSizes: [Int: (width: Int, height: Int)] = [:],
                      named name: String = "harness",
                      file: StaticString = #filePath,
                      line: UInt = #line) async throws -> FrameHarness {
@@ -96,9 +99,10 @@ final class FrameHarness {
         let truthRow = horizonRow ?? height / 2
 
         for index in 0..<frameCount {
-            let image = syntheticFrame(width: width,
-                                       height: height,
-                                       horizonRow: truthRow + index * shiftPerFrame,
+            let size = frameSizes[index] ?? (width: width, height: height)
+            let image = syntheticFrame(width: size.width,
+                                       height: size.height,
+                                       horizonRow: truthRow * size.height / height + index * shiftPerFrame,
                                        seed: index)
             // zero padded so the glob's lexicographic sort matches frame order
             let path = sequenceDir.appendingPathComponent(String(format: "frame_%03d.tiff", index)).path
