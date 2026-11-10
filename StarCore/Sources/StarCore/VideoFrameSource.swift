@@ -410,6 +410,8 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
 
     private func unregister() {
         Self.running.withValue { _ = $0.removeValue(forKey: ObjectIdentifier(self)) }
+        // A stopped or finished source has nothing more to wait for: the loader must not keep it, or consult it.
+        DecodedFrameStore.shared.unregister(source: self, folder: outputFolder)
     }
 
     private func stop(_ worker: Worker) {
