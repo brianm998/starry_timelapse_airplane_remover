@@ -478,7 +478,11 @@ public final class DirectoryFrameSource: FrameSource, @unchecked Sendable {
         let contents = try FileManager.default.contentsOfDirectory(atPath: dirname)
         var imageFiles: [String] = []
         for file in contents {
-            for type in supportedImageFileTypes where file.hasSuffix(type) {
+            // hidden files, such as the `._name.tif` sidecars macOS writes on exFAT, SMB and NAS volumes, are never frames
+            if file.hasPrefix(".") { continue }
+            let lowered = file.lowercased()
+            // listed once even if two types match it
+            if supportedImageFileTypes.contains(where: { lowered.hasSuffix($0.lowercased()) }) {
                 imageFiles.append("\(dirname)/\(file)")
             }
         }
