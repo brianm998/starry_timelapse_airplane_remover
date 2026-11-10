@@ -68,7 +68,7 @@ public class AbstractBlobProcessor {
                 
             case .findBlobs(let args):
                 Log.i("frame \(frame.frameIndex) finding blobs with startingBlobID \(startingBlobID)")
-                blobMap = await BlobFinder().process(
+                blobMap = try await BlobFinder().process(
                   args,
                   subtractionArray: subtractionArray,
                   frame: frame,

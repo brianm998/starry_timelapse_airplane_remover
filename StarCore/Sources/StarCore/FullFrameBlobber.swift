@@ -77,6 +77,19 @@ public class FullFrameBlobber {
     private var blobPixelIndices: [[Int32]] = []
     private var blobIds: [Int32] = []
 
+    /// Why the initializer refused its input.
+    public enum InitError: Error, CustomStringConvertible, Equatable {
+        /// `subtractionPixelData.count` is not `width * height`.
+        case subtractionSizeMismatch(count: Int, width: Int, height: Int)
+
+        public var description: String {
+            switch self {
+            case .subtractionSizeMismatch(let count, let width, let height):
+                return "subtractionPixelData.count \(count) is not imageWidth*imageHeight \(width*height) (\(width) x \(height))"
+            }
+        }
+    }
+
     // neighbor search policies
     public enum NeighborType {
         case fourCardinal       // up and down, left and right, no corners
@@ -104,7 +117,7 @@ public class FullFrameBlobber {
                 subtractionPixelData: [UInt16],
                 frameIndex: Int,
                 neighborType: NeighborType,
-                startingBlobID: UInt16 = 1) async
+                startingBlobID: UInt16 = 1) async throws
     {
         // pixels that are local maximums, but have a value lower than this are ignored
         let minIntensity = args.minPixelIntensity
@@ -119,7 +132,9 @@ public class FullFrameBlobber {
         self.newBlobId = Int32(startingBlobID)
 
         guard subtractionPixelData.count == imageWidth*imageHeight else {
-            fatalError("subtractionPixelData.count \(subtractionPixelData.count) is not imageWidth*imageHeight \(imageWidth*imageHeight)")
+            throw InitError.subtractionSizeMismatch(count: subtractionPixelData.count,
+                                                    width: imageWidth,
+                                                    height: imageHeight)
         }
 
         Log.v("frame \(frameIndex) blobbing image of size (\(imageWidth), \(imageHeight))")

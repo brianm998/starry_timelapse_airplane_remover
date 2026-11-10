@@ -40,7 +40,7 @@ final class FullFrameBlobberIdentityTests: XCTestCase {
                          config: Config = Config(),
                          startingBlobID: UInt16 = 1,
                          _ what: String,
-                         file: StaticString = #filePath, line: UInt = #line) async -> Int
+                         file: StaticString = #filePath, line: UInt = #line) async throws -> Int
     {
         let legacy = await LegacyFullFrameBlobber(
           config: config, args: args, imageWidth: width, imageHeight: height, within: bounds,
@@ -49,7 +49,7 @@ final class FullFrameBlobberIdentityTests: XCTestCase {
         legacy.sortPixels()
         await legacy.process()
 
-        let rewritten = await FullFrameBlobber(
+        let rewritten = try await FullFrameBlobber(
           config: config, args: args, imageWidth: width, imageHeight: height, within: bounds,
           subtractionPixelData: subtraction, frameIndex: 0,
           neighborType: neighborType, startingBlobID: startingBlobID)
@@ -88,7 +88,7 @@ final class FullFrameBlobberIdentityTests: XCTestCase {
     // MARK: - synthetic
 
     /// Sparse bright peaks on a dim noisy floor with ties everywhere: the stable-sort question.
-    func testSparsePeaksWithManyEqualValues() async {
+    func testSparsePeaksWithManyEqualValues() async throws {
         let w = 120, h = 90
         var rng = Rng(state: 1)
         var data = [UInt16](repeating: 0, count: w * h)
@@ -105,52 +105,52 @@ final class FullFrameBlobberIdentityTests: XCTestCase {
             } }
         }
         for type in [FullFrameBlobber.NeighborType.eight, .fourCardinal, .fourCorner] {
-            let n = await compare(data, width: w, height: h, args: args(), neighborType: type, "sparse \(type)")
+            let n = try await compare(data, width: w, height: h, args: args(), neighborType: type, "sparse \(type)")
             XCTAssertGreaterThan(n, 5)
         }
     }
 
     /// A dense field of bright pixels: big blobs that grow past the contrast-size ramp, so the
     /// threshold changes while a blob is growing and queued pixels get refused and re-added.
-    func testDenseFieldWhereTheContrastThresholdMovesDuringGrowth() async {
+    func testDenseFieldWhereTheContrastThresholdMovesDuringGrowth() async throws {
         let w = 90, h = 70
         var rng = Rng(state: 9)
         var data = [UInt16](repeating: 0, count: w * h)
         for i in 0..<data.count { data[i] = UInt16(7000 + rng.next() % 40000) }
         for (start, end, hi, lo) in [(5, 60, 40.0, 3.0), (10, 100, 30.0, 5.0), (3, 20, 60.0, 20.0)] {
-            let n = await compare(data, width: w, height: h,
+            let n = try await compare(data, width: w, height: h,
                                   args: args(startSize: start, endSize: end, startContrast: hi, endContrast: lo),
                                   "dense \(start)-\(end)")
             XCTAssertGreaterThan(n, 0)
         }
     }
 
-    func testStreaksAndDimPixelsNearTheThreshold() async {
+    func testStreaksAndDimPixelsNearTheThreshold() async throws {
         let w = 100, h = 60
         var data = [UInt16](repeating: 0, count: w * h)
         for x in 10..<90 { data[(20 + x / 10) * w + x] = 30000 }                     // a diagonal streak
         for x in 10..<90 where x % 3 == 0 { data[(40) * w + x] = 5900 }              // just under the threshold
         for x in 10..<90 where x % 3 == 1 { data[(40) * w + x] = 6001 }              // just over
-        _ = await compare(data, width: w, height: h, args: args(), "streak")
+        _ = try await compare(data, width: w, height: h, args: args(), "streak")
     }
 
-    func testBoundsAndIgnoredLowerRows() async {
+    func testBoundsAndIgnoredLowerRows() async throws {
         let w = 80, h = 80
         var rng = Rng(state: 4)
         var data = [UInt16](repeating: 0, count: w * h)
         for i in 0..<data.count { data[i] = UInt16(rng.next() % 20) * 2500 }
         let bounds = BoundingBox(min: Coord(x: 10, y: 12), max: Coord(x: 60, y: 70))
-        _ = await compare(data, width: w, height: h, args: args(), within: bounds, "bounds")
+        _ = try await compare(data, width: w, height: h, args: args(), within: bounds, "bounds")
         var config = Config()
         config.ignoreLowerPixels = 25
-        _ = await compare(data, width: w, height: h, args: args(), config: config, "ignoreLowerPixels")
-        _ = await compare(data, width: w, height: h, args: args(), startingBlobID: 777, "starting id")
+        _ = try await compare(data, width: w, height: h, args: args(), config: config, "ignoreLowerPixels")
+        _ = try await compare(data, width: w, height: h, args: args(), startingBlobID: 777, "starting id")
     }
 
-    func testAnEmptyAndAnAllBrightImage() async {
+    func testAnEmptyAndAnAllBrightImage() async throws {
         let w = 20, h = 20
-        _ = await compare([UInt16](repeating: 0, count: w * h), width: w, height: h, args: args(), "empty")
-        _ = await compare([UInt16](repeating: 40000, count: w * h), width: w, height: h, args: args(), "flat bright")
+        _ = try await compare([UInt16](repeating: 0, count: w * h), width: w, height: h, args: args(), "empty")
+        _ = try await compare([UInt16](repeating: 40000, count: w * h), width: w, height: h, args: args(), "flat bright")
     }
 
     /// Ids starting at 0, which is what production uses: `FrameOutlierProcessor.findOutliers()`
@@ -158,13 +158,13 @@ final class FullFrameBlobberIdentityTests: XCTestCase {
     /// blobber's pixel state, blob 0 could never mark a pixel as its own, so its flood fill
     /// queued the same neighbours forever and its stack grew until the process ran out of
     /// memory (Gherkin run 39982100958, every desktop platform).
-    func testBlobIdsStartingAtZero() async {
+    func testBlobIdsStartingAtZero() async throws {
         // An isolated brightest pixel first. With that collision blob 0 comes out empty here
         // instead of looping, so this half fails fast; the fields below would never finish.
         let w = 5, h = 5
         var isolated = [UInt16](repeating: 0, count: w * h)
         isolated[2 * w + 2] = 30000
-        let blobber = await FullFrameBlobber(
+        let blobber = try await FullFrameBlobber(
           config: Config(), args: args(), imageWidth: w, imageHeight: h,
           subtractionPixelData: isolated, frameIndex: 0, neighborType: .eight, startingBlobID: 0)
         blobber.sortPixels()
@@ -178,8 +178,8 @@ final class FullFrameBlobberIdentityTests: XCTestCase {
         var rng = Rng(state: 9)
         var dense = [UInt16](repeating: 0, count: 90 * 70)
         for i in 0..<dense.count { dense[i] = UInt16(7000 + rng.next() % 40000) }
-        _ = await compare(dense, width: 90, height: 70, args: args(), startingBlobID: 0, "dense, id 0")
-        _ = await compare([UInt16](repeating: 40000, count: 20 * 20), width: 20, height: 20,
+        _ = try await compare(dense, width: 90, height: 70, args: args(), startingBlobID: 0, "dense, id 0")
+        _ = try await compare([UInt16](repeating: 40000, count: 20 * 20), width: 20, height: 20,
                           args: args(), startingBlobID: 0, "flat bright, id 0")
     }
 
@@ -215,7 +215,7 @@ final class FullFrameBlobberIdentityTests: XCTestCase {
                 sub[y * cropW + x] = UInt16(max(0, min(65535, d * 4)))
             } }
             for variant in [args(), args(minIntensity: 3000, startContrast: 50, endContrast: 10)] {
-                let n = await compare(sub, width: cropW, height: cropH, args: variant,
+                let n = try await compare(sub, width: cropW, height: cropH, args: variant,
                                       "real pair \(pair) minIntensity \(variant.minPixelIntensity)")
                 checked += n
             }

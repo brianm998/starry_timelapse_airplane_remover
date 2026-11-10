@@ -97,8 +97,9 @@ public struct SortablePixel: Hashable,
             return UInt16(eightBits)
         case .sixteenBit(let sixteenBits):
             return sixteenBits
-        case .thirtyTwoBit(_):
-            fatalError("cannot convert to 16 bits")
+        case .thirtyTwoBit(let thirtyTwoBits):
+            // saturate rather than trap: 32 bit data does not fit, and callers cannot fail here
+            return UInt16(clamping: thirtyTwoBits)
         }
     }
 
