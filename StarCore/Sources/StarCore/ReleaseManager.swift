@@ -57,17 +57,11 @@ public enum ReleaseType {
 }
 
 public func newRelease() async -> GitHubRelease? {
-    let runningVersion = Config.latestVersion
-
     do {
-        let currentRelease = try await currentRelease()
-        Log.i("currentRelease \(currentRelease)")
-
-        if let latestVersion = currentRelease.version,
-           let currentVersion = ReleaseVersion(runningVersion),
-           latestVersion > currentVersion
-        {
-            return currentRelease
+        let releases = try await fetchReleases()
+        if let release = newerRelease(than: Config.latestVersion, in: releases) {
+            Log.i("newer release \(release.tagName)")
+            return release
         }
     } catch {
         Log.w("unable to get releases: \(error)")
@@ -76,10 +70,17 @@ public func newRelease() async -> GitHubRelease? {
     return nil                  // no newer release was found
 }
 
-func currentRelease() async throws -> GitHubRelease {
-    // XXX this assumes that the releases are ordered with latest first,
-    // XXX which is currently the case, but may not always be
-    try await fetchReleases()[0] // XXX could be better :)
+/// The highest-versioned published release that is newer than `running`, whatever order `releases` is in.
+/// Drafts are not releases yet; tags that are not a version are skipped. Nil if there is none.
+func newerRelease(than running: String, in releases: [GitHubRelease]) -> GitHubRelease? {
+    guard let current = ReleaseVersion(running) else { return nil }
+    var best: (release: GitHubRelease, version: ReleaseVersion)?
+    for release in releases where !release.draft {
+        guard let version = release.version, version > current else { continue }
+        if let b = best, !(version > b.version) { continue }
+        best = (release, version)
+    }
+    return best?.release
 }
 
 func fetchReleases() async throws -> [GitHubRelease] {
