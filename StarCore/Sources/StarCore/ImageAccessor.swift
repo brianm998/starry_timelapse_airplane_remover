@@ -56,9 +56,26 @@ enum OriginalWaitWarnings {
     }
 }
 
+/// The frames whose original did not match the sequence's format.  A reference shared by every
+/// copy of the `ImageAccessor` (the frames hold copies), so a frame that finds out its own
+/// original is the wrong size tells the others, who then leave it out of their alignment
+/// neighbours instead of failing on it too.
+final class FormatMismatchLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var frames = Set<Int>()
+    func record(_ frameIndex: Int) { lock.lock(); frames.insert(frameIndex); lock.unlock() }
+    func contains(_ frameIndex: Int) -> Bool { lock.lock(); defer { lock.unlock() }; return frames.contains(frameIndex) }
+}
+
 // read and write access to different image types for a given frame
 public struct ImageAccessor: Sendable {
     let config: Config
+    let formatMismatches = FormatMismatchLog()
+
+    /// True once a read of this frame's original found it did not match the sequence's format.
+    func originalMismatchesSequence(frameIndex: Int) -> Bool {
+        formatMismatches.contains(frameIndex)
+    }
     let frameIndexToBaseNameMap: [Int: String]
     public let imageSequence: ImageSequence
     let imageSavedClosure: (
@@ -244,7 +261,9 @@ public struct ImageAccessor: Sendable {
       type imageType: FrameViewMode,
       atSize size: ImageDisplaySize
     ) async throws -> PixelatedImage? {
-        await self.loadInt(frameIndex: frameIndex, type: imageType, atSize: size)
+        let image = await self.loadInt(frameIndex: frameIndex, type: imageType, atSize: size)
+        try checkMatchesSequenceFormat(image, frameIndex: frameIndex, type: imageType, atSize: size)
+        return image
     }
 
     public func load(
@@ -252,7 +271,36 @@ public struct ImageAccessor: Sendable {
       type imageType: FrameViewMode,
       atSize size: ImageDisplaySize
     ) async throws -> PixelatedImage? {
-        await self.loadInt(frameIndex: frameIndex, type: imageType, atSize: size)
+        let image = await self.loadInt(frameIndex: frameIndex, type: imageType, atSize: size)
+        try checkMatchesSequenceFormat(image, frameIndex: frameIndex, type: imageType, atSize: size)
+        return image
+    }
+
+    /// The sequence's format is read from frame 0 only and every frame is built with it, so a
+    /// later original of another width, height, depth or channel count (a thumbnail, a frame
+    /// from another camera) would otherwise reach code that indexes it with frame 0's
+    /// dimensions. Throwing here makes it that frame's error and no later stage sees its pixels.
+    /// Only originals are checked: every derived image is made from one, and is skipped
+    /// where the config carries no format (`set(imageInfo:)` was not applied).
+    private func checkMatchesSequenceFormat(
+      _ image: PixelatedImage?,
+      frameIndex: Int,
+      type imageType: FrameViewMode,
+      atSize size: ImageDisplaySize
+    ) throws {
+        guard imageType == .original, size == .original,
+              let image, config.imageWidth > 0, config.imageHeight > 0
+        else { return }
+        if image.width != config.imageWidth || image.height != config.imageHeight ||
+           image.bitsPerComponent != config.imageBitsPerComponent ||
+           image.bytesPerPixel != config.imageBytesPerPixel
+        {
+            formatMismatches.record(frameIndex)
+            throw "frame \(frameIndex) is \(image.width)x\(image.height), " +
+                  "\(image.bitsPerComponent)-bit, \(image.bytesPerPixel) bytes per pixel, but the " +
+                  "sequence (frame 0) is \(config.imageWidth)x\(config.imageHeight), " +
+                  "\(config.imageBitsPerComponent)-bit, \(config.imageBytesPerPixel) bytes per pixel"
+        }
     }
 
     public func loadInt(
