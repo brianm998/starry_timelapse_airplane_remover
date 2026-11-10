@@ -7,17 +7,28 @@ import XCTest
 /// which installs the handler and dereferences an unmapped address.
 final class CrashHandlerBacktraceTests: XCTestCase {
 
-    /// The probe is built next to the test bundle: SwiftPM puts `StarCrashProbe` in the
-    /// products directory, which is the `.xctest` bundle's parent on macOS and the
-    /// `.xctest` executable's parent on Linux.
+    /// SwiftPM builds `StarCrashProbe` into the products directory, but where the test
+    /// bundle's URL sits relative to it differs: on macOS it is the `.xctest` bundle (the
+    /// products directory is its parent), on Linux it may be the executable's parent or the
+    /// products directory itself. So try every plausible directory and take the first hit.
     private func probeURL() throws -> URL {
         let bundleURL = Bundle(for: CrashHandlerBacktraceTests.self).bundleURL
-        let url = bundleURL.deletingLastPathComponent().appendingPathComponent("StarCrashProbe")
-        guard FileManager.default.isExecutableFile(atPath: url.path) else {
-            XCTFail("StarCrashProbe not found at \(url.path); it is built with the tests")
-            throw CancellationError()
+        let mainURL = Bundle.main.bundleURL
+        let directories = [
+            bundleURL.deletingLastPathComponent(),
+            bundleURL,
+            mainURL,
+            mainURL.deletingLastPathComponent(),
+        ]
+        let candidates = directories.map { $0.appendingPathComponent("StarCrashProbe") }
+        if let found = candidates.first(where: {
+            FileManager.default.isExecutableFile(atPath: $0.path)
+        }) {
+            return found
         }
-        return url
+        XCTFail("StarCrashProbe not found; it is built with the tests. Tried:\n"
+                + candidates.map(\.path).joined(separator: "\n"))
+        throw CancellationError()
     }
 
     func testASegfaultingChildWritesABacktraceToStderr() throws {
