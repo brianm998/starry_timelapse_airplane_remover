@@ -283,6 +283,88 @@ final class BunchCalculatorTests: XCTestCase {
         XCTAssertEqual(bunches(diagonal, maxPixelDistance: maxBunchDistance).count, 1)
     }
 
+    // MARK: - frontier order
+
+    /// The flood fill pops its frontier from the end; the partition must be exactly what a
+    /// first-in-first-out fill gives.  The reference below is a queue walked with a head index,
+    /// seeded in row major order, with the neighbourhood written out as "within
+    /// `maxPixelDistance + 1` in both axes".
+    func testPartitionMatchesQueueReference() {
+        struct SplitMix: RandomNumberGenerator {
+            var state: UInt64
+            mutating func next() -> UInt64 {
+                state &+= 0x9E3779B97F4A7C15
+                var z = state
+                z = (z ^ (z >> 30)) &* 0xBF58476D1CE4E5B9
+                z = (z ^ (z >> 27)) &* 0x94D049BB133111EB
+                return z ^ (z >> 31)
+            }
+        }
+
+        func reference(_ set: Set<SortablePixel>, distance: Int) -> [Set<SortablePixel>] {
+            let seeds = set.sorted { $0.y == $1.y ? $0.x < $1.x : $0.y < $1.y }
+            let reach = distance + 1
+            var handled: Set<SortablePixel> = []
+            var result: [Set<SortablePixel>] = []
+            for seed in seeds where !handled.contains(seed) {
+                handled.insert(seed)
+                var queue = [seed]
+                var head = 0
+                var bunch: Set<SortablePixel> = []
+                while head < queue.count {
+                    let current = queue[head]
+                    head += 1
+                    bunch.insert(current)
+                    for other in seeds where !handled.contains(other)
+                        && abs(other.x - current.x) <= reach
+                        && abs(other.y - current.y) <= reach
+                    {
+                        handled.insert(other)
+                        queue.append(other)
+                    }
+                }
+                result.append(bunch)
+            }
+            return result
+        }
+
+        var rng = SplitMix(state: 491)
+        for trial in 0..<200 {
+            let distance = trial % 4                       // 0...3
+            var coords = Set<Int>()                        // packed x * 1000 + y
+            var points: [(Int, Int)] = []
+            func add(_ x: Int, _ y: Int) {
+                if coords.insert(x * 1000 + y).inserted { points.append((x, y)) }
+            }
+
+            if trial % 2 == 0 {
+                // uniform scatter over a small grid, density varies per trial
+                let side = Int.random(in: 8...30, using: &rng)
+                let count = Int.random(in: 1...(side * side / 3 + 1), using: &rng)
+                for _ in 0..<count {
+                    add(Int.random(in: 0..<side, using: &rng),
+                        Int.random(in: 0..<side, using: &rng))
+                }
+            } else {
+                // short runs placed so neighbouring runs sit a gap of exactly
+                // `distance + 1` (merges) or `distance + 2` (separate) apart
+                var x = Int.random(in: 0...3, using: &rng)
+                for _ in 0..<Int.random(in: 2...8, using: &rng) {
+                    let y = Int.random(in: 0...6, using: &rng)
+                    for step in 0..<Int.random(in: 1...5, using: &rng) { add(x + step, y) }
+                    x += 5 + distance + Int.random(in: 1...2, using: &rng)
+                }
+            }
+
+            let set = pixels(points)
+            let actual = BunchCalculator(from: set, with: bounds(points),
+                                         maxPixelDistance: distance).calculateBunches()
+            let expected = reference(set, distance: distance)
+            XCTAssertEqual(actual, expected,
+                           "trial \(trial) (distance \(distance)) partitioned \(points.count) pixels differently")
+        }
+    }
+
     // MARK: - calculateBunchData
 
     /// The triple is (number of bunches, median bunch size, largest bunch size).
