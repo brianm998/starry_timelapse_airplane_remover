@@ -85,6 +85,18 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
     /// The ffmpeg's own pace, in frames per second, is measured; before there is a measurement the estimate is unknown.
     private let estimator = LockedBox(Estimate())
 
+    /// The ffmpeg processes this source has running, by worker id, and whether the process is quitting.  The one piece of scheduler
+    /// state that is not confined to `queue`: `terminateAllNow()` reads it from the quitting thread, which must neither wait for the
+    /// queue (it may be the one calling in, or busy) nor read the queue's own state.  Both change under one lock, so that a launch
+    /// that races the kill either gets its ffmpeg killed with the rest or does not start one.
+    private struct LiveRuns {
+        var killed = false
+        var runs: [Int: FFmpegRun] = [:]
+    }
+    private let live = LockedBox(LiveRuns())
+
+    private var isQuitting: Bool { live.get().killed }
+
     // MARK: scheduler state, confined to `queue`
 
     private let queue = DispatchQueue(label: "VideoFrameSource", qos: .utility)
@@ -372,18 +384,34 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
 
     /// An ffmpeg that an earlier run of star left behind (the app was killed or crashed, so nobody stopped it) is still decoding into this
     /// folder, writing frames nobody collects and competing with this run for the disk and the memory.  Found by the staging folder in
-    /// its command line, and killed.
+    /// its command line, and killed, unless another live star owns it (see `orphanedFFmpegPids`).
     private func killOrphanedWorkers() {
         #if !os(Windows)
-        guard let listing = try? shellOut(to: "/bin/ps", arguments: ["-axo", "pid=,command="]) else { return }
-        let marker = "\(stagingRoot)/"
-        for line in listing.split(separator: "\n") where line.contains("ffmpeg") && line.contains(marker) {
-            let fields = line.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
-            guard let first = fields.first, let pid = Int32(first), pid != getpid() else { continue }
+        guard let listing = try? shellOut(to: "/bin/ps", arguments: ["-axo", "pid=,ppid=,command="]) else { return }
+        for pid in Self.orphanedFFmpegPids(inListing: listing, stagingMarker: "\(stagingRoot)/", ownPid: getpid()) {
             Log.w("killing ffmpeg \(pid) left behind by an earlier run in \(outputFolder)")
             kill(pid, SIGKILL)
         }
         #endif
+    }
+
+    /// Which processes of a `ps -axo pid=,ppid=,command=` listing are ffmpegs left behind by a star that is gone: those with
+    /// `stagingMarker` in the command line whose parent is this process (an earlier source of ours, already stopped), init (their star was
+    /// killed and they were reparented) or not in the listing at all.  An ffmpeg whose parent is another live process belongs to
+    /// another star extracting into the same folder (the gui and the cli, say), and is left alone.
+    static func orphanedFFmpegPids(inListing listing: String, stagingMarker: String, ownPid: Int32) -> [Int32] {
+        var pids = Set<Int32>()
+        var candidates: [(pid: Int32, parent: Int32)] = []
+        for line in listing.split(separator: "\n") {
+            let fields = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
+            guard fields.count == 3, let pid = Int32(fields[0]), let parent = Int32(fields[1]) else { continue }
+            pids.insert(pid)
+            let command = fields[2]
+            if pid != ownPid, command.contains("ffmpeg"), command.contains(stagingMarker) {
+                candidates.append((pid: pid, parent: parent))
+            }
+        }
+        return candidates.filter { $0.parent == ownPid || $0.parent <= 1 || !pids.contains($0.parent) }.map(\.pid)
     }
 
     // MARK: every source still running
@@ -392,16 +420,21 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
     private struct Weak { weak var source: VideoFrameSource? }
 
     /// Kills every ffmpeg any source has running, now, and stops the sources: for a process that is quitting, which cannot wait for the
-    /// politer stop (and whose children would otherwise be left decoding after it).
+    /// politer stop (and whose children would otherwise be left decoding after it).  Callable from any thread, including the scheduler
+    /// queue: the ffmpegs are killed from `live`, which has its own lock, and the queue's state is only touched by the `stop()` it queues.
     public static func terminateAllNow() {
         let sources = running.get().values.compactMap(\.source)
         for source in sources { source.killEverythingNow() }
     }
 
     private func killEverythingNow() {
-        stopped = true
-        for worker in allWorkers { worker.stopRequested = true; worker.run?.killNow() }
-        writeSidecar(complete: false)
+        let runs = live.withValue { state -> [FFmpegRun] in
+            state.killed = true
+            return Array(state.runs.values)
+        }
+        for run in runs { run.killNow() }
+        // The queue's own state (`stopped`, the sidecar, the waiters) is brought up to date on the queue, not here.
+        stop()
     }
 
     private func register() {
@@ -419,6 +452,7 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
     }
 
     private func launch(kind: WorkerKind, start: Int, limit: Int?, priority: FramePriorityReason) {
+        guard !isQuitting else { return }
         let id = nextWorkerID
         nextWorkerID += 1
         let staging = "\(stagingRoot)/\(runToken)-\(id)"
@@ -460,6 +494,15 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
             return
         }
         worker.run = run
+        let killedMeanwhile = live.withValue { state -> Bool in
+            if state.killed { return true }
+            state.runs[id] = run
+            return false
+        }
+        if killedMeanwhile {
+            run.killNow()
+            worker.stopRequested = true
+        }
         switch kind {
         case .sweep: sweep = worker
         case .jump:  jumps.append(worker)
@@ -469,6 +512,7 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
 
         Task.detached { [self] in
             await run.exit()
+            live.withValue { _ = $0.runs.removeValue(forKey: id) }
             let failure: Error?
             do { try run.finish(); failure = nil } catch { failure = error }
             queue.async { self.workerExited(worker, failure: failure) }
@@ -544,9 +588,9 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
     }
 
     private func workerExited(_ worker: Worker, failure: Error?) {
-        if !stopped { scan(worker) }
+        if !stopped, !isQuitting { scan(worker) }
         // A frame held back (see `heldFromFrame`) is still in the staging folder, which goes with the worker: wait for the hold to end.
-        if !stopped, let heldFrom = Self.heldFromFrame(forVideo: videoPath), worker.cursor >= heldFrom,
+        if !stopped, !isQuitting, let heldFrom = Self.heldFromFrame(forVideo: videoPath), worker.cursor >= heldFrom,
            FileManager.default.fileExists(atPath: "\(worker.stagingFolder)/\(FrameNaming.fileName(forFrame: worker.cursor, digits: digits, fileExtension: format.fileExtension))") {
             queue.asyncAfter(deadline: .now() + Self.holdRecheck) { self.workerExited(worker, failure: failure) }
             return
@@ -555,7 +599,7 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
         if sweep === worker { sweep = nil }
         jumps.removeAll { $0 === worker }
         publishEstimate()
-        guard !stopped else { return }
+        guard !stopped, !isQuitting else { return }
 
         if let failure, !worker.stopRequested {
             let message = Self.message(for: failure)
@@ -601,7 +645,7 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
     // MARK: scheduling
 
     private func reschedule() {
-        guard !stopped, started, book.error == nil else { return }
+        guard !stopped, !isQuitting, started, book.error == nil else { return }
         let count = book.frameCount
         for index in requests.keys where index >= count || book.isAvailable(index) { requests[index] = nil }
 
