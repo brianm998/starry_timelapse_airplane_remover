@@ -587,7 +587,7 @@ public final actor FrameGraphBuilder {
         let cleanupDirectories = [cleanupConfig.tempOutputPath, cleanupConfig.outputPath]
         _ = await NativeWork.run { StaleTempFiles.clean(in: cleanupDirectories) }
 
-        let errors = ArrayActor<String>([])
+        let errors = FrameErrorLog()
 
         let config = await configManager.config()
 
@@ -849,7 +849,7 @@ public final actor FrameGraphBuilder {
                           memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier()),
                           feedsAccumulator: horizonAccumulatorInUse
                         ) { errorString in
-                            Task { await errors.append(errorString) }
+                            errors.append(errorString)
                             errorClosure(errorString)
                         }
                         horizonOp.queuePriority = .low
@@ -904,7 +904,7 @@ public final actor FrameGraphBuilder {
                               rawImageBytes: rawImageBytes,
                               memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier())
                             ) { errorString in
-                                Task { await errors.append(errorString) }
+                                errors.append(errorString)
                                 errorClosure(errorString)
                             }
                             horizonOp.queuePriority = .normal
@@ -957,7 +957,7 @@ public final actor FrameGraphBuilder {
                       rawImageBytes: rawImageBytes,
                       memoryMultiplier: UInt64(multiplier)
                     ) { errorString in
-                        Task { await errors.append(errorString) }
+                        errors.append(errorString)
                         errorClosure(errorString)
                     }
                     horizonOp.queuePriority = .normal
@@ -1004,7 +1004,7 @@ public final actor FrameGraphBuilder {
                       keypointPath: config.keypointPath(frameIndex: frameIndex,
                                                         ofType: .starAligned)
                     ) { errorString in
-                        Task { await errors.append(errorString) }
+                        errors.append(errorString)
                         errorClosure(errorString)
                     }
 
@@ -1064,7 +1064,7 @@ public final actor FrameGraphBuilder {
                           keypointPath: config.keypointPath(frameIndex: frameIndex,
                                                             ofType: .earthAligned)
                         ) { errorString in
-                            Task { await errors.append(errorString) }
+                            errors.append(errorString)
                             errorClosure(errorString)
                         }
                         kp.queuePriority = .high
@@ -1104,7 +1104,7 @@ public final actor FrameGraphBuilder {
               mode: .starAligned,
               rawImageBytes: rawImageBytes
             ) { errorString in
-                Task { await errors.append(errorString) }
+                errors.append(errorString)
                 errorClosure(errorString)
             }
             skyH.queuePriority = .veryHigh
@@ -1144,7 +1144,7 @@ public final actor FrameGraphBuilder {
                   mode: .earthAligned,
                   rawImageBytes: rawImageBytes
                 ) { errorString in
-                    Task { await errors.append(errorString) }
+                    errors.append(errorString)
                     errorClosure(errorString)
                 }
                 earthH.queuePriority = .veryHigh
@@ -1179,14 +1179,14 @@ public final actor FrameGraphBuilder {
         // `queue.cancelAllOperations()` skips every op still on that one.
         let abortCompletionOp = GraphCompletionOp {
             Log.i("Frame graph aborted")
-            closure(await errors.elements())
+            closure(errors.elements())
         }
         let abortCompletionQueue = OperationQueue()
         let validationOp = AlignmentValidationOp(
           frames: outputFrames,
           configManager: configManager,
           errorClosure: { errorString in
-              Task { await errors.append(errorString) }
+              errors.append(errorString)
               errorClosure(errorString)
           },
           abortClosure: { [queue, cancelledOperations] errorString in
@@ -1195,10 +1195,8 @@ public final actor FrameGraphBuilder {
               // here or whoever waits on it hangs.
               cancelledOperations.cancelAll(on: [queue])
               errorClosure(errorString)
-              Task {
-                  await errors.append(errorString)
-                  abortCompletionQueue.addOperation(abortCompletionOp)
-              }
+              errors.append(errorString)
+              abortCompletionQueue.addOperation(abortCompletionOp)
           }
         )
         validationOp.qualityOfService = .userInteractive
@@ -1241,7 +1239,7 @@ public final actor FrameGraphBuilder {
               configManager: configManager,
               rawImageBytes: rawImageBytes
             ) { errorString in
-                Task { await errors.append(errorString) }
+                errors.append(errorString)
                 errorClosure(errorString)
             }
             recordAlreadyDone(.horizonConsensus,
@@ -1289,7 +1287,7 @@ public final actor FrameGraphBuilder {
                                              alignedNeighbours: aligned,
                                              staticNeighbours: statics))
                 ) { errorString in
-                    Task { await errors.append(errorString) }
+                    errors.append(errorString)
                     errorClosure(errorString)
                 }
 
@@ -1324,7 +1322,7 @@ public final actor FrameGraphBuilder {
                                          alignedNeighbours: aligned,
                                          staticNeighbours: statics))
             ) { errorString in
-                Task { await errors.append(errorString) }
+                errors.append(errorString)
                 errorClosure(errorString)
             }
 
@@ -1371,7 +1369,7 @@ public final actor FrameGraphBuilder {
                 Log.i(memoryStats)
             }
             Log.i(DecodedFrameStore.shared.statsLine(frames: outputFrameCount))
-            closure(await errors.elements())
+            closure(errors.elements())
         }
         Log.d("\(mergeOps.count) mergeOps")
         mergeOps.forEach { completionOp.addDependency($0) }
@@ -1473,7 +1471,7 @@ public final actor FrameGraphBuilder {
         // the 16-bit working depth, so an 8-bit source must not halve them.
         let rawImageBytes = config.workingFrameBytes
 
-        let errors = ArrayActor<String>([])
+        let errors = FrameErrorLog()
 
         var refinementOps: [Int: HorizonRefinementOp] = [:]
         for frame in refinementFrames {
@@ -1482,7 +1480,7 @@ public final actor FrameGraphBuilder {
               rawImageBytes: rawImageBytes,
               memoryMultiplier: UInt64(config.effectiveHorizonMemoryMultiplier()),
               errorClosure: { errorString in
-                  Task { await errors.append(errorString) }
+                  errors.append(errorString)
                   errorClosure(errorString)
               },
               onCompletion: refinementCompletion
@@ -1525,7 +1523,7 @@ public final actor FrameGraphBuilder {
                                          alignedNeighbours: aligned,
                                          staticNeighbours: statics))
             ) { errorString in
-                Task { await errors.append(errorString) }
+                errors.append(errorString)
                 errorClosure(errorString)
             }
             mergeOp.qualityOfService = .userInteractive
@@ -1548,7 +1546,7 @@ public final actor FrameGraphBuilder {
               configManager: configManager,
               rawImageBytes: rawImageBytes
             ) { errorString in
-                Task { await errors.append(errorString) }
+                errors.append(errorString)
                 errorClosure(errorString)
             }
             if !ops.isEmpty {
@@ -1573,7 +1571,7 @@ public final actor FrameGraphBuilder {
         }
 
         let completionOp = GraphCompletionOp {
-            completion(await errors.elements())
+            completion(errors.elements())
         }
         refinementOps.values.forEach { completionOp.addDependency($0) }
         mergeOps.forEach { completionOp.addDependency($0) }
