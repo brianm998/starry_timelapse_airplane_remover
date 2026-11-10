@@ -7,6 +7,18 @@ import XCTest
 /// thresholds are compared against.
 final class SortablePixelTests: XCTestCase {
 
+    // MARK: - 16 bit conversion
+
+    /// 32 bit data does not fit in 16 bits.  `uInt16Value` is read from non-throwing code, and it
+    /// used to trap; it now saturates (and floors negatives at zero).
+    func testAThirtyTwoBitPixelSaturatesWhenReadAsSixteenBits() {
+        XCTAssertEqual(SortablePixel(value: .thirtyTwoBit(1234)).uInt16Value, 1234)
+        XCTAssertEqual(SortablePixel(value: .thirtyTwoBit(0xFFFF)).uInt16Value, 0xFFFF)
+        XCTAssertEqual(SortablePixel(value: .thirtyTwoBit(0x10000)).uInt16Value, 0xFFFF)
+        XCTAssertEqual(SortablePixel(value: .thirtyTwoBit(Int32.max)).uInt16Value, 0xFFFF)
+        XCTAssertEqual(SortablePixel(value: .thirtyTwoBit(-5)).uInt16Value, 0)
+    }
+
     // MARK: - intensity normalisation
 
     /// `intensity` normalises each depth onto 0...1, which is what lets one threshold work

@@ -150,35 +150,35 @@ final class PixelatedImageTests: XCTestCase {
     /// The offset arithmetic in `readPixel` is `y * width * components + x * components`, so it
     /// ignores `bytesPerRow` — which is fine only while the mat is tightly packed.  These pin that
     /// the mapping from (x, y) to a value is right, including that x and y are not transposed.
-    func testReadingAPixelFindsTheValueThatWasWrittenThere() {
+    func testReadingAPixelFindsTheValueThatWasWrittenThere() throws {
         let image = sixteenBitGray(width: 6, height: 4) { x, y in UInt16(y * 100 + x) }
         for y in 0..<4 {
             for x in 0..<6 {
-                XCTAssertEqual(image.readPixel(atX: x, andY: y).red, UInt16(y * 100 + x),
+                XCTAssertEqual(try image.readPixel(atX: x, andY: y).red, UInt16(y * 100 + x),
                                "pixel [\(x), \(y)]")
             }
         }
     }
 
-    func testReadingIsNotTransposed() {
+    func testReadingIsNotTransposed() throws {
         // only [1, 0] is set, so a transposed read would find nothing there and something at [0, 1]
         let image = sixteenBitGray(width: 4, height: 4) { x, y in (x == 1 && y == 0) ? 9999 : 0 }
-        XCTAssertEqual(image.readPixel(atX: 1, andY: 0).red, 9999)
-        XCTAssertEqual(image.readPixel(atX: 0, andY: 1).red, 0)
+        XCTAssertEqual(try image.readPixel(atX: 1, andY: 0).red, 9999)
+        XCTAssertEqual(try image.readPixel(atX: 0, andY: 1).red, 0)
     }
 
-    func testEachColourChannelIsReadSeparately() {
+    func testEachColourChannelIsReadSeparately() throws {
         // red = 100, green = 200, blue = 300 everywhere
         let image = sixteenBitColor(width: 3, height: 3) { _, _, c in UInt16((c + 1) * 100) }
-        let pixel = image.readPixel(atX: 1, andY: 1)
+        let pixel = try image.readPixel(atX: 1, andY: 1)
         XCTAssertEqual(pixel.red, 100)
         XCTAssertEqual(pixel.green, 200)
         XCTAssertEqual(pixel.blue, 300)
     }
 
-    func testAGrayPixelLeavesTheOtherChannelsAlone() {
+    func testAGrayPixelLeavesTheOtherChannelsAlone() throws {
         let image = sixteenBitGray(width: 3, height: 3) { _, _ in 777 }
-        let pixel = image.readPixel(atX: 1, andY: 1)
+        let pixel = try image.readPixel(atX: 1, andY: 1)
         XCTAssertEqual(pixel.red, 777)
         XCTAssertEqual(pixel.green, 0, "a single channel image has no green")
         XCTAssertEqual(pixel.blue, 0)
@@ -363,7 +363,7 @@ final class PixelatedImageTests: XCTestCase {
 
     /// A tile's pixels have to be the ones at its own position in the source, or the classifier
     /// would be shown the wrong patch.
-    func testATilesPixelsComeFromItsOwnPositionInTheSource() {
+    func testATilesPixelsComeFromItsOwnPositionInTheSource() throws {
         let image = sixteenBitGray(width: 32, height: 16) { x, y in UInt16(y * 32 + x) }
         let tiles = image.splitIntoMatrix(maxWidth: 16, maxHeight: 16, overlapPercent: 0)
 
@@ -371,7 +371,7 @@ final class PixelatedImageTests: XCTestCase {
             for localY in 0..<tile.image.height {
                 for localX in 0..<tile.image.width {
                     let expected = UInt16((tile.y + localY) * 32 + (tile.x + localX))
-                    XCTAssertEqual(tile.image.readPixel(atX: localX, andY: localY).red, expected,
+                    XCTAssertEqual(try tile.image.readPixel(atX: localX, andY: localY).red, expected,
                                    "tile at [\(tile.x), \(tile.y)] local [\(localX), \(localY)]")
                 }
             }
