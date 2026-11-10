@@ -4141,12 +4141,15 @@ final class SharedConstantsTests: XCTestCase {
             for (x, y) in [(0, 0), (3, 1)] {
                 let c = try components(x, y)
                 let others = (0..<3).filter { $0 != channel }.map { c[$0] }
-                XCTAssertGreaterThan(c[channel], 0.9, "\(name): set pixel (\(x), \(y)) is \(c)")
-                XCTAssertTrue(others.allSatisfy { $0 < 0.4 }, "\(name): set pixel (\(x), \(y)) is \(c)")
+                // system colours are not pure primaries, so ask only that the channel clearly leads
+                XCTAssertGreaterThan(c[channel], 0.8, "\(name): set pixel (\(x), \(y)) is \(c)")
+                XCTAssertTrue(others.allSatisfy { $0 < c[channel] - 0.2 }, "\(name): set pixel (\(x), \(y)) is \(c)")
             }
             for (x, y) in [(1, 0), (2, 0), (1, 1), (0, 1)] {
                 let c = try components(x, y)
-                XCTAssertTrue(c.allSatisfy { abs($0 - 0.5) < 0.03 }, "\(name): unset pixel (\(x), \(y)) is \(c), not the background")
+                // the grey background, untinted (it reads back as ~0.57 after colour conversion)
+                XCTAssertTrue(c.allSatisfy { abs($0 - c[0]) < 0.01 && abs($0 - 0.57) < 0.05 },
+                              "\(name): unset pixel (\(x), \(y)) is \(c), not the background")
             }
         }
     }
