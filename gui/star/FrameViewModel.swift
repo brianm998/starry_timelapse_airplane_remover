@@ -611,7 +611,11 @@ public class FrameViewModel {
                 Log.d("got \(outlierGroups.count) groups for frame \(frame.frameIndex)")
                 var newOutlierGroups: [OutlierGroupViewModel] = []
                 for group in outlierGroups {
-                    if let cgImage = await group.testImage() { // XXX heap corruption here :(
+                    // testImage() is an 8-bit mask, one byte per pixel of the group's box.  It used to fill a
+                    // 64-bit-per-pixel buffer with unchecked offsets (a pixel outside the group's bounds
+                    // wrote past the buffer), which is the likely source of the heap corruption once
+                    // noted here; the offsets are now bounds-checked.
+                    if let cgImage = await group.testImage() {
                         var size = CGSize()
                         size.width = CGFloat(cgImage.width)
                         size.height = CGFloat(cgImage.height)

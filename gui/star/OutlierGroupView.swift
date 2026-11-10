@@ -239,6 +239,14 @@ struct OutlierGroupView: View {
         }
     }
 
+    /// Paints an outlier group's alpha-only mask image in the group's decision colour.
+    static func maskView(image: NSImage, color: Color) -> some View {
+        Image(nsImage: image)
+          .renderingMode(.template) // makes this VV color work
+          .foregroundColor(color)
+          .blendMode(.hardLight)
+    }
+
     var outlierView: some View {
         let bounds = self.groupViewModel.bounds
         let frameWidth = viewModel.frameWidth
@@ -285,10 +293,7 @@ struct OutlierGroupView: View {
                 
             }
             // the actual outlier group image
-            Image(nsImage: self.groupViewModel.image)
-              .renderingMode(.template) // makes this VV color work
-              .foregroundColor(paint_color)
-              .blendMode(.hardLight)
+            OutlierGroupView.maskView(image: self.groupViewModel.image, color: paint_color)
 
             
         }

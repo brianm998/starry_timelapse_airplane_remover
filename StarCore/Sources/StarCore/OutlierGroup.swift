@@ -347,99 +347,43 @@ public actor OutlierGroup: CustomStringConvertible,
     #if canImport(CoreGraphics)
     private var cachedTestImage: CGImage?
 
-    fileprivate func testRemoveAt(x: Int, y: Int, pixel: Pixel, imageData: inout Data) -> Bool {
-        
-        let bytesPerPixel = 64/8
-        
-        if x >= self.bounds.width ||
-             x < 0 ||
-             y >= self.bounds.height ||
-             y < 0
-        {
-            return false
-        }
-        
-        var nextValue = pixel.value
-        
-        let offset = (Int(y) * bytesPerPixel*self.bounds.width) + (Int(x) * bytesPerPixel)
-
-        imageData.replaceSubrange(offset ..< offset+bytesPerPixel,
-                                  with: &nextValue,
-                                  count: bytesPerPixel)
-        return true
-    }
-    
-    // outputs an image the same size as this outlier's bounding box,
-    // coloring the outlier pixels red if will remove, green if not
+    // outputs an 8-bit alpha-only mask the same size as this outlier's bounding box:
+    // 0xFF where the group has a pixel, 0 elsewhere.  That is one byte per pixel of the box.
+    // The colour is set in the view layer, which paints the image as a template (alpha only).
     public func testImage() async -> CGImage? {
 
-        let bytesPerPixel = 64/8
-        
         // return cached version if present
         if let ret = cachedTestImage { return ret }
-        
-        var imageData = Data(count: self.bounds.width*self.bounds.height*bytesPerPixel)
 
-        // XXX this is nice to see for debugging, but slow
-        // Uncomment to visualize line detection in test images:
-        //
-        // if let line = await self.line() {
-        //     var pixel = Pixel(numberOfComponents: 3)
-        //     pixel.blue = 0xFFFF
-        //     pixel.alpha = 0xFFFF
-        //     let centralCoord = DoubleCoord(x: Double(self.bounds.width/2),
-        //                                    y: Double(self.bounds.height/2))
-        //     line.iterate(.forwards, from: centralCoord) { x, y, iterationDirection in
-        //         testRemoveAt(x: x, y: y, pixel: pixel, imageData: &imageData)
-        //     }
-        //     line.iterate(.backwards, from: centralCoord) { x, y, iterationDirection in
-        //         testRemoveAt(x: x, y: y, pixel: pixel, imageData: &imageData)
-        //     }
-        // }
-        
+        let width = self.bounds.width
+        let height = self.bounds.height
+        if width <= 0 || height <= 0 { return nil }
 
+        // an alpha-only bitmap context ignores its colour space (CGContext's Swift signature
+        // still wants one); it owns zeroed memory, one byte per pixel
+        guard let context = CGContext(data: nil,
+                                      width: width,
+                                      height: height,
+                                      bitsPerComponent: 8,
+                                      bytesPerRow: width,
+                                      space: CGColorSpaceCreateDeviceGray(),
+                                      bitmapInfo: CGImageAlphaInfo.alphaOnly.rawValue),
+              let base = context.data
+        else { return nil }
+
+        let buffer = UnsafeMutableBufferPointer(start: base.assumingMemoryBound(to: UInt8.self),
+                                                count: width*height)
         for pixel in pixelSet {
-            var pixelToWrite = Pixel(numberOfComponents: 4)
-            // the real color is set in the view layer 
-            pixelToWrite.red = 0xFFFF
-            pixelToWrite.green = 0xFFFF
-            pixelToWrite.blue = 0xFFFF
-            pixelToWrite.alpha = 0xFFFF
-            //pixelToWrite.red = pixel.intensity
-            //pixelToWrite.green = pixel.intensity
-            //pixelToWrite.blue = pixel.intensity
-
-            var nextValue = pixelToWrite.value
-            
-            let offset = (Int(pixel.y-bounds.min.y) * bytesPerPixel*self.bounds.width) +
-              (Int(pixel.x-bounds.min.x) * bytesPerPixel)
-            
-            imageData.replaceSubrange(offset ..< offset+bytesPerPixel,
-                                      with: &nextValue,
-                                      count: bytesPerPixel)
-
+            let x = pixel.x - bounds.min.x
+            let y = pixel.y - bounds.min.y
+            // a pixel outside the bounds has no place in the image
+            if x < 0 || x >= width || y < 0 || y >= height { continue }
+            buffer[y*width + x] = 0xFF
         }
 
-        let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue)
-        
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        if let dataProvider = CGDataProvider(data: imageData as CFData) {
-            let ret = CGImage(width: self.bounds.width,
-                              height: self.bounds.height,
-                              bitsPerComponent: 16,
-                              bitsPerPixel: bytesPerPixel*8,
-                              bytesPerRow: self.bounds.width*bytesPerPixel,
-                              space: colorSpace,
-                              bitmapInfo: bitmapInfo,
-                              provider: dataProvider,
-                              decode: nil,
-                              shouldInterpolate: false,
-                              intent: .defaultIntent)
-            cachedTestImage = ret
-            return ret
-        } else {
-            return nil
-        }
+        let ret = context.makeImage()
+        cachedTestImage = ret
+        return ret
     }
     #endif
 
