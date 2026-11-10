@@ -508,8 +508,16 @@ final class GuiFeatureRunner {
         guard let identifier = pendingRightClick else { return "" }
         let cell = element(identifier)
         let there = cell.exists
-        let menus = app.menus.allElementsBoundByIndex.prefix(5).map { "\($0.exists ? $0.menuItems.count : 0) items" }
-        return "\nright-clicked \(identifier): exists \(there), hittable \(there && cell.isHittable), frame \(there ? "\(cell.frame)" : "none"), selected \(there && cell.isSelected); menus open: \(menus)"
+        // the menu bar's menus are in app.menus too (the 36, 45, 5, 14 and 4 items of a failure were those), so say how many there are and print
+        // the frame and the item titles of each, a context menu being the one whose frame is not in the menu bar
+        let barMenus = app.menuBars.descendants(matching: .menu).count
+        let menus = app.menus.allElementsBoundByIndex.prefix(12).map { menu -> String in
+            guard menu.exists else { return "gone" }
+            let titles = menu.menuItems.allElementsBoundByIndex.prefix(8).map { $0.exists ? ($0.title.isEmpty ? $0.label : $0.title) : "?" }
+            return "\(menu.menuItems.count) items at \(menu.frame) \(titles)"
+        }
+        // an element's isSelected is false for a grid cell whatever the selection is (it carries no selected trait): not evidence of one
+        return "\nright-clicked \(identifier): exists \(there), hittable \(there && cell.isHittable), frame \(there ? "\(cell.frame)" : "none"), selected \(there && cell.isSelected) (a cell never reports it); menu bar menus \(barMenus); menus open: \(menus)"
     }
 
     /// Waits for the run that has begun to end: the progress line says "<complete>/<total>/idle" with every frame complete, once it has said
@@ -656,18 +664,27 @@ final class GuiFeatureRunner {
     /// The element's text is exactly [text] (English: the runs of a @ui feature are in English).
     /// Clicks the field (which opens a tap-to-edit one), replaces what it holds with [text] and leaves it focused, as a user does before pressing Return.
     private func typeInto(_ text: String, into identifier: String) throws {
-        try clickId(identifier)
+        // A click can be lost or undone at once (the field stays a StaticText), and the typed keys would then go to the app.
+        // Click again, up to 3 times, until the field has the keyboard; never throw here, the step's own expectation reports a failure.
+        for _ in 1...3 {
+            try clickId(identifier)
+            let deadline = Date().addingTimeInterval(3)
+            while Date() < deadline && !hasKeyboardFocus(element(identifier)) { Thread.sleep(forTimeInterval: 0.1) }
+            if hasKeyboardFocus(element(identifier)) { break }
+        }
         app.typeKey("a", modifierFlags: .command)
         app.typeText(text)
     }
+
+    /// `hasKeyboardFocus` is the attribute the accessibility API reports for it; XCUIElement has no public property on macOS.
+    private func hasKeyboardFocus(_ e: XCUIElement) -> Bool { e.exists && ((e.value(forKey: "hasKeyboardFocus") as? Bool) ?? false) }
 
     /// The control has the keyboard (a text field being typed into), or not.
     private func expectFocus(_ identifier: String, focused: Bool) throws {
         try expectShown(identifier, shown: true)
         let e = element(identifier)
-        // `hasKeyboardFocus` is the attribute the accessibility API reports for it; XCUIElement has no public property on macOS.
-        func hasKeyboard() -> Bool { (e.value(forKey: "hasKeyboardFocus") as? Bool) ?? false }
-        try waitFor("\(identifier) \(focused ? "to have" : "not to have") the keyboard", timeout: 20, detail: { "(hasKeyboardFocus: \(hasKeyboard()))" }) { hasKeyboard() == focused }
+        // elementType says whether a field never opened (StaticText) or opened but is unfocused (TextField).
+        try waitFor("\(identifier) \(focused ? "to have" : "not to have") the keyboard", timeout: 20, detail: { "(hasKeyboardFocus: \(hasKeyboardFocus(e)), elementType: \(e.exists ? String(e.elementType.rawValue) : "absent"))" }) { hasKeyboardFocus(e) == focused }
     }
 
     /// The control takes clicks (a button that is not greyed out), or does not.

@@ -851,11 +851,17 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         mkdir(await outlierProcessor.outliersDirname)
         
-        await outlierProcessor.writeOutliersRemoveReasons()
+        let config = await configManager.config()
+        // Finishing a frame saves decisions only with writeOutlierGroupFiles on (#458);
+        // edits always save (testADecisionIsSavedWithoutWriteOutlierGroupFiles). The gherkin
+        // features uiFindOutliersInline, uiOutlierClickUndecided and uiOutlierInformationClick
+        // open a cli-made sequence and expect '0 will keep'.
+        if config.writeOutlierGroupFiles {
+            await outlierProcessor.writeOutliersRemoveReasons()
+        }
 
         self.set(state: .finishing)
 
-        let config = await configManager.config()
         
         if config.writeOutlierClassificationValues {
             // THIS MOFO IS SLOW
@@ -2081,11 +2087,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
             mkdir(await outlierProcessor.outliersDirname)
             
-            await outlierProcessor.writeOutliersRemoveReasons()
+            let config = await configManager.config()
+            if config.writeOutlierGroupFiles {
+                await outlierProcessor.writeOutliersRemoveReasons()
+            }
 
             self.set(state: .finishing)
 
-            let config = await configManager.config()
             
             if config.writeOutlierClassificationValues {
                 // THIS MOFO IS SLOW

@@ -53,11 +53,14 @@ public struct APIConfig: Sendable, Equatable {
 public enum APIError: Error, Equatable, LocalizedError {
     case status(Int, String)
     case daemonDown(String)
+    /// The request got no answer in time: the daemon may only be slow, unlike a refused connection.
+    case timedOut
 
     public var errorDescription: String? {
         switch self {
         case .status(let code, let body): "The daemon answered \(code): \(body)"
         case .daemonDown(let why): "The daemon is not answering: \(why)"
+        case .timedOut: "The daemon did not answer in time"
         }
     }
 }
@@ -94,6 +97,8 @@ public struct APIClient: Sendable {
             return data
         } catch let error as APIError {
             throw error
+        } catch let error as URLError where error.code == .timedOut {
+            throw APIError.timedOut
         } catch {
             throw APIError.daemonDown(error.localizedDescription)
         }
