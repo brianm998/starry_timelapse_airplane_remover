@@ -4108,6 +4108,49 @@ final class SharedConstantsTests: XCTestCase {
         }
     }
 
+    /// A2: an outlier group's mask image takes the decision colour where the group has pixels
+    /// and leaves the background alone elsewhere.  The mask is the one `OutlierGroup.testImage()`
+    /// builds, painted by the same helper `OutlierGroupView` uses.
+    @MainActor
+    func testOutlierGroupMaskPaintsEachDecisionColour() async throws {
+        let set: Set<SortablePixel> = [SortablePixel(x: 0, y: 0, value: .sixteenBit(1000)),
+                                       SortablePixel(x: 3, y: 1, value: .sixteenBit(1000))]
+        let group = OutlierGroup(id: 1, size: 2, brightness: 1000,
+                                 bounds: BoundingBox(min: Coord(x: 0, y: 0), max: Coord(x: 3, y: 1)),
+                                 frameIndex: 0, imageWidth: 10, imageHeight: 10, pixels: [],
+                                 pixelSet: set)
+        let maybeMask = await group.testImage()
+        let mask = try XCTUnwrap(maybeMask)
+        let image = NSImage(cgImage: mask, size: CGSize(width: mask.width, height: mask.height))
+
+        // (colour, index of the channel that must dominate) for remove, keep and undecided
+        let decisions: [(String, Color, Int)] = [("remove", .red, 0), ("keep", .green, 1), ("undecided", .blue, 2)]
+        for (name, color, channel) in decisions {
+            let view = OutlierGroupView.maskView(image: image, color: color)
+              .frame(width: 4, height: 2)
+              .background(Color(white: 0.5))
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 1
+            let cg = try XCTUnwrap(renderer.cgImage, "\(name): the mask did not render")
+            let rep = NSBitmapImageRep(cgImage: cg)
+
+            func components(_ x: Int, _ y: Int) throws -> [CGFloat] {
+                let c = try XCTUnwrap(rep.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
+                return [c.redComponent, c.greenComponent, c.blueComponent]
+            }
+            for (x, y) in [(0, 0), (3, 1)] {
+                let c = try components(x, y)
+                let others = (0..<3).filter { $0 != channel }.map { c[$0] }
+                XCTAssertGreaterThan(c[channel], 0.9, "\(name): set pixel (\(x), \(y)) is \(c)")
+                XCTAssertTrue(others.allSatisfy { $0 < 0.4 }, "\(name): set pixel (\(x), \(y)) is \(c)")
+            }
+            for (x, y) in [(1, 0), (2, 0), (1, 1), (0, 1)] {
+                let c = try components(x, y)
+                XCTAssertTrue(c.allSatisfy { abs($0 - 0.5) < 0.03 }, "\(name): unset pixel (\(x), \(y)) is \(c), not the background")
+            }
+        }
+    }
+
     /// A4: the new key is translated in every language, not left as English.
     func testChangeKeyTranslatedEverywhere() throws {
         defer { StarLocalization.shared.languageOverride = nil }
