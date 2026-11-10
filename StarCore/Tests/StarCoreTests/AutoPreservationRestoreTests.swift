@@ -21,8 +21,7 @@ final class AutoPreservationRestoreTests: FrameHarnessTestCase {
     private let width = 128
     private let height = 96
 
-    // Frame 1, not 0: building the harness reads frame 0 for the image info, which can cache it,
-    // and these tests replace the frame's file on disk.
+    // Frame 1, not 0, as the tests were first written against a frame 0 the harness had already read.
     private let frameIndex = 1
 
     private func flatImage(bits: Int32, value: UInt16) -> PixelatedImage {
@@ -75,20 +74,18 @@ final class AutoPreservationRestoreTests: FrameHarnessTestCase {
     /// auto image is flat `autoValue`, both at `bits`, and returns the written output.
     private func render(bits: Int32, originalValue: UInt16, autoValue: UInt16,
                         named name: String) async throws -> PixelatedImage {
-        let h = try await FrameHarness.make(frameCount: 2, width: width, height: height, named: name)
+        // every frame is flat `originalValue` at `bits`, so the sequence format the config records
+        // (what Config.set(imageInfo:) records for a JPEG sequence, at 8 bits) is the frames' own;
+        // the planted auto image is what finishAuto loads instead of building one from aligned
+        // neighbours
+        let h = try await FrameHarness.make(frameCount: 2, width: width, height: height,
+                                            frameWriter: { _ in self.flatImage(bits: bits, value: originalValue) },
+                                            named: name)
         harness = h
         let frame = h.frames[frameIndex]
 
-        // the frame's own file becomes the original; the planted auto image is what finishAuto
-        // loads instead of building one from aligned neighbours
-        let filenames = await h.imageSequence.filenames
-        flatImage(bits: bits, value: originalValue).mat.write(to: filenames[frameIndex])
         try h.plantImage(flatImage(bits: bits, value: autoValue),
                          ofType: .autoProcessed, frameIndex: frameIndex)
-        if bits == 8 {
-            // what Config.set(imageInfo:) records for a JPEG sequence
-            await h.updateConfig { $0.imageBitsPerComponent = 8 }
-        }
 
         let outlier = await frame.outlierProcessor
         await outlier.initializeEmptyOutlierGroups()
