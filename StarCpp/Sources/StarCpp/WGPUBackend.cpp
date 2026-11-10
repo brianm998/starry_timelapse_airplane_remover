@@ -9,6 +9,7 @@
 #include "GPUOps_C.h"
 #include "MatWrapper.h"
 #include "starcpp_bridge_logging.h"
+#include "logging_impl.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -1032,7 +1033,7 @@ bool wgpu_ops_last_timing(double *seconds) {
     return true;
 }
 
-bool wgpu_ops_warp(MatWrapperRef src, const double *homography, MatWrapperRef dst) {
+static bool wgpu_ops_warpImpl(MatWrapperRef src, const double *homography, MatWrapperRef dst) {
     Backend *b = backend();
     if (!b || !src || !dst || !homography) return false;
     Format fmt;
@@ -1073,9 +1074,16 @@ bool wgpu_ops_warp(MatWrapperRef src, const double *homography, MatWrapperRef ds
     return ok;
 }
 
-bool wgpu_ops_aligned_merge(MatWrapperRef base, MatWrapperRef *neighbours, int neighbourCount,
-                            const double *homographies, double outlierThreshold, bool includeAll,
-                            MatWrapperRef dst) {
+bool wgpu_ops_warp(MatWrapperRef src, const double *homography, MatWrapperRef dst) {
+    try {
+        return wgpu_ops_warpImpl(src, homography, dst);
+    } KHT_CATCH_LOG("wgpu_ops_warp")
+    return false;
+}
+
+static bool wgpu_ops_aligned_mergeImpl(MatWrapperRef base, MatWrapperRef *neighbours, int neighbourCount,
+                                       const double *homographies, double outlierThreshold, bool includeAll,
+                                       MatWrapperRef dst) {
     Backend *b = backend();
     if (!b || !b->alignedOK || !base || !neighbours || !homographies || !dst) return false;
     if (neighbourCount < 1 || neighbourCount + 1 > kMaxSources) return false;
@@ -1129,13 +1137,22 @@ bool wgpu_ops_aligned_merge(MatWrapperRef base, MatWrapperRef *neighbours, int n
     return ok;
 }
 
+bool wgpu_ops_aligned_merge(MatWrapperRef base, MatWrapperRef *neighbours, int neighbourCount,
+                            const double *homographies, double outlierThreshold, bool includeAll,
+                            MatWrapperRef dst) {
+    try {
+        return wgpu_ops_aligned_mergeImpl(base, neighbours, neighbourCount, homographies, outlierThreshold, includeAll, dst);
+    } KHT_CATCH_LOG("wgpu_ops_aligned_merge")
+    return false;
+}
+
 bool wgpu_ops_median_merge_supported(void) {
     Backend *b = backend();
     return b && b->medianOK;
 }
 
-bool wgpu_ops_median_merge(MatWrapperRef *sources, int count, MatWrapperRef misses,
-                           double outlierThreshold, bool includeAll, MatWrapperRef dst) {
+static bool wgpu_ops_median_mergeImpl(MatWrapperRef *sources, int count, MatWrapperRef misses,
+                                      double outlierThreshold, bool includeAll, MatWrapperRef dst) {
     Backend *b = backend();
     if (!b || !b->medianOK || !sources || !dst || count < 1 || count > kMaxSources) return false;
     Format fmt;
@@ -1200,13 +1217,21 @@ bool wgpu_ops_median_merge(MatWrapperRef *sources, int count, MatWrapperRef miss
     return ok;
 }
 
+bool wgpu_ops_median_merge(MatWrapperRef *sources, int count, MatWrapperRef misses,
+                           double outlierThreshold, bool includeAll, MatWrapperRef dst) {
+    try {
+        return wgpu_ops_median_mergeImpl(sources, count, misses, outlierThreshold, includeAll, dst);
+    } KHT_CATCH_LOG("wgpu_ops_median_merge")
+    return false;
+}
+
 // Builds the Gaussian scale-space pyramid SIFTDetector.cpp needs (GPUSiftPyramidFunc's contract, see
 // GPUOps_C.h): octave-major, layer-minor, nOctaves * (nOctaveLayers + 3) new CV_32FC1 Mats in outPyramid.
 // A port of buildSiftPyramid in GPUOps.swift: createInitialImage's optional bilinear 2x upscale and its blur
 // by sigDiff, then buildGaussianPyramid's incremental sigma schedule, with each new octave the previous
 // one's last layer taken at every second pixel. On false nothing in outPyramid is set.
-bool wgpu_ops_sift_pyramid(MatWrapperRef base, bool doubleImageSize, double sigma, int nOctaves,
-                           int nOctaveLayers, MatWrapperRef *outPyramid) {
+static bool wgpu_ops_sift_pyramidImpl(MatWrapperRef base, bool doubleImageSize, double sigma, int nOctaves,
+                                      int nOctaveLayers, MatWrapperRef *outPyramid) {
     Backend *b = backend();
     if (!b || !base || !outPyramid || nOctaves < 1 || nOctaveLayers < 1) return false;
     if (mat_wrapper_bits_per_component(base) != 32 || mat_wrapper_channels(base) != 1) return false;
@@ -1289,15 +1314,31 @@ bool wgpu_ops_sift_pyramid(MatWrapperRef base, bool doubleImageSize, double sigm
     if (!chain.submit()) return false;
 
     // each level out into its own new Mat
-    for (size_t idx = 0; idx < level.size(); ++idx) {
-        MatWrapperRef mat = readImage(*b, lease, level[idx]);
-        if (!mat) {
-            for (size_t j = 0; j < idx; ++j) { mat_wrapper_release(outPyramid[j]); outPyramid[j] = nullptr; }
-            return false;
+    size_t made = 0;
+    try {
+        for (size_t idx = 0; idx < level.size(); ++idx) {
+            MatWrapperRef mat = readImage(*b, lease, level[idx]);
+            if (!mat) {
+                for (size_t j = 0; j < idx; ++j) { mat_wrapper_release(outPyramid[j]); outPyramid[j] = nullptr; }
+                return false;
+            }
+            outPyramid[idx] = mat;
+            made = idx + 1;
         }
-        outPyramid[idx] = mat;
+    } catch (...) {
+        // an exception must not leave Mats behind: on failure nothing in outPyramid is set
+        for (size_t j = 0; j < made; ++j) { mat_wrapper_release(outPyramid[j]); outPyramid[j] = nullptr; }
+        throw;
     }
     return true;
+}
+
+bool wgpu_ops_sift_pyramid(MatWrapperRef base, bool doubleImageSize, double sigma, int nOctaves,
+                           int nOctaveLayers, MatWrapperRef *outPyramid) {
+    try {
+        return wgpu_ops_sift_pyramidImpl(base, doubleImageSize, sigma, nOctaves, nOctaveLayers, outPyramid);
+    } KHT_CATCH_LOG("wgpu_ops_sift_pyramid")
+    return false;
 }
 
 // Builds the nonlinear diffusion scale-space pyramid AKAZEDetector.cpp needs (GPUAkazePyramidFunc's
@@ -1308,9 +1349,9 @@ bool wgpu_ops_sift_pyramid(MatWrapperRef base, bool doubleImageSize, double sigm
 // 5-tap sigma-1 blur of that; Scharr derivatives and the Perona-Malik G2 diffusivity come from Lsmooth;
 // and Fast Explicit Diffusion steps (a five-point stencil, then Lt += Lstep) advance Lt. Every AKAZE blur
 // reads BORDER_REPLICATE. On false nothing in outLt / outLsmooth is set.
-bool wgpu_ops_akaze_pyramid(MatWrapperRef img, float soffset, const GPUAkazeLevelInfo *levels, int levelCount,
-                            const int *stepCounts, const float *tsteps, int tstepsCount, float kcontrastBase,
-                            MatWrapperRef *outLt, MatWrapperRef *outLsmooth) {
+static bool wgpu_ops_akaze_pyramidImpl(MatWrapperRef img, float soffset, const GPUAkazeLevelInfo *levels, int levelCount,
+                                       const int *stepCounts, const float *tsteps, int tstepsCount, float kcontrastBase,
+                                       MatWrapperRef *outLt, MatWrapperRef *outLsmooth) {
     Backend *b = backend();
     if (!b || !img || !levels || !stepCounts || !outLt || !outLsmooth || levelCount < 2) return false;
     if (mat_wrapper_bits_per_component(img) != 32 || mat_wrapper_channels(img) != 1) return false;
@@ -1427,13 +1468,29 @@ bool wgpu_ops_akaze_pyramid(MatWrapperRef img, float soffset, const GPUAkazeLeve
             if (outLsmooth[i]) { mat_wrapper_release(outLsmooth[i]); outLsmooth[i] = nullptr; }
         }
     };
-    for (int i = 0; i < levelCount; ++i) {
-        outLt[i] = readImage(*b, lease, lt[(size_t)i]);
-        outLsmooth[i] = readImage(*b, lease, smoothImg[(size_t)i]);
-        made = i + 1;
-        if (!outLt[i] || !outLsmooth[i]) { release(); return false; }
+    try {
+        for (int i = 0; i < levelCount; ++i) {
+            outLt[i] = nullptr;
+            outLsmooth[i] = nullptr;
+            made = i + 1;
+            outLt[i] = readImage(*b, lease, lt[(size_t)i]);
+            outLsmooth[i] = readImage(*b, lease, smoothImg[(size_t)i]);
+            if (!outLt[i] || !outLsmooth[i]) { release(); return false; }
+        }
+    } catch (...) {
+        release();   // an exception must not leave Mats behind either
+        throw;
     }
     return true;
+}
+
+bool wgpu_ops_akaze_pyramid(MatWrapperRef img, float soffset, const GPUAkazeLevelInfo *levels, int levelCount,
+                            const int *stepCounts, const float *tsteps, int tstepsCount, float kcontrastBase,
+                            MatWrapperRef *outLt, MatWrapperRef *outLsmooth) {
+    try {
+        return wgpu_ops_akaze_pyramidImpl(img, soffset, levels, levelCount, stepCounts, tsteps, tstepsCount, kcontrastBase, outLt, outLsmooth);
+    } KHT_CATCH_LOG("wgpu_ops_akaze_pyramid")
+    return false;
 }
 
 // Registers without probing: the handlers start the device on their first call and say "no" when there
