@@ -1267,5 +1267,6 @@
   "ui.frame_mode_desc_dirty_earth": "Hanya menyimpan yang bergerak di daratan pada bingkai ini (aslinya dikurangi referensi yang disejajarkan); langit berwarna hitam. Tidak ada yang perlu ditinjau pada bingkai ini.",
   "ui.this_frame_uses_dirty_sky": "Bingkai ini memakai mode langit tanpa pembersihan",
   "ui.this_frame_uses_dirty_earth": "Bingkai ini memakai mode daratan tanpa pembersihan",
-  "ui.change": "Ubah"
+  "ui.change": "Ubah",
+  "ui.unsupported_bit_depth": "Urutan gambar ini memiliki {0} bit per komponen, yang tidak didukung oleh star. star mendukung gambar 8-bit dan 16-bit."
 }
