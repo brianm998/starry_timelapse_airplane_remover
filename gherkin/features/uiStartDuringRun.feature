@@ -19,6 +19,10 @@ Feature: A start while a run is going stops that run and takes its place
   frame 18 at 04:51:03.6, second click 04:51:06.9). The steps between the starts took about 90 s there and the command-click of "grid.cell.17" alone 42 s, the grid
   scrolling to a far cell while the engine used every core. So the second selection is cells 2 and 6 (cell 6 is reachable on the small macOS screen, uiOpenWhileProcessing clicks it),
   frame 18 is still outside it, and "the processed copy processes one frame at a time" also gates the engine to one native operation, which leaves cores to the UI.
+  A fifth Windows run (job 129272986326, stard log) was the same race: frame 18 was complete at 17:30:33.19, the second start was clicked at 17:30:34.79 and stard's
+  "all operations cancelled" came at 17:30:37.2, so the daemon is right and a superseded run would have left frame 18 unfinished; the check on frame 18 stays as it was.
+  The steps between the starts took 160 s against the run's 158 s (command-click of "grid.cell.6" alone 62 s), the grid having been left scrolled to cell 18 by the
+  first selection's right-click. That right-click is now on cell 3, which is selected too (only cell 2 is toggled off), so the grid stays near the top where the second selection is made.
 
   Scenario: Re-process frames 2 and 6 during a run over frames 0, 1 and 3 to 18
     Given a processed copy of the sequence {sequence}
@@ -30,7 +34,7 @@ Feature: A start while a run is going stops that run and takes its place
       And I click "grid.cell.0"
       And I shift-click "grid.cell.18"
       And I command-click "grid.cell.2"
-      And I right-click "grid.cell.18"
+      And I right-click "grid.cell.3"
       And I click the label "ui.re_process_everything"
     Then  "processing.modal" is shown
     When  I press "return"

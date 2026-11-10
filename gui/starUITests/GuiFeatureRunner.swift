@@ -611,7 +611,15 @@ final class GuiFeatureRunner {
     private func scrollGridToBuild(towards identifier: String) {
         let holder = app.scrollViews.containing(NSPredicate(format: "identifier BEGINSWITH %@", "grid.cell.")).firstMatch
         guard holder.exists, holder.isHittable else { return }
-        let built = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "grid.cell.")).allElementsBoundByIndex.map { $0.identifier }
+        // one snapshot of the grid, not one accessibility request per built cell: the running first run redraws the grid, and a cell recycled
+        // between requests made XCTest throw "No matches found" (run 42629928385); a failed snapshot is skipped and the caller's wait tries again
+        guard let snapshot = try? holder.snapshot() else { return }
+        var built: [String] = []
+        var pending: [any XCUIElementSnapshot] = [snapshot]
+        while let next = pending.popLast() {
+            if next.identifier.hasPrefix("grid.cell.") { built.append(next.identifier) }
+            pending.append(contentsOf: next.children)
+        }
         let direction = GridScrollPlan.direction(towards: identifier, built: built) ?? .down
         holder.scroll(byDeltaX: 0, deltaY: direction == .down ? -300 : 300)
     }
