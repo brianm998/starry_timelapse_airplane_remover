@@ -156,6 +156,21 @@ public final class DecodedFrameStore: @unchecked Sendable {
         sourcesLock.unlock()
     }
 
+    /// Forgets `source` for `folder`, when it is still the one registered there: a source registered for the folder since stays.
+    public func unregister(source: FrameSource, folder: String) {
+        sourcesLock.lock()
+        defer { sourcesLock.unlock() }
+        guard let current = extractingSources[folder], (current as AnyObject) === (source as AnyObject) else { return }
+        extractingSources[folder] = nil
+    }
+
+    /// Whether a source is registered for `folder`, for tests.
+    func hasSource(forFolder folder: String) -> Bool {
+        sourcesLock.lock()
+        defer { sourcesLock.unlock() }
+        return extractingSources[folder] != nil
+    }
+
     /// The loader is called by the C++ merge on a native thread, by filename.  A frame of a video that is still being extracted is
     /// waited for there (blocking, which is safe because this thread is never one of the cooperative pool's: see
     /// `waitUntilAvailableBlocking`).  The merge ops depend on `FrameAvailableOp`s, so this is a backstop for one that was missed.
