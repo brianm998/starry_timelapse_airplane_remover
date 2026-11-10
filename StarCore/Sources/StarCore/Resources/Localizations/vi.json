@@ -1267,5 +1267,6 @@
   "ui.frame_mode_desc_dirty_earth": "Chỉ giữ lại những gì đã di chuyển trên mặt đất của khung này (ảnh gốc trừ đi tham chiếu đã căn chỉnh); bầu trời màu đen. Khung này không có gì để xem lại.",
   "ui.this_frame_uses_dirty_sky": "Khung này dùng chế độ bầu trời chưa làm sạch",
   "ui.this_frame_uses_dirty_earth": "Khung này dùng chế độ mặt đất chưa làm sạch",
-  "ui.change": "Đổi"
+  "ui.change": "Đổi",
+  "ui.unsupported_bit_depth": "Chuỗi ảnh này có {0} bit trên mỗi thành phần, star không hỗ trợ. star hỗ trợ ảnh 8 bit và 16 bit."
 }

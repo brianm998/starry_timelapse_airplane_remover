@@ -1267,5 +1267,6 @@
   "ui.frame_mode_desc_dirty_earth": "Houdt alleen over wat er op de grond van dit beeld bewoog (het origineel min de uitgelijnde referentie); de lucht is zwart. Er valt op dit beeld niets te beoordelen.",
   "ui.this_frame_uses_dirty_sky": "Dit beeld gebruikt de modus onopgeschoonde lucht",
   "ui.this_frame_uses_dirty_earth": "Dit beeld gebruikt de modus onopgeschoonde grond",
-  "ui.change": "Wijzigen"
+  "ui.change": "Wijzigen",
+  "ui.unsupported_bit_depth": "Deze beeldreeks heeft {0} bits per component, wat star niet ondersteunt. star ondersteunt 8-bits- en 16-bitsafbeeldingen."
 }

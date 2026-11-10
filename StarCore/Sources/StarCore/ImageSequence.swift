@@ -47,6 +47,10 @@ public actor ImageSequence {
         try await source.waitUntilAvailable(0)
         let fileExtension = filename.components(separatedBy: ".").last ?? ".tiff" // XXX
         let testImage = try await self.getImage(withName: filename).image()
+        // Later stages only handle 8 and 16 bit samples and hit a fatalError on anything else, so refuse it here.
+        guard testImage.bitsPerComponent == 8 || testImage.bitsPerComponent == 16 else {
+            throw localized("ui.unsupported_bit_depth", testImage.bitsPerComponent)
+        }
         return ImageInfo(imageWidth: testImage.width,
                          imageHeight: testImage.height,
                          imageBytesPerPixel: testImage.bytesPerPixel,
