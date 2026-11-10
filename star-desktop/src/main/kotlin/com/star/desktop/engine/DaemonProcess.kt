@@ -36,6 +36,7 @@ class DaemonProcess(
 ) {
     private var process: Process? = null
     private var stderrJob: Job? = null
+    private var shutdownHook: Thread? = null
 
     /**
      * Where this daemon's stderr is also written. In a packaged app [onStderrLine]'s default,
@@ -61,7 +62,11 @@ class DaemonProcess(
         process = proc
         log?.apply { appendLine("# stard started: $binaryPath (pid ${proc.pid()})"); flush() }
         // Insurance against an orphaned daemon if the JVM exits abnormally (stdin-EOF is the normal path).
-        Runtime.getRuntime().addShutdownHook(Thread { if (proc.isAlive) proc.destroy() })
+        // Kept so destroy() can remove it: otherwise every restart leaves one more hook holding a dead Process.
+        removeShutdownHook() // a start without a destroy in between must not stack a second hook
+        val hook = Thread { if (proc.isAlive) proc.destroy() }
+        Runtime.getRuntime().addShutdownHook(hook)
+        shutdownHook = hook
         stderrJob = logScope.launch(Dispatchers.IO) {
             try {
                 proc.errorStream.bufferedReader().forEachLine { line ->
@@ -163,6 +168,14 @@ class DaemonProcess(
         runCatching { process?.outputStream?.close() } // close stdin → daemon gets EOF (clean-exit backstop, design §2.1)
         process?.destroy()
         process = null
+        removeShutdownHook()
+    }
+
+    /** Take back the hook [start] added. Throws IllegalStateException while the JVM is already shutting down, where the hook is about to run anyway. */
+    private fun removeShutdownHook() {
+        val hook = shutdownHook ?: return
+        shutdownHook = null
+        runCatching { Runtime.getRuntime().removeShutdownHook(hook) }
     }
 
     companion object {

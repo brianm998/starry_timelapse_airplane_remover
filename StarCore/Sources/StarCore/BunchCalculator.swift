@@ -108,7 +108,11 @@ public class BunchCalculator {
                 var nearbyPixels: [SortablePixel] = [pixel]
 
                 while nearbyPixels.count > 0 {
-                    let nextPixel = nearbyPixels.removeFirst()
+                    // Pop from the end: removeFirst() shifts the whole array, which made a
+                    // bunch of n pixels cost O(n^2).  Pixels are marked handled when they are
+                    // discovered and bunches are only a Set, so the order they are visited in
+                    // cannot change the partition.
+                    let nextPixel = nearbyPixels.removeLast()
                     newBunch.update(with: nextPixel)
 
                     // Every pixel within maxPixelDistance+1 in either direction joins this
