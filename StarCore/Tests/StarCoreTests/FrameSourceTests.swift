@@ -32,6 +32,32 @@ final class FrameSourceTests: XCTestCase {
         XCTAssertEqual(names, (0..<3).map { source.path(forFrame: $0) })
     }
 
+    private let listedTypes = [".tif", ".tiff", "jpg", "jpeg", "png", "bmp", "ndr", "ppm", "pgm", "pdm"]
+
+    private func touch(_ names: [String]) {
+        for name in names {
+            FileManager.default.createFile(atPath: scratch.appendingPathComponent(name).path, contents: Data([0]))
+        }
+    }
+
+    func testUppercaseExtensionsAreListed() throws {
+        touch(["A_0003.Tiff", "A_0001.JPG", "A_0002.TIF"])
+        let source = try DirectoryFrameSource(dirname: scratch.path, supportedImageFileTypes: listedTypes)
+        XCTAssertEqual(source.filenames, ["A_0001.JPG", "A_0002.TIF", "A_0003.Tiff"].map { "\(scratch.path)/\($0)" })
+    }
+
+    func testDotFilesAreNotFrames() throws {
+        touch(["._A_0001.tif", ".hidden.jpg", "A_0001.tif"])
+        let source = try DirectoryFrameSource(dirname: scratch.path, supportedImageFileTypes: listedTypes)
+        XCTAssertEqual(source.filenames, ["\(scratch.path)/A_0001.tif"])
+    }
+
+    func testLowercaseListingIsUnchanged() throws {
+        touch(["b_0002.tiff", "b_0010.tif", "b_0001.jpg", "b_0003.png", "notes.txt", "b_0004.jpeg"])
+        let source = try DirectoryFrameSource(dirname: scratch.path, supportedImageFileTypes: listedTypes)
+        XCTAssertEqual(source.filenames, ["b_0001.jpg", "b_0002.tiff", "b_0003.png", "b_0004.jpeg", "b_0010.tif"].map { "\(scratch.path)/\($0)" })
+    }
+
     func testADirectorySourceWaitReturnsAtOnceAndAnOutOfRangeFrameFails() async throws {
         FileManager.default.createFile(atPath: scratch.appendingPathComponent("image_0001.tiff").path, contents: Data([0]))
         let source = try DirectoryFrameSource(dirname: scratch.path, supportedImageFileTypes: [".tiff"])
