@@ -956,7 +956,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         switch format {
         case .thirtyTwoBit(_):
-            fatalError("frame \(self.frameIndex) cannot load 32 bit image here now")
+            throw "frame \(self.frameIndex) cannot load 32 bit image here now"
                 
         case .eightBit(_):
             Log.e("8 bit not supported here now")

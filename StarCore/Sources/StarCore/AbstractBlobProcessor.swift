@@ -215,7 +215,7 @@ public class AbstractBlobProcessor {
     // (the original used to be loaded here and handed to the blobber, which never read it)
 
     internal func setup() async throws -> [UInt16] {
-        guard let frame else { fatalError("need frame") } // XXX ???
+        guard let frame else { throw "blob setup needs a frame, but none was set" }
         let frameIndex = frame.frameIndex
         let imageAccessor = frame.imageAccessor
       
@@ -236,9 +236,9 @@ public class AbstractBlobProcessor {
                     subtractionArray = Array(buffer)
 
                 case .eightBit(_):
-                    fatalError("not implemented")
+                    throw "frame \(frameIndex) 8 bit subtraction image is not supported here"
                 case .thirtyTwoBit(_):
-                    fatalError("frame \(frameIndex) 32 bit images not supported here yet")
+                    throw "frame \(frameIndex) 32 bit subtraction image is not supported here"
                 }
                 Log.d("frame \(frameIndex) loaded outlier amounts from subtraction image")
 
@@ -264,9 +264,9 @@ public class AbstractBlobProcessor {
             case .sixteenBit(let buffer):
                 subtractionArray = Array(buffer)
             case .eightBit(_):
-                fatalError("not implemented")
+                throw "frame \(frameIndex) 8 bit subtraction image is not supported here"
             case .thirtyTwoBit(_):
-                fatalError("NOT SUPPORTED YET")
+                throw "frame \(frameIndex) 32 bit subtraction image is not supported here"
             }
             Log.d("frame \(frameIndex) loaded subtractionArray with \(subtractionArray.count) items")
         }
