@@ -22,10 +22,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
-#if defined(__linux__) && defined(__GLIBC__)
-// glibc's backtrace_symbols_fd formats straight to a descriptor without malloc, which is
-// what makes it usable from a handler. Linux has no OS crash report the way macOS does, so
-// without this a CI crash names only the signal.
+#if (defined(__linux__) && defined(__GLIBC__)) || defined(__APPLE__)
+// backtrace_symbols_fd formats straight to a descriptor without malloc, which is what makes
+// it usable from a handler. Linux has no OS crash report the way a desktop macOS does, and a
+// hosted macOS CI runner does not keep one either, so without this a CI crash names only the
+// signal. Darwin's <execinfo.h> has the same two calls.
 #include <execinfo.h>
 #define STAR_HAVE_BACKTRACE 1
 #endif
@@ -209,16 +210,16 @@ static void star_fatal_handler(int signo) {
         star_write_file(star_log_path, STAR_APPEND_FLAGS, entry->log_line, entry->log_line_len);
         star_write_file(star_note_path, STAR_TRUNC_FLAGS, entry->note, entry->note_len);
 #if defined(STAR_HAVE_BACKTRACE)
-        // Last, and the least safe step: the unwind runs libgcc over a stack that may be
-        // corrupt, so if it faults the guard above exits immediately. Everything the user
+        // Last, and the least safe step: the unwind walks a stack that may be corrupt, so if it faults the guard above exits immediately. Everything the user
         // needs (message, log line, note) is already out by then.
         star_write_backtrace();
 #endif
     }
 
     // Restore the default and re-raise, so the process dies of the signal it was given and
-    // the OS still writes its own crash report. That report has the backtrace, which is the
-    // part this handler cannot produce and the part actually needed to fix the bug —
+    // the OS still writes its own crash report where it keeps one (a desktop macOS does; a
+    // hosted CI runner does not, which is why the handler writes its own backtrace above).
+    // That report has a better backtrace than the handler's, with symbols and registers —
     // reporting a crash must never cost the diagnosis of it.
     //
     // Raising unconditionally, rather than returning and letting a hardware fault
