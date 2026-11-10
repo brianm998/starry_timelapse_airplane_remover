@@ -97,6 +97,8 @@ paravirtual-GPU hypotheses (a 7 GB / 3-core VM) as the live ones, and a hosted-r
 
 2026-11-04, later: the new backtrace named the site for the Linux `uiStartDuringRun` crash (PR run 41814682342): `AsyncOperation.finish()` -> the `state` setter -> a call into statically linked Foundation, a second after `FrameGraphBuilder: all operations cancelled`, while the stopped run's operations were draining. swift-corelibs-foundation (Linux, Windows) keeps each operation's dependents as unretained pointers and walks them when it finishes; a stop makes the queued dependents run, finish and be freed while the operation they depend on still runs, so its finish touches a freed object. Darwin's Foundation does not do this, which fits macOS never crashing. `CancelledOperationKeeper` now holds every cancelled operation until what it depends on has finished. This explains the stop/supersede crash only: the first sighting above (no stop, after the merged horizon is saved, macos-15) is not a stop, so it stays open.
 
+2026-11-09: the macOS crash handler now also writes the crashing thread's backtrace (`backtrace_symbols_fd`) to stderr and star's log, as the Linux one does, because a hosted macos-15 runner keeps no crash report. The next occurrence of the first sighting will name its site; `CrashHandlerBacktraceTests` pins it. The bug itself is still open.
+
 ### What it means (hypotheses, not yet separated)
 
 A race or use-after-free in the merged-horizon step (several frames' horizon tasks run concurrently); a memory-pressure failure on the 7 GB VM

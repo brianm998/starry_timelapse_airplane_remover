@@ -75,8 +75,14 @@ let package = Package(
               .copy("Resources/Localizations"),
             ]
         ),
+        // Installs the fatal-signal handler and dies of SIGSEGV. CrashHandlerBacktraceTests
+        // spawns it to read the handler's stderr; it is not a product, so nothing ships it.
+        .executableTarget(
+            name: "StarCrashProbe",
+            dependencies: ["StarCoreC"],
+            path: "Sources/StarCrashProbe"),
         .testTarget(
             name: "StarCoreTests",
-            dependencies: ["StarCore"]),
+            dependencies: ["StarCore", "StarCrashProbe"]),
     ]
 )
