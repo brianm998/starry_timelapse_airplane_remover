@@ -82,8 +82,9 @@ public final class ViewModel {
             userPreferences = newPrefs
         }
 
-        // A UI test must not meet a "new release" sheet that depends on what GitHub says today.
-        guard Self.uiTestOpenSequencePath == nil else { return }
+        // A UI test must not meet a "new release" sheet that depends on what GitHub says today: a sheet over the start screen
+        // blocks the Preferences sheet (Cmd-comma), so the gallery's preferences step never saw `preferences.close`.
+        guard Self.uiTestOpenSequencePath == nil, !Self.uiTestNoReleaseCheck else { return }
 
         Task.detached {
             if let newRelease = await StarCore.newRelease() {
@@ -103,6 +104,11 @@ public final class ViewModel {
     /// The sequence directory to open at launch, when run by the UI tests; nil in every other launch.
     static var uiTestOpenSequencePath: String? {
         UserDefaults.standard.string(forKey: uiTestOpenSequenceKey).flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// `-StarUITestNoReleaseCheck YES`: no GitHub release check at launch (the runner passes it on every launch; the desktop test host's `releaseCheck = { null }`).
+    static var uiTestNoReleaseCheck: Bool {
+        UserDefaults.standard.bool(forKey: "StarUITestNoReleaseCheck")
     }
 
     /// `-StarUITestSkipStartupQuestions YES`: the opened sequence is not asked the startup questions, so a test can look at the sequence screen

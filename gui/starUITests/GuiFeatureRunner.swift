@@ -266,6 +266,13 @@ final class GuiFeatureRunner {
         let predicate = NSPredicate(format: "label == %@ OR title == %@", text, text)
         let types: [XCUIElement.ElementType] = [.radioButton, .button, .checkBox, .menuItem, .staticText]
         func look() -> XCUIElement? {
+            // An alert is modal, so a matching button on it is the only valid target. It must come before the sheet sweep: the settings sheet
+            // holds a radio button called "No" (UseCannyEdgeDetectionForHorizon) that the radioButton-first order would pick over the Update
+            // alert's No, leaving the alert unanswered (run 42976394931 ended with `action-button-2` "No" / `action-button-1` "Yes" unclicked).
+            // SwiftUI's .alert buttons carry the identifiers `action-button-<n>` on macos-15.
+            let alertButtons = self.app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'action-button-'"))
+                .matching(predicate)
+            if alertButtons.count > 0 { return alertButtons.element(boundBy: alertButtons.count - 1) }
             let scopes: [XCUIElement] = self.app.sheets.firstMatch.exists ? [self.app.sheets.firstMatch] : [self.app.windows.firstMatch]
             for scope in scopes {
                 for type in types {
@@ -410,6 +417,8 @@ final class GuiFeatureRunner {
         if savesScreenshots || startsRunsFromTheProcessedCopy || feature?.id == "uiRestartNow" { try keepGPUMergeOff() }
         // Ignore the windows the last run of the app left open (macOS restores them): a feature starts from the app as it opens, not from where an earlier one quit.
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"] + arguments
+        // No "new release" sheet from the GitHub check: over the start screen it blocks the Preferences sheet and any other step (`ViewModel.uiTestNoReleaseCheck`).
+        app.launchArguments += ["-StarUITestNoReleaseCheck", "YES"]
         // File ▸ Open's open panel cannot be driven: when the feature says what it answers with, the app is told (`ViewModel.uiTestChosenPath`).
         if let chosen = chosenPath { app.launchArguments += ["-StarUITestChoosePath", chosen] }
         // The parity gallery's window is 1400 by 1100 points, as the desktop client's test window is: XCUITest cannot size a window, so the app does (`ViewModel.uiTestWindowSize`).
