@@ -20,7 +20,8 @@ public enum ImageAligner {
     /// `useGPU` only ever applies to the all-resident path (never streaming), and even
     /// there is a request, not a guarantee — see `GPUCapability`. On by default so a
     /// caller that does not think about GPU acceleration gets it when the machine
-    /// supports it, same as `Config.useGPUForMerge`'s own default.
+    /// supports it, same as `Config.useGPUForMerge`'s own default. Every `useGPU` here is forced
+    /// off when `STAR_USE_GPU_FOR_MERGE=0` is in the environment (`GPUCapability.mergeForcedOff`).
     ///
     /// `rows` asks for only those rows of the merge, for a caller that will read no others: each
     /// is exactly the row the whole merge gives, the rest is `image`'s own, and where the merge
@@ -44,7 +45,7 @@ public enum ImageAligner {
                                                   scratchDir,
                                                   streamingThresholdBytes,
                                                   Int32(loadConcurrency),
-                                                  useGPU,
+                                                  GPUCapability.effectiveUseGPU(useGPU),
                                                   Int32(rows?.lowerBound ?? -1),
                                                   Int32(rows?.upperBound ?? -1))
         }
@@ -262,7 +263,7 @@ public enum ImageAligner {
                                                scratchDir,
                                                streamingThresholdBytes,
                                                Int32(loadConcurrency),
-                                               useGPU,
+                                               GPUCapability.effectiveUseGPU(useGPU),
                                                cloudAware,
                                                skyMask?.ref,
                                                cloudDebugDir,
@@ -347,7 +348,7 @@ public enum ImageAligner {
     /// `ia_debug_warp`'s comment for why this exists and where it does not belong.
     public static func debugWarp(_ src: MatWrapper, homography: MatWrapper,
                                  useGPU: Bool) -> MatWrapper? {
-        let r = ia_debug_warp(src.ref, homography.ref, useGPU)
+        let r = ia_debug_warp(src.ref, homography.ref, GPUCapability.effectiveUseGPU(useGPU))
         return r.map { MatWrapper(ref: $0) }
     }
 
@@ -405,7 +406,7 @@ public enum ImageAligner {
         var refs = sources.map { $0.ref as MatWrapperRef? }
         let r = refs.withUnsafeMutableBufferPointer { buf in
             ia_debug_median_merge(buf.baseAddress, Int32(buf.count), misses?.ref,
-                                  outlierThreshold, includeAll, useGPU)
+                                  outlierThreshold, includeAll, GPUCapability.effectiveUseGPU(useGPU))
         }
         return r.map { MatWrapper(ref: $0) }
     }

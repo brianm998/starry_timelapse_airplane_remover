@@ -28,13 +28,27 @@ final class UseGPUForMergeLegacyKeyTests: XCTestCase {
 
     func testNewKeyWinsWhenBothArePresent() throws {
         let c = try decode(#"{"useGPUForMerge": true, "useGPU": false}"#)
-        XCTAssertTrue(c.useGPUForMerge, "a config written by a newer star already has the new key")
+        XCTAssertEqual(c.useGPUForMerge, !GPUCapability.mergeForcedOff(), "a config written by a newer star already has the new key")
     }
 
     func testAbsentKeysLeaveTheDefault() throws {
         let c = try decode(#"{"imageWidth": 100}"#)
-        XCTAssertEqual(c.useGPUForMerge, GPUCapability.isAvailable(), "defaults to on when a GPU is available")
+        XCTAssertEqual(c.useGPUForMerge, GPUCapability.isAvailable() && !GPUCapability.mergeForcedOff(), "defaults to on when a GPU is available")
         XCTAssertEqual(c.useGPUForSIFT, GPUCapability.isAvailable())
         XCTAssertEqual(c.useGPUForAKAZE, GPUCapability.isAvailable())
+    }
+
+    func testEnvironmentForcesCPU() throws {
+        func decode(_ json: String, _ env: [String: String]) throws -> Config {
+            let d = JSONDecoder()
+            d.userInfo[Config.environmentUserInfoKey] = env
+            return try d.decode(Config.self, from: Data(json.utf8))
+        }
+        let off = ["STAR_USE_GPU_FOR_MERGE": "0"]
+        XCTAssertFalse(try decode(#"{"imageWidth": 100}"#, off).useGPUForMerge, "the default")
+        XCTAssertFalse(try decode(#"{"useGPUForMerge": true}"#, off).useGPUForMerge, "config.json true")
+        XCTAssertFalse(try decode(#"{"useGPU": true}"#, off).useGPUForMerge, "legacy key true")
+        XCTAssertTrue(try decode(#"{"useGPUForMerge": true}"#, ["STAR_USE_GPU_FOR_MERGE": "1"]).useGPUForMerge,
+                      "1 leaves the config alone")
     }
 }
