@@ -1,3 +1,4 @@
+#if canImport(CoreGraphics)
 import XCTest
 import CoreGraphics
 import StarCppBridge
@@ -57,3 +58,4 @@ final class OutlierGroupTestImageTests: XCTestCase {
         XCTAssertEqual([UInt8](data), [0xFF, 0, 0, 0])
     }
 }
+#endif
