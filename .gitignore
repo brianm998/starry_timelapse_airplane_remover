@@ -52,3 +52,7 @@ small_horizon_test_data
 # wgpu-native release artifacts: fetched by wgpu/fetch.sh, never committed
 /wgpu/*/
 .heap-hunt-scratch/
+
+# Python bytecode from the MASON helper scripts
+.mason/scripts/__pycache__/
+*.pyc

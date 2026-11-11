@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# star's live MASON configuration for the shadow period, running beside starpipe: MASON claims only
+# issues labelled `mason`. Inventory and decisions: brianm998/mason docs/stages/s27.md.
+#
+# direct-ci: ready tasks are merged into one disposable branch, the suites run over the union,
+# the branch is pushed as `mason/ci/<batch>`, CI is dispatched on it, and a green result
+# fast-forwards `develop`. No pull request is opened, which is star's "No pull requests for
+# internal work" rule. Which workflow is dispatched is in the project registration, not here:
+# `[ci] workflow = "pr-gate.yml"` in docs/examples/star.project.toml.
+#
+# direct-ci dispatches ONE workflow with no inputs. starpipe also dispatched macos-gate.yml and, per
+# ticket, gherkin.yml with a `features` input. How those two are covered is an owner decision
+# (docs/decisions/0119, decisions 1 and 2); nothing in this file covers them yet.
+mode = "direct-ci"
+base = "develop"
+window = "20m"
+max_size = 0
+
+[on_red]
+# A red CI run is rerun once (the whole run: MASON does not tell an infrastructure red from a real one).
+ladder = ["rerun-failed", "blame-by-impact", "bisect", "ask"]
