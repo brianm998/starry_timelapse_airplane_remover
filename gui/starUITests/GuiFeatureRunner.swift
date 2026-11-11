@@ -266,6 +266,13 @@ final class GuiFeatureRunner {
         let predicate = NSPredicate(format: "label == %@ OR title == %@", text, text)
         let types: [XCUIElement.ElementType] = [.radioButton, .button, .checkBox, .menuItem, .staticText]
         func look() -> XCUIElement? {
+            // An alert is modal, so a matching button on it is the only valid target. It must come before the sheet sweep: the settings sheet
+            // holds a radio button called "No" (UseCannyEdgeDetectionForHorizon) that the radioButton-first order would pick over the Update
+            // alert's No, leaving the alert unanswered (run 42976394931 ended with `action-button-2` "No" / `action-button-1` "Yes" unclicked).
+            // SwiftUI's .alert buttons carry the identifiers `action-button-<n>` on macos-15.
+            let alertButtons = self.app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'action-button-'"))
+                .matching(predicate)
+            if alertButtons.count > 0 { return alertButtons.element(boundBy: alertButtons.count - 1) }
             let scopes: [XCUIElement] = self.app.sheets.firstMatch.exists ? [self.app.sheets.firstMatch] : [self.app.windows.firstMatch]
             for scope in scopes {
                 for type in types {
