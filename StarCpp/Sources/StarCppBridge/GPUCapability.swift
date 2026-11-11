@@ -5,6 +5,7 @@
 // "does your machine support this" — the gui's settings view, the daemon's
 // status to the Kotlin client, the cli's startup log — call this directly, with
 // no dependency on `ImageAligner` or any merge machinery having run yet.
+import Foundation
 #if canImport(Metal)
 import Metal
 #endif
@@ -42,6 +43,30 @@ public enum GPUCapability: Sendable {
         #else
         return false
         #endif
+    }
+
+    /// Name of the environment variable that forces the CPU median merge from outside the process.
+    public static let forceCPUMergeVariable = "STAR_USE_GPU_FOR_MERGE"
+
+    /// Whether the environment forces the CPU warp and median merge: `STAR_USE_GPU_FOR_MERGE` set to
+    /// `0`, `false`, `no` or `off` (any case). Unset, empty, `1`, `true` or anything else leaves the
+    /// choice to `Config` and the caller. Test runs set it so no config.json or test setup can turn
+    /// the GPU merge back on. `environment` is injectable so tests never touch the process's own.
+    public static func mergeForcedOff(
+        environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
+        guard let raw = environment[forceCPUMergeVariable] else { return false }
+        switch raw.trimmingCharacters(in: .whitespaces).lowercased() {
+        case "0", "false", "no", "off": return true
+        default: return false
+        }
+    }
+
+    /// What `ImageAligner` passes to the C layer for a caller's `useGPU` request: the request,
+    /// unless the environment forces the CPU merge.
+    public static func effectiveUseGPU(
+        _ requested: Bool,
+        environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
+        requested && !mergeForcedOff(environment: environment)
     }
 
     /// The Metal device name, e.g. "Radeon Pro Vega 64" or "Apple M2 Max", or nil
