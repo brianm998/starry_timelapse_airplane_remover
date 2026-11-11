@@ -417,6 +417,8 @@ final class GuiFeatureRunner {
         if savesScreenshots || startsRunsFromTheProcessedCopy || feature?.id == "uiRestartNow" { try keepGPUMergeOff() }
         // Ignore the windows the last run of the app left open (macOS restores them): a feature starts from the app as it opens, not from where an earlier one quit.
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"] + arguments
+        // No "new release" sheet from the GitHub check: over the start screen it blocks the Preferences sheet and any other step (`ViewModel.uiTestNoReleaseCheck`).
+        app.launchArguments += ["-StarUITestNoReleaseCheck", "YES"]
         // File ▸ Open's open panel cannot be driven: when the feature says what it answers with, the app is told (`ViewModel.uiTestChosenPath`).
         if let chosen = chosenPath { app.launchArguments += ["-StarUITestChoosePath", chosen] }
         // The parity gallery's window is 1400 by 1100 points, as the desktop client's test window is: XCUITest cannot size a window, so the app does (`ViewModel.uiTestWindowSize`).

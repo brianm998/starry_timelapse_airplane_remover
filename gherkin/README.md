@@ -234,7 +234,8 @@ Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<clie
 
 * gui: launch arguments `-StarUITestOpenSequence <dir>` (`ViewModel.openSequenceFromUITestArgument`) opens a sequence the way
   the open panel does, and `-StarUITestOpenVideo <file>` raises the video import sheet as "Load Video" does; both suppress
-  the GitHub release check. Accessibility identifiers: `startup.horizon.yes/.no`, `startup.moving.static/.moving`,
+  the GitHub release check, as does `-StarUITestNoReleaseCheck YES`, which the runner passes on every launch (a no-sequence start screen would otherwise
+  get the new-release sheet, which blocks Cmd-comma's Preferences). Accessibility identifiers: `startup.horizon.yes/.no`, `startup.moving.static/.moving`,
   `startup.selecthorizon.no`, `startup.selectmovinghorizons.no`, `startup.removal.automatic/.autoselective/.selective/.groundalignment/.start`,
   `videoimport.format.tiff16/.tiff8/.jpeg`, `videoimport.import`, `prompt.pre.yes/.no`, `prompt.options.confirm` (the render options Yes leads to), `render.done`/`render.error`, and
   `processing.progress` whose label reads `<complete>/<total>/<running|idle>`.
