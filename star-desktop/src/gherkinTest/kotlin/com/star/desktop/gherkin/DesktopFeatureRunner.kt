@@ -150,6 +150,8 @@ class DesktopFeatureRunner {
         StepAction.NO_VIDEO_LEFT to { t -> noVideoLeft(t) },
         StepAction.SLOW_ENCODER to { slowEncoder() },
         StepAction.SLOW_FRAMES to { slowFrames() },
+        StepAction.HOLD_RUN to { holdRun() },
+        StepAction.RELEASE_RUN to { t -> releaseRun(t) },
         StepAction.ID_FOCUSED to { t -> expectFocus(t, args[0], focused = true) },
         StepAction.ID_NOT_FOCUSED to { t -> expectFocus(t, args[0], focused = false) },
         StepAction.LANGUAGE_IS to { },   // read when the run starts
@@ -732,6 +734,26 @@ class DesktopFeatureRunner {
         limits.addProperty("cpuWidth", 1)
         json.add("customResources", limits)
         config.writeText(Gson().toJson(json))
+    }
+
+    /** The file in the processed copy's working folder that holds the merge of every frame but the first (StarCore's `MergeOp.heldFromFrame`). */
+    private var runHold: File? = null
+
+    /**
+     * The processed copy's run is held after its first frame: `merge.hold` (text `1`) in the folder of its config.json, which is the config's
+     * `tempOutputPath`, so the engine parks the merge of every frame from index 1 on until [releaseRun]. The run then cannot end however slow the
+     * UI steps are; frame 0 merges, the others wait.
+     */
+    private fun holdRun() {
+        val config = processedConfig ?: throw RunnerError("\"a processed copy of the sequence\" has not run")
+        runHold = File(config.parentFile, "merge.hold").also { it.writeText("1") }
+    }
+
+    /** Lets the held run go on: removes the file that held it. */
+    private fun releaseRun(t: ComposeUiTest) {
+        val hold = runHold ?: throw RunnerError("\"the processed copy's run is held after its first frame\" has not run")
+        if (hold.exists() && !hold.delete()) throw RunnerError("could not remove $hold")
+        t.waitForIdle()
     }
 
     /** The videos in [folder] (not its subfolders), by the containers a render writes. */

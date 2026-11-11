@@ -127,6 +127,8 @@ final class GuiFeatureRunner {
         .noVideoLeft: { try $0.noVideoLeft() },
         .slowEncoder: { try $0.slowEncoder() },
         .slowFrames: { try $0.slowFrames() },
+        .holdRun: { try $0.holdRun() },
+        .releaseRun: { try $0.releaseRun() },
         .idFocused: { try $0.expectFocus($0.args[0], focused: true) },
         .idNotFocused: { try $0.expectFocus($0.args[0], focused: false) },
         .languageIs: { _ in },   // read by `language` when the app is launched
@@ -751,6 +753,25 @@ final class GuiFeatureRunner {
         limits["cpuWidth"] = 1
         object["customResources"] = limits
         try JSONSerialization.data(withJSONObject: object).write(to: config)
+    }
+
+    /// The file in the processed copy's working folder that holds the merge of every frame but the first (StarCore's `MergeOp.heldFromFrame`).
+    private var runHold: URL?
+
+    /// The processed copy's run is held after its first frame: `merge.hold` (text `1`) in the folder of its config.json, which is the config's
+    /// `tempOutputPath`, so the engine parks the merge of every frame from index 1 on until `releaseRun`. The run then cannot end however slow the
+    /// UI steps are; frame 0 merges, the others wait.
+    private func holdRun() throws {
+        guard let config = processedConfig else { throw RunnerError("\"a processed copy of the sequence\" has not run") }
+        let hold = config.deletingLastPathComponent().appendingPathComponent("merge.hold")
+        try "1".write(to: hold, atomically: true, encoding: .utf8)
+        runHold = hold
+    }
+
+    /// Lets the held run go on: removes the file that held it.
+    private func releaseRun() throws {
+        guard let hold = runHold else { throw RunnerError("\"the processed copy's run is held after its first frame\" has not run") }
+        if FileManager.default.fileExists(atPath: hold.path) { try FileManager.default.removeItem(at: hold) }
     }
 
     /// The videos in [folder] (not its subfolders), by the containers a render writes.
