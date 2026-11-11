@@ -28,6 +28,36 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
         await frame.processingState() != .complete
     }
 
+    /// Test seam: while the file `<tempOutputPath>/merge.hold` exists, the merge of every frame from the index it holds (its text; the first
+    /// frame when empty) on waits, so a UI test can keep a run going for as long as its steps take and then let it finish (delete the file).
+    /// Alignment and outliers go on meanwhile, and the run is reported as in progress.  Nil when there is no such file, which is all a real run
+    /// ever sees: one stat per merge.
+    static func heldFromFrame(tempOutputPath: String) -> Int? {
+        guard let data = FileManager.default.contents(atPath: tempOutputPath + "/merge.hold") else { return nil }
+        let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        return Int(text) ?? 0
+    }
+
+    /// How long a held merge waits before the hold is looked at again.
+    static let holdRecheck: Duration = .milliseconds(250)
+
+    /// Waits while the hold holds this frame; returns at once when the op is cancelled (a superseding start, Stop), so the hold never keeps
+    /// `cancelAllOperationsAndWait` from draining.
+    private func holdWhileAsked() async {
+        let tempOutputPath = await frame.configManager.config().tempOutputPath
+        var logged = false
+        while !Task.isCancelled,
+              let heldFrom = Self.heldFromFrame(tempOutputPath: tempOutputPath),
+              frame.frameIndex >= heldFrom {
+            if !logged {
+                Log.i("frame \(frame.frameIndex) merge held by \(tempOutputPath)/merge.hold")
+                logged = true
+            }
+            try? await Task.sleep(for: Self.holdRecheck)
+        }
+        if logged { Log.i("frame \(frame.frameIndex) merge no longer held") }
+    }
+
     public override func asyncExecute() async {
         guard !Task.isCancelled else {
             Log.d("frame \(frame.frameIndex) merge cancelled")
@@ -43,6 +73,12 @@ public final class MergeOp: AsyncOperation, @unchecked Sendable {
 
             guard !Task.isCancelled else {
                 Log.d("frame \(frame.frameIndex) merge cancelled after state check")
+                return
+            }
+
+            await holdWhileAsked()
+            guard !Task.isCancelled else {
+                Log.d("frame \(frame.frameIndex) merge cancelled while held")
                 return
             }
 
