@@ -68,6 +68,8 @@ apply to it: don't translate it and don't build a Kotlin twin.
   ticket *is* the exploration agent. Open the files you name, settle the approach, and write the plan into the
   ticket (format and checks: "Carrying a plan" in `.claude/skills/file-tickets/SKILL.md`; `starpipe ticket lint`
   verifies it). Omit it only when you genuinely haven't explored the code. A guessed plan is worse than none.
+- **MASON is shadowing starpipe.** Its configuration is `.mason/` (pipeline tooling, like `pipeline/`: no translation, no Kotlin twin).
+  It claims only issues labelled `mason`, starpipe claims only `pipeline`, and an issue never carries both.
 
 ## This machine cannot run the GPU median merge
 
