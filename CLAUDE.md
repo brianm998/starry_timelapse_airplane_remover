@@ -76,6 +76,8 @@ this Mac roughly 60% of the time or more. It can get through part of a run, then
 service is locked out and stops responding, and the machine has to be recovered.
 
 **Whenever a test (or any star run) is executed on this machine, ALWAYS use the CPU version of the
-median merge logic**: set `useGPUForMerge = false` (config / `~/.star.userprefs.json` / test
-setup) and don't rely on the default, which is on whenever a GPU is detected. Don't run GPU merge
+median merge logic**: set `STAR_USE_GPU_FOR_MERGE=0` in the environment (also `false`, `no`,
+`off`). `ImageAligner` and `Config` honour it for every caller, whatever `config.json` or a test's own
+setup says (`GPUCapability.mergeForcedOff`); the default is otherwise on whenever a GPU is detected.
+(`~/.star.userprefs.json` is the gui's own preferences and does not do this; the cli ignores it.) Don't run GPU merge
 tests or GPU-vs-CPU comparisons here; leave those to CI or another machine.

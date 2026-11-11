@@ -384,7 +384,7 @@ public struct Config: Codable, Sendable {
     /// this setting. See `GPUCapability` for how a client shows the user which case
     /// they are in — this flag alone cannot tell them, because "off" and "on but
     /// unsupported" both end up running on the CPU.
-    public var useGPUForMerge: Bool = GPUCapability.hasFullAcceleration()
+    public var useGPUForMerge: Bool = GPUCapability.hasFullAcceleration() && !GPUCapability.mergeForcedOff()
 
     /// Whether to use a from-scratch, GPU-accelerated reimplementation of SIFT's
     /// Gaussian scale-space pyramid for sky (star) keypoint detection, in place of
@@ -1565,6 +1565,10 @@ public struct Config: Codable, Sendable {
         case useGPU
     }
 
+    /// `JSONDecoder.userInfo` key whose value, a `[String: String]`, replaces the process environment
+    /// for the decode (tests only).
+    static let environmentUserInfoKey = CodingUserInfoKey(rawValue: "star.environment")!
+
     public init(from decoder: Decoder) throws {
         // start with all your initializer defaults
         self = Config()
@@ -1600,6 +1604,10 @@ public struct Config: Codable, Sendable {
             // Pre-rename config.json still has the old key; see `LegacyCodingKeys.useGPU`.
             self.useGPUForMerge = legacy
         }
+        // STAR_USE_GPU_FOR_MERGE=0 wins over config.json; `userInfo` lets tests supply the environment.
+        let environment = decoder.userInfo[Config.environmentUserInfoKey] as? [String: String]
+            ?? ProcessInfo.processInfo.environment
+        if GPUCapability.mergeForcedOff(environment: environment) { self.useGPUForMerge = false }
         self.useGPUForSIFT = try c.decodeIfPresent(Bool.self, forKey: .useGPUForSIFT) ?? self.useGPUForSIFT
         self.useGPUForAKAZE = try c.decodeIfPresent(Bool.self, forKey: .useGPUForAKAZE) ?? self.useGPUForAKAZE
 
