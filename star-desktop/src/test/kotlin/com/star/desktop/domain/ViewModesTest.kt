@@ -21,19 +21,17 @@ class ViewModesTest {
         )
     }
 
-    /** A1: the dirty methods' outputs are listed like the automatic one, once the frame has them. */
-    @Test fun theGridListsTheDirtyOutputsLikeTheAutoOne() {
-        val shown = ViewModes.gridShown(listOf(FrameViewMode.VIEW_DIRTY_EARTH_PROCESSED, FrameViewMode.VIEW_AUTO_PROCESSED, FrameViewMode.VIEW_DIRTY_SKY_PROCESSED))
+    /** A1: the dirty method's output is listed like the automatic one, once the frame has them. */
+    @Test fun theGridListsTheDirtyOutputLikeTheAutoOne() {
+        val shown = ViewModes.gridShown(listOf(FrameViewMode.VIEW_DIRTY_PROCESSED, FrameViewMode.VIEW_AUTO_PROCESSED))
         assertEquals(
             listOf(
-                FrameViewMode.VIEW_ORIGINAL, FrameViewMode.VIEW_AUTO_PROCESSED, FrameViewMode.VIEW_DIRTY_SKY_PROCESSED,
-                FrameViewMode.VIEW_DIRTY_EARTH_PROCESSED, FrameViewMode.VIEW_PROCESSED,
+                FrameViewMode.VIEW_ORIGINAL, FrameViewMode.VIEW_AUTO_PROCESSED, FrameViewMode.VIEW_DIRTY_PROCESSED,
+                FrameViewMode.VIEW_PROCESSED,
             ),
             shown,
         )
-        for (mode in listOf(FrameViewMode.VIEW_DIRTY_SKY_PROCESSED, FrameViewMode.VIEW_DIRTY_EARTH_PROCESSED)) {
-            assertEquals(false, ViewModes.longName(mode).isEmpty(), "$mode has a name")
-        }
+        assertEquals(false, ViewModes.longName(FrameViewMode.VIEW_DIRTY_PROCESSED).isEmpty(), "the dirty mode has a name")
     }
 
     @Test fun aModeWithNoImageIsNotListed() {

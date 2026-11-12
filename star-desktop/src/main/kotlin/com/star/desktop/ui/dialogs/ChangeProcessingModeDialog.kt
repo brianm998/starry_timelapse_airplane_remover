@@ -43,16 +43,14 @@ import com.star.proto.CleanMethod
 internal fun frameModeNameKey(m: CleanMethod) = when (m) {
     CleanMethod.CLEAN_AUTOMATIC -> "ui.frame_mode_automatic"
     CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.frame_mode_auto_selective"
-    CleanMethod.CLEAN_DIRTY_SKY -> "ui.dirty_sky"
-    CleanMethod.CLEAN_DIRTY_EARTH -> "ui.dirty_earth"
+    CleanMethod.CLEAN_DIRTY -> "ui.dirty"
     else -> "ui.frame_mode_selective"
 }
 
 private fun descriptionKey(m: CleanMethod) = when (m) {
     CleanMethod.CLEAN_AUTOMATIC -> "ui.frame_mode_desc_automatic"
     CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.frame_mode_desc_auto_selective"
-    CleanMethod.CLEAN_DIRTY_SKY -> "ui.frame_mode_desc_dirty_sky"
-    CleanMethod.CLEAN_DIRTY_EARTH -> "ui.frame_mode_desc_dirty_earth"
+    CleanMethod.CLEAN_DIRTY -> "ui.frame_mode_desc_dirty"
     else -> "ui.frame_mode_desc_selective"
 }
 
@@ -63,8 +61,6 @@ private fun descriptionKey(m: CleanMethod) = when (m) {
 @Composable
 fun ChangeProcessingModeDialog(
     current: CleanMethod,
-    /** The sequence has a horizon; Dirty earth needs one, so it is switched off (with its tip) when this is false. */
-    horizonDetection: Boolean,
     onCancel: () -> Unit,
     onConfirm: (CleanMethod) -> Unit,
 ) {
@@ -106,11 +102,7 @@ fun ChangeProcessingModeDialog(
                 label = { localized(CleanMethodTexts.titleKey(it)) },
                 onSelect = { clean = it },
                 modifier = Modifier.fillMaxWidth(),
-                optionEnabled = { it.isAvailable(horizonDetection) },
             )
-            CleanMethodTexts.unavailableTipKey(HighLevelClean.DIRTY_EARTH, horizonDetection)?.let {
-                Text(localized(it), color = StarColors.textSecondary, fontSize = 11.sp)
-            }
 
             Column(Modifier.alpha(if (automatic) 1f else 0.4f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(localized("ui.auto_select"), color = StarColors.white, fontSize = 12.sp)

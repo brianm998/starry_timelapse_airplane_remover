@@ -29,9 +29,9 @@ final class EnumParityTests: XCTestCase {
     // MARK: - CleanMethod (associated values; check each variant explicitly)
 
     func testCleanMethodVariants() {
-        // Proto has 5 cases: cleanAutomatic, cleanAutomaticTrue, cleanSelective, cleanDirtySky, cleanDirtyEarth.
+        // Proto has 4 cases: cleanAutomatic, cleanAutomaticTrue, cleanSelective, cleanDirty.
         // Goes through the real Mapping functions, not copies of them.
-        let variants: [CleanMethod] = [.automatic(false), .automatic(true), .selective, .dirtySky, .dirtyEarth]
+        let variants: [CleanMethod] = [.automatic(false), .automatic(true), .selective, .dirty]
         var seen = Set<Star_V1_CleanMethod>()
         for cm in variants {
             let proto = Mapping.protoCleanMethod(cm)
@@ -40,7 +40,7 @@ final class EnumParityTests: XCTestCase {
             XCTAssertEqual(back, cm, "round-trip failed for \(cm)")
         }
         let protoCases = Star_V1_CleanMethod.allCases.filter { $0 != .UNRECOGNIZED(-1) }
-        XCTAssertEqual(protoCases.count, 5)
+        XCTAssertEqual(protoCases.count, 4)
         // Every proto case maps back to a distinct Swift variant and returns to itself.
         for proto in protoCases {
             XCTAssertEqual(Mapping.protoCleanMethod(Mapping.cleanMethod(fromProto: proto)), proto,

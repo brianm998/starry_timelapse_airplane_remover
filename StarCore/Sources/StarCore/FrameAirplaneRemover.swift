@@ -303,7 +303,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     /// directory was gone, and a reprocess under a new merge put the old merge back.
     nonisolated public func mergeOutputExistsOnDisk() -> Bool {
         [FrameViewMode.final, .autoProcessed, .autoSelectiveProcessed, .selectiveProcessed,
-         .dirtySkyProcessed, .dirtyEarthProcessed]
+         .dirtyProcessed]
           .contains { imageAccessor.imageExists(frameIndex: frameIndex,
                                                 ofType: $0,
                                                 atSize: .original) }
@@ -704,7 +704,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
         imageAccessor.deleteImages(
             frameIndex: frameIndex,
             ofTypes: [.autoProcessed, .autoSelectiveProcessed, .selectiveProcessed,
-                      .dirtySkyProcessed, .dirtyEarthProcessed, .final],
+                      .dirtyProcessed, .final],
             atSizes: [.original, .preview]
         )
         if state == .complete {
@@ -719,54 +719,24 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
             try await self.finishAuto(useOutliers: useOutliers)
         case .selective:
             try await self.finishSelective()
-        case .dirtySky:
-            try await self.finishDirty(portion: .sky)
-        case .dirtyEarth:
-            try await self.finishDirty(portion: .earth)
+        case .dirty:
+            try await self.finishDirty()
         }
     }
 
-    /// Which part of the frame a dirty clean method keeps.
-    public enum DirtyPortion: Sendable {
-        case sky
-        case earth
-
-        var outputType: FrameViewMode {
-            switch self {
-            case .sky:   .dirtySkyProcessed
-            case .earth: .dirtyEarthProcessed
-            }
-        }
-    }
-
-    /// The dirty clean methods' image: for `portion`, `original − aligned reference` per channel,
-    /// clipped at 0, in the original's own bit depth and channels; the other portion is exactly 0.
-    /// The reference and the horizon split are the ones the outlier subtraction uses
-    /// (`loadOrCreateAlignedReference`), un-feathered for the split, so a static star or static
-    /// ground goes to ~0 and only what moved is left.
+    /// The dirty clean method's image: `original − aligned reference` per channel, clipped at 0,
+    /// in the original's own bit depth and channels, over the whole frame.  The reference is the
+    /// one the outlier subtraction uses (`loadOrCreateAlignedReference`): the star alignment in the
+    /// sky blended with the earth alignment on the ground, or the star alignment alone with horizon
+    /// detection off.  So a static star or static ground goes to ~0 and only what moved is left,
+    /// in the sky and on the ground alike.  This is exactly the union of the two halves the earlier
+    /// dirty sky and dirty earth methods each wrote.
     ///
-    /// With horizon detection off there is no ground: dirty sky covers the whole frame and dirty
-    /// earth throws `Config.dirtyEarthNeedsHorizonMessage`.  On a moving camera, a frame whose
-    /// ground neighbours cannot be tracked has the original as its earth reference, so its dirty
-    /// earth image is near-black; that is the right answer for "what moved", not a defect.
-    func createDirtyImage(portion: DirtyPortion) async throws -> PixelatedImage {
-        let config = await configManager.config()
-        if portion == .earth, !config.horizonDetectionEnabled {
-            throw Config.dirtyEarthNeedsHorizonMessage
-        }
-
+    /// On a moving camera, a frame whose ground neighbours cannot be tracked has the original as
+    /// its earth reference, so its ground is near-black; that is the right answer for "what
+    /// moved", not a defect.
+    func createDirtyImage() async throws -> PixelatedImage {
         let aligned = try await loadOrCreateAlignedReference()
-
-        var skyMask = aligned.skyMask
-        if config.horizonDetectionEnabled, skyMask == nil {
-            // no earth image to blend with: still split where the horizon is
-            if let horizon = try await horizonProcessor.loadOrCreateFinalHorizonMask()?.image {
-                skyMask = await alignmentProcessor.starAlignedHorizonMask(from: horizon)
-            }
-        }
-        if portion == .earth, skyMask == nil {
-            throw "frame \(frameIndex) cannot make a dirty earth image without a horizon mask"
-        }
 
         guard let original = try await imageAccessor.load(frameIndex: frameIndex,
                                                           type: .original,
@@ -777,17 +747,15 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         // a full-frame pixel loop, off the pool like the grayscale subtraction
         let reference = aligned.reference
-        let mask = skyMask
-        let keepSky = portion == .sky
         return try await NativeWork.run {
-            try original.subtractColor(reference, mask: mask, keepingMaskWhite: keepSky)
+            try original.subtractColor(reference, mask: nil)
         }
     }
 
-    /// Finishes a frame under `.dirtySky` or `.dirtyEarth`: writes `createDirtyImage` as the
+    /// Finishes a frame under `.dirty`: writes `createDirtyImage` as the
     /// processed image and links it as the final.  No outlier or blob work, and no outlier files.
-    public func finishDirty(portion: DirtyPortion) async throws {
-        let outputType = portion.outputType
+    public func finishDirty() async throws {
+        let outputType = FrameViewMode.dirtyProcessed
         let outputSizes = await self.outputSizes
 
         if imageAccessor.imageExists(frameIndex: frameIndex, ofType: outputType, atSize: .original) {
@@ -814,7 +782,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
 
         self.set(state: .finishing)
         let config = await configManager.config()
-        var image = try await createDirtyImage(portion: portion)
+        var image = try await createDirtyImage()
         if config.imageBitsPerComponent == 8 {
             // as finishSelective does: an 8-bit sequence is written back out at 8 bits
             image = image.ensure8Bits
@@ -1985,10 +1953,10 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                         }
                     }
                 }
-            case .dirtySky, .dirtyEarth:
+            case .dirty:
                 // finishDirty links the cached processed image when it is on disk, and makes it
                 // when it is not
-                try await self.finishDirty(portion: cleanMethod == .dirtySky ? .sky : .earth)
+                try await self.finishDirty()
             case .selective:
                 if let filename = imageAccessor.nameForImage(
                      frameIndex: frameIndex,

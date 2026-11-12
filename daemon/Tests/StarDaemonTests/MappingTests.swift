@@ -177,12 +177,10 @@ final class MappingTests: XCTestCase {
     /// And going back out gets the same view: announcing a save and asking for the preview agree, for every image.
     private static let modesOnTheWire = FrameViewMode.allCases
 
-    /// A1: the dirty methods' outputs are views a client can list and ask for, like the automatic one.
+    /// A4: the dirty method's output is a view a client can list and ask for, like the automatic one.
     func testTheDirtyViewModesMapBothWays() {
-        XCTAssertEqual(Mapping.protoFrameViewMode(.dirtySkyProcessed), .viewDirtySkyProcessed)
-        XCTAssertEqual(Mapping.protoFrameViewMode(.dirtyEarthProcessed), .viewDirtyEarthProcessed)
-        XCTAssertEqual(Mapping.frameViewMode(from: .viewDirtySkyProcessed), .dirtySkyProcessed)
-        XCTAssertEqual(Mapping.frameViewMode(from: .viewDirtyEarthProcessed), .dirtyEarthProcessed)
+        XCTAssertEqual(Mapping.protoFrameViewMode(.dirtyProcessed), .viewDirtyProcessed)
+        XCTAssertEqual(Mapping.frameViewMode(from: .viewDirtyProcessed), .dirtyProcessed)
     }
 
     func testAnAnnouncedViewIsTheOneThatCanBeAskedFor() {

@@ -4001,8 +4001,7 @@ final class SharedConstantsTests: XCTestCase {
         case .automatic(false): "automatic"
         case .automatic(true): "autoSelective"
         case .selective: "selective"
-        case .dirtySky: "dirtySky"
-        case .dirtyEarth: "dirtyEarth"
+        case .dirty: "dirty"
         }
     }
 
@@ -4010,8 +4009,7 @@ final class SharedConstantsTests: XCTestCase {
         switch name {
         case "automatic": .automatic
         case "selective": .selective
-        case "dirtySky": .dirtySky
-        case "dirtyEarth": .dirtyEarth
+        case "dirty": .dirty
         default: throw XCTSkip("no clean method choice named \(name ?? "nil")")
         }
     }
@@ -4026,7 +4024,7 @@ final class SharedConstantsTests: XCTestCase {
         for language in ["en", "de"] {
             StarLocalization.shared.languageOverride = language
             for (name, option) in [("automatic", HighLevelCleanMethod.automatic), ("selective", .selective),
-                                   ("dirtySky", .dirtySky), ("dirtyEarth", .dirtyEarth)] {
+                                   ("dirty", .dirty)] {
                 let keys = try XCTUnwrap(clean[name])
                 XCTAssertEqual(option.titleText, localized(try XCTUnwrap(keys["title"])), "\(name) in \(language)")
                 XCTAssertEqual(option.helpText, localized(try XCTUnwrap(keys["tip"])), "\(name) in \(language)")
@@ -4039,9 +4037,6 @@ final class SharedConstantsTests: XCTestCase {
                 XCTAssertEqual(option.descriptionText, localized(try XCTUnwrap(keys["description"])), "\(name) in \(language)")
             }
         }
-        // The tip a switched-off Dirty earth shows is the same key in both clients.
-        XCTAssertEqual(HighLevelCleanMethod.dirtyEarth.unavailableText(horizonDetectionEnabled: false),
-                       localized(try XCTUnwrap(texts["dirtyEarthNeedsHorizon"] as? String)))
         // Every one of them is a real catalogue entry, and German is not English.
         for keys in Array(clean.values) + Array(auto.values) {
             for key in ["tip", "description"] {
@@ -4064,26 +4059,24 @@ final class SharedConstantsTests: XCTestCase {
             XCTAssertEqual(cleanMethodName(CleanMethod(highLevelCleanMethod: high, autoPreservationMode: preservation)), c["expected"] as? String, "\(c)")
         }
         for c in try XCTUnwrap(rule["autoPreservationStart"] as? [[String: Any]]) {
-            let method: CleanMethod = switch c["method"] as? String { case "automatic": .automatic(false); case "autoSelective": .automatic(true); case "dirtySky": .dirtySky; case "dirtyEarth": .dirtyEarth; default: .selective }
+            let method: CleanMethod = switch c["method"] as? String { case "automatic": .automatic(false); case "autoSelective": .automatic(true); case "dirty": .dirty; default: .selective }
             // ProcessingSettingsView.init: the sheet opens with Selective Auto Clean at Yes whenever the method reviews outliers.
             XCTAssertEqual(method.usesOutliers, c["expected"] as? Bool, "\(c)")
         }
     }
 
-    /// A5: choosing Dirty sky or Dirty earth builds that `CleanMethod`, whatever Selective Auto Clean was left at, and a
+    /// A5: choosing Dirty builds `.dirty`, whatever Selective Auto Clean was left at, and a
     /// clean method reads back as the choice it was made from.
     func testTheDirtyChoicesBuildTheMatchingCleanMethod() {
         for preservation in AutoPreservationMode.allCases {
-            XCTAssertEqual(CleanMethod(highLevelCleanMethod: .dirtySky, autoPreservationMode: preservation), .dirtySky)
-            XCTAssertEqual(CleanMethod(highLevelCleanMethod: .dirtyEarth, autoPreservationMode: preservation), .dirtyEarth)
+            XCTAssertEqual(CleanMethod(highLevelCleanMethod: .dirty, autoPreservationMode: preservation), .dirty)
         }
-        XCTAssertEqual(HighLevelCleanMethod.allCases, [.automatic, .selective, .dirtySky, .dirtyEarth])
-        for method: CleanMethod in [.automatic(false), .automatic(true), .selective, .dirtySky, .dirtyEarth] {
+        XCTAssertEqual(HighLevelCleanMethod.allCases, [.automatic, .selective, .dirty])
+        for method: CleanMethod in [.automatic(false), .automatic(true), .selective, .dirty] {
             XCTAssertEqual(CleanMethod(highLevelCleanMethod: HighLevelCleanMethod(method), autoPreservationMode: method.usesOutliers ? .yes : .no).isDirty,
                            method.isDirty, "\(method)")
         }
-        XCTAssertEqual(HighLevelCleanMethod(.dirtySky), .dirtySky)
-        XCTAssertEqual(HighLevelCleanMethod(.dirtyEarth), .dirtyEarth)
+        XCTAssertEqual(HighLevelCleanMethod(.dirty), .dirty)
         XCTAssertEqual(HighLevelCleanMethod(.automatic(true)), .automatic)
     }
 
@@ -4094,27 +4087,17 @@ final class SharedConstantsTests: XCTestCase {
         for c in rows {
             XCTAssertEqual(try highLevel(c["highLevel"] as? String).usesAutoPreservation, c["expected"] as? Bool, "\(c)")
         }
-        XCTAssertFalse(CleanMethod.dirtySky.usesOutliers)
-        XCTAssertFalse(CleanMethod.dirtyEarth.usesOutliers)
+        XCTAssertFalse(CleanMethod.dirty.usesOutliers)
     }
 
-    /// A3: Dirty earth needs a horizon, so it is off when horizon detection is off, with the tip saying why; the settings sheet
-    /// falls back to Automatic when the horizon is switched off under it.
-    func testDirtyEarthIsUnavailableWithoutAHorizon() throws {
-        let cases = try XCTUnwrap(try XCTUnwrap(try doc()["cleanMethod"] as? [String: Any])["availability"] as? [[String: Any]])
-        XCTAssertFalse(cases.isEmpty)
-        for c in cases {
-            let choice = try highLevel(c["highLevel"] as? String)
-            let horizon = try XCTUnwrap(c["horizonDetection"] as? Bool)
-            XCTAssertEqual(choice.isAvailable(horizonDetectionEnabled: horizon), c["available"] as? Bool, "\(c)")
-            XCTAssertEqual(choice.coerced(horizonDetectionEnabled: horizon), try highLevel(c["coerced"] as? String), "\(c)")
-            XCTAssertEqual(choice.unavailableText(horizonDetectionEnabled: horizon) != nil, c["available"] as? Bool == false, "\(c)")
-        }
-        // and the CleanMethod it would make is refused by the config the same way
+    /// A5: Dirty needs no horizon, so nothing in the clean-method row is ever switched off and a config with horizon detection off
+    /// and Dirty chosen has nothing to refuse.
+    func testDirtyIsAlwaysAvailable() throws {
+        XCTAssertEqual(HighLevelCleanMethod.allCases, [.automatic, .selective, .dirty])
         var config = Config()
         config.horizonDetectionEnabled = false
-        config.cleanMethod = .dirtyEarth
-        XCTAssertNotNil(config.cleanMethodConflict)
+        config.cleanMethod = .dirty
+        XCTAssertEqual(config.cleanMethod, .dirty)
     }
 
     /// Q7: the playback speeds the Display picker offers are the same in both clients.

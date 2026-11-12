@@ -835,15 +835,15 @@ class InteropIntegrationTest {
         }
     }
 
-    /** The dirty sky method set on one frame is read back as that frame's own, and survives closing and reopening the sequence. */
+    /** The dirty method set on one frame is read back as that frame's own, and survives closing and reopening the sequence. */
     @Test
-    fun perFrameDirtySkySurvivesReopen() {
+    fun perFrameDirtySurvivesReopen() {
         val seq = seqPath
         if (!runProcess || seq == null) {
-            println("[skip] perFrameDirtySkySurvivesReopen — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
+            println("[skip] perFrameDirtySurvivesReopen — set -Dstar.it.process=true -Dstar.it.seq=<dir>")
             return
         }
-        val tmp = java.nio.file.Files.createTempDirectory("star-it-dirtysky").toFile()
+        val tmp = java.nio.file.Files.createTempDirectory("star-it-dirty").toFile()
         val seqCopy = File(tmp, File(seq).name)
         File(seq).copyRecursively(seqCopy)
         val cfg = Config.newBuilder(SessionRepository.defaultInitialConfig())
@@ -852,17 +852,17 @@ class InteropIntegrationTest {
             val configJson = withEngine { client ->
                 val info = client.openSequence(seqCopy.absolutePath, cfg)
                 assertTrue(!client.getFrame(info.sessionId, 1).cleanMethodOverridden)
-                val set = client.setFrameCleanMethod(info.sessionId, 1, CleanMethod.CLEAN_DIRTY_SKY)
+                val set = client.setFrameCleanMethod(info.sessionId, 1, CleanMethod.CLEAN_DIRTY)
                 assertTrue(set.cleanMethodOverridden)
-                assertEquals(CleanMethod.CLEAN_DIRTY_SKY, set.cleanMethod)
+                assertEquals(CleanMethod.CLEAN_DIRTY, set.cleanMethod)
                 client.closeSession(info.sessionId)
                 info.configJsonPath
             }
             withEngine { client ->
                 val info = client.openConfig(configJson)
                 val frame = client.getFrame(info.sessionId, 1)
-                assertTrue(frame.cleanMethodOverridden, "the frame's dirty sky method was lost on reopen")
-                assertEquals(CleanMethod.CLEAN_DIRTY_SKY, frame.cleanMethod)
+                assertTrue(frame.cleanMethodOverridden, "the frame's dirty method was lost on reopen")
+                assertEquals(CleanMethod.CLEAN_DIRTY, frame.cleanMethod)
                 val other = client.getFrame(info.sessionId, 0)
                 assertTrue(!other.cleanMethodOverridden, "another frame must keep the sequence's method")
                 client.closeSession(info.sessionId)

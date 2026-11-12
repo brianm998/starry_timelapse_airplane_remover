@@ -9,26 +9,60 @@ public enum CleanMethod: Identifiable,
 {
     case automatic(Bool)
     case selective
-    /// The opposite of cleaning, for the sky: keeps only what moved there.  Each sky pixel is
-    /// `original − aligned reference` per channel, clipped at 0, so static stars go to black and
-    /// airplanes, satellites and meteors keep their colour; the ground is black.  With horizon
-    /// detection off there is no ground, so this covers the whole frame.
-    case dirtySky
-    /// The same for the ground: moved ground pixels keep their colour, static ground goes to
-    /// black, the sky is black.  Needs horizon detection (`Config.cleanMethodConflict`).  On a
-    /// moving camera, a frame whose ground neighbours cannot be tracked has the original as its
-    /// earth reference, so its dirty earth output is (correctly) near-black.
-    case dirtyEarth
+    /// The opposite of cleaning: keeps only what moved.  Each pixel is `original − aligned
+    /// reference` per channel, clipped at 0, so static stars and static ground go to black and
+    /// airplanes, satellites and meteors keep their colour.  The aligned reference is the star
+    /// alignment in the sky and the earth alignment on the ground, so one image covers the whole
+    /// frame; with horizon detection off it is the star alignment alone.  Replaces the earlier
+    /// separate dirty sky and dirty earth methods, whose saved spellings still decode as this.
+    case dirty
 
     public var id: Self { self }
-    
+
+    // Codable is written by hand only so that `dirtySky` and `dirtyEarth`, which a saved config.json
+    // or per-frame override may still hold, load as `.dirty`.  The format is otherwise the
+    // synthesised one (`{"automatic":{"_0":true}}`, `{"selective":{}}`, `{"dirty":{}}`).
+    private enum CodingKeys: String, CodingKey {
+        case automatic, selective, dirty, dirtySky, dirtyEarth
+    }
+    private enum AutomaticCodingKeys: String, CodingKey { case _0 }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if container.contains(.automatic) {
+            let inner = try container.nestedContainer(keyedBy: AutomaticCodingKeys.self, forKey: .automatic)
+            self = .automatic(try inner.decode(Bool.self, forKey: ._0))
+        } else if container.contains(.selective) {
+            self = .selective
+        } else if container.contains(.dirty) || container.contains(.dirtySky) || container.contains(.dirtyEarth) {
+            self = .dirty
+        } else {
+            throw DecodingError.dataCorrupted(.init(
+              codingPath: decoder.codingPath,
+              debugDescription: "Unknown clean method"))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .automatic(let selective):
+            var inner = container.nestedContainer(keyedBy: AutomaticCodingKeys.self, forKey: .automatic)
+            try inner.encode(selective, forKey: ._0)
+        case .selective:
+            _ = container.nestedContainer(keyedBy: AutomaticCodingKeys.self, forKey: .selective)
+        case .dirty:
+            _ = container.nestedContainer(keyedBy: AutomaticCodingKeys.self, forKey: .dirty)
+        }
+    }
+
     public var usesOutliers: Bool {
         switch self {
         case .automatic(let selective):
             selective
         case .selective:
             true
-        case .dirtySky, .dirtyEarth:
+        case .dirty:
             // keep every bad signal: no outlier or blob detection at all
             false
         }
@@ -37,7 +71,7 @@ public enum CleanMethod: Identifiable,
     /// True for the dirty methods, which write a subtraction rather than a cleaned frame.
     public var isDirty: Bool {
         switch self {
-        case .dirtySky, .dirtyEarth: true
+        case .dirty: true
         case .automatic, .selective: false
         }
     }
@@ -49,11 +83,9 @@ public enum CleanMethod: Identifiable,
         switch highLevelCleanMethod {
         case .selective:
             self = .selective
-        case .dirtySky:
+        case .dirty:
             // the preservation mode is for Automatic only; a dirty method has no use for it
-            self = .dirtySky
-        case .dirtyEarth:
-            self = .dirtyEarth
+            self = .dirty
         case .automatic:
             switch autoPreservationMode {
             case .no:
@@ -71,8 +103,7 @@ public enum HighLevelCleanMethod: InstructionOption,
 {
     case automatic
     case selective
-    case dirtySky
-    case dirtyEarth
+    case dirty
 
     public var id: Self { self }
 
@@ -82,10 +113,8 @@ public enum HighLevelCleanMethod: InstructionOption,
             localized("ui.automatic")
         case .selective:
             localized("ui.selective")
-        case .dirtySky:
-            localized("ui.dirty_sky")
-        case .dirtyEarth:
-            localized("ui.dirty_earth")
+        case .dirty:
+            localized("ui.dirty")
         }
     }
 
@@ -95,8 +124,7 @@ public enum HighLevelCleanMethod: InstructionOption,
         switch method {
         case .automatic: self = .automatic
         case .selective: self = .selective
-        case .dirtySky: self = .dirtySky
-        case .dirtyEarth: self = .dirtyEarth
+        case .dirty: self = .dirty
         }
     }
 
@@ -105,27 +133,8 @@ public enum HighLevelCleanMethod: InstructionOption,
     public var usesAutoPreservation: Bool {
         switch self {
         case .automatic: true
-        case .selective, .dirtySky, .dirtyEarth: false
+        case .selective, .dirty: false
         }
-    }
-
-    /// Dirty earth keeps only the ground, so it needs a horizon (`Config.cleanMethodConflict` refuses it otherwise).
-    public func isAvailable(horizonDetectionEnabled: Bool) -> Bool {
-        switch self {
-        case .dirtyEarth: horizonDetectionEnabled
-        case .automatic, .selective, .dirtySky: true
-        }
-    }
-
-    /// The tip to show instead of `helpText` when the choice is switched off, or nil when it is on.
-    public func unavailableText(horizonDetectionEnabled: Bool) -> String? {
-        isAvailable(horizonDetectionEnabled: horizonDetectionEnabled)
-          ? nil : localized("ui.clean_method_tip.dirty_earth_needs_horizon")
-    }
-
-    /// What the choice becomes when the horizon is switched off: dirty earth cannot stay chosen, so it falls back to Automatic.
-    public func coerced(horizonDetectionEnabled: Bool) -> HighLevelCleanMethod {
-        isAvailable(horizonDetectionEnabled: horizonDetectionEnabled) ? self : .automatic
     }
 
     /// The row's heading, from the catalogue: the same "Clean Method" the desktop's settings sheet has, with the colon the other rows' headings carry.
@@ -139,10 +148,8 @@ public enum HighLevelCleanMethod: InstructionOption,
             localized("ui.clean_method_tip.automatic")
         case .selective:
             localized("ui.clean_method_tip.selective")
-        case .dirtySky:
-            localized("ui.clean_method_tip.dirty_sky")
-        case .dirtyEarth:
-            localized("ui.clean_method_tip.dirty_earth")
+        case .dirty:
+            localized("ui.clean_method_tip.dirty")
         }
     }
 
@@ -152,10 +159,8 @@ public enum HighLevelCleanMethod: InstructionOption,
             localized("ui.mode_desc_automatic")
         case .selective:
             localized("ui.mode_desc_selective")
-        case .dirtySky:
-            localized("ui.mode_desc_dirty_sky")
-        case .dirtyEarth:
-            localized("ui.mode_desc_dirty_earth")
+        case .dirty:
+            localized("ui.mode_desc_dirty")
         }
     }
 }
@@ -217,22 +222,5 @@ public enum AutoPreservationMode: String, InstructionOption, Identifiable {
         case .no:
             localized("ui.mode_desc_automatic")
         }
-    }
-}
-
-extension Config {
-    /// What `.dirtyEarth` without horizon detection is refused with: with no horizon there is
-    /// no ground portion to keep.
-    public static var dirtyEarthNeedsHorizonMessage: String {
-        localized("cli.errors.dirty_earth_needs_horizon")
-    }
-
-    /// Why this config's clean method cannot run, in the user's language, or nil when it can.
-    /// The cli asks after its overrides are applied, for a new sequence and a resumed one alike.
-    public var cleanMethodConflict: String? {
-        if cleanMethod == .dirtyEarth, !horizonDetectionEnabled {
-            return Config.dirtyEarthNeedsHorizonMessage
-        }
-        return nil
     }
 }

@@ -40,11 +40,9 @@ final class ProcessingStepsInfoTests: XCTestCase {
                           "auto-selective is not named as automatic")
     }
 
-    func testIntroNamesTheDirtyModes() {
-        XCTAssertEqual(make(moving: false, method: .dirtySky, steps: [.merge]).intro,
-                       localized("ui.steps_info_intro_static", localized("ui.dirty_sky")))
-        XCTAssertEqual(make(moving: false, method: .dirtyEarth, steps: [.merge]).intro,
-                       localized("ui.steps_info_intro_static", localized("ui.dirty_earth")))
+    func testIntroNamesTheDirtyMode() {
+        XCTAssertEqual(make(moving: false, method: .dirty, steps: [.merge]).intro,
+                       localized("ui.steps_info_intro_static", localized("ui.dirty")))
     }
 
     // MARK: - A3: exactly the steps the panel shows
