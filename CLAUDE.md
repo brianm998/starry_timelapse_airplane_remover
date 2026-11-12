@@ -83,3 +83,76 @@ median merge logic**: set `STAR_USE_GPU_FOR_MERGE=0` in the environment (also `f
 setup says (`GPUCapability.mergeForcedOff`); the default is otherwise on whenever a GPU is detected.
 (`~/.star.userprefs.json` is the gui's own preferences and does not do this; the cli ignores it.) Don't run GPU merge
 tests or GPU-vs-CPU comparisons here; leave those to CI or another machine.
+
+## Building and testing in a worktree
+
+- **Link the gitignored artifacts first**: run `.mason/scripts/link-artifacts.sh` in the worktree
+  (OpenCV, StarDecisionTrees, `gui/videos`, `external_binaries/bin`). Without them, builds fail with
+  errors that look like code breakage: `'opencv2/core.hpp' file not found`, `Unable to find module
+  dependency: 'StarDecisionTrees'`, or a late `lstat(.../gui/videos/...)` / `lstat(.../ffmpeg)` after
+  every Swift file has already compiled. `gui/videos` is the one link `git status` shows (the
+  `.gitignore` entry has a trailing slash), so don't commit it.
+- **gui**: `xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug
+  CODE_SIGNING_ALLOWED=NO build`. Always `-scheme star`, never `-target Star`: the target skips the
+  scheme's package graph and fails with `Unable to find module dependency: 'logging'`, and it leaves
+  `build/` dirs behind. Leave out `-destination`. The app module is `Star`
+  (`@testable import Star`).
+- **cli**: build with SwiftPM (`cd cli && swift build`), which is what `cli/build-optimized` runs.
+  `cli/star.xcodeproj` can hit an `ld` assertion (`dylibToOrdinal`) even at a clean HEAD, so don't
+  bisect your own edits when you see it.
+- **async XCTest**: `XCTAssertEqual(await x, y)` doesn't compile (the arguments are non-async
+  autoclosures). Put each `await` in a local first.
+
+## Adding or removing a `Config` property
+
+One property lives in seven places, and only the last is caught by a compiler:
+
+1. `StarCore/.../Config.swift`: the declaration **and** its `decodeIfPresent` line in the
+   hand-written `init(from:)`.
+2. `StarCore/.../ArtifactInputs.swift`: stage input records, including comments naming settings
+   they leave out.
+3. `gui/star/`: `ImageSequenceViewModel` (property and its assignment in the config init),
+   `FocusedField` (text fields only), `ProcessingSettingsView` (view, state flag,
+   `addSpacer`/show-all/hide-all, grid row).
+4. `daemon/Sources/stard/Mapping.swift`: two lines (Config→proto, proto→Config).
+5. Both `star.proto` copies (`daemon/proto/`, `star-desktop/proto/`), byte-identical apart from the
+   `option java_*` lines. Retire a field with `reserved <n>;` plus a comment. Then run
+   `daemon/regen-proto.sh`.
+6. The Kotlin `ProcessingSettingsDialog.kt` row (plus its `FIELD_HELP` entry).
+7. The `ui.` (and `setting_help.`) keys in all 22 catalogues.
+
+A new cli flag also goes in `ConfigOverrides` and `ConfigOverridesTests.everyFlag`. To prove the
+change, run all four: `cd StarCore && swift build && swift test --filter ConfigRoundTrip`,
+`cd daemon && swift build`, the gui build above, and
+`cd star-desktop && ./gradlew checkProtoSync compileKotlin`.
+
+## Editing the localization tables
+
+The tables are in append order, not sorted. Don't use `i18n/check.py --install`: it re-sorts and
+rewrites all 22 files. Load each table with `json.load`, add or delete keys, and write it back with
+`json.dumps(t, indent=2, ensure_ascii=False) + "\n"`, which round-trips byte for byte. Then run
+`python3 i18n/check.py` (read-only).
+
+## Measuring performance
+
+On this machine a single end-to-end run proves nothing: two identical 20-frame runs took 321 s and
+413 s, because other apps hold tens of GB resident and swap is full. Time the function itself, in
+one process, min-of-K, on real frames, and check a run's peak compressor size before trusting its
+wall clock (above ~10 GB, the run is an artifact). Output equivalence still needs a full run.
+
+When a mutation survives a header-only kernel harness, check the include order first: the scratch
+copy of the header has to come first on `-I`, otherwise the real header wins and every mutation
+passes.
+
+The OpenCV 4.12.0 source is in the main checkout at `opencv/opencv/` (worktrees don't have it).
+Read `modules/imgproc/src/imgwarp.cpp` and friends before you guess at a rounding rule.
+
+## Pipeline code
+
+- Run `uv run ruff check` in `pipeline/` before committing straight to `develop`; the pr-gate's
+  `static` job runs ruff, pyright and pytest there.
+- Pipeline worktrees can't `git fetch` (no SSH key for `origin`), but the daemon keeps
+  `origin/develop` current over https. When you answer a stage agent, tell it
+  "`git merge origin/develop` (no fetch)".
+- Before `starpipe self-update`, compare `develop` with `origin/develop`. If local is ahead, pass
+  `--ref develop`, or the runtime is built from the older origin.
