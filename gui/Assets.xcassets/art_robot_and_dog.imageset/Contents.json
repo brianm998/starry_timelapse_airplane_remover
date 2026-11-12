@@ -1,0 +1,18 @@
+{
+  "images": [
+    {
+      "filename": "art_robot_and_dog1x.jpg",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "art_robot_and_dog2x.jpg",
+      "idiom": "universal",
+      "scale": "2x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}
