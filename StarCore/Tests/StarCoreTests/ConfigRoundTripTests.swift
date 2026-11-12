@@ -33,12 +33,8 @@ final class ConfigRoundTripTests: XCTestCase {
 
         let decoded: Config
         do {
-            // An empty environment: STAR_USE_GPU_FOR_MERGE=0 (set for every suite on the
-            // test machine) would otherwise force useGPUForMerge off whatever the file says.
-            let decoder = JSONDecoder()
-            decoder.userInfo[Config.environmentUserInfoKey] = [String: String]()
-            decoded = try decoder.decode(Config.self,
-                                         from: try JSONEncoder().encode(mutated))
+            decoded = try JSONDecoder().decode(Config.self,
+                                               from: try JSONEncoder().encode(mutated))
         } catch let error as DecodingError {
             // Almost certainly `alternates` needs an entry: the generic perturbation handed
             // some property a value of the right JSON type but outside what it accepts, e.g.
