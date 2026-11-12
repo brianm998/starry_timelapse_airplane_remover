@@ -169,6 +169,23 @@ final class HorizonConsensusTests: XCTestCase {
         XCTAssertEqual(answer, 400)
     }
 
+    /// The vote's own sort must order exactly as the standard library's stable sort did,
+    /// equal keys keeping their order, or the vote's answers would shift on ties.
+    func testTheVoteSortIsTheStandardLibrarysStableOrder() {
+        var g = SystemRandomNumberGenerator()
+        for count in [0, 1, 2, 3, 7, 20, 61, 200] {
+            // keys from a few values, so most of them tie; the index tells ties apart
+            let pairs = (0..<count).map { (key: Int.random(in: 0..<5, using: &g), index: $0) }
+            var mine = pairs
+            HorizonConsensus.insertionSort(&mine) { $0.key < $1.key }
+            let theirs = pairs.sorted { $0.key < $1.key }
+            XCTAssertEqual(mine.map(\.index), theirs.map(\.index), "\(count) elements")
+        }
+        var floats: [Float] = [3, -1, 2.5, 2.5, 0, 9, -1]
+        HorizonConsensus.insertionSort(&floats) { $0 < $1 }
+        XCTAssertEqual(floats, [-1, -1, 0, 2.5, 2.5, 3, 9])
+    }
+
     /// The long span replaces the short one only where they disagree by more than chain error
     /// could explain: a cloud bank, not a pixel.
     func testTheLongSpanOverridesOnlyALargeDisagreement() {
