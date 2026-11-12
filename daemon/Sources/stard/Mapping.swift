@@ -41,8 +41,7 @@ enum Mapping {
         case .viewAutoProcessed:         return .autoProcessed
         case .viewAutoSelectiveProcessed: return .autoSelectiveProcessed
         case .viewSelectiveProcessed:    return .selectiveProcessed
-        case .viewDirtySkyProcessed:     return .dirtySkyProcessed
-        case .viewDirtyEarthProcessed:   return .dirtyEarthProcessed
+        case .viewDirtyProcessed:        return .dirtyProcessed
         default:               return .original
         }
     }
@@ -67,8 +66,7 @@ enum Mapping {
         case .autoProcessed:          return .viewAutoProcessed
         case .autoSelectiveProcessed: return .viewAutoSelectiveProcessed
         case .selectiveProcessed:     return .viewSelectiveProcessed
-        case .dirtySkyProcessed:      return .viewDirtySkyProcessed
-        case .dirtyEarthProcessed:    return .viewDirtyEarthProcessed
+        case .dirtyProcessed:         return .viewDirtyProcessed
         }
     }
 
@@ -253,8 +251,7 @@ enum Mapping {
         switch proto {
         case .cleanSelective:     return .selective
         case .cleanAutomaticTrue: return .automatic(true)
-        case .cleanDirtySky:      return .dirtySky
-        case .cleanDirtyEarth:    return .dirtyEarth
+        case .cleanDirty:         return .dirty
         default:                  return .automatic(false)
         }
     }
@@ -264,8 +261,7 @@ enum Mapping {
         case .selective:        return .cleanSelective
         case .automatic(true):  return .cleanAutomaticTrue
         case .automatic(false): return .cleanAutomatic
-        case .dirtySky:         return .cleanDirtySky
-        case .dirtyEarth:       return .cleanDirtyEarth
+        case .dirty:            return .cleanDirty
         }
     }
 

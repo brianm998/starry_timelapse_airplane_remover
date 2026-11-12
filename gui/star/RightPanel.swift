@@ -375,10 +375,8 @@ extension CleanMethod {
             localized(usesOutliers ? "ui.frame_mode_auto_selective" : "ui.frame_mode_automatic")
         case .selective:
             localized("ui.frame_mode_selective")
-        case .dirtySky:
-            localized("ui.dirty_sky")
-        case .dirtyEarth:
-            localized("ui.dirty_earth")
+        case .dirty:
+            localized("ui.dirty")
         }
     }
 
@@ -388,10 +386,8 @@ extension CleanMethod {
             localized(usesOutliers ? "ui.frame_mode_desc_auto_selective" : "ui.frame_mode_desc_automatic")
         case .selective:
             localized("ui.frame_mode_desc_selective")
-        case .dirtySky:
-            localized("ui.frame_mode_desc_dirty_sky")
-        case .dirtyEarth:
-            localized("ui.frame_mode_desc_dirty_earth")
+        case .dirty:
+            localized("ui.frame_mode_desc_dirty")
         }
     }
 }
@@ -434,25 +430,14 @@ struct ChangeProcessingModeView: View {
                         switch value {
                         case .automatic: AutoIcon()
                         case .selective: SelectiveIcon()
-                        case .dirtySky, .dirtyEarth: AutoIcon()
+                        case .dirty: AutoIcon()
                         }
                         Text(value.titleText)
                     }
-                      .disabled(!value.isAvailable(horizonDetectionEnabled: viewModel.horizonDetectionEnabled))
                 }
             }
               .pickerStyle(.inline)
               .help(localized("ui.clean_method_help"))
-
-            // Why dirty earth is switched off, when it is
-            if let why = HighLevelCleanMethod.dirtyEarth.unavailableText(
-                 horizonDetectionEnabled: viewModel.horizonDetectionEnabled)
-            {
-                Text(why)
-                  .font(.caption)
-                  .foregroundColor(.secondary)
-                  .fixedSize(horizontal: false, vertical: true)
-            }
 
             Picker(localized("ui.auto_select"), selection: $autoSelect) {
                 ForEach(AutoPreservationMode.allCases, id: \.id) { value in
@@ -513,6 +498,7 @@ struct ChangeProcessingModeView: View {
                   autoSelect = .no
               }
           }
+          .starDialogStyle()
     }
 }
 
@@ -776,5 +762,6 @@ struct ResourceCustomLimitsView: View {
         }
         .padding()
         .frame(width: 420)
+        .starDialogStyle()
     }
 }

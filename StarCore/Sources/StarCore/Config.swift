@@ -2551,22 +2551,12 @@ public struct Config: Codable, Sendable {
                 return nil
             }
 
-        case .dirtySkyProcessed:
+        case .dirtyProcessed:
             switch size {
             case .original:
-                return "\(self.tempOutputPath)/dirty-sky-processed"
+                return "\(self.tempOutputPath)/dirty-processed"
             case .preview:
-                return "\(self.tempOutputPath)/dirty-sky-processed-previews"
-            case .thumbnail:
-                return nil
-            }
-
-        case .dirtyEarthProcessed:
-            switch size {
-            case .original:
-                return "\(self.tempOutputPath)/dirty-earth-processed"
-            case .preview:
-                return "\(self.tempOutputPath)/dirty-earth-processed-previews"
+                return "\(self.tempOutputPath)/dirty-processed-previews"
             case .thumbnail:
                 return nil
             }
@@ -2607,8 +2597,7 @@ public struct Config: Codable, Sendable {
         if let dir = self.dirForImage(ofType: .autoProcessed) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .autoSelectiveProcessed) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .selectiveProcessed) { ret.append(dir) }
-        if let dir = self.dirForImage(ofType: .dirtySkyProcessed) { ret.append(dir) }
-        if let dir = self.dirForImage(ofType: .dirtyEarthProcessed) { ret.append(dir) }
+        if let dir = self.dirForImage(ofType: .dirtyProcessed) { ret.append(dir) }
         if let dir = self.dirForImage(ofType: .final) { ret.append(dir) }
         
         if self.writeFramePreviewFiles {
@@ -2633,8 +2622,7 @@ public struct Config: Codable, Sendable {
             if let dir = self.dirForImage(ofType: .autoProcessed, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .autoSelectiveProcessed, atSize: .preview) { ret.append(dir) }
             if let dir = self.dirForImage(ofType: .selectiveProcessed, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .dirtySkyProcessed, atSize: .preview) { ret.append(dir) }
-            if let dir = self.dirForImage(ofType: .dirtyEarthProcessed, atSize: .preview) { ret.append(dir) }
+            if let dir = self.dirForImage(ofType: .dirtyProcessed, atSize: .preview) { ret.append(dir) }
         }
         return ret
     }

@@ -94,35 +94,17 @@ final class ValidationTests: XCTestCase {
     }
 
     func testDirtyCleanMethodSpellingsParse() throws {
-        XCTAssertEqual(try StarCli.parse(["-c", "dirtySky", "/some/seq"]).cleanMethod, .dirtySky)
-        XCTAssertEqual(try StarCli.parse(["--clean-method", "dirtyEarth", "/some/seq"]).cleanMethod,
-                       .dirtyEarth)
+        XCTAssertEqual(try StarCli.parse(["-c", "dirty", "/some/seq"]).cleanMethod, .dirty)
+        // the two methods it replaced still parse, as it
+        XCTAssertEqual(try StarCli.parse(["-c", "dirtySky", "/some/seq"]).cleanMethod, .dirty)
+        XCTAssertEqual(try StarCli.parse(["--clean-method", "dirtyEarth", "/some/seq"]).cleanMethod, .dirty)
         // the existing spellings are matched case-insensitively, and so are these
-        XCTAssertEqual(try StarCli.parse(["-c", "dirtysky", "/some/seq"]).cleanMethod, .dirtySky)
-        XCTAssertEqual(try StarCli.parse(["-c", "DIRTYEARTH", "/some/seq"]).cleanMethod, .dirtyEarth)
-        XCTAssertTrue(CleanMethod.allValueStrings.contains("dirtySky"))
-        XCTAssertTrue(CleanMethod.allValueStrings.contains("dirtyEarth"))
-        // dirty sky has a whole frame to cover with no horizon
-        XCTAssertEqual(try StarCli.parse(["-c", "dirtySky", "--no-horizon", "/some/seq"]).cleanMethod,
-                       .dirtySky)
-    }
-
-    /// Dirty earth keeps the ground portion, and with horizon detection off there is none.
-    func testDirtyEarthWithNoHorizonIsAUsageError() {
-        XCTAssertThrowsError(try StarCli.parse(["-c", "dirtyEarth", "--no-horizon", "/some/seq"])) { error in
-            XCTAssertTrue(StarCli.message(for: error).contains(Config.dirtyEarthNeedsHorizonMessage),
-                          StarCli.message(for: error))
-        }
-        // and a saved config that holds the pair is refused by the same check run() makes
-        var config = Config()
-        config.cleanMethod = .dirtyEarth
-        config.horizonDetectionEnabled = false
-        XCTAssertEqual(config.cleanMethodConflict, Config.dirtyEarthNeedsHorizonMessage)
-        config.horizonDetectionEnabled = true
-        XCTAssertNil(config.cleanMethodConflict)
-        config.cleanMethod = .dirtySky
-        config.horizonDetectionEnabled = false
-        XCTAssertNil(config.cleanMethodConflict)
+        XCTAssertEqual(try StarCli.parse(["-c", "DIRTY", "/some/seq"]).cleanMethod, .dirty)
+        XCTAssertEqual(try StarCli.parse(["-c", "DIRTYEARTH", "/some/seq"]).cleanMethod, .dirty)
+        XCTAssertEqual(CleanMethod.allValueStrings.filter { $0.lowercased().hasPrefix("dirty") }, ["dirty"])
+        // it needs no horizon, so no horizon is not a usage error
+        XCTAssertEqual(try StarCli.parse(["-c", "dirty", "--no-horizon", "/some/seq"]).cleanMethod, .dirty)
+        XCTAssertEqual(try StarCli.parse(["-c", "dirtyEarth", "--no-horizon", "/some/seq"]).cleanMethod, .dirty)
     }
 
     func testAnUnknownCleanMethodIsAUsageError() {

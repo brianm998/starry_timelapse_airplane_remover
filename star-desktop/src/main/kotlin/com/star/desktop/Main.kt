@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import com.star.desktop.i18n.localized
+import com.star.desktop.util.DesktopOs
 
 /**
  * Compose application entry point. The headless engine smoke harness lives in
@@ -29,10 +30,23 @@ import com.star.desktop.i18n.localized
  * launcher, its JVM options and its bundled engine, checked end to end with no window.
  */
 fun main(args: Array<String>) {
+    // First, before AWT starts: the JVM reads this property once, when the toolkit comes up.
+    applyMacDarkAppearance(System.getProperty("os.name"))
     if (args.firstOrNull() == "--self-test") {
         kotlin.system.exitProcess(com.star.desktop.tools.EngineSelfTest.run(args.drop(1)))
     }
     runApp(args)
+}
+
+/**
+ * On macOS, AWT draws its own dialogs (the `FileDialog` pickers, window title bars, the tray menu) in the
+ * system appearance, which is white on a Light-mode Mac. star is dark only, so ask the JVM for the dark
+ * appearance. Other systems have no such property and are left alone.
+ */
+internal fun applyMacDarkAppearance(osName: String, setProperty: (String, String) -> Unit = { k, v -> System.setProperty(k, v) }) {
+    if (DesktopOs.of(osName) == DesktopOs.MAC) {
+        setProperty("apple.awt.application.appearance", "NSAppearanceNameDarkAqua")
+    }
 }
 
 private fun runApp(args: Array<String>) = application {

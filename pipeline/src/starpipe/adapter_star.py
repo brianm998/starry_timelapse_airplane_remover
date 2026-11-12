@@ -435,6 +435,8 @@ RULES: list[Rule] = [
     Rule(("gherkin/",), note="generated-files check (T0); features run when the plan names them"),
     Rule(("daemon/proto/",), builds=("build:daemon", "build:desktop"), tests=("test:daemon",), package="daemon"),
     Rule(("daemon/",), tests=("test:daemon",), package="daemon"),
+    Rule(("art/",), builds=("build:desktop",), tests=("test:gui", "test:desktop"),
+         note="art masters and export.py: the StarArt slots of both clients"),
     Rule(("gui/",), tests=("test:gui",), package="gui"),
     Rule(("star-desktop/",), builds=("build:desktop",), tests=("test:desktop",)),
     Rule(("trail_tools/",), builds=("build:trail_tools",), tests=("test:trail_tools",)),
@@ -446,7 +448,7 @@ RULES: list[Rule] = [
 ]
 
 # Paths that need no check at all.
-NO_CHECK_PREFIXES = (".claude/", "docs/", "plans/", ".github/", "ffmpeg/", "opencv/", "wgpu/", "i18n/")
+NO_CHECK_PREFIXES = (".claude/", "docs/", "plans/", ".github/", "ffmpeg/", "opencv/", "wgpu/", "i18n/", ".mason/")
 NO_CHECK_SUFFIXES = (".md",)
 
 

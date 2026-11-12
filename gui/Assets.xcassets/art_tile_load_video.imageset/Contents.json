@@ -1,0 +1,18 @@
+{
+  "images": [
+    {
+      "filename": "art_tile_load_video1x.png",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "art_tile_load_video2x.png",
+      "idiom": "universal",
+      "scale": "2x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

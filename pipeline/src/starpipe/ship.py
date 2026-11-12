@@ -497,10 +497,11 @@ def merge(eng: Engine, t: Ticket, head: str) -> bool:
 
 # post-merge watch and stop-the-line ---------------------------------------------------------------------------------
 def watch_develop(eng: Engine) -> None:
-    """Refresh the develop baseline from the latest run of each workflow that ended success or failure; react to new reds
-    (§10.3). Gherkin's baseline is kept but never ticketed here: its nightly full run reruns and files its own (gherkin_nightly.py).
-    A run cancelled by a newer push is completed but says nothing about the code, so it is skipped: the workflow's
-    earlier success/failure run stays the baseline. So is a job that concluded `skipped` inside an otherwise finished run."""
+    """Refresh the develop baseline from the latest run of each workflow that ended success or failure, and hold or release
+    the landing train's `stop_line` on the gate (§10.3). Filing tickets for a red develop is MASON's base-branch CI watch
+    (`[watch.ci]` in .mason/mason.toml), not this function's. A run cancelled by a newer push is completed but says nothing
+    about the code, so it is skipped: the workflow's earlier success/failure run stays the baseline. So is a job that
+    concluded `skipped` inside an otherwise finished run."""
     base = eng.config.base_branch
     runs = [r for r in eng.gh.workflow_runs(branch=base)
             if r.get("status") == "completed" and r.get("conclusion") in ("success", "failure")]
@@ -514,101 +515,15 @@ def watch_develop(eng: Engine) -> None:
                 continue  # the push run skipped it because the batch PR already tested this tree: that result stays the baseline
             before = eng.db.baseline(job.workflow, job.job)
             now = job.conclusion or "failure"
-            eng.db.set_baseline(job.workflow, job.job, str(run.get("head_sha")), now)
-            pending = f"red_pending:{job.workflow}/{job.job}"
-            if job.workflow.lower() == "gherkin":
-                eng.db.put(pending, None)
-                continue  # the nightly owns Gherkin's tickets
-            since, checked = f"red_since:{job.workflow}/{job.job}", f"red_checked:{job.workflow}/{job.job}"
-            red_now = job.red and (job.conclusion or "failure") not in ci.INFRA_CONCLUSIONS
-            if red_now and eng.db.get(since) is None:
-                eng.db.put(since, str(eng.clock()))  # includes the reds that were there when the pipeline started
-            elif not job.red:
-                eng.db.put(since, None)
-                eng.db.put(checked, None)
-            if seeding or before is None:
-                continue  # reds present when the pipeline first started are the known-red ledger, not tickets
             sha = str(run.get("head_sha"))
-            infra = (job.conclusion or "failure") in ci.INFRA_CONCLUSIONS  # cancelled / timed out is the runner, not a regression
-            if job.red and not infra:
-                if job.workflow == ci.GATE:
-                    if before == "success":
-                        _new_red(eng, job, sha)  # the gate reacts at once: landing stops
-                elif before == "success":
-                    eng.db.put(pending, sha)  # first sighting: wait for a second, different run to agree before filing a ticket
-                elif (old := eng.db.get(pending)) not in (None, sha):
-                    eng.db.put(pending, None)
-                    if not _new_red(eng, job, sha):
-                        eng.db.put(pending, old)  # nowhere to file it yet: the next poll tries again
-                elif _red_long_enough(eng, since, checked) and _new_red(eng, job, sha, red_since=float(eng.db.get(since) or 0)):
-                    # still red from before (a ticket for another failure, or the ledger's red) and no open ticket names it: it
-                    # is filed now, or `_new_red` found one. Ask GitHub again only after another threshold.
-                    eng.db.put(checked, str(eng.clock()))
-            elif not job.red:
-                eng.db.put(pending, None)  # green again: that was a flake
+            eng.db.set_baseline(job.workflow, job.job, sha, now)
+            infra = now in ci.INFRA_CONCLUSIONS  # cancelled / timed out is the runner, not a regression
+            if job.workflow == ci.GATE and job.red and not infra and not seeding and before == "success":
+                name = f"{job.workflow}/{job.job}"
+                eng.db.put("stop_line", name)  # the gate reacts at once: landing stops
+                eng.notifier.alert("develop-red", None, f"{name} is red on develop at {sha[:10]}")
             if job.workflow == ci.GATE and job.conclusion == "success" and eng.db.get("stop_line") == f"{job.workflow}/{job.job}":
                 # only the job that set the line clears it: a green sibling says nothing about the red one
                 eng.db.put("stop_line", None)
                 eng.notifier.clear("develop-red", None)
                 eng.db.event("stop-line-cleared", None, job=job.job)
-
-
-def _red_long_enough(eng: Engine, since: str, checked: str) -> bool:
-    """True when the job has been red for `red_ticket_after_s` and was not looked at (ticketed or found covered) within it."""
-    start, last = eng.db.get(since), eng.db.get(checked)
-    after = eng.config.red_ticket_after_s
-    now = eng.clock()
-    return start is not None and now - float(start) >= after and (last is None or now - float(last) >= after)
-
-
-def _auto_open(eng: Engine) -> int:
-    return len([i for i in eng.gh.paged("issues?state=open&labels=pipe:filed-by-pipeline&per_page=100")
-                if any(lab["name"] == "pipeline" for lab in i.get("labels", []))])
-
-
-def _new_red(eng: Engine, job: ci.Job, sha: str, red_since: float | None = None) -> bool:
-    """File a ticket for a red develop job. True: dealt with (filed, or an open ticket already covers it). False: could
-    not file it now, so the caller keeps `red_pending` and the next poll tries again. Over the auto-ticket cap the red
-    becomes a proposal (waits for `starpipe approve`) instead of being dropped."""
-    gate = job.workflow == ci.GATE
-    name = f"{job.workflow}/{job.job}"
-    if gate:
-        eng.db.put("stop_line", name)
-        eng.notifier.alert("develop-red", None, f"{name} is red on develop at {sha[:10]}")
-    title = f"develop red: {name}" if gate else f"regression on develop: {name}"
-    try:
-        if any(title.lower() == i["title"].lower() or name.lower() in i["title"].lower()
-               for i in eng.gh.paged("issues?state=open&per_page=100") if "pull_request" not in i):
-            eng.db.event("red-already-ticketed", None, job=name)  # an open ticket (maybe hand-filed) already names it
-            return True
-        propose = _auto_open(eng) >= eng.config.max_auto_tickets
-        if propose and len(tickets.open_issues(eng.gh, tickets.PROPOSED)) >= eng.config.max_proposed:
-            eng.db.event("auto-ticket-capped", None, job=name)
-            return False
-        log = ""
-        try:
-            log = eng.gh.failed_log(job.run_id, 4000)
-        except GitHubError:
-            pass
-        if red_since is None:
-            happened = f"It was green and is now red at {sha}. Run {job.run_id}."
-        else:
-            when = datetime.fromtimestamp(red_since).strftime("%Y-%m-%d %H:%M")
-            happened = (f"It has been red on develop since {when} (now at {sha}, run {job.run_id}) and no open ticket names it. "
-                        f"That includes a job that was already red when the pipeline started, and a red caused by a different "
-                        f"failure than the one an earlier ticket was filed for.")
-        body = (f"## Goal\nMake {name} green on develop again.\n\n## Context\n{happened}\n\n```\n{log}\n```\n\n## Acceptance criteria\n- A1: {name} passes on "
-                f"develop — check: review: CI run on the fix PR\n\n## Tests\nnone: restores an existing check\n\n## Out of scope\n"
-                f"Unrelated failures.\n")
-        if propose:
-            eng.gh.ensure_label(tickets.PROPOSED)
-            n = eng.gh.create_issue(title, body + tickets.filed_by("pipeline develop watcher"))
-            eng.gh.add_labels(n, ["pipe:filed-by-pipeline", tickets.PROPOSED, "p0" if gate else "p1"])  # waits for `starpipe approve`
-            eng.db.event("auto-ticket-proposed", None, job=name, issue=n)
-        else:
-            n = eng.gh.create_issue(title, body)
-            eng.gh.add_labels(n, ["pipe:filed-by-pipeline", "pipeline", "p0" if gate else "p1"])
-    except GitHubError as exc:
-        eng.db.event("auto-ticket-failed", None, job=name, error=str(exc))
-        return False
-    return True

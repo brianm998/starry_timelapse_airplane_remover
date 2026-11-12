@@ -48,7 +48,7 @@ class SharedConstantsTest {
         val clean = texts.getAsJsonObject("cleanMethod")
         for ((name, choice) in listOf(
             "automatic" to HighLevelClean.AUTOMATIC, "selective" to HighLevelClean.SELECTIVE,
-            "dirtySky" to HighLevelClean.DIRTY_SKY, "dirtyEarth" to HighLevelClean.DIRTY_EARTH,
+            "dirty" to HighLevelClean.DIRTY,
         )) {
             assertEquals(clean.getAsJsonObject(name)["title"].asString, CleanMethodTexts.titleKey(choice), name)
             assertEquals(clean.getAsJsonObject(name)["tip"].asString, CleanMethodTexts.tipKey(choice), name)
@@ -61,8 +61,7 @@ class SharedConstantsTest {
         }
         val dialog = listOf(File("src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingSettingsDialog.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingSettingsDialog.kt"))
             .first { it.isFile }.readText()
-        assertEquals(texts["dirtyEarthNeedsHorizon"].asString, CleanMethodTexts.unavailableTipKey(HighLevelClean.DIRTY_EARTH, false))
-        assertTrue("CleanMethodTexts.unavailableTipKey(it, horizon) ?: CleanMethodTexts.tipKey(it)" in dialog)
+        assertTrue("tip = { localized(CleanMethodTexts.tipKey(it)) }" in dialog)
         assertTrue("tip = { localized(CleanMethodTexts.autoPreservationTipKey(it)) }" in dialog)
         assertTrue("CleanMethodTexts.descriptionKey(it)" in dialog)
         assertTrue("CleanMethodTexts.autoPreservationDescriptionKey(true)" in dialog)
@@ -91,8 +90,7 @@ class SharedConstantsTest {
         "automatic" -> com.star.proto.CleanMethod.CLEAN_AUTOMATIC
         "autoSelective" -> com.star.proto.CleanMethod.CLEAN_AUTOMATIC_TRUE
         "selective" -> com.star.proto.CleanMethod.CLEAN_SELECTIVE
-        "dirtySky" -> com.star.proto.CleanMethod.CLEAN_DIRTY_SKY
-        "dirtyEarth" -> com.star.proto.CleanMethod.CLEAN_DIRTY_EARTH
+        "dirty" -> com.star.proto.CleanMethod.CLEAN_DIRTY
         else -> error("no clean method named $name")
     }
 
@@ -103,8 +101,7 @@ class SharedConstantsTest {
             val c = element.asJsonObject
             val high = when (c["highLevel"].asString) {
                 "selective" -> HighLevelClean.SELECTIVE
-                "dirtySky" -> HighLevelClean.DIRTY_SKY
-                "dirtyEarth" -> HighLevelClean.DIRTY_EARTH
+                "dirty" -> HighLevelClean.DIRTY
                 else -> HighLevelClean.AUTOMATIC
             }
             assertEquals(cleanMethodNamed(c["expected"].asString), CleanMethodChoice.method(high, c["autoPreservation"].asBoolean), c.toString())

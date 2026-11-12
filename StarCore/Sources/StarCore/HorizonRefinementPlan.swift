@@ -57,7 +57,7 @@ public struct HorizonRefinementPlan: Sendable, Equatable {
     /// moves -- the same set `FrameAirplaneRemover.deleteMergeOutput` deletes.
     public static let outputTypes: Set<FrameViewMode> =
       [.autoProcessed, .autoSelectiveProcessed, .selectiveProcessed,
-       .dirtySkyProcessed, .dirtyEarthProcessed, .final]
+       .dirtyProcessed, .final]
 
     // MARK: - what is owed
 
