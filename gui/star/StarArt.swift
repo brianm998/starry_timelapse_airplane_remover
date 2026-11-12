@@ -35,6 +35,36 @@ enum StarArt: String, CaseIterable {
     case waiting = "art_waiting"
     case newRelease = "art_new_release"
     case holdOn = "art_hold_on"
+    case drop = "art_drop"
+    case formatTiff16 = "art_format_tiff16"
+    case formatTiff8 = "art_format_tiff8"
+    case formatJpeg = "art_format_jpeg"
+    case stepImport = "art_step_import"
+    case stepHorizon = "art_step_horizon"
+    case stepAlign = "art_step_align"
+    case stepMerge = "art_step_merge"
+    case stepReview = "art_step_review"
+    case stepRender = "art_step_render"
+    case paintBrush = "art_paint_brush"
+    case paintFill = "art_paint_fill"
+    case paintTouchUp = "art_paint_touch_up"
+    case paintMoving = "art_paint_moving"
+    case settingNeighbors = "art_setting_neighbors"
+    case settingThreshold = "art_setting_threshold"
+    case settingClouds = "art_setting_clouds"
+    case settingSpikes = "art_setting_spikes"
+    case settingMemory = "art_setting_memory"
+    case toolRemove = "art_tool_remove"
+    case toolKeep = "art_tool_keep"
+    case toolRazor = "art_tool_razor"
+    case toolShovel = "art_tool_shovel"
+    case toolTrash = "art_tool_trash"
+    case toolGetFromTrash = "art_tool_get_from_trash"
+    case toolMulti = "art_tool_multi"
+    case toolInformation = "art_tool_information"
+    case changeModeAutomatic = "art_change_mode_automatic"
+    case changeModeSelective = "art_change_mode_selective"
+    case changeModeDirty = "art_change_mode_dirty"
 
     enum Kind { case cutout, tile, scene }
 
@@ -72,6 +102,36 @@ enum StarArt: String, CaseIterable {
         case .waiting: return .cutout
         case .newRelease: return .cutout
         case .holdOn: return .cutout
+        case .drop: return .cutout
+        case .formatTiff16: return .tile
+        case .formatTiff8: return .tile
+        case .formatJpeg: return .tile
+        case .stepImport: return .tile
+        case .stepHorizon: return .tile
+        case .stepAlign: return .tile
+        case .stepMerge: return .tile
+        case .stepReview: return .tile
+        case .stepRender: return .tile
+        case .paintBrush: return .scene
+        case .paintFill: return .scene
+        case .paintTouchUp: return .scene
+        case .paintMoving: return .scene
+        case .settingNeighbors: return .scene
+        case .settingThreshold: return .scene
+        case .settingClouds: return .scene
+        case .settingSpikes: return .scene
+        case .settingMemory: return .scene
+        case .toolRemove: return .scene
+        case .toolKeep: return .scene
+        case .toolRazor: return .scene
+        case .toolShovel: return .scene
+        case .toolTrash: return .scene
+        case .toolGetFromTrash: return .scene
+        case .toolMulti: return .scene
+        case .toolInformation: return .scene
+        case .changeModeAutomatic: return .tile
+        case .changeModeSelective: return .tile
+        case .changeModeDirty: return .tile
         }
     }
 
@@ -86,7 +146,7 @@ enum StarArt: String, CaseIterable {
         case .tileLoadSequence: return CGSize(width: 48, height: 48)
         case .tileLoadConfig: return CGSize(width: 48, height: 48)
         case .tileLearn: return CGSize(width: 48, height: 48)
-        case .`import`: return CGSize(width: 99, height: 120)
+        case .`import`: return CGSize(width: 111, height: 120)
         case .skyOnly: return CGSize(width: 260, height: 150)
         case .skyAndGround: return CGSize(width: 260, height: 150)
         case .cameraStatic: return CGSize(width: 260, height: 150)
@@ -98,7 +158,7 @@ enum StarArt: String, CaseIterable {
         case .modeSelective: return CGSize(width: 64, height: 64)
         case .modeAutoSelective: return CGSize(width: 64, height: 64)
         case .groundAlignment: return CGSize(width: 64, height: 64)
-        case .settings: return CGSize(width: 58, height: 64)
+        case .settings: return CGSize(width: 49, height: 64)
         case .process: return CGSize(width: 56, height: 51)
         case .processBody: return CGSize(width: 43, height: 56)
         case .processGear: return CGSize(width: 56, height: 56)
@@ -109,7 +169,37 @@ enum StarArt: String, CaseIterable {
         case .oops: return CGSize(width: 78, height: 96)
         case .waiting: return CGSize(width: 160, height: 138)
         case .newRelease: return CGSize(width: 109, height: 120)
-        case .holdOn: return CGSize(width: 69, height: 80)
+        case .holdOn: return CGSize(width: 49, height: 80)
+        case .drop: return CGSize(width: 96, height: 89)
+        case .formatTiff16: return CGSize(width: 40, height: 40)
+        case .formatTiff8: return CGSize(width: 40, height: 40)
+        case .formatJpeg: return CGSize(width: 40, height: 40)
+        case .stepImport: return CGSize(width: 64, height: 64)
+        case .stepHorizon: return CGSize(width: 64, height: 64)
+        case .stepAlign: return CGSize(width: 64, height: 64)
+        case .stepMerge: return CGSize(width: 64, height: 64)
+        case .stepReview: return CGSize(width: 64, height: 64)
+        case .stepRender: return CGSize(width: 64, height: 64)
+        case .paintBrush: return CGSize(width: 165, height: 110)
+        case .paintFill: return CGSize(width: 165, height: 110)
+        case .paintTouchUp: return CGSize(width: 165, height: 110)
+        case .paintMoving: return CGSize(width: 190, height: 63)
+        case .settingNeighbors: return CGSize(width: 320, height: 107)
+        case .settingThreshold: return CGSize(width: 280, height: 140)
+        case .settingClouds: return CGSize(width: 320, height: 120)
+        case .settingSpikes: return CGSize(width: 315, height: 140)
+        case .settingMemory: return CGSize(width: 320, height: 107)
+        case .toolRemove: return CGSize(width: 180, height: 60)
+        case .toolKeep: return CGSize(width: 180, height: 60)
+        case .toolRazor: return CGSize(width: 180, height: 60)
+        case .toolShovel: return CGSize(width: 180, height: 60)
+        case .toolTrash: return CGSize(width: 180, height: 60)
+        case .toolGetFromTrash: return CGSize(width: 180, height: 60)
+        case .toolMulti: return CGSize(width: 180, height: 60)
+        case .toolInformation: return CGSize(width: 180, height: 60)
+        case .changeModeAutomatic: return CGSize(width: 40, height: 40)
+        case .changeModeSelective: return CGSize(width: 40, height: 40)
+        case .changeModeDirty: return CGSize(width: 40, height: 40)
         }
     }
 }

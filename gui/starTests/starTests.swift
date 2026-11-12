@@ -4136,7 +4136,7 @@ final class SharedConstantsTests: XCTestCase {
 
     /// Art A4: every StarArt slot is an imageset in the app's asset catalog and loads at its display size or larger.
     func testEveryStarArtSlotLoads() throws {
-        XCTAssertEqual(StarArt.allCases.count, 32)
+        XCTAssertEqual(StarArt.allCases.count, 62)
         for art in StarArt.allCases {
             let image = try XCTUnwrap(NSImage(named: art.rawValue), "\(art.rawValue) is not in the asset catalog")
             XCTAssertGreaterThan(image.size.width, 0, art.rawValue)
