@@ -822,7 +822,7 @@ public final class ImageSequenceViewModel {
                         self._currentFrameHighLevelCleanMethod = .automatic
                         self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
                         
-                    case .selective, .dirtySky, .dirtyEarth:
+                    case .selective, .dirty:
                         self._currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
                         self._currentFrameAutoPreservationMode = .no
                     }
@@ -3809,7 +3809,7 @@ public final class ImageSequenceViewModel {
             }
         case .selective:
             true
-        case .dirtySky, .dirtyEarth:
+        case .dirty:
             false
         }
     }
@@ -3833,7 +3833,7 @@ public final class ImageSequenceViewModel {
         case .automatic(let useOutliers):
             self._currentFrameHighLevelCleanMethod = .automatic
             self._currentFrameAutoPreservationMode = useOutliers ? .yes : .no
-        case .selective, .dirtySky, .dirtyEarth:
+        case .selective, .dirty:
             self._currentFrameHighLevelCleanMethod = HighLevelCleanMethod(method)
             self._currentFrameAutoPreservationMode = .no
         }

@@ -21,7 +21,7 @@ Feature: The grid's Show list, its finished-frame badges and its right panel's c
       And "grid.show.original" is above "grid.show.starAligned"
       And "grid.show.starAligned" is above "grid.show.selectiveProcessed"
       And "grid.show.selectiveProcessed" is above "grid.show.final"
-      And "grid.show.dirtyEarthProcessed" is not shown
+      And "grid.show.dirtyProcessed" is not shown
       And "grid.badge.0" is not shown
     When  I click "grid.cell.0"
     Then  "grid.panel.outliers" is shown

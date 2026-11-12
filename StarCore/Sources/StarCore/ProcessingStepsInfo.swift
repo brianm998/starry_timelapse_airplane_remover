@@ -63,8 +63,7 @@ public struct ProcessingStepsInfo: Equatable, Sendable {
         switch cleanMethod {
         case .automatic(let useOutliers): localized(useOutliers ? "ui.auto_selective" : "ui.automatic")
         case .selective:                  localized("ui.selective")
-        case .dirtySky:                   localized("ui.dirty_sky")
-        case .dirtyEarth:                 localized("ui.dirty_earth")
+        case .dirty:                      localized("ui.dirty")
         }
     }
 }

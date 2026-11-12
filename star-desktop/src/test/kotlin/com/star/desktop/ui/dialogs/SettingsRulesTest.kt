@@ -108,12 +108,11 @@ class SettingsRulesTest {
     private fun choiceNamed(name: String) = when (name) {
         "automatic" -> HighLevelClean.AUTOMATIC
         "selective" -> HighLevelClean.SELECTIVE
-        "dirtySky" -> HighLevelClean.DIRTY_SKY
-        "dirtyEarth" -> HighLevelClean.DIRTY_EARTH
+        "dirty" -> HighLevelClean.DIRTY
         else -> error("no clean method choice named $name")
     }
 
-    /** A2: only Automatic has a Selective Auto Clean row to answer; Selective always reviews outliers and the dirty methods never do. */
+    /** A2: only Automatic has a Selective Auto Clean row to answer; Selective always reviews outliers and Dirty never does. */
     @Test fun aDirtyMethodHasNoSelectiveAutoCleanChoice() {
         val rows = constants.getAsJsonArray("usesAutoPreservation")
         assertEquals(HighLevelClean.values().size, rows.size())
@@ -121,27 +120,22 @@ class SettingsRulesTest {
             val c = element.asJsonObject
             assertEquals(c["expected"].asBoolean, choiceNamed(c["highLevel"].asString).usesAutoPreservation, c.toString())
         }
-        assertFalse(edit(clean = CleanMethod.CLEAN_DIRTY_SKY).usesOutliers)
-        assertFalse(edit(clean = CleanMethod.CLEAN_DIRTY_EARTH).usesOutliers)
+        assertFalse(edit(clean = CleanMethod.CLEAN_DIRTY).usesOutliers)
     }
 
-    /** A3: Dirty earth keeps only the ground, so it is off while horizon detection is off, with the needs-horizon tip, and falls back to Automatic. */
-    @Test fun dirtyEarthNeedsAHorizon() {
-        val cases = constants.getAsJsonArray("availability")
-        assertTrue(cases.size() > 0)
-        for (element in cases) {
-            val c = element.asJsonObject
-            val choice = choiceNamed(c["highLevel"].asString)
-            val horizon = c["horizonDetection"].asBoolean
-            assertEquals(c["available"].asBoolean, choice.isAvailable(horizon), c.toString())
-            assertEquals(choiceNamed(c["coerced"].asString), choice.coerced(horizon), c.toString())
-            val tip = CleanMethodTexts.unavailableTipKey(choice, horizon)
-            assertEquals(!c["available"].asBoolean, tip != null, c.toString())
-            if (tip != null) {
-                assertEquals(constants.getAsJsonObject("texts")["dirtyEarthNeedsHorizon"].asString, tip)
-                assertTrue(localized(tip) != tip, "$tip is not in the catalogue")
-            }
+    /**
+     * A5: Dirty covers the whole frame against the star-aligned image when there is no horizon, so it is a choice like the others:
+     * the row offers exactly Automatic, Selective and Dirty, none of them is ever switched off, and none has a needs-horizon tip.
+     */
+    @Test fun dirtyIsAlwaysAvailable() {
+        assertEquals(listOf(HighLevelClean.AUTOMATIC, HighLevelClean.SELECTIVE, HighLevelClean.DIRTY), HighLevelClean.values().toList())
+        for (horizon in listOf(true, false)) {
+            // the settings sheet with the horizon off still sends Dirty, unchanged
+            assertEquals(CleanMethod.CLEAN_DIRTY, com.star.desktop.domain.CleanMethodChoice.method(HighLevelClean.DIRTY, false), "horizon=$horizon")
+            assertEquals(HighLevelClean.DIRTY, com.star.desktop.domain.CleanMethodChoice.highLevel(CleanMethod.CLEAN_DIRTY), "horizon=$horizon")
         }
+        assertTrue(constants.getAsJsonObject("texts")["dirtyEarthNeedsHorizon"] == null, "the needs-horizon tip is gone")
+        assertTrue(!constants.has("availability"), "no availability rules are left to apply")
     }
 
     // ---- the ranges

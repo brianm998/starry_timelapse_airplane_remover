@@ -317,11 +317,7 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                                 Segmented(
                                     options = listOf(true to localized("scene_type.sky_horizon"), false to localized("scene_type.sky_only")),
                                     selected = horizon,
-                                    // Dirty earth needs a horizon, so it cannot stay chosen once the horizon is off.
-                                    onSelect = {
-                                        horizon = it
-                                        clean = CleanMethodChoice.method(CleanMethodChoice.highLevel(clean).coerced(it), autoPreserve)
-                                    },
+                                    onSelect = { horizon = it },
                                     tip = { localized(if (it) "ui.sky_horizon_help" else "ui.sky_only_help") },
                                 )
                             }
@@ -347,9 +343,7 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                             ) {
                                 Segmented(
                                     options = HighLevelClean.values().map { it to localized(CleanMethodTexts.titleKey(it)) },
-                                    // A switched-off choice (Dirty earth without a horizon) says why instead of what it does.
-                                    tip = { localized(CleanMethodTexts.unavailableTipKey(it, horizon) ?: CleanMethodTexts.tipKey(it)) },
-                                    optionEnabled = { it.isAvailable(horizon) },
+                                    tip = { localized(CleanMethodTexts.tipKey(it)) },
                                     selected = CleanMethodChoice.highLevel(clean),
                                     onSelect = { clean = CleanMethodChoice.method(it, autoPreserve) },
                                 )
@@ -358,7 +352,7 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                                     color = StarColors.textDisabled, fontSize = 10.sp,
                                 )
                             }
-                            // Selective always reviews outliers, whatever this is left at, and the dirty methods never do.
+                            // Selective always reviews outliers, whatever this is left at, and Dirty never does.
                             val asksAutoPreservation = CleanMethodChoice.highLevel(clean).usesAutoPreservation
                             SettingGroup(
                                 localized("ui.selective_auto_clean").removeSuffix(":"), enabled = asksAutoPreservation,
@@ -559,14 +553,12 @@ private fun <T> Segmented(
     enabled: Boolean = true,
     /** What hovering an option says it means (macOS's `.help` on each choice). */
     tip: (T) -> String? = { null },
-    /** Whether one option can be chosen while the rest can (Dirty earth needs a horizon). */
-    optionEnabled: (T) -> Boolean = { true },
 ) {
     // Wraps onto the next line rather than squeezing an option until its text is cut off.
     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         options.forEach { (value, label) ->
             val isSel = value == selected
-            val usable = enabled && optionEnabled(value)
+            val usable = enabled
             val option: @Composable () -> Unit = {
                 Box(
                     Modifier

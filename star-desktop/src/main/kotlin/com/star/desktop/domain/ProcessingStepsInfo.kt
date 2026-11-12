@@ -53,8 +53,7 @@ data class ProcessingStepsInfo(val intro: String, val subtitle: String, val entr
             when (cleanMethod) {
                 CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.auto_selective"
                 CleanMethod.CLEAN_AUTOMATIC -> "ui.automatic"
-                CleanMethod.CLEAN_DIRTY_SKY -> "ui.dirty_sky"
-                CleanMethod.CLEAN_DIRTY_EARTH -> "ui.dirty_earth"
+                CleanMethod.CLEAN_DIRTY -> "ui.dirty"
                 else -> "ui.selective"
             },
         )

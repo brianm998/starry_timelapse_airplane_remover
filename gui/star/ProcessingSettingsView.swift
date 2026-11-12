@@ -606,11 +606,6 @@ struct ProcessingSettingsView: View {
           // move — the user would switch from automatic to selective, which changes every
           // output frame, and be told nothing.
           .onChange(of: cleanMethod) { self.applySettings() }
-          // Dirty earth needs a horizon, so switching the scene to sky only while it is chosen
-          // takes it back to Automatic (`Config.cleanMethodConflict` would refuse it).
-          .onChange(of: viewModel.horizonDetectionEnabled) {
-              cleanMethod = cleanMethod.coerced(horizonDetectionEnabled: viewModel.horizonDetectionEnabled)
-          }
           .onChange(of: autoPreservationMode) { self.applySettings() }
           // The whole question as the title, with no message under it.  Splitting it would
           // put the first clause in the bold title and the second in the body, which reads
@@ -815,11 +810,8 @@ struct ProcessingSettingsView: View {
         EnumInstructionGridRow<HighLevelCleanMethod>(
           selection: $cleanMethod,
           showInfo: $showProcessingMethodInfo,
-          addSpacer: { addSpacer },
-          unavailableText: {
-              $0.unavailableText(horizonDetectionEnabled: viewModel.horizonDetectionEnabled)
-          }
-        )        
+          addSpacer: { addSpacer }
+        )
     }
 
     private var useCannyEdgeDetectionGridRow: some View {

@@ -393,11 +393,12 @@ final class ConfigOverridesTests: XCTestCase {
                       "still untouched by a command line that did not mention it")
     }
 
-    /// The dirty methods override a saved config like any other, and survive the config.json
-    /// a resume reads back (synthesized Codable: `{"dirtySky":{}}`).
+    /// The dirty method overrides a saved config like any other, and survives the config.json
+    /// a resume reads back (`{"dirty":{}}`).  The retired spellings override it as `.dirty` too.
     func testDirtyCleanMethodsApplyAndRoundTripThroughConfigJSON() throws {
-        for (spelling, method, key) in [("dirtySky", CleanMethod.dirtySky, "dirtySky"),
-                                        ("dirtyEarth", CleanMethod.dirtyEarth, "dirtyEarth")] {
+        for (spelling, method, key) in [("dirty", CleanMethod.dirty, "dirty"),
+                                        ("dirtySky", CleanMethod.dirty, "dirty"),
+                                        ("dirtyEarth", CleanMethod.dirty, "dirty")] {
             var config = savedConfig()
             config.horizonDetectionEnabled = true
             try StarCli.parse(["--clean-method", spelling, "/some/seq"]).configOverrides.apply(to: &config)
