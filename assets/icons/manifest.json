@@ -1,0 +1,1048 @@
+[
+ {
+  "row": "BR-4",
+  "title": "Menu bar and tray",
+  "size_pt": 18,
+  "tint": "tray",
+  "where": "Mac menu bar item, Windows and Linux tray",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "tray_idle",
+    "label": "Idle"
+   },
+   {
+    "name": "tray_running",
+    "label": "Running (code draws the ring around it)"
+   },
+   {
+    "name": "tray_finished",
+    "label": "Finished"
+   },
+   {
+    "name": "tray_failed",
+    "label": "Failed"
+   }
+  ]
+ },
+ {
+  "row": "WL-5",
+  "title": "Recent files",
+  "size_pt": 20,
+  "tint": "brand",
+  "where": "Start of each row in Open Recent",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "recent_video",
+    "label": "Video"
+   },
+   {
+    "name": "recent_sequence",
+    "label": "Image sequence"
+   },
+   {
+    "name": "recent_config",
+    "label": "Config file"
+   }
+  ]
+ },
+ {
+  "row": "IM-3",
+  "title": "Working location",
+  "size_pt": 20,
+  "tint": "brand",
+  "where": "Where to put the working files, on both sheets",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "location_folder",
+    "label": "Folder"
+   },
+   {
+    "name": "disk_has_room",
+    "label": "Disk with room"
+   },
+   {
+    "name": "disk_short",
+    "label": "Disk without room"
+   }
+  ]
+ },
+ {
+  "row": "HZ-3",
+  "title": "Horizon painter toolbar",
+  "size_pt": 18,
+  "tint": "neutral",
+  "where": "Toolbar above the frame while painting",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "horizon_paint_across",
+    "label": "Paint across the horizon"
+   },
+   {
+    "name": "reset",
+    "label": "Reset"
+   },
+   {
+    "name": "brush_sky",
+    "label": "Sky brush"
+   },
+   {
+    "name": "brush_ground",
+    "label": "Ground brush"
+   },
+   {
+    "name": "brush_shrink",
+    "label": "Shrink brush"
+   },
+   {
+    "name": "brush_grow",
+    "label": "Grow brush"
+   },
+   {
+    "name": "save",
+    "label": "Save"
+   },
+   {
+    "name": "apply_nearby",
+    "label": "Apply to nearby frames"
+   }
+  ]
+ },
+ {
+  "row": "ST-1",
+  "title": "Settings tabs",
+  "size_pt": 18,
+  "tint": "brand",
+  "where": "Tab strip of Processing Settings",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "tab_cleaning",
+    "label": "Cleaning"
+   },
+   {
+    "name": "tab_gpu",
+    "label": "GPU Usage"
+   },
+   {
+    "name": "tab_alignment",
+    "label": "Alignment"
+   },
+   {
+    "name": "tab_horizon",
+    "label": "Horizon"
+   },
+   {
+    "name": "tab_memory",
+    "label": "Memory"
+   }
+  ]
+ },
+ {
+  "row": "PR-2",
+  "title": "Processing steps",
+  "size_pt": 18,
+  "tint": "brand",
+  "where": "Each row of the Steps list, and larger in About the processing steps",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "step_extract",
+    "label": "Extracting video frames"
+   },
+   {
+    "name": "step_horizon",
+    "label": "Horizon"
+   },
+   {
+    "name": "step_merged_horizon",
+    "label": "Merged Horizon"
+   },
+   {
+    "name": "step_horizon_consensus",
+    "label": "Horizon Consensus"
+   },
+   {
+    "name": "step_star_keypoints",
+    "label": "Star Keypoints"
+   },
+   {
+    "name": "step_earth_keypoints",
+    "label": "Earth Keypoints"
+   },
+   {
+    "name": "step_star_alignment",
+    "label": "Star Alignment"
+   },
+   {
+    "name": "step_earth_alignment",
+    "label": "Earth Alignment"
+   },
+   {
+    "name": "step_outliers",
+    "label": "Outliers"
+   },
+   {
+    "name": "step_merged",
+    "label": "Merged"
+   }
+  ]
+ },
+ {
+  "row": "RD-4",
+  "title": "Render options",
+  "size_pt": 18,
+  "tint": "brand",
+  "where": "Beside each option in Render Video and Choose Video Settings",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "render_frame_rate",
+    "label": "Frame rate"
+   },
+   {
+    "name": "render_resolution",
+    "label": "Resolution"
+   },
+   {
+    "name": "render_codec",
+    "label": "Codec"
+   },
+   {
+    "name": "render_encoder",
+    "label": "Encoder"
+   },
+   {
+    "name": "render_pixel_format",
+    "label": "Pixel format"
+   },
+   {
+    "name": "render_container",
+    "label": "Container"
+   }
+  ]
+ },
+ {
+  "row": "MW-1",
+  "title": "Playback",
+  "size_pt": 30,
+  "tint": "neutral",
+  "where": "Centre of the bottom bar",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "transport_first",
+    "label": "First frame"
+   },
+   {
+    "name": "transport_back_several",
+    "label": "Back several"
+   },
+   {
+    "name": "transport_previous",
+    "label": "Previous frame"
+   },
+   {
+    "name": "transport_play_reverse",
+    "label": "Play backwards"
+   },
+   {
+    "name": "transport_play",
+    "label": "Play"
+   },
+   {
+    "name": "transport_pause",
+    "label": "Pause"
+   },
+   {
+    "name": "transport_next",
+    "label": "Next frame"
+   },
+   {
+    "name": "transport_forward_several",
+    "label": "Forward several"
+   },
+   {
+    "name": "transport_last",
+    "label": "Last frame"
+   }
+  ]
+ },
+ {
+  "row": "MW-2",
+  "title": "Interaction modes",
+  "size_pt": 18,
+  "tint": "neutral",
+  "where": "Mode picker at the left of the bottom bar",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "mode_edit",
+    "label": "Edit"
+   },
+   {
+    "name": "mode_scrub",
+    "label": "Scrub"
+   },
+   {
+    "name": "mode_grid",
+    "label": "Grid"
+   }
+  ]
+ },
+ {
+  "row": "MW-3",
+  "title": "Original and Processed",
+  "size_pt": 18,
+  "tint": "neutral",
+  "where": "Picker beside the mode picker",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "view_original",
+    "label": "Original"
+   },
+   {
+    "name": "view_processed",
+    "label": "Processed"
+   }
+  ]
+ },
+ {
+  "row": "MW-4",
+  "title": "Main actions",
+  "size_pt": 18,
+  "tint": "neutral",
+  "where": "Bottom bar, Settings footer, processing window footer",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "action_process",
+    "label": "Process"
+   },
+   {
+    "name": "action_show_progress",
+    "label": "Show Progress"
+   },
+   {
+    "name": "action_render_video",
+    "label": "Render Video"
+   },
+   {
+    "name": "action_stop",
+    "label": "Stop"
+   },
+   {
+    "name": "action_preview",
+    "label": "Preview"
+   }
+  ]
+ },
+ {
+  "row": "MW-5",
+  "title": "Everyday utility",
+  "size_pt": 20,
+  "tint": "neutral",
+  "where": "Throughout both clients",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "settings",
+    "label": "Settings"
+   },
+   {
+    "name": "info",
+    "label": "Info"
+   },
+   {
+    "name": "close",
+    "label": "Close"
+   },
+   {
+    "name": "back",
+    "label": "Back"
+   },
+   {
+    "name": "panel_collapse",
+    "label": "Collapse panel"
+   },
+   {
+    "name": "section_expand",
+    "label": "Expand section"
+   },
+   {
+    "name": "filmstrip_show",
+    "label": "Show filmstrip"
+   },
+   {
+    "name": "filmstrip_hide",
+    "label": "Hide filmstrip"
+   },
+   {
+    "name": "open_in_window",
+    "label": "Open in window"
+   }
+  ]
+ },
+ {
+  "row": "MW-6",
+  "title": "Right panel rows",
+  "size_pt": 16,
+  "tint": "neutral",
+  "where": "Right panel in Edit mode",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "panel_selective_tools",
+    "label": "Selective Tools"
+   },
+   {
+    "name": "panel_processing",
+    "label": "Processing"
+   },
+   {
+    "name": "panel_debug",
+    "label": "Debug"
+   },
+   {
+    "name": "panel_multi_choice",
+    "label": "Multi choice"
+   },
+   {
+    "name": "panel_show_trash",
+    "label": "Show Trash"
+   },
+   {
+    "name": "panel_only_unclassified",
+    "label": "Only Unclassified"
+   },
+   {
+    "name": "panel_opacity",
+    "label": "Opacity"
+   },
+   {
+    "name": "panel_rerun_refinement",
+    "label": "Re-run Horizon Refinement"
+   },
+   {
+    "name": "panel_change_mode",
+    "label": "Change Mode"
+   },
+   {
+    "name": "panel_static_merge",
+    "label": "Static merge"
+   },
+   {
+    "name": "panel_render_updates",
+    "label": "Render Updates"
+   },
+   {
+    "name": "panel_log_to_file",
+    "label": "Log to file"
+   }
+  ]
+ },
+ {
+  "row": "MW-7",
+  "title": "Effort levels",
+  "size_pt": 18,
+  "tint": "neutral",
+  "where": "Effort control in the right panel and the processing window",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "effort_full",
+    "label": "Full"
+   },
+   {
+    "name": "effort_balanced",
+    "label": "Balanced"
+   },
+   {
+    "name": "effort_light",
+    "label": "Light"
+   },
+   {
+    "name": "effort_custom",
+    "label": "Custom"
+   }
+  ]
+ },
+ {
+  "row": "MW-8",
+  "title": "Display rows",
+  "size_pt": 16,
+  "tint": "neutral",
+  "where": "Display section of the left panel",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "display_fast_advancement",
+    "label": "Fast Advancement"
+   },
+   {
+    "name": "display_horizon_line",
+    "label": "Show Horizon Line"
+   },
+   {
+    "name": "display_frame_rate",
+    "label": "Frame Rate"
+   },
+   {
+    "name": "display_frame_opacity",
+    "label": "Frame Opacity"
+   },
+   {
+    "name": "display_zoom",
+    "label": "Zoom"
+   },
+   {
+    "name": "display_full_resolution",
+    "label": "Full resolution"
+   }
+  ]
+ },
+ {
+  "row": "MW-9",
+  "title": "Frame view list",
+  "size_pt": 18,
+  "tint": "neutral",
+  "where": "The Show list in the left panel and in Grid mode",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "view_mode_original",
+    "label": "Original"
+   },
+   {
+    "name": "view_mode_final",
+    "label": "Final"
+   },
+   {
+    "name": "view_mode_star_aligned",
+    "label": "Star aligned"
+   },
+   {
+    "name": "view_mode_earth_aligned",
+    "label": "Earth aligned"
+   },
+   {
+    "name": "view_mode_failed_star_aligned",
+    "label": "Failed star aligned"
+   },
+   {
+    "name": "view_mode_failed_earth_aligned",
+    "label": "Failed earth aligned"
+   },
+   {
+    "name": "view_mode_subtraction",
+    "label": "Subtraction"
+   },
+   {
+    "name": "view_mode_blobs",
+    "label": "Blobs"
+   },
+   {
+    "name": "view_mode_remove_mask",
+    "label": "Removal mask"
+   },
+   {
+    "name": "view_mode_horizon",
+    "label": "Horizon mask"
+   },
+   {
+    "name": "view_mode_merged_horizon",
+    "label": "Merged horizon"
+   },
+   {
+    "name": "view_mode_consensus_horizon",
+    "label": "Horizon consensus"
+   },
+   {
+    "name": "view_mode_user_horizon",
+    "label": "User defined horizon"
+   },
+   {
+    "name": "view_mode_auto_processed",
+    "label": "Auto processed"
+   },
+   {
+    "name": "view_mode_auto_selective_processed",
+    "label": "Auto processed with selection"
+   },
+   {
+    "name": "view_mode_selective_processed",
+    "label": "Selective processed"
+   },
+   {
+    "name": "view_mode_dirty_sky_processed",
+    "label": "Dirty sky"
+   },
+   {
+    "name": "view_mode_dirty_earth_processed",
+    "label": "Dirty earth"
+   },
+   {
+    "name": "view_mode_validation",
+    "label": "Validation"
+   }
+  ]
+ },
+ {
+  "row": "MW-10",
+  "title": "Filmstrip and grid badges",
+  "size_pt": 9,
+  "tint": "app",
+  "where": "Top strip of every filmstrip and grid cell",
+  "viewBox": [
+   12,
+   12
+  ],
+  "icons": [
+   {
+    "name": "badge_will_remove",
+    "label": "Will remove"
+   },
+   {
+    "name": "badge_undecided",
+    "label": "Undecided"
+   },
+   {
+    "name": "badge_will_keep",
+    "label": "Will keep"
+   },
+   {
+    "name": "badge_automatic",
+    "label": "Automatic"
+   },
+   {
+    "name": "badge_selective",
+    "label": "Selective"
+   },
+   {
+    "name": "badge_auto_selective",
+    "label": "Auto-Selective"
+   },
+   {
+    "name": "badge_dirty_sky",
+    "label": "Dirty Sky"
+   },
+   {
+    "name": "badge_dirty_earth",
+    "label": "Dirty Earth"
+   },
+   {
+    "name": "badge_not_extracted",
+    "label": "Not extracted yet"
+   },
+   {
+    "name": "badge_loading",
+    "label": "Loading"
+   }
+  ]
+ },
+ {
+  "row": "MW-11",
+  "title": "Re-process menu",
+  "size_pt": 16,
+  "tint": "neutral",
+  "where": "Right-click menu on filmstrip and grid frames",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "reprocess_new_only",
+    "label": "Process new only"
+   },
+   {
+    "name": "reprocess_alignment",
+    "label": "Re-process alignment"
+   },
+   {
+    "name": "reprocess_outliers",
+    "label": "Re-process outliers"
+   },
+   {
+    "name": "reprocess_horizons",
+    "label": "Re-process horizons"
+   },
+   {
+    "name": "reprocess_everything",
+    "label": "Re-process everything"
+   }
+  ]
+ },
+ {
+  "row": "TL-1",
+  "title": "Tool icons",
+  "size_pt": 35,
+  "tint": "colour",
+  "where": "Tool list in the right panel, Editing Tools, and the outlier table",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "tool_remove",
+    "label": "Remove"
+   },
+   {
+    "name": "tool_keep",
+    "label": "Keep"
+   },
+   {
+    "name": "tool_razor",
+    "label": "Razor"
+   },
+   {
+    "name": "tool_shovel",
+    "label": "Shovel"
+   },
+   {
+    "name": "tool_trash",
+    "label": "Trash"
+   },
+   {
+    "name": "tool_get_from_trash",
+    "label": "Get from Trash"
+   },
+   {
+    "name": "tool_multi",
+    "label": "Multi"
+   },
+   {
+    "name": "tool_information",
+    "label": "Information"
+   }
+  ]
+ },
+ {
+  "row": "TL-2",
+  "title": "Tool cursors",
+  "size_pt": 40,
+  "tint": "colour",
+  "where": "The cursor over the frame in Edit mode",
+  "viewBox": [
+   40,
+   40
+  ],
+  "icons": [
+   {
+    "name": "cursor_remove_crosshair",
+    "label": "Remove, crosshair"
+   },
+   {
+    "name": "cursor_remove_pointing",
+    "label": "Remove, pointing"
+   },
+   {
+    "name": "cursor_keep_crosshair",
+    "label": "Keep, crosshair"
+   },
+   {
+    "name": "cursor_keep_pointing",
+    "label": "Keep, pointing"
+   },
+   {
+    "name": "cursor_razor_crosshair",
+    "label": "Razor, crosshair"
+   },
+   {
+    "name": "cursor_razor_pointing",
+    "label": "Razor, pointing"
+   },
+   {
+    "name": "cursor_shovel_crosshair",
+    "label": "Shovel, crosshair"
+   },
+   {
+    "name": "cursor_shovel_pointing",
+    "label": "Shovel, pointing"
+   },
+   {
+    "name": "cursor_delete_trash_crosshair",
+    "label": "Trash, crosshair"
+   },
+   {
+    "name": "cursor_delete_trash_pointing",
+    "label": "Trash, pointing"
+   },
+   {
+    "name": "cursor_extract_trash_crosshair",
+    "label": "Get from Trash, crosshair"
+   },
+   {
+    "name": "cursor_extract_trash_pointing",
+    "label": "Get from Trash, pointing"
+   },
+   {
+    "name": "cursor_multi_crosshair",
+    "label": "Multi, crosshair"
+   },
+   {
+    "name": "cursor_multi_pointing",
+    "label": "Multi, pointing"
+   },
+   {
+    "name": "cursor_info_crosshair",
+    "label": "Information, crosshair"
+   },
+   {
+    "name": "cursor_info_pointing",
+    "label": "Information, pointing"
+   }
+  ]
+ },
+ {
+  "row": "TL-5",
+  "title": "Frame ranges",
+  "size_pt": 24,
+  "tint": "app",
+  "where": "Both multi-frame sheets",
+  "viewBox": [
+   36,
+   24
+  ],
+  "icons": [
+   {
+    "name": "range_all",
+    "label": "All frames"
+   },
+   {
+    "name": "range_here_to_end",
+    "label": "From here to the end"
+   },
+   {
+    "name": "range_start_to_here",
+    "label": "From the start to here"
+   },
+   {
+    "name": "range_here_and_some_after",
+    "label": "This one and some after"
+   },
+   {
+    "name": "range_some_ending_here",
+    "label": "Some ending here"
+   }
+  ]
+ },
+ {
+  "row": "TL-6",
+  "title": "Overlap actions",
+  "size_pt": 18,
+  "tint": "app",
+  "where": "Action pills on the multi-frame sheets",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "overlap_remove",
+    "label": "Remove overlapping"
+   },
+   {
+    "name": "overlap_keep",
+    "label": "Keep overlapping"
+   }
+  ]
+ },
+ {
+  "row": "TL-8",
+  "title": "Custom limits",
+  "size_pt": 16,
+  "tint": "neutral",
+  "where": "The Custom limits popover",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "limit_frames_in_flight",
+    "label": "Frames in flight"
+   },
+   {
+    "name": "limit_memory",
+    "label": "Memory"
+   },
+   {
+    "name": "limit_cpu",
+    "label": "CPU"
+   },
+   {
+    "name": "limit_gpu",
+    "label": "GPU"
+   },
+   {
+    "name": "limit_disk",
+    "label": "Disk"
+   },
+   {
+    "name": "limit_priority",
+    "label": "Priority"
+   }
+  ]
+ },
+ {
+  "row": "ER-2",
+  "title": "Warning banners",
+  "size_pt": 24,
+  "tint": "app",
+  "where": "Left edge of the banner at the top of the window",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "warn_warning",
+    "label": "Warning"
+   },
+   {
+    "name": "warn_critical",
+    "label": "Critical"
+   },
+   {
+    "name": "warn_low_memory",
+    "label": "Low memory"
+   },
+   {
+    "name": "warn_disk_full",
+    "label": "Not enough disk"
+   },
+   {
+    "name": "warn_write_failed",
+    "label": "Could not write output"
+   },
+   {
+    "name": "warn_ground_not_tracked",
+    "label": "Ground not tracked"
+   },
+   {
+    "name": "warn_frame_not_finished",
+    "label": "Frame not finished"
+   },
+   {
+    "name": "warn_rebuilding",
+    "label": "Rebuilding earlier work"
+   }
+  ]
+ },
+ {
+  "row": "ER-6",
+  "title": "Preferences rows",
+  "size_pt": 20,
+  "tint": "brand",
+  "where": "Each card in Preferences",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "pref_processing_type",
+    "label": "Processing Type"
+   },
+   {
+    "name": "pref_frame_rate",
+    "label": "Frame Rate"
+   },
+   {
+    "name": "pref_show_horizon",
+    "label": "Show Horizon on Main View"
+   },
+   {
+    "name": "pref_painter_instructions",
+    "label": "Show Horizon Painter Instructions"
+   },
+   {
+    "name": "pref_skip_render_prompt",
+    "label": "Skip Render Prompt"
+   },
+   {
+    "name": "pref_show_processing_window",
+    "label": "Show Processing Window"
+   }
+  ]
+ },
+ {
+  "row": "HP-4",
+  "title": "Information tabs",
+  "size_pt": 20,
+  "tint": "brand",
+  "where": "The list on the left of the Information dialog",
+  "viewBox": [
+   24,
+   24
+  ],
+  "icons": [
+   {
+    "name": "info_about",
+    "label": "About"
+   },
+   {
+    "name": "info_how_to",
+    "label": "How To"
+   },
+   {
+    "name": "info_detailed",
+    "label": "Detailed"
+   }
+  ]
+ }
+]
