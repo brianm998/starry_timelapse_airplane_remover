@@ -172,64 +172,72 @@ uses = { compile = 1 }
 # ---------------------------------------------------------------------------------------------
 [suite.build-logging]
 # s27-shadow: remove at the switch
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path logging 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path logging 2>&1 && echo BUILD-build-logging-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-logging-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-StarCpp]
 # s27-shadow: remove at the switch
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCpp 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCpp 2>&1 && echo BUILD-build-StarCpp-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-StarCpp-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-StarCore]
 # s27-shadow: remove at the switch
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCore 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCore 2>&1 && echo BUILD-build-StarCore-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-StarCore-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-cli]
 # s27-shadow: remove at the switch
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path cli 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path cli 2>&1 && echo BUILD-build-cli-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-cli-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-daemon]
 # s27-shadow: remove at the switch
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path daemon -c release 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path daemon -c release 2>&1 && echo BUILD-build-daemon-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-daemon-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-trail_tools]
 # s27-shadow: remove at the switch
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path trail_tools 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path trail_tools 2>&1 && echo BUILD-build-trail_tools-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-trail_tools-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-decision_tree_generator]
 # s27-shadow: remove at the switch
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path decision_tree_generator 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path decision_tree_generator 2>&1 && echo BUILD-build-decision_tree_generator-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-decision_tree_generator-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-monitor]
 # s27-shadow: remove at the switch
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path pipeline/monitor 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path pipeline/monitor 2>&1 && echo BUILD-build-monitor-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-monitor-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
@@ -237,16 +245,18 @@ uses = { compile = 1 }
 [suite.build-gui]
 # s27-shadow: remove at the switch
 # Builds the app only. It runs no tests, so it never touches the display.
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build 2>&1 && echo BUILD-build-gui-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-gui-OK$"
 fail_regex = "error:|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-desktop]
 # s27-shadow: remove at the switch
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop compileKotlin compileTestKotlin --no-daemon 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop compileKotlin compileTestKotlin --no-daemon 2>&1 && echo BUILD-build-desktop-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-desktop-OK$"
 fail_regex = "FAILURE: Build failed|error:"
 level = "t1"
 uses = { compile = 1 }
