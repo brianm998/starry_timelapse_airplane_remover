@@ -12,11 +12,10 @@ import os
 import shutil
 import subprocess
 import time
-import tomllib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Self, cast
+from typing import Self
 
 from . import adapter_star
 
@@ -44,35 +43,16 @@ def under_mason_task() -> bool:
     return bool(os.environ.get("MASON_TASK"))
 
 
-def test_steps(worktree: str) -> frozenset[str]:
-    """The names of the `type = "test"` steps in the worktree's MASON definition (.mason/mason.toml); {"test"} if it cannot be read."""
-    try:
-        with (Path(worktree) / ".mason" / "mason.toml").open("rb") as f:
-            steps: object = tomllib.load(f).get("step")
-    except (OSError, tomllib.TOMLDecodeError):
-        return frozenset({"test"})
-    if not isinstance(steps, dict):
-        return frozenset()
-    return frozenset(str(name) for name, step in cast(dict[object, object], steps).items()
-                     if isinstance(step, dict) and cast(dict[str, object], step).get("type") == "test")
-
-
 def admitted(env: Mapping[str, str] | None = None) -> str:
     """Why MASON has already admitted this process's heavy work, or "" if it has not and the job must queue.
 
-    A command MASON itself runs already holds what MASON gave it; asking masond again (`mason run`) queues the command behind the
-    slots its own step holds, so it waits on itself until the request is dropped (task #169's test step, 2026-11-11: 70 min, never
-    above 13th in line). Two cases:
-    - `MASON_HELD` names classes: MASON's documented way to say a command holds them (a landing batch's suites set it per suite).
-    - A MASON task's test step: it holds the union of its suites' `uses` for the whole step (masond's `suites::needs_for`), but
-      `MASON_HELD` carries only the step's own `uses`, which is empty when the suites say what they use.
-    Anything else under a MASON task (an agent's session building, say) holds nothing for the job and queues as before."""
+    `MASON_HELD` names the classes MASON holds for the command it runs (a landing batch's suites set it per suite). Queueing such
+    a command in masond again (`mason run`) would wait behind the slots it already holds, so it runs directly. Nothing else is
+    taken as admitted: a task's test step that runs the project's `test` command (star's: no `suites = [...]` on the step) holds
+    nothing in masond, and the `mason run` here is the only thing scheduling its jobs."""
     env = os.environ if env is None else env
     if held := env.get("MASON_HELD", "").strip():
         return f"MASON already holds {held} for this command"
-    step = env.get("MASON_STEP", "")
-    if env.get("MASON_TASK") and step and step in test_steps(env.get("MASON_WORKTREE") or os.getcwd()):
-        return f"MASON's {step} step already holds the machine for its suites"
     return ""
 
 
