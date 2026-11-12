@@ -61,6 +61,9 @@ apply to it: don't translate it and don't build a Kotlin twin.
 - **To stop all automated testing at once: `pipeline/bin/starpipe freeze`** (`thaw` lets go). It holds every heavy-lock slot,
   including the one-slot file older code uses, so the daemon, the agents in ticket worktrees (which run their own older
   `heavy.py`) and wrapped session commands all wait instead of starting. It does not stop a run already going: kill that first.
+- **MASON files develop-red tickets, starpipe does not.** `[watch.ci]` in `.mason/mason.toml` watches the CI of `develop`
+  (gate `pr-gate`, `Gherkin` excluded: its nightly owns those). starpipe's `watch_develop` still keeps the baseline and
+  sets and clears `stop_line` for its own landing train, but files nothing.
 - `pipeline/bin/starpipe check --explain` says which builds and tests a change needs;
   `starpipe check` runs them and proves each from its own output.
 - **File every new star ticket in MASON, never with starpipe.** Don't run `starpipe ticket new`, and don't use the

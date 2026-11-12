@@ -545,17 +545,14 @@ def test_ticket_worktree_and_branch_names() -> None:
 
 
 # post-merge watch and stop-the-line ------------------------------------------------------------------------------------
-def test_watch_seeds_the_baseline_then_files_a_p0_for_a_red_pr_gate(rig: Rig) -> None:
+def test_watch_seeds_the_baseline_then_stops_the_line_for_a_red_pr_gate(rig: Rig) -> None:
     rig.gh.develop_ci = [("pr-gate", "linux", "completed", "success"), ("cli", "windows", "completed", "failure")]
     ship.watch_develop(rig.engine)
     assert rig.db.baseline("cli", "windows") == "failure" and rig.gh.issues == {}  # known red: no ticket
 
     rig.gh.develop_ci = [("pr-gate", "linux", "completed", "failure"), ("cli", "windows", "completed", "failure")]
     ship.watch_develop(rig.engine)
-    assert rig.db.get("stop_line") == "pr-gate/linux"
-    (issue,) = rig.gh.issues.values()
-    assert issue["title"] == "develop red: pr-gate/linux"
-    assert {"pipeline", "p0", "pipe:filed-by-pipeline"} <= {x["name"] for x in issue["labels"]}
+    assert rig.db.get("stop_line") == "pr-gate/linux" and rig.gh.issues == {}, "MASON files the ticket"
     assert any(k == "star pipeline: develop-red" for k, _ in rig.pages)
 
     rig.gh.develop_ci = [("pr-gate", "linux", "completed", "success"), ("cli", "windows", "completed", "failure")]
@@ -563,161 +560,40 @@ def test_watch_seeds_the_baseline_then_files_a_p0_for_a_red_pr_gate(rig: Rig) ->
     assert rig.db.get("stop_line") is None
 
 
-def test_auto_run_tickets_are_capped(rig: Rig) -> None:
-    rig.gh.develop_sha = "d1"
-    rig.gh.develop_ci = [(f"w{i}", "j", "completed", "success") for i in range(4)]
-    ship.watch_develop(rig.engine)
-    rig.gh.develop_ci = [(f"w{i}", "j", "completed", "failure") for i in range(4)]
-    for sha in ("d2", "d3"):  # red in two different develop runs: now it is real
-        rig.gh.develop_sha = sha
-        ship.watch_develop(rig.engine)
-    filed = [i for i in rig.gh.issues.values() if i["title"].startswith("regression on develop")]
-    runs = [i for i in filed if "pipeline" in labels_of(i)]
-    assert len(runs) == 2, "only two reach the pipeline; the rest wait for the owner"
-    assert len(filed) == 4 and all("pipe:proposed" in labels_of(i) for i in filed if i not in runs)
-
-
-def labels_of(issue: dict[str, Any]) -> set[str]:
-    return {x["name"] for x in issue["labels"]}
-
-
-def _two_red_runs(rig: Rig, workflow: str = "cli", name: str = "desktop") -> None:
-    rig.gh.develop_sha = "d1"
-    rig.gh.develop_ci = [(workflow, name, "completed", "success")]
-    ship.watch_develop(rig.engine)
-    rig.gh.develop_ci = [(workflow, name, "completed", "failure")]
-    for sha in ("d2", "d3"):
-        rig.gh.develop_sha = sha
-        ship.watch_develop(rig.engine)
-
-
-def test_a_develop_red_is_proposed_when_the_auto_ticket_cap_is_reached(rig: Rig) -> None:
-    for n in (1, 2):
-        rig.gh.add_issue(n, f"other work {n}", labels=("pipeline", "pipe:filed-by-pipeline"))
-    _two_red_runs(rig)
-    (issue,) = [i for i in rig.gh.issues.values() if i["title"] == "regression on develop: cli/desktop"]
-    assert labels_of(issue) == {"pipe:filed-by-pipeline", "pipe:proposed", "p1"}, "no `pipeline` label: nothing runs unapproved"
-    assert any(e["kind"] == "auto-ticket-proposed" for e in rig.db.events_since())
-
-
-def test_a_red_is_retried_when_both_caps_are_reached(rig: Rig) -> None:
-    rig.engine.config.max_proposed = 1
-    for n in (1, 2):
-        rig.gh.add_issue(n, f"other work {n}", labels=("pipeline", "pipe:filed-by-pipeline"))
-    rig.gh.add_issue(3, "a proposal", labels=("pipe:filed-by-pipeline", "pipe:proposed"))
-    _two_red_runs(rig)
-    assert len(rig.gh.issues) == 3, "nothing could be filed"
-    assert rig.db.get("red_pending:cli/desktop") == "d2", "kept, so the next poll retries"
-    assert any(e["kind"] == "auto-ticket-capped" for e in rig.db.events_since())
-    rig.gh.issues[3]["state"] = "closed"  # the owner dealt with the proposal: room again
-    rig.gh.develop_sha = "d4"
-    ship.watch_develop(rig.engine)
-    assert any(i["title"] == "regression on develop: cli/desktop" for i in rig.gh.issues.values())
-
-
-def test_a_red_with_an_open_ticket_of_the_same_title_is_not_refiled(rig: Rig) -> None:
-    rig.gh.add_issue(7, "regression on develop: cli/desktop", labels=("pipeline", "pipe:filed-by-pipeline"))
-    rig.gh.add_issue(8, "Kotlin tests red (cli/other leg)", labels=())
-    rig.gh.add_issue(9, "cli/other is red", labels=())  # hand-filed, names the job
-    _two_red_runs(rig)
-    _two_red_runs(rig, "cli", "other")
-    assert sorted(rig.gh.issues) == [7, 8, 9]
-    assert [e for e in rig.db.events_since() if e["kind"] == "red-already-ticketed"]
-
-
-def test_one_red_run_of_a_non_gate_job_on_develop_files_nothing_until_a_second_run_agrees(rig: Rig) -> None:
+def test_a_red_on_two_runs_of_a_non_gate_job_files_nothing(rig: Rig) -> None:
+    """Filing a develop-red ticket is MASON's base-branch CI watch; the baseline still follows the jobs."""
     rig.gh.develop_sha = "d1"
     rig.gh.develop_ci = [("cli", "desktop", "completed", "success")]
     ship.watch_develop(rig.engine)
     rig.gh.develop_ci = [("cli", "desktop", "completed", "failure")]
-    for sha in ("d2", "d2", "d2"):  # the same red run, polled again and again
+    for sha in ("d2", "d3", "d4"):
         rig.gh.develop_sha = sha
         ship.watch_develop(rig.engine)
-    assert rig.gh.issues == {}, "a single red run might be a flake"
-    rig.gh.develop_sha = "d3"
-    ship.watch_develop(rig.engine)
-    (issue,) = rig.gh.issues.values()
-    assert issue["title"] == "regression on develop: cli/desktop"
-    rig.gh.develop_sha = "d4"
-    ship.watch_develop(rig.engine)
-    assert len(rig.gh.issues) == 1, "it is filed once, not on every red run"
+    assert rig.gh.issues == {}
+    assert rig.db.baseline("cli", "desktop") == "failure"
+    assert rig.db.get("stop_line") is None, "only the gate stops the line"
 
 
-def test_a_job_that_goes_green_again_was_a_flake_and_resets_the_wait(rig: Rig) -> None:
+def test_a_long_red_job_files_nothing(rig: Rig) -> None:
     rig.gh.develop_sha = "d1"
-    rig.gh.develop_ci = [("cli", "desktop", "completed", "success")]
+    rig.gh.develop_ci = [("Kotlin Client", "ubuntu-latest", "completed", "failure")]
+    ship.watch_develop(rig.engine)  # seeding: the known-red ledger
+    rig.now += 24 * 3600
+    rig.gh.develop_sha = "d2"
     ship.watch_develop(rig.engine)
-    for sha, result in (("d2", "failure"), ("d3", "success"), ("d4", "failure")):
-        rig.gh.develop_sha = sha
-        rig.gh.develop_ci = [("cli", "desktop", "completed", result)]
-        ship.watch_develop(rig.engine)
-    assert rig.gh.issues == {}, "red, green, red: never two reds in a row"
+    assert rig.gh.issues == {}
 
 
-def test_a_gherkin_job_going_red_files_no_regression_ticket_but_updates_the_baseline(rig: Rig) -> None:
+def test_a_gherkin_job_going_red_updates_the_baseline_and_files_nothing(rig: Rig) -> None:
     rig.gh.develop_sha = "d1"
     rig.gh.develop_ci = [("Gherkin", "desktop (ubuntu-24.04) · a", "completed", "success")]
     ship.watch_develop(rig.engine)
     rig.gh.develop_ci = [("Gherkin", "desktop (ubuntu-24.04) · a", "completed", "failure")]
-    for sha in ("d2", "d3", "d4"):  # red at several different shas: the nightly files Gherkin's tickets, not this
+    for sha in ("d2", "d3", "d4"):
         rig.gh.develop_sha = sha
         ship.watch_develop(rig.engine)
     assert rig.gh.issues == {}
     assert rig.db.baseline("Gherkin", "desktop (ubuntu-24.04) · a") == "failure"
-    assert rig.db.get("red_pending:Gherkin/desktop (ubuntu-24.04) · a") is None
-
-
-def _red_for(rig: Rig, workflow: str, name: str, hours: float, *, shas: tuple[str, ...] = ("d2",)) -> None:
-    """The job was already red (baseline `failure`) when watching started; `hours` later it is still red."""
-    rig.gh.develop_sha = "d1"
-    rig.gh.develop_ci = [(workflow, name, "completed", "failure")]
-    ship.watch_develop(rig.engine)  # seeding: the known-red ledger
-    for sha in shas:
-        rig.gh.develop_sha = sha
-        ship.watch_develop(rig.engine)
-    rig.now += hours * 3600
-    rig.gh.develop_sha = shas[-1]
-    ship.watch_develop(rig.engine)
-
-
-def test_a_job_red_for_long_with_no_open_ticket_gets_one(rig: Rig) -> None:
-    _red_for(rig, "Kotlin Client", "ubuntu-latest", 0.5)
-    assert rig.gh.issues == {}, "red for half an hour: not yet"
-    rig.now += 3 * 3600
-    ship.watch_develop(rig.engine)
-    (issue,) = rig.gh.issues.values()
-    assert issue["title"] == "regression on develop: Kotlin Client/ubuntu-latest"
-    assert "red on develop since" in issue["body"] and "was green and is now red" not in issue["body"]
-    rig.now += 4 * 3600
-    ship.watch_develop(rig.engine)
-    assert len(rig.gh.issues) == 1, "an open ticket now covers it"
-
-
-def test_a_long_red_job_with_an_open_ticket_gets_no_second_one(rig: Rig) -> None:
-    rig.gh.add_issue(7, "WholeWordsTest fails on Kotlin Client/ubuntu-latest", labels=("pipeline",))
-    _red_for(rig, "Kotlin Client", "ubuntu-latest", 5)
-    assert sorted(rig.gh.issues) == [7]
-    assert any(e["kind"] == "red-already-ticketed" for e in rig.db.events_since())
-
-
-def test_gherkin_reds_are_never_ticketed_by_the_watcher(rig: Rig) -> None:
-    _red_for(rig, "Gherkin", "desktop (ubuntu-24.04) · a", 24)
-    assert rig.gh.issues == {}
-    assert rig.db.get("red_since:Gherkin/desktop (ubuntu-24.04) · a") is None
-
-
-def test_a_green_run_clears_the_red_since_mark(rig: Rig) -> None:
-    _red_for(rig, "cli", "desktop", 1)
-    assert rig.db.get("red_since:cli/desktop") is not None
-    rig.gh.develop_sha = "d3"
-    rig.gh.develop_ci = [("cli", "desktop", "completed", "success")]
-    ship.watch_develop(rig.engine)
-    assert rig.db.get("red_since:cli/desktop") is None
-    rig.now += 5 * 3600
-    rig.gh.develop_sha = "d4"
-    rig.gh.develop_ci = [("cli", "desktop", "completed", "failure")]
-    ship.watch_develop(rig.engine)
-    assert rig.gh.issues == {}, "the clock restarted at the new red"
 
 
 def test_a_red_gate_still_stops_the_line_on_the_first_red_run(rig: Rig) -> None:
@@ -727,7 +603,7 @@ def test_a_red_gate_still_stops_the_line_on_the_first_red_run(rig: Rig) -> None:
     rig.gh.develop_sha = "d2"
     rig.gh.develop_ci = [("pr-gate", "linux", "completed", "failure")]
     ship.watch_develop(rig.engine)
-    assert rig.db.get("stop_line") == "pr-gate/linux" and len(rig.gh.issues) == 1
+    assert rig.db.get("stop_line") == "pr-gate/linux" and rig.gh.issues == {}
 
 
 async def test_a_refused_rerun_is_not_fatal_and_waits_for_the_run_to_finish(rig: Rig) -> None:
@@ -819,11 +695,7 @@ def test_a_newest_develop_run_that_really_failed_still_counts(rig: Rig) -> None:
     rig.gh.develop_history = [[("pr-gate", "linux", "completed", "success"), ("cli", "macos", "completed", "cancelled")]]
     ship.watch_develop(rig.engine)
     assert rig.db.baseline("cli", "macos") == "failure"
-    assert rig.gh.issues == {}, "one red run waits for a second to agree"
-    rig.gh.develop_sha = "d2"  # a later develop push, also red
-    ship.watch_develop(rig.engine)
-    (issue,) = rig.gh.issues.values()
-    assert issue["title"] == "regression on develop: cli/macos"
+    assert rig.gh.issues == {}, "MASON files develop-red tickets, not this watch"
 
 
 def test_a_gradle_download_failure_looks_like_infrastructure_and_a_test_failure_does_not() -> None:
