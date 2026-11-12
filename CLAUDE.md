@@ -68,13 +68,22 @@ apply to it: don't translate it and don't build a Kotlin twin.
   MASON's (`mason resources limit llm:claude N`). starpipe has no `max_llm_sessions` or CPU gate; `starpipe limits` says so.
 - `pipeline/bin/starpipe check --explain` says which builds and tests a change needs;
   `starpipe check` runs them and proves each from its own output.
-- To queue work for the pipeline, use the file-tickets skill (`.claude/skills/file-tickets`).
-- **Every ticket you file carries a `## Plan`** so the pipeline skips its EXPLORE agent: the agent filing the
-  ticket *is* the exploration agent. Open the files you name, settle the approach, and write the plan into the
-  ticket (format and checks: "Carrying a plan" in `.claude/skills/file-tickets/SKILL.md`; `starpipe ticket lint`
-  verifies it). Omit it only when you genuinely haven't explored the code. A guessed plan is worse than none.
-- **MASON is shadowing starpipe.** Its configuration is `.mason/` (pipeline tooling, like `pipeline/`: no translation, no Kotlin twin).
-  It claims only issues labelled `mason`, starpipe claims only `pipeline`, and an issue never carries both.
+- **File every new star ticket in MASON, never with starpipe.** Don't run `starpipe ticket new`, and don't use the
+  file-tickets skill to file: it still files through starpipe. The owner approves the task list in conversation
+  first, as before. Then file each task with
+  `~/.config/mason/bin/mason task add "<title>" --project star --body-file <file>`, adding `--after <task ids>` for
+  tasks that must land first. `mason help filing` is the reference. MASON's configuration is `.mason/` (pipeline
+  tooling, like `pipeline/`: no translation, no Kotlin twin).
+- **Every ticket you file is already a plan**, so MASON skips exploring: the agent filing the ticket *is* the
+  exploration agent. Open the files you name, settle the approach, and write into the body the files to change, how,
+  and an `## Acceptance criteria` section (the "Carrying a plan" format in `.claude/skills/file-tickets/SKILL.md`
+  still works). Pass `--explored` once the plan is settled. Without it, MASON's clarity check explores any body that
+  names a file not yet on the base branch, unless that file is marked `(new)`. A guessed plan is worse than none:
+  leave the flag off when you haven't explored the code.
+- starpipe still runs until the switch. It claims only issues labelled `pipeline`, MASON claims only `mason`, and an
+  issue never carries both. To move a starpipe ticket to MASON: `starpipe cancel <n>`, swap `pipeline` and any
+  `pipe:*` labels for `mason`, then approve the imported task with `mason task approve <id>`. GitHub's "blocked by"
+  links carry over.
 
 ## This machine cannot run the GPU median merge
 
@@ -88,3 +97,76 @@ median merge logic**: set `STAR_USE_GPU_FOR_MERGE=0` in the environment (also `f
 setup says (`GPUCapability.mergeForcedOff`); the default is otherwise on whenever a GPU is detected.
 (`~/.star.userprefs.json` is the gui's own preferences and does not do this; the cli ignores it.) Don't run GPU merge
 tests or GPU-vs-CPU comparisons here; leave those to CI or another machine.
+
+## Building and testing in a worktree
+
+- **Link the gitignored artifacts first**: run `.mason/scripts/link-artifacts.sh` in the worktree
+  (OpenCV, StarDecisionTrees, `gui/videos`, `external_binaries/bin`). Without them, builds fail with
+  errors that look like code breakage: `'opencv2/core.hpp' file not found`, `Unable to find module
+  dependency: 'StarDecisionTrees'`, or a late `lstat(.../gui/videos/...)` / `lstat(.../ffmpeg)` after
+  every Swift file has already compiled. `gui/videos` is the one link `git status` shows (the
+  `.gitignore` entry has a trailing slash), so don't commit it.
+- **gui**: `xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug
+  CODE_SIGNING_ALLOWED=NO build`. Always `-scheme star`, never `-target Star`: the target skips the
+  scheme's package graph and fails with `Unable to find module dependency: 'logging'`, and it leaves
+  `build/` dirs behind. Leave out `-destination`. The app module is `Star`
+  (`@testable import Star`).
+- **cli**: build with SwiftPM (`cd cli && swift build`), which is what `cli/build-optimized` runs.
+  `cli/star.xcodeproj` can hit an `ld` assertion (`dylibToOrdinal`) even at a clean HEAD, so don't
+  bisect your own edits when you see it.
+- **async XCTest**: `XCTAssertEqual(await x, y)` doesn't compile (the arguments are non-async
+  autoclosures). Put each `await` in a local first.
+
+## Adding or removing a `Config` property
+
+One property lives in seven places, and only the last is caught by a compiler:
+
+1. `StarCore/.../Config.swift`: the declaration **and** its `decodeIfPresent` line in the
+   hand-written `init(from:)`.
+2. `StarCore/.../ArtifactInputs.swift`: stage input records, including comments naming settings
+   they leave out.
+3. `gui/star/`: `ImageSequenceViewModel` (property and its assignment in the config init),
+   `FocusedField` (text fields only), `ProcessingSettingsView` (view, state flag,
+   `addSpacer`/show-all/hide-all, grid row).
+4. `daemon/Sources/stard/Mapping.swift`: two lines (Config→proto, proto→Config).
+5. Both `star.proto` copies (`daemon/proto/`, `star-desktop/proto/`), byte-identical apart from the
+   `option java_*` lines. Retire a field with `reserved <n>;` plus a comment. Then run
+   `daemon/regen-proto.sh`.
+6. The Kotlin `ProcessingSettingsDialog.kt` row (plus its `FIELD_HELP` entry).
+7. The `ui.` (and `setting_help.`) keys in all 22 catalogues.
+
+A new cli flag also goes in `ConfigOverrides` and `ConfigOverridesTests.everyFlag`. To prove the
+change, run all four: `cd StarCore && swift build && swift test --filter ConfigRoundTrip`,
+`cd daemon && swift build`, the gui build above, and
+`cd star-desktop && ./gradlew checkProtoSync compileKotlin`.
+
+## Editing the localization tables
+
+The tables are in append order, not sorted. Don't use `i18n/check.py --install`: it re-sorts and
+rewrites all 22 files. Load each table with `json.load`, add or delete keys, and write it back with
+`json.dumps(t, indent=2, ensure_ascii=False) + "\n"`, which round-trips byte for byte. Then run
+`python3 i18n/check.py` (read-only).
+
+## Measuring performance
+
+On this machine a single end-to-end run proves nothing: two identical 20-frame runs took 321 s and
+413 s, because other apps hold tens of GB resident and swap is full. Time the function itself, in
+one process, min-of-K, on real frames, and check a run's peak compressor size before trusting its
+wall clock (above ~10 GB, the run is an artifact). Output equivalence still needs a full run.
+
+When a mutation survives a header-only kernel harness, check the include order first: the scratch
+copy of the header has to come first on `-I`, otherwise the real header wins and every mutation
+passes.
+
+The OpenCV 4.12.0 source is in the main checkout at `opencv/opencv/` (worktrees don't have it).
+Read `modules/imgproc/src/imgwarp.cpp` and friends before you guess at a rounding rule.
+
+## Pipeline code
+
+- Run `uv run ruff check` in `pipeline/` before committing straight to `develop`; the pr-gate's
+  `static` job runs ruff, pyright and pytest there.
+- Pipeline worktrees can't `git fetch` (no SSH key for `origin`), but the daemon keeps
+  `origin/develop` current over https. When you answer a stage agent, tell it
+  "`git merge origin/develop` (no fetch)".
+- Before `starpipe self-update`, compare `develop` with `origin/develop`. If local is ahead, pass
+  `--ref develop`, or the runtime is built from the older origin.
