@@ -421,6 +421,7 @@ level = "t1"
 "tile_extractor/**" = []
 "tools/**" = []
 "packaging/**" = []
+"scripts/**" = []
 "demo_videos/**" = []
 "test_data/**" = []
 "**/*.md" = []
