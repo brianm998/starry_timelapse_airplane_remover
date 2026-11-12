@@ -15,7 +15,7 @@ final class EnumParityTests: XCTestCase {
         // StarCore.DetectionType has 5 cases (mild..custom).
         XCTAssertEqual(DetectionType.allCases.count, 5)
         let protoCases = Star_V1_DetectionType.allCases.filter { $0 != .UNRECOGNIZED(-1) }
-        XCTAssertEqual(protoCases.count, 4)
+        XCTAssertEqual(protoCases.count, 5)
     }
 
     func testDetectionTypeMappingExhaustive() {
@@ -78,7 +78,7 @@ final class EnumParityTests: XCTestCase {
 
         // 5 proto cases including undecided.
         let protoCases = Star_V1_RemoveReason.allCases.filter { $0 != .UNRECOGNIZED(-1) }
-        XCTAssertEqual(protoCases.count, 4)
+        XCTAssertEqual(protoCases.count, 5)
     }
 
     // MARK: - FrameProcessingState spot-checks
