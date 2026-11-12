@@ -97,6 +97,7 @@ IGNORED_TOP_LEVEL = {
     "wgpu", "external_binaries", "logging-objc", "StarDecisionTrees", "removal_tools",
     "horizon_test_bench", "outlier_feature_data_classifier",
     "tile_extractor", "tools", "emacs_load_swift.sh", "packaging",
+    ".mason", "scripts",
 }
 
 
