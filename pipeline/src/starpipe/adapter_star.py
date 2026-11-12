@@ -97,7 +97,7 @@ IGNORED_TOP_LEVEL = {
     "wgpu", "external_binaries", "logging-objc", "StarDecisionTrees", "removal_tools",
     "horizon_test_bench", "outlier_feature_data_classifier",
     "tile_extractor", "tools", "emacs_load_swift.sh", "packaging",
-    ".mason", "scripts",
+    ".mason", "scripts",  # MASON tooling: its configuration and per-stage exit scripts, not star code
 }
 
 
@@ -437,8 +437,6 @@ RULES: list[Rule] = [
     Rule(("daemon/",), tests=("test:daemon",), package="daemon"),
     Rule(("gui/",), tests=("test:gui",), package="gui"),
     Rule(("star-desktop/",), builds=("build:desktop",), tests=("test:desktop",)),
-    Rule(("art/",), builds=("build:desktop",), tests=("test:gui", "test:desktop"),
-         note="art/export.py writes the gui asset catalog and the desktop resources"),
     Rule(("trail_tools/",), builds=("build:trail_tools",), tests=("test:trail_tools",)),
     Rule(("decision_tree_generator/",), builds=("build:decision_tree_generator",),
          tests=("test:decision_tree_generator",)),
