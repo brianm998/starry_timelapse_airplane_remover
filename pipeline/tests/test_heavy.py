@@ -465,3 +465,66 @@ def test_with_masond_unreachable_the_job_waits_says_so_and_never_runs(monkeypatc
     result = heavy.run_job([sys.executable, "-c", f"open({str(ran)!r}, 'w')"], config=CFG, report=messages.append)
     assert result.code == 0 and ran.exists() and len(attempts) == 3 and len(messages) == 3
     assert len(mason_lines(fake_mason)) == 1
+
+
+DEFINITION = """
+[step.develop]
+type = "develop"
+
+[step.check]
+type = "test"
+"""
+
+
+def test_a_job_mason_already_holds_runs_without_queueing_again(monkeypatch: pytest.MonkeyPatch, fake_mason: Path,
+                                                                tmp_path: Path) -> None:
+    """Task #169's test step queued its own suites' jobs in masond behind the slots the step held, and waited on itself."""
+    (tmp_path / ".mason").mkdir()
+    (tmp_path / ".mason" / "mason.toml").write_text(DEFINITION)
+    ran = tmp_path / "ran"
+    job = [sys.executable, "-c", f"open({str(ran)!r}, 'w')"]
+    # a MASON task's test step: it holds its suites' classes although MASON_HELD is empty
+    monkeypatch.setenv("MASON_TASK", "169")
+    monkeypatch.setenv("MASON_STEP", "check")
+    monkeypatch.setenv("MASON_WORKTREE", str(tmp_path))
+    monkeypatch.setenv("MASON_HELD", "")
+    (fake_mason.parent / "down").touch()  # it does not even wait for masond
+    for kind in (heavy.BUILD, heavy.TEST, heavy.EXCLUSIVE):
+        ran.unlink(missing_ok=True)
+        assert heavy.run_job(job, config=CFG, job_class=kind).code == 0 and ran.exists()
+    assert mason_lines(fake_mason) == []
+    # a landing batch's suite: no task, MASON_HELD names what it holds
+    for name in ("MASON_TASK", "MASON_STEP", "MASON_WORKTREE"):
+        monkeypatch.delenv(name)
+    monkeypatch.setenv("MASON_HELD", "test-suite")
+    ran.unlink()
+    assert heavy.run_job(job, config=CFG, job_class=heavy.EXCLUSIVE).code == 0 and ran.exists()
+    assert mason_lines(fake_mason) == []
+    assert heavy.run_job([sys.executable, "-c", "raise SystemExit(5)"], config=CFG).code == 5  # its exit code still comes back
+
+
+def test_an_agent_step_under_mason_still_queues(monkeypatch: pytest.MonkeyPatch, fake_mason: Path, tmp_path: Path) -> None:
+    (tmp_path / ".mason").mkdir()
+    (tmp_path / ".mason" / "mason.toml").write_text(DEFINITION)
+    monkeypatch.setenv("MASON_TASK", "169")
+    monkeypatch.setenv("MASON_STEP", "develop")
+    monkeypatch.setenv("MASON_WORKTREE", str(tmp_path))
+    monkeypatch.setenv("MASON_HELD", "")
+    assert heavy.run_job([sys.executable, "-c", "pass"], config=CFG, job_class=heavy.BUILD).code == 0
+    (line,) = mason_lines(fake_mason)
+    assert line[1:3] == ["--needs", "compile"]
+
+
+def test_admitted_reads_the_definitions_test_steps(tmp_path: Path) -> None:
+    from starpipe import masonq
+
+    (tmp_path / ".mason").mkdir()
+    (tmp_path / ".mason" / "mason.toml").write_text(DEFINITION)
+    task = {"MASON_TASK": "1", "MASON_WORKTREE": str(tmp_path)}
+    assert masonq.admitted({**task, "MASON_STEP": "check"})
+    assert not masonq.admitted({**task, "MASON_STEP": "develop"})
+    assert not masonq.admitted({**task, "MASON_STEP": "test"})  # not a test step in this definition
+    assert not masonq.admitted({"MASON_STEP": "check", "MASON_WORKTREE": str(tmp_path)})  # no task: a person's shell
+    assert masonq.admitted({"MASON_HELD": "compile"}) and not masonq.admitted({"MASON_HELD": " "})
+    assert not masonq.admitted({})
+    assert masonq.test_steps(str(tmp_path / "nowhere")) == {"test"}  # unreadable definition: star's step name

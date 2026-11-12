@@ -17,6 +17,8 @@ def state_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path
     monkeypatch.delenv("STARPIPE_NIGHTLY", raising=False)
     monkeypatch.delenv("STARPIPE_STAGE", raising=False)
     monkeypatch.delenv("STARPIPE_TICKET_PRIORITY", raising=False)
+    for name in ("MASON_TASK", "MASON_STEP", "MASON_HELD", "MASON_WORKTREE"):  # set when MASON runs these tests itself
+        monkeypatch.delenv(name, raising=False)
     yield home
 
 

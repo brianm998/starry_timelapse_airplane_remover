@@ -245,7 +245,8 @@ def run_job(
     env: dict[str, str] | None = None,
     job_class: str | None = None,
 ) -> RunResult:
-    """Queue argv in masond (`mason run`), run it in its own process group. A job idle for `heavy_idle_kill_s` once it runs is
+    """Queue argv in masond (`mason run`) unless MASON already holds the machine for it (masonq.admitted), and run it in its own
+    process group. A job idle for `heavy_idle_kill_s` once it runs is
     killed and reported as hung, so a wedged test run cannot hold its lease until the owner notices. `priority` is not used:
     masond ranks by who asks (see masonq.run_argv)."""
     del priority
@@ -265,11 +266,15 @@ def run_job(
     waited = 0.0
     if gated:  # before queueing: a held-back UI run must not keep a lease while it waits for the owner to go away
         waited += input_idle.wait_until_idle(cfg.ui_idle_s, poll_s=cfg.ui_idle_poll_s, report=report)
-    waited += masonq.wait_reachable(report)  # never run unqueued
-    who = current_requester()
     inner = ["caffeinate", "-d", "-u", *argv] if keep_display_awake else argv  # XCUITest / Compose UI freeze when the display sleeps
-    mason = masonq.run_argv(kind, inner, ticket=who.ticket, stage=who.stage, ticket_priority=who.ticket_priority,
-                            label=f"starpipe #{who.ticket} {who.stage}".strip() if who.ticket else "")
+    direct = masonq.admitted()  # MASON already holds the machine for this command: queueing again would wait on itself
+    if direct:
+        mason = inner
+    else:
+        waited += masonq.wait_reachable(report)  # never run unqueued
+        who = current_requester()
+        mason = masonq.run_argv(kind, inner, ticket=who.ticket, stage=who.stage, ticket_priority=who.ticket_priority,
+                                label=f"starpipe #{who.ticket} {who.stage}".strip() if who.ticket else "")
     queued_at = time.monotonic()
     proc = subprocess.Popen(mason, process_group=0, cwd=cwd, stdout=stdout, env=env,
                             stderr=subprocess.STDOUT if stdout is not None else None)
@@ -294,7 +299,7 @@ def run_job(
             except subprocess.TimeoutExpired:
                 pass
             if watch is None:
-                if not _job_started(proc):  # still queued in masond: not idle, not running
+                if not direct and not _job_started(proc):  # still queued in masond: not idle, not running
                     continue
                 waited += time.monotonic() - queued_at
                 watch = _Activity(proc.pid, stdout, cfg.heavy_idle_kill_s)
