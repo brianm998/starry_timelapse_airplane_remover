@@ -34,5 +34,6 @@ struct PostProcessingRenderPromptView: View {
         }
           .padding(20)
           .frame(minWidth: 380)
+          .starDialogStyle()
     }
 }

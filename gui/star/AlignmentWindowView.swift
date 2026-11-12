@@ -977,6 +977,7 @@ struct AlignmentInfoContent: View {
             }
         }
           .padding(24)
+          .starDialogStyle()
     }
 }
 

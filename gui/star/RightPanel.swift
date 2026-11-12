@@ -513,6 +513,7 @@ struct ChangeProcessingModeView: View {
                   autoSelect = .no
               }
           }
+          .starDialogStyle()
     }
 }
 
@@ -776,5 +777,6 @@ struct ResourceCustomLimitsView: View {
         }
         .padding()
         .frame(width: 420)
+        .starDialogStyle()
     }
 }

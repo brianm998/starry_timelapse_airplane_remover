@@ -189,3 +189,18 @@ public enum InfoType: CaseIterable {
         }
     }
 }
+
+extension View {
+    /// Draws a sheet, popover or card in the star dialog style: the grey dialog ground, white
+    /// text by default, and the dark appearance so controls are drawn for a dark ground.
+    ///
+    /// A sheet otherwise takes the system's light window background, and everything in it is
+    /// white text. `.environment(\.colorScheme, .dark)` is used rather than
+    /// `.preferredColorScheme`, which would propagate up to the presenting window.
+    func starDialogStyle() -> some View {
+        self
+          .background(Color.gray)
+          .foregroundColor(.white)
+          .environment(\.colorScheme, .dark)
+    }
+}

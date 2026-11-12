@@ -99,5 +99,6 @@ struct NewReleaseSheetView: View {
             }
             Space(width: 20)
         }
+        .starDialogStyle()
     }
 }

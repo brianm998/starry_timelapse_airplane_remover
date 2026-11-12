@@ -301,6 +301,7 @@ struct MultiSelectSheetView: View {
             Spacer()
         }.frame(minWidth: 300, idealWidth: 450, maxWidth: 800)
           .onAppear { includingTrash = viewModel.shouldShowTrash }
+          .starDialogStyle()
     }
 
     private func updateFrames(shouldRemove: Bool,

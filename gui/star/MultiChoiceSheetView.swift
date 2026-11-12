@@ -218,6 +218,7 @@ struct MultiChoiceSheetView: View {
             }
             Spacer()
         }
+        .starDialogStyle()
     }
 
     private func updateFrames(shouldRemove: Bool,
