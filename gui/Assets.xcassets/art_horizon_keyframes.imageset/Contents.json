@@ -1,0 +1,18 @@
+{
+  "images": [
+    {
+      "filename": "art_horizon_keyframes1x.png",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "art_horizon_keyframes2x.png",
+      "idiom": "universal",
+      "scale": "2x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

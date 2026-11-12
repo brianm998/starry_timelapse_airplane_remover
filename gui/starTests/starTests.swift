@@ -4134,6 +4134,18 @@ final class SharedConstantsTests: XCTestCase {
         XCTAssertEqual(localized("ui.update"), "Update", "ui.update keeps its value: the settings sheet uses it too")
     }
 
+    /// Art A4: every StarArt slot is an imageset in the app's asset catalog and loads at its display size or larger.
+    func testEveryStarArtSlotLoads() throws {
+        XCTAssertEqual(StarArt.allCases.count, 32)
+        for art in StarArt.allCases {
+            let image = try XCTUnwrap(NSImage(named: art.rawValue), "\(art.rawValue) is not in the asset catalog")
+            XCTAssertGreaterThan(image.size.width, 0, art.rawValue)
+            XCTAssertGreaterThan(image.size.height, 0, art.rawValue)
+            XCTAssertGreaterThan(art.size.width, 0, art.rawValue)
+            XCTAssertGreaterThan(art.size.height, 0, art.rawValue)
+        }
+    }
+
     /// A3: the Speed vs. Sharpness sheet is all white text, so what it is drawn on must not be near-white.
     @MainActor
     func testSpeedSheetBackgroundIsNotWhite() throws {

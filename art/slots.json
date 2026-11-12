@@ -1,0 +1,241 @@
+{
+ "comment": "Sizes are display boxes in points; art is fitted inside the box. 'crop' is an aspect ratio, 'anchor' the crop window position (0..1 of the slack). Edit, then run art/export.py.",
+ "slots": [
+  {
+   "name": "art_wordmark",
+   "source": "BR-3",
+   "kind": "cutout",
+   "width": 360,
+   "height": 90
+  },
+  {
+   "name": "art_welcome_background",
+   "source": "BR-5",
+   "kind": "scene",
+   "width": 1280,
+   "height": 720
+  },
+  {
+   "name": "art_robot_and_dog",
+   "source": "BR-6",
+   "kind": "scene",
+   "width": 680
+  },
+  {
+   "name": "art_greeter",
+   "source": "WL-1",
+   "kind": "cutout",
+   "height": 220
+  },
+  {
+   "name": "art_tile_load_video",
+   "source": "WL-4a",
+   "kind": "tile",
+   "width": 48,
+   "height": 48
+  },
+  {
+   "name": "art_tile_load_sequence",
+   "source": "WL-4b",
+   "kind": "tile",
+   "width": 48,
+   "height": 48
+  },
+  {
+   "name": "art_tile_load_config",
+   "source": "WL-4c",
+   "kind": "tile",
+   "width": 48,
+   "height": 48
+  },
+  {
+   "name": "art_tile_learn",
+   "source": "WL-4d",
+   "kind": "tile",
+   "width": 48,
+   "height": 48
+  },
+  {
+   "name": "art_import",
+   "source": "IM-1",
+   "kind": "cutout",
+   "width": 120,
+   "height": 120
+  },
+  {
+   "name": "art_sky_only",
+   "source": "SU-1a",
+   "kind": "scene",
+   "width": 260,
+   "height": 150,
+   "crop": "26:15"
+  },
+  {
+   "name": "art_sky_and_ground",
+   "source": "SU-1b",
+   "kind": "scene",
+   "width": 260,
+   "height": 150,
+   "crop": "26:15"
+  },
+  {
+   "name": "art_camera_static",
+   "source": "SU-2a",
+   "kind": "scene",
+   "width": 260,
+   "height": 150,
+   "crop": "26:15",
+   "anchor": [
+    1.0,
+    0.5
+   ]
+  },
+  {
+   "name": "art_camera_moving",
+   "source": "SU-2b",
+   "kind": "scene",
+   "width": 260,
+   "height": 150,
+   "crop": "26:15",
+   "anchor": [
+    0.5,
+    1.0
+   ]
+  },
+  {
+   "name": "art_horizon_brush",
+   "source": "SU-3a",
+   "kind": "cutout",
+   "width": 200,
+   "height": 200
+  },
+  {
+   "name": "art_horizon_auto",
+   "source": "SU-3b",
+   "kind": "cutout",
+   "width": 200,
+   "height": 200,
+   "spread": 0.3,
+   "tolerance": 0.25
+  },
+  {
+   "name": "art_horizon_keyframes",
+   "source": "SU-4",
+   "kind": "cutout",
+   "width": 420,
+   "height": 90
+  },
+  {
+   "name": "art_mode_automatic",
+   "source": "SU-5a",
+   "kind": "tile",
+   "width": 64,
+   "height": 64
+  },
+  {
+   "name": "art_mode_selective",
+   "source": "SU-5b",
+   "kind": "tile",
+   "width": 64,
+   "height": 64
+  },
+  {
+   "name": "art_mode_auto_selective",
+   "source": "SU-5c",
+   "kind": "tile",
+   "width": 64,
+   "height": 64
+  },
+  {
+   "name": "art_ground_alignment",
+   "source": "SU-6",
+   "kind": "tile",
+   "width": 64,
+   "height": 64
+  },
+  {
+   "name": "art_settings",
+   "source": "ST-9",
+   "kind": "cutout",
+   "width": 64,
+   "height": 64
+  },
+  {
+   "name": "art_process",
+   "source": "PR-1",
+   "kind": "cutout",
+   "width": 56,
+   "height": 56
+  },
+  {
+   "name": "art_process_body",
+   "source": "PR-5a",
+   "kind": "cutout",
+   "width": 56,
+   "height": 56
+  },
+  {
+   "name": "art_process_gear",
+   "source": "PR-5b",
+   "kind": "cutout",
+   "width": 56,
+   "height": 56
+  },
+  {
+   "name": "art_done",
+   "source": "RD-1",
+   "kind": "cutout",
+   "width": 120,
+   "height": 120
+  },
+  {
+   "name": "art_rendering",
+   "source": "RD-2",
+   "kind": "cutout",
+   "width": 96,
+   "height": 96
+  },
+  {
+   "name": "art_rebuilding",
+   "source": "RD-3",
+   "kind": "cutout",
+   "width": 64,
+   "height": 64
+  },
+  {
+   "name": "art_review",
+   "source": "TL-3",
+   "kind": "cutout",
+   "width": 96,
+   "height": 96
+  },
+  {
+   "name": "art_oops",
+   "source": "ER-1",
+   "kind": "cutout",
+   "width": 96,
+   "height": 96
+  },
+  {
+   "name": "art_waiting",
+   "source": "ER-3",
+   "kind": "cutout",
+   "width": 160,
+   "height": 160
+  },
+  {
+   "name": "art_new_release",
+   "source": "ER-4",
+   "kind": "cutout",
+   "width": 120,
+   "height": 120
+  },
+  {
+   "name": "art_hold_on",
+   "source": "ER-5",
+   "kind": "cutout",
+   "width": 80,
+   "height": 80
+  }
+ ]
+}
