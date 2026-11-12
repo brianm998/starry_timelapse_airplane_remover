@@ -230,3 +230,36 @@ def test_plan_section_lint() -> None:
     assert any("explicit 'gherkin:" in e for e in errors("## Pipeline\ngherkin: no\n", ""))
     assert any("explicit 'gherkin:" in e for e in errors("gherkin: no", "effort_develop: low"))
     assert any("summary" in e for e in errors("summary: Fix the thing in docs.", "summary: Short"))  # Pydantic's min_length
+
+
+PLAN_LAST = PLAN_BODY.replace("\n## Pipeline\ngherkin: no\n", "").replace("## Plan\n", "## Pipeline\ngherkin: no\n\n## Plan\n")
+
+
+def test_plan_as_last_section_survives_the_filed_by_footer() -> None:
+    assert PLAN_LAST.rstrip().splitlines()[-1] == "- risk: stale docs"
+    bare, bare_errors = tickets.ticket_plan(PLAN_LAST)
+    assert bare is not None and bare_errors == []
+    plan, errors = tickets.ticket_plan(PLAN_LAST + tickets.filed_by("interactive"))
+    assert errors == []
+    assert plan is not None and plan.model_dump() == bare.model_dump()
+
+
+def test_lint_ignores_the_filed_by_footer() -> None:
+    assert tickets.lint(PLAN_LAST).ok
+    result = tickets.lint(PLAN_LAST + tickets.filed_by("interactive"))
+    assert result.errors == []
+
+
+def test_with_pipeline_models_keeps_the_footer_apart() -> None:
+    footer = tickets.filed_by("interactive")
+    body = GOOD.replace("model_develop: opus · effort_develop: high", "gherkin: no") + footer
+    out = tickets.with_pipeline_models(body, {"develop": "sonnet"})
+    assert out.endswith(footer)
+    assert tickets.parse_pipeline(out) == {"gherkin": "no", "model_develop": "sonnet"}
+    section = tickets.split_sections(out)["Pipeline"]
+    assert "Filed by" not in section and "starpipe" not in section
+    assert tickets.FILED_BY.search(out)
+    # with no Pipeline section at all the new one goes before the footer
+    bare = GOOD.split("## Pipeline")[0] + footer
+    added = tickets.with_pipeline_models(bare, {"develop": "sonnet"})
+    assert added.endswith(footer) and tickets.parse_pipeline(added) == {"model_develop": "sonnet"}

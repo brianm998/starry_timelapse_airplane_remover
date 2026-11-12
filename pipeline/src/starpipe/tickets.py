@@ -33,7 +33,24 @@ class Lint:
         return not self.errors
 
 
+def split_footer(body: str) -> tuple[str, str]:
+    """`body` as (everything before the filed-by footer, the footer from its marker line on).
+
+    The footer is what `filed_by()` appends: the hidden marker line, then a 'Filed by:' line. It is only a footer when
+    nothing else follows it, so a marker quoted in the middle of the prose is left alone. No footer is (body, "")."""
+    matches = list(re.finditer(rf"^{FILED_BY.pattern}[ \t]*$", body, re.MULTILINE))
+    if not matches:
+        return body, ""
+    cut = matches[-1].start()
+    rest = body[cut:].splitlines()[1:]
+    if any(line.strip() and not line.startswith("Filed by:") for line in rest) or sum(bool(l.strip()) for l in rest) > 1:
+        return body, ""
+    return body[:cut].rstrip(), body[cut:]
+
+
 def split_sections(body: str) -> dict[str, str]:
+    """The `## ` sections of a ticket body; the filed-by footer is never part of one."""
+    body = split_footer(body)[0]
     out: dict[str, list[str]] = {}
     current: str | None = None
     in_fence = False
@@ -93,6 +110,8 @@ def with_pipeline_models(body: str, models: dict[str, str]) -> str:
     if not models:
         return body
     chosen = {f"model_{stage}": f"model_{stage}: {model}" for stage, model in models.items()}
+    body, footer = split_footer(body)
+    tail = ("\n" + footer) if footer else ""  # the footer, re-attached unchanged, after the blank line the head ends with
     lines = body.splitlines()
     start = end = None
     in_fence = False
@@ -107,7 +126,7 @@ def with_pipeline_models(body: str, models: dict[str, str]) -> str:
         if re.fullmatch(r"##\s+Pipeline\s*", line):
             start = i
     if start is None:
-        return body.rstrip("\n") + "\n\n## Pipeline\n" + " · ".join(chosen.values()) + "\n"
+        return body.rstrip("\n") + "\n\n## Pipeline\n" + " · ".join(chosen.values()) + "\n" + tail
     end = len(lines) if end is None else end
     parts: list[str] = []
     done: set[str] = set()
@@ -121,7 +140,7 @@ def with_pipeline_models(body: str, models: dict[str, str]) -> str:
     section = [lines[start], " · ".join(parts)]
     if end < len(lines):
         section.append("")  # keep the blank line before the next heading
-    return "\n".join([*lines[:start], *section, *lines[end:]]) + "\n"
+    return "\n".join([*lines[:start], *section, *lines[end:]]) + "\n" + tail
 
 
 def validate_choice(key: str, value: str, allow_fable: bool = False) -> str | None:
