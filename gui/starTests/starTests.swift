@@ -4637,7 +4637,8 @@ final class AlignmentWindowTextsTests: XCTestCase {
         var checked = 0
         for state in states {
             let hasSequence = try XCTUnwrap(state["hasSequence"] as? Bool)
-            if hasSequence && !(try XCTUnwrap(state["fetched"] as? Bool)) { continue }
+            let fetched = try XCTUnwrap(state["fetched"] as? Bool)
+            if hasSequence && !fetched { continue }
             let lines = try XCTUnwrap(state["lines"] as? [String])
             let art = AlignmentWindowView.emptyStateArt(
               hasSequence: hasSequence,
