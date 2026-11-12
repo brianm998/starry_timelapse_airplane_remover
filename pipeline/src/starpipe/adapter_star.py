@@ -446,7 +446,7 @@ RULES: list[Rule] = [
 ]
 
 # Paths that need no check at all.
-NO_CHECK_PREFIXES = (".claude/", "docs/", "plans/", ".github/", "ffmpeg/", "opencv/", "wgpu/", "i18n/")
+NO_CHECK_PREFIXES = (".claude/", "docs/", "plans/", ".github/", "ffmpeg/", "opencv/", "wgpu/", "i18n/", ".mason/")
 NO_CHECK_SUFFIXES = (".md",)
 
 
