@@ -373,7 +373,7 @@ level = "t1"
 uses = { exclusive = 1 }
 
 [suite.test-pipeline]
-command = "cd pipeline && STAR_USE_GPU_FOR_MERGE=0 uv run pytest -q 2>&1"
+command = "cd pipeline && STAR_USE_GPU_FOR_MERGE=0 uv run pytest -v 2>&1"
 parser = "pytest"
 min_tests = 1 # UNMEASURED
 level = "t1"
