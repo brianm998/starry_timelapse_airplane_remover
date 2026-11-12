@@ -5520,3 +5520,27 @@ final class WorkSleepHoldTests: XCTestCase {
         XCTAssertEqual(blocker.calls, ["begin(light)", "end", "begin"])
     }
 }
+
+/// The launch hook makes star's dark theme hold for everything the system draws: alerts, NSAlerts,
+/// open panels and popovers follow `NSApp.appearance` when it is set, so a Light-mode Mac must not
+/// bring up white dialogs in the dark app.
+@MainActor
+final class DarkAppearanceTests: XCTestCase {
+
+    override func tearDown() {
+        // The test host is shared; leave the appearance as the other tests found it.
+        NSApplication.shared.appearance = nil
+        super.tearDown()
+    }
+
+    func testTheAppForcesTheDarkAppearance() {
+        AppDelegate().applicationWillFinishLaunching(
+            Notification(name: NSApplication.willFinishLaunchingNotification))
+
+        XCTAssertEqual(NSApp.appearance?.name, .darkAqua)
+        let alert = NSAlert()
+        XCTAssertEqual(
+            alert.window.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]), .darkAqua,
+            "a fresh NSAlert must be drawn dark")
+    }
+}
