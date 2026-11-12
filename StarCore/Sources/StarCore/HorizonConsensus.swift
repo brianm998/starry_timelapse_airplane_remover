@@ -545,6 +545,11 @@ public enum HorizonConsensus {
     /// One column's answer: among `rows[i]` (NaN for a source that does not reach this
     /// column), the window `band` rows tall holding the most of them — the topmost such
     /// window on a tie — and the median of its `nearest` members closest in time.
+    ///
+    /// Written with `while` loops and `insertionSort` so that it allocates nothing, even in
+    /// a debug build: there a `for … in` over a range, a tuple `<` and `sort(by:)` each go
+    /// through unspecialised standard-library generics that heap-allocate per step, about
+    /// 3,400 small blocks per column in all, on every core at once. See `insertionSort`.
     static func densestWindowRow(
       rows: UnsafeBufferPointer<Float>,
       offsets: [Int],
@@ -553,13 +558,18 @@ public enum HorizonConsensus {
       scratch: inout VoteScratch
     ) -> Float {
         scratch.order.removeAll(keepingCapacity: true)
-        for i in 0..<rows.count where !rows[i].isNaN { scratch.order.append(i) }
+        var i = 0
+        while i < rows.count {
+            if !rows[i].isNaN { scratch.order.append(i) }
+            i += 1
+        }
         guard !scratch.order.isEmpty else { return .nan }
-        scratch.order.sort { rows[$0] < rows[$1] }
+        insertionSort(&scratch.order) { rows[$0] < rows[$1] }
         let count = scratch.order.count
         var bestStart = 0, bestEnd = 1, bestCount = 0
         var end = 0
-        for start in 0..<count {
+        var start = 0
+        while start < count {
             let limit = rows[scratch.order[start]] + band
             if end < start { end = start }
             while end < count, rows[scratch.order[end]] <= limit { end += 1 }
@@ -568,19 +578,57 @@ public enum HorizonConsensus {
                 bestStart = start
                 bestEnd = end
             }
+            start += 1
         }
         scratch.members.removeAll(keepingCapacity: true)
-        for k in bestStart..<bestEnd {
-            let i = scratch.order[k]
-            scratch.members.append((abs(offsets[i]), offsets[i], rows[i]))
+        var k = bestStart
+        while k < bestEnd {
+            let source = scratch.order[k]
+            scratch.members.append((abs(offsets[source]), offsets[source], rows[source]))
+            k += 1
         }
-        scratch.members.sort { ($0.distance, $0.offset) < ($1.distance, $1.offset) }
+        insertionSort(&scratch.members) {
+            $0.distance != $1.distance ? $0.distance < $1.distance : $0.offset < $1.offset
+        }
         scratch.picked.removeAll(keepingCapacity: true)
-        for member in scratch.members.prefix(nearest) { scratch.picked.append(member.row) }
-        scratch.picked.sort()
+        let take = min(nearest, scratch.members.count)
+        var p = 0
+        while p < take {
+            scratch.picked.append(scratch.members[p].row)
+            p += 1
+        }
+        insertionSort(&scratch.picked) { $0 < $1 }
         let m = scratch.picked.count
         return m % 2 == 1 ? scratch.picked[m / 2]
                           : (scratch.picked[m / 2 - 1] + scratch.picked[m / 2]) / 2
+    }
+
+    /// Sorts `array` in place, stably, by `less` — what `sort(by:)` gives here, since the
+    /// standard library's sort is stable too, so the vote's answers do not change.
+    ///
+    /// Written out because in a debug build `sort(by:)` runs the standard library's
+    /// unspecialised generic sort, which heap-allocates a small block on every comparison
+    /// (the buffer subscript's read coroutine), and the vote sorts every column of every
+    /// target on every core at once. Under that traffic the nano allocator aborted the test
+    /// process twice with `nanov2_guard_corruption_detected` at exactly this sort
+    /// (HorizonConsensusTests, 2026-11-10 and 2026-11-11). Going through the pointer's
+    /// addressors allocates nothing. The arrays hold one entry per voting frame, a few
+    /// dozen, which insertion sort suits.
+    static func insertionSort<T>(_ array: inout [T], by less: (T, T) -> Bool) {
+        array.withUnsafeMutableBufferPointer { buffer in
+            guard buffer.count > 1, let base = buffer.baseAddress else { return }
+            var i = 1
+            while i < buffer.count {
+                let value = base[i]
+                var j = i
+                while j > 0, less(value, base[j - 1]) {
+                    base[j] = base[j - 1]
+                    j -= 1
+                }
+                base[j] = value
+                i += 1
+            }
+        }
     }
 
     /// `target`'s consensus line from `own`, its own detection, and the detections `carried`
@@ -606,8 +654,17 @@ public enum HorizonConsensus {
         var result = [Float](repeating: 0, count: gridWidth)
         for x in 0..<gridWidth {
             column[0] = own[x]
-            for (k, line) in carried.enumerated() { column[k + 1] = line[x] }
-            for (k, source) in shortSources.enumerated() { shortColumn[k] = column[source] }
+            // `while`, not `for … in`: see densestWindowRow on allocating per step
+            var k = 0
+            while k < carried.count {
+                column[k + 1] = carried[k][x]
+                k += 1
+            }
+            k = 0
+            while k < shortSources.count {
+                shortColumn[k] = column[shortSources[k]]
+                k += 1
+            }
             var short = shortColumn.withUnsafeBufferPointer {
                 densestWindowRow(rows: $0, offsets: shortOffsets, band: band,
                                  nearest: parameters.nearest, scratch: &scratch)
