@@ -22,6 +22,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from collections.abc import Callable, Generator
@@ -42,6 +43,7 @@ BUILD, TEST, EXCLUSIVE = adapter_star.BUILD, adapter_star.TEST, adapter_star.EXC
 PROGRESS = {"explore": 0, "develop": 1, "fix": 2, "verify": 3, "review": 3, "resolve": 4, "ci-fix": 5, "conflict": 5,
             "landing": 6}
 NO_TICKET_PRIORITY = 9
+REQUEUE_MAX = 5  # masond dropping a queued request this many times in a row is not a blip: the job's run fails
 
 
 def default_priority() -> int:
@@ -269,14 +271,40 @@ def run_job(
     inner = ["caffeinate", "-d", "-u", *argv] if keep_display_awake else argv  # XCUITest / Compose UI freeze when the display sleeps
     direct = masonq.admitted()  # MASON already holds the machine for this command: queueing again would wait on itself
     if direct:
-        mason = inner
-    else:
-        waited += masonq.wait_reachable(report)  # never run unqueued
-        who = current_requester()
-        mason = masonq.run_argv(kind, inner, ticket=who.ticket, stage=who.stage, ticket_priority=who.ticket_priority,
-                                label=f"starpipe #{who.ticket} {who.stage}".strip() if who.ticket else "")
+        return _attempt(inner, cmd, cfg, cwd, stdout, env, direct=True, waited=waited)
+    who = current_requester()
+    label = f"starpipe #{who.ticket} {who.stage}".strip() if who.ticket else ""
+    with tempfile.TemporaryDirectory(prefix="starpipe-job-") as scratch:
+        marker = os.path.join(scratch, "started")
+        # The job says it started before it execs, so a `mason run` that ends without running it (masond dropped the queued
+        # request; it says so and exits 1, which is indistinguishable from the job's own status) is told apart and queued again.
+        marked = ["/bin/sh", "-c", ': > "$0" && exec "$@"', marker, *inner]
+        delay = masonq.RETRY_S
+        drops = 0
+        while True:
+            waited += masonq.wait_reachable(report)  # never run unqueued
+            mason = masonq.run_argv(kind, marked, ticket=who.ticket, stage=who.stage, ticket_priority=who.ticket_priority,
+                                    label=label)
+            result = _attempt(mason, cmd, cfg, cwd, stdout, env, direct=False, waited=waited)
+            if os.path.exists(marker) or result.hung or result.code == 0 or drops >= REQUEUE_MAX:
+                return result
+            drops += 1
+            waited = result.waited
+            say = f"masond dropped the queued request before {cmd} started: queueing it again ({drops} of {REQUEUE_MAX})"
+            if report:
+                report(say)
+            else:
+                print(f"starpipe: {say}", file=sys.stderr, flush=True)
+            masonq._sleep(delay)  # pyright: ignore[reportPrivateUsage]
+            waited += delay
+            delay = min(delay * 2, masonq.RETRY_MAX_S)
+
+
+def _attempt(argv: list[str], cmd: str, cfg: Config, cwd: str | None, stdout: int | None, env: dict[str, str] | None, *,
+             direct: bool, waited: float) -> RunResult:
+    """One run of argv (`mason run …`, or the job itself when MASON already admitted it) in its own process group."""
     queued_at = time.monotonic()
-    proc = subprocess.Popen(mason, process_group=0, cwd=cwd, stdout=stdout, env=env,
+    proc = subprocess.Popen(argv, process_group=0, cwd=cwd, stdout=stdout, env=env,
                             stderr=subprocess.STDOUT if stdout is not None else None)
 
     def forward(signum: int, _frame: object) -> None:

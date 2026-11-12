@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import time
@@ -346,7 +347,8 @@ def _shim(name: str, args: list[str], home: Path, **env: str) -> subprocess.Comp
     fake.write_text('#!/bin/bash\necho "ran: $*"\n')
     fake.chmod(0o755)
     full = {"PATH": f"{home}:/usr/bin:/bin", "STARPIPE_HOME": str(home), "STARPIPE_REAL_XCODEBUILD": str(fake),
-            "STARPIPE_REAL_CAFFEINATE": str(fake), **env}
+            "STARPIPE_REAL_CAFFEINATE": str(fake),
+            **{k: os.environ[k] for k in ("STARPIPE_MASON", "FAKE_MASON_LOG", "FAKE_MASON_DIR") if k in os.environ}, **env}  # the fake mason, never masond
     return subprocess.run([str(shim), *args], capture_output=True, text=True, env=full, check=False)
 
 
@@ -393,7 +395,7 @@ def test_a_ticket_stage_job_ranks_as_starpipes_with_its_class(monkeypatch: pytes
         assert head[: len(flags)] == flags
         assert head[-6:] == ["--pipeline", "starpipe", "--priority", "high", "--progress", str(heavy.PROGRESS["ci-fix"])]
         assert "--label" in head and "starpipe #42 ci-fix" in " ".join(head)
-        assert line[sep + 1] == sys.executable
+        assert sys.executable in line[sep + 1:]  # after the start-marker wrapper
 
 
 def test_a_persons_session_names_no_pipeline(fake_mason: Path) -> None:
@@ -499,3 +501,42 @@ def test_admitted_reads_only_mason_held() -> None:
     assert not masonq.admitted({"MASON_HELD": " "})
     assert not masonq.admitted({"MASON_TASK": "1", "MASON_STEP": "test"})
     assert not masonq.admitted({})
+
+
+def _no_sleep(_seconds: float) -> None:
+    pass
+
+
+def test_a_dropped_request_is_queued_again_until_the_job_runs(monkeypatch: pytest.MonkeyPatch, fake_mason: Path, tmp_path: Path) -> None:
+    """masond reaps a waiting request whose poll comes late; `mason run` then exits 1 without running the job (#169, 2026-11-12)."""
+    from starpipe import masonq
+
+    slept: list[float] = []
+    monkeypatch.setattr(masonq, "_sleep", slept.append)
+    (fake_mason.parent / "drop").write_text("2")
+    ran = tmp_path / "ran"
+    said: list[str] = []
+    result = heavy.run_job([sys.executable, "-c", f"open({str(ran)!r}, 'a').write('x')"], config=CFG, report=said.append,
+                           job_class=heavy.TEST)
+    assert result.code == 0 and ran.read_text() == "x"  # it ran exactly once
+    assert len(mason_lines(fake_mason)) == 3 and len(said) == 2 and all("dropped the queued request" in m for m in said)
+    assert slept == [masonq.RETRY_S, masonq.RETRY_S * 2]
+
+
+def test_a_job_that_ran_and_failed_is_not_queued_again(monkeypatch: pytest.MonkeyPatch, fake_mason: Path) -> None:
+    from starpipe import masonq
+
+    monkeypatch.setattr(masonq, "_sleep", _no_sleep)
+    assert heavy.run_job([sys.executable, "-c", "raise SystemExit(1)"], config=CFG).code == 1
+    assert len(mason_lines(fake_mason)) == 1
+
+
+def test_requests_dropped_again_and_again_fail_the_run(monkeypatch: pytest.MonkeyPatch, fake_mason: Path, tmp_path: Path) -> None:
+    from starpipe import masonq
+
+    monkeypatch.setattr(masonq, "_sleep", _no_sleep)
+    (fake_mason.parent / "drop").write_text("99")
+    ran = tmp_path / "ran"
+    result = heavy.run_job([sys.executable, "-c", f"open({str(ran)!r}, 'w')"], config=CFG)
+    assert result.code == 1 and not ran.exists()
+    assert len(mason_lines(fake_mason)) == heavy.REQUEUE_MAX + 1

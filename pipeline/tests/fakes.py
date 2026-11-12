@@ -384,7 +384,7 @@ def green_runner(worktree: Path, base: str, tiers: set[str] | None = None, /) ->
 
 FAKE_MASON = r'''#!{python}
 """A stand-in for `mason` that records argv. FAKE_MASON_LOG: the file argv lines go to. FAKE_MASON_DIR: holds the `down` file
-(masond unreachable: `resources` and `hold` fail), `holders` (`resources` lists one holder), and `deny` (a hold exits before granting)."""
+(masond unreachable: `resources` and `hold` fail), `holders` (`resources` lists one holder), `deny` (a hold exits before granting) and `drop`."""
 import os, subprocess, sys
 args = sys.argv[1:]
 log = os.environ["FAKE_MASON_LOG"]
@@ -405,6 +405,13 @@ elif args[:1] in (["run"], ["hold"]) and "--needs" not in args:
     sys.exit(1)
 elif args[:1] == ["run"]:
     note("run " + " ".join(args))
+    drop = os.path.join(state, "drop")  # a count: that many runs end before the job, as masond dropping the queued request
+    left = int(open(drop).read() or "0") if os.path.exists(drop) else 0
+    if left > 0:
+        with open(drop, "w") as f:
+            f.write(str(left - 1))
+        print("error: the daemon dropped the request", file=sys.stderr)
+        sys.exit(1)
     wait = float(os.environ.get("FAKE_MASON_WAIT", "0"))
     if wait:
         import time
