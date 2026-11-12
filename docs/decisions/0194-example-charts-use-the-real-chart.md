@@ -1,0 +1,3 @@
+# 0194: the panel's example charts are the real chart in an example mode
+
+The "About the alignment charts" examples are drawn by `AlignmentDeviationChart` (gui) and `DeviationChart` (desktop) with an example mode, not by a copy, so they cannot drift from the real charts. The example mode takes the points as they are and turns off the slider, the current-frame line, hover and taps, so it needs nothing from the sequence. Data is generated in each client and pinned by `gherkin/ui/vectors/alignmentExamples.json`. Amplitudes were scaled down from the ticket's first draft so every line fits the default height of 50.
