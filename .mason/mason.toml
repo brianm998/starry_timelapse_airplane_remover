@@ -175,6 +175,7 @@ uses = { compile = 1 }
 command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path logging 2>&1"
 parser = "regex"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
+pass_regex = "^Build complete!"
 level = "t1"
 uses = { compile = 1 }
 
@@ -183,6 +184,7 @@ uses = { compile = 1 }
 command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCpp 2>&1"
 parser = "regex"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
+pass_regex = "^Build complete!"
 level = "t1"
 uses = { compile = 1 }
 
@@ -191,6 +193,7 @@ uses = { compile = 1 }
 command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCore 2>&1"
 parser = "regex"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
+pass_regex = "^Build complete!"
 level = "t1"
 uses = { compile = 1 }
 
@@ -199,6 +202,7 @@ uses = { compile = 1 }
 command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path cli 2>&1"
 parser = "regex"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
+pass_regex = "^Build complete!"
 level = "t1"
 uses = { compile = 1 }
 
@@ -207,6 +211,7 @@ uses = { compile = 1 }
 command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path daemon -c release 2>&1"
 parser = "regex"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
+pass_regex = "^Build complete!"
 level = "t1"
 uses = { compile = 1 }
 
@@ -215,6 +220,7 @@ uses = { compile = 1 }
 command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path trail_tools 2>&1"
 parser = "regex"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
+pass_regex = "^Build complete!"
 level = "t1"
 uses = { compile = 1 }
 
@@ -223,6 +229,7 @@ uses = { compile = 1 }
 command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path decision_tree_generator 2>&1"
 parser = "regex"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
+pass_regex = "^Build complete!"
 level = "t1"
 uses = { compile = 1 }
 
@@ -231,6 +238,7 @@ uses = { compile = 1 }
 command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path pipeline/monitor 2>&1"
 parser = "regex"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
+pass_regex = "^Build complete!"
 level = "t1"
 uses = { compile = 1 }
 
@@ -240,6 +248,7 @@ uses = { compile = 1 }
 command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build 2>&1"
 parser = "regex"
 fail_regex = "error:|BUILD FAILED"
+pass_regex = "\\*\\* BUILD SUCCEEDED \\*\\*"
 level = "t1"
 uses = { compile = 1 }
 
@@ -248,6 +257,7 @@ uses = { compile = 1 }
 command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop compileKotlin compileTestKotlin --no-daemon 2>&1"
 parser = "regex"
 fail_regex = "FAILURE: Build failed|error:"
+pass_regex = "BUILD SUCCESSFUL"
 level = "t1"
 uses = { compile = 1 }
 
