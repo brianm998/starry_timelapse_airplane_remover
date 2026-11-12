@@ -456,10 +456,14 @@ struct ProcessingSettingsView: View {
     var body: some View {
         @Bindable var viewModel = viewModel
         return VStack {
-              Text(localized("ui.choose_from_the_following_options_to_let"))
-                .lineLimit(nil)
-                .font(.largeTitle)
-                .foregroundColor(.white)
+              HStack(alignment: .top, spacing: 12) {
+                ArtImage(.settings)
+                Text(localized("ui.choose_from_the_following_options_to_let"))
+                  .lineLimit(nil)
+                  .fixedSize(horizontal: false, vertical: true)
+                  .font(.largeTitle)
+                  .foregroundColor(.white)
+              }
 
               // Under the top label, and only over a sequence that has work on disk this
               // change contradicts.  A sequence nothing has been done to is what this whole
