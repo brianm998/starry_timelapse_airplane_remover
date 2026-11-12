@@ -103,7 +103,6 @@ class Config(BaseModel):
     ci_poll_s: float = 60.0
     ci_settle_s: float = 90.0
     max_auto_tickets: int = 2
-    red_ticket_after_s: float = 3 * 3600.0  # a non-gate job red on develop this long with no open ticket naming it is ticketed
     gherkin_nightly_max_tickets: int = 6  # new tickets one Gherkin nightly may file (red before flaky); the rest wait for the next night
     max_open_tickets: int = 30  # open issues labelled `pipeline`: `ticket new` and `approve` refuse past this
     max_proposed: int = 10  # open issues labelled `pipe:proposed`: waiting on the owner
