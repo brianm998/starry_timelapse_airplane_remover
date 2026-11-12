@@ -1,63 +1,47 @@
-"""The machine-wide heavy-job lock (plan §9.1), split by what each job actually needs of the machine.
+"""Heavy jobs, queued in masond (MASON's daemon), the one arbiter of this Mac (plan §9.1, ticket #169).
 
-Why there is a lock at all: on 2026-10-23 two star runs (~20 GB and most cores each) beside test suites wedged this Mac and
-logged the owner out. What has to be kept apart is narrower than "everything heavy":
+Why there is a queue at all: on 2026-10-23 two star runs (~20 GB and most cores each) beside test suites wedged this Mac and
+logged the owner out. starpipe no longer schedules the machine itself: every job runs under `mason run`, which queues it with
+MASON's own work (masonq.py). The class decides what it asks for:
 
-- `exclusive` jobs need the machine to themselves: star/stard runs, Gherkin, UI tests (the display), test classes that read the
-  whole machine or hang beside others (adapter_star.EXCLUSIVE_TEST_MARKERS), and any command not recognised.
-- `test` jobs (test suites) run one at a time, so one suite's timing never depends on another suite.
-- `build` jobs (compiles) share the machine with each other and with a test, up to `heavy_build_slots` at once. They used a few
-  cores and under 9 GB of this 18-core, 128 GB machine (results.jsonl, 2026-10-30..11-04).
+- build (compiles) -> `--needs compile`; they share the machine up to MASON's `compile` limit.
+- test (suites) -> `--needs test-suite`; one at a time.
+- exclusive (star/stard runs, Gherkin, UI tests, test classes that read the whole machine, any command not recognised) -> `--exclusive`.
 
-Slots are flock()ed files, which the kernel releases when the holder dies, so there are no stale locks to guess about: one `test`
-slot and `heavy_build_slots` build slots; an exclusive job takes all of them. Waiters queue in locks/queue/ and are served in
-order: interactive callers first, then the ticket furthest along the pipeline (PROGRESS: a landing ticket before a develop
-one), then the higher-priority and older ticket, then arrival. A waiter that cannot start yet keeps the slots it needs from
-everyone behind it, so a later job can pass it only by using slots it does not need: a build may pass a waiting test suite,
-nothing passes a waiting exclusive job. A job that would start beside another also needs `heavy_free_mem_pct` of memory free.
-It counts jobs and never reads the load average.
+From a ticket stage the job ranks as starpipe's (`--pipeline starpipe --priority --progress`: the ticket furthest along first);
+from a person's session it names no pipeline, so it ranks as a person's; under a MASON task (`MASON_TASK`) it is a plain
+`mason run`. If masond cannot be reached the job waits and retries, and never runs unqueued.
 """
 
 from __future__ import annotations
 
 import contextlib
 import contextvars
-import fcntl
 import json
-import math
 import os
 import signal
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from collections.abc import Callable, Generator
-from dataclasses import asdict, dataclass, field
-from pathlib import Path
-from typing import Any
+from dataclasses import dataclass, field
+from typing import Any, cast
 
 import psutil
 
-from . import adapter_star
+from . import adapter_star, masonq
 from . import idle as input_idle
-from .config import Config, home, load
+from .config import Config, load
 
 INTERACTIVE, PIPELINE, NIGHTLY = 0, 1, 2
 BUILD, TEST, EXCLUSIVE = adapter_star.BUILD, adapter_star.TEST, adapter_star.EXCLUSIVE
-TEST_SLOT = "test"
 
 # How far along the pipeline a stage is: further along goes first, so a ticket that is about to land is never queued behind a
 # ticket that has only started developing. "verify" is the daemon's own check run after develop submits.
 PROGRESS = {"explore": 0, "develop": 1, "fix": 2, "verify": 3, "review": 3, "resolve": 4, "ci-fix": 5, "conflict": 5,
             "landing": 6}
 NO_TICKET_PRIORITY = 9
-
-
-def locks_dir() -> Path:
-    path = home() / "locks"
-    (path / "queue").mkdir(parents=True, exist_ok=True)
-    return path
 
 
 def default_priority() -> int:
@@ -99,221 +83,6 @@ def current_requester() -> Requester:
     except ValueError:
         prio = NO_TICKET_PRIORITY
     return Requester(env.get("STARPIPE_TICKET", ""), env.get("STARPIPE_STAGE", ""), prio)
-
-
-@dataclass
-class Waiter:
-    priority: int
-    enqueued_at: float
-    pid: int
-    started: float  # the pid's create_time, so a reused pid is not mistaken for the waiter
-    ticket: str
-    cmd: str
-    job_class: str = EXCLUSIVE
-    stage: str = ""
-    ticket_priority: int = NO_TICKET_PRIORITY
-
-    def key(self) -> tuple[int, int, int, float, float, int]:
-        number = float(self.ticket) if self.ticket.isdigit() else math.inf
-        return (self.priority, -PROGRESS.get(self.stage, 0), self.ticket_priority, number, self.enqueued_at, self.pid)
-
-
-def _alive(pid: int, started: float) -> bool:
-    try:
-        return abs(psutil.Process(pid).create_time() - started) < 1.0
-    except psutil.Error:
-        return False
-
-
-def _queue() -> list[Waiter]:
-    out: list[Waiter] = []
-    for entry in (locks_dir() / "queue").glob("*.json"):
-        try:
-            waiter = Waiter(**json.loads(entry.read_text()))
-        except (OSError, ValueError, TypeError):
-            continue
-        if _alive(waiter.pid, waiter.started):
-            out.append(waiter)
-        else:
-            entry.unlink(missing_ok=True)
-    return sorted(out, key=Waiter.key)
-
-
-@contextlib.contextmanager
-def _grant_lock() -> Generator[None]:
-    with (locks_dir() / "grant.flock").open("a") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
-
-
-def _slot_file(name: str) -> Path:
-    """The test slot is the file the one-slot lock used, so a worktree still running that code (a branch cut before the split)
-    and this one exclude each other: its jobs wait for a test suite or an exclusive job here, and theirs hold off ours."""
-    return locks_dir() / ("heavy.slot0" if name == TEST_SLOT else f"slot.{name}")
-
-
-def _try_slot(name: str) -> int | None:
-    fd = os.open(_slot_file(name), os.O_RDWR | os.O_CREAT, 0o644)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        return fd
-    except OSError:
-        os.close(fd)
-        return None
-
-
-def _build_slots(cfg: Config) -> list[str]:
-    return [f"build{i}" for i in range(max(0, cfg.heavy_build_slots))]
-
-
-def _all_slots(cfg: Config) -> list[str]:
-    return [TEST_SLOT, *_build_slots(cfg)]
-
-
-def _free(names: list[str]) -> set[str]:
-    out: set[str] = set()
-    for name in names:
-        fd = _try_slot(name)
-        if fd is not None:
-            out.add(name)
-            os.close(fd)  # closing releases the probe lock
-    return out
-
-
-def _needs(cfg: Config, kind: str) -> list[str]:
-    """Every slot this class could use. A build needs any one of the build slots; a test, the test slot; anything else, all."""
-    if kind == BUILD and cfg.heavy_build_slots > 0:
-        return _build_slots(cfg)
-    if kind == TEST:
-        return [TEST_SLOT]
-    return _all_slots(cfg)
-
-
-def _pick(cfg: Config, kind: str, free: set[str]) -> list[str] | None:
-    needs = _needs(cfg, kind)
-    if kind == BUILD and cfg.heavy_build_slots > 0:
-        return next(([n] for n in needs if n in free), None)
-    return needs if all(n in free for n in needs) else None
-
-
-def _memory_ok(cfg: Config) -> bool:
-    mem = psutil.virtual_memory()
-    return mem.available / mem.total * 100 >= cfg.heavy_free_mem_pct
-
-
-def _grant(cfg: Config, queue: list[Waiter], me: int, kind_of: Callable[[Waiter], str]) -> list[str] | None:
-    """The slots `me` may take now, or None. Walks the queue in order handing out the free slots: a waiter ahead that can start
-    is given its slots (it takes them on its next poll), one that cannot keeps the slots it needs from everyone behind it."""
-    all_slots = _all_slots(cfg)
-    free = _free(all_slots)
-    busy = len(free) < len(all_slots)
-    memory: bool | None = None
-    for w in queue:
-        kind = kind_of(w)
-        take = _pick(cfg, kind, free)
-        if take is not None and busy:  # it would start beside another job: only with memory to spare
-            memory = _memory_ok(cfg) if memory is None else memory
-            if not memory:
-                take = None
-        if take is None:
-            free -= set(_needs(cfg, kind))
-            if w.pid == me:
-                return None
-            continue
-        if w.pid == me:
-            return take
-        free -= set(take)
-        busy = True
-    return None
-
-
-@dataclass
-class Held:
-    fds: list[int]
-    slots: list[str]
-    waited: float
-    pid: int = field(default_factory=os.getpid)
-
-
-def _holder_file(pid: int) -> Path:
-    return locks_dir() / f"holder.{pid}.json"
-
-
-def _write_holder(pid: int, record: dict[str, Any]) -> None:
-    """Atomically, so a reader never sees half a record."""
-    path = _holder_file(pid)
-    # A unique temp per call: jobs inside one process share a pid, so a fixed name collides.
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + ".", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w") as f:
-            f.write(json.dumps(record))
-        os.replace(tmp, path)
-    except BaseException:
-        with contextlib.suppress(OSError):
-            os.unlink(tmp)
-        raise
-
-
-def _effective_class(cfg: Config, kind: str) -> str:
-    return kind if cfg.heavy_split else EXCLUSIVE
-
-
-def acquire(
-    cmd: str,
-    *,
-    priority: int | None = None,
-    config: Config | None = None,
-    report: Callable[[str], None] | None = None,
-    poll: float = 0.25,
-    job_class: str | None = None,
-) -> Held:
-    cfg = config or load()
-    prio = default_priority() if priority is None else priority
-    kind = _effective_class(cfg, job_class or adapter_star.job_class(cmd))
-    who = current_requester()
-    me = psutil.Process()
-    waiter = Waiter(prio, time.time(), os.getpid(), me.create_time(), who.ticket, cmd, kind, who.stage, who.ticket_priority)
-    entry = locks_dir() / "queue" / f"{waiter.pid}.json"
-    entry.write_text(json.dumps(asdict(waiter)))
-    started, last_report = time.monotonic(), 0.0
-    try:
-        while True:
-            with _grant_lock():
-                queue = _queue()
-                if not any(w.pid == waiter.pid for w in queue):  # our entry was removed from outside: put it back
-                    entry.write_text(json.dumps(asdict(waiter)))
-                    queue = sorted([*queue, waiter], key=Waiter.key)
-                rank = next(i for i, w in enumerate(queue) if w.pid == waiter.pid)
-                slots = _grant(cfg, queue, waiter.pid, lambda w: _effective_class(cfg, w.job_class))
-                if slots is not None:
-                    fds = [_try_slot(s) for s in slots]
-                    if all(fd is not None for fd in fds):
-                        entry.unlink(missing_ok=True)
-                        # written under the grant lock, so the status never shows a held slot without its holder
-                        _write_holder(waiter.pid, {"pid": waiter.pid, "ticket": waiter.ticket, "cmd": cmd, "since": time.time(),
-                                                   "job_class": kind, "stage": waiter.stage, "slots": slots})
-                        return Held([fd for fd in fds if fd is not None], slots, time.monotonic() - started)
-                    for fd in fds:
-                        if fd is not None:
-                            os.close(fd)
-            now = time.monotonic()
-            if report and now - last_report >= cfg.heavy_wait_report_s:
-                last_report = now
-                holders = status().holders
-                busy = ", ".join(f"{h.ticket or 'interactive'} {h.job_class} {h.cmd[:40]}" for h in holders) or "?"
-                report(f"waiting for the heavy lock ({kind}): {busy} ({int(now - started)}s), you are #{rank + 1}")
-            time.sleep(poll)
-    finally:
-        entry.unlink(missing_ok=True)
-
-
-def release(held: Held) -> None:
-    _holder_file(held.pid).unlink(missing_ok=True)
-    for fd in held.fds:
-        os.close(fd)
 
 
 @dataclass(frozen=True)
@@ -377,7 +146,7 @@ class _Activity:
             self.seen[p.pid] = used
             with contextlib.suppress(psutil.Error):
                 rss += p.memory_info().rss
-        if now > self.last_at:
+        if now - self.last_at >= 0.1:  # a shorter interval says nothing (the first sample sees all the CPU used so far at once)
             self.cpu_peak = max(self.cpu_peak, (self.total - self.last_total) / (now - self.last_at))
         self.last_at, self.last_total = now, self.total
         self.rss_peak = max(self.rss_peak, rss)
@@ -455,6 +224,14 @@ def _kill_group(proc: subprocess.Popen[bytes], grace: float) -> None:
 UI_TESTS_REFUSED = 69  # sysexits' EX_UNAVAILABLE, the same code pipeline/shims/xcodebuild exits with
 
 
+def _job_started(proc: subprocess.Popen[bytes]) -> bool:
+    """`mason run` spawns the job as its child once it holds its lease; while it queues it has none."""
+    try:
+        return bool(psutil.Process(proc.pid).children())
+    except psutil.Error:
+        return False
+
+
 def run_job(
     argv: list[str],
     *,
@@ -467,8 +244,10 @@ def run_job(
     env: dict[str, str] | None = None,
     job_class: str | None = None,
 ) -> RunResult:
-    """Wait for a slot, run argv in its own process group, release. A job idle for `heavy_idle_kill_s` is killed and
-    reported as hung, so a wedged test run cannot hold the slot until the owner notices."""
+    """Queue argv in masond (`mason run`), run it in its own process group. A job idle for `heavy_idle_kill_s` once it runs is
+    killed and reported as hung, so a wedged test run cannot hold its lease until the owner notices. `priority` is not used:
+    masond ranks by who asks (see masonq.run_argv)."""
+    del priority
     cfg = config or load()
     cmd = " ".join(argv)
     kind = EXCLUSIVE if keep_display_awake else job_class or adapter_star.job_class(cmd)  # a UI run needs the display
@@ -482,67 +261,63 @@ def run_job(
         else:
             print(message, file=sys.stderr, flush=True)
         return RunResult(UI_TESTS_REFUSED, 0.0)
-    idle_wait = 0.0
-    while True:
-        if gated:  # outside the lock: a held-back UI run must not keep every other job waiting for it
-            idle_wait += input_idle.wait_until_idle(cfg.ui_idle_s, poll_s=cfg.ui_idle_poll_s, report=report)
-        held = acquire(cmd, priority=priority, config=cfg, report=report, job_class=kind)
-        if not gated or input_idle.is_idle(cfg.ui_idle_s):
-            break
-        release(held)  # the owner came back while this job waited for its turn
-    held.waited += idle_wait
+    waited = 0.0
+    if gated:  # before queueing: a held-back UI run must not keep a lease while it waits for the owner to go away
+        waited += input_idle.wait_until_idle(cfg.ui_idle_s, poll_s=cfg.ui_idle_poll_s, report=report)
+    waited += masonq.wait_reachable(report)  # never run unqueued
+    who = current_requester()
+    inner = ["caffeinate", "-d", "-u", *argv] if keep_display_awake else argv  # XCUITest / Compose UI freeze when the display sleeps
+    mason = masonq.run_argv(kind, inner, ticket=who.ticket, stage=who.stage, ticket_priority=who.ticket_priority,
+                            label=f"starpipe #{who.ticket} {who.stage}".strip() if who.ticket else "")
+    queued_at = time.monotonic()
+    proc = subprocess.Popen(mason, process_group=0, cwd=cwd, stdout=stdout, env=env,
+                            stderr=subprocess.STDOUT if stdout is not None else None)
+
+    def forward(signum: int, _frame: object) -> None:
+        if proc.poll() is None:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(proc.pid, signum)
+
+    # Signal handlers can only be set on the main thread. The daemon runs this on a worker thread, so there the child
+    # is not forwarded signals; it is still never left running (see the except below).
+    old = {}
+    if threading.current_thread() is threading.main_thread():
+        old = {s: signal.signal(s, forward) for s in (signal.SIGINT, signal.SIGTERM)}
+    hung: Hung | None = None
+    watch: _Activity | None = None
     try:
-        who = current_requester()
-        record: dict[str, Any] = {"pid": held.pid, "ticket": who.ticket, "cmd": cmd, "since": time.time(),
-                                  "job_class": _effective_class(cfg, kind), "stage": who.stage, "slots": held.slots}
-        _write_holder(held.pid, record)
-        if keep_display_awake:  # XCUITest / Compose UI freeze when the display sleeps
-            argv = ["caffeinate", "-d", "-u", *argv]
-        proc = subprocess.Popen(argv, process_group=0, cwd=cwd, stdout=stdout, env=env,
-                                stderr=subprocess.STDOUT if stdout is not None else None)
-        record["job_pid"] = proc.pid  # `pid` is the caller; this is what is running
-        _write_holder(held.pid, record)
-
-        def forward(signum: int, _frame: object) -> None:
-            if proc.poll() is None:
-                with contextlib.suppress(ProcessLookupError):
-                    os.killpg(proc.pid, signum)
-
-        # Signal handlers can only be set on the main thread. The daemon runs this on a worker thread, so there the child
-        # is not forwarded signals; it is still never left running past the lock (see the except below).
-        old = {}
-        if threading.current_thread() is threading.main_thread():
-            old = {s: signal.signal(s, forward) for s in (signal.SIGINT, signal.SIGTERM)}
-        hung: Hung | None = None
-        watch = _Activity(proc.pid, stdout, cfg.heavy_idle_kill_s)  # always: it records the hold's CPU and memory
-        try:
-            while True:
-                try:
-                    code = proc.wait(cfg.heavy_idle_poll_s)
-                    break
-                except subprocess.TimeoutExpired:
-                    pass
-                now = time.monotonic()
-                watch.sample(now)
-                _write_holder(held.pid, {**record, "cpu_mean": watch.cpu_mean, "cpu_peak": watch.cpu_peak,
-                                          "rss_peak_mb": watch.rss_peak_mb})
-                idle = watch.idle_for(now) if cfg.heavy_idle_kill_s > 0 else None
-                if idle is not None:
-                    hung = Hung(cmd, idle)
-                    _kill_group(proc, cfg.heavy_idle_grace_s)
-                    code = proc.returncode
-                    break
-        except BaseException:
-            _kill_group(proc, 0)  # never release the lock while any of the job is still running
-            raise
-        finally:
-            for s, h in old.items():
-                signal.signal(s, h)
-        code = 128 + -code if code < 0 else code
-        return RunResult(code or (128 + signal.SIGTERM if hung else 0), held.waited, hung, time.monotonic() - watch.start,
-                         watch.cpu_mean, watch.cpu_peak, watch.rss_peak_mb)
+        while True:
+            try:
+                code = proc.wait(cfg.heavy_idle_poll_s)
+                break
+            except subprocess.TimeoutExpired:
+                pass
+            if watch is None:
+                if not _job_started(proc):  # still queued in masond: not idle, not running
+                    continue
+                waited += time.monotonic() - queued_at
+                watch = _Activity(proc.pid, stdout, cfg.heavy_idle_kill_s)
+            now = time.monotonic()
+            watch.sample(now)
+            idle = watch.idle_for(now) if cfg.heavy_idle_kill_s > 0 else None
+            if idle is not None:
+                hung = Hung(cmd, idle)
+                _kill_group(proc, cfg.heavy_idle_grace_s)
+                code = proc.returncode
+                break
+    except BaseException:
+        _kill_group(proc, 0)  # never leave any of the job running
+        raise
     finally:
-        release(held)
+        for s, h in old.items():
+            signal.signal(s, h)
+    if watch is None:
+        waited += time.monotonic() - queued_at
+    code = 128 + -code if code < 0 else code
+    code = code or (128 + signal.SIGTERM if hung else 0)
+    if watch is None:
+        return RunResult(code, waited, hung)
+    return RunResult(code, waited, hung, time.monotonic() - watch.start, watch.cpu_mean, watch.cpu_peak, watch.rss_peak_mb)
 
 
 def run(argv: list[str], **kwargs: Any) -> tuple[int, float]:
@@ -553,6 +328,7 @@ def run(argv: list[str], **kwargs: Any) -> tuple[int, float]:
 
 @dataclass
 class Holder:
+    """A lease masond holds. `pid` is 0: masond does not say whose process it is."""
     pid: int
     ticket: str
     cmd: str
@@ -567,24 +343,43 @@ class Holder:
 
 
 @dataclass
+class Waiter:
+    priority: int
+    enqueued_at: float
+    pid: int
+    started: float
+    ticket: str
+    cmd: str
+    job_class: str = EXCLUSIVE
+    stage: str = ""
+    ticket_priority: int = NO_TICKET_PRIORITY
+
+
+@dataclass
 class Status:
     holders: list[Holder]
-    queue: list[Waiter]
+    queue: list[Waiter]  # masond keeps the queue; `mason resources` explains every wait
 
 
 def status() -> Status:
+    """What masond says is held (starpipe's own leases and everyone else's); empty when it cannot be asked."""
+    try:
+        done = subprocess.run([masonq.binary(), "resources", "--json"], capture_output=True, text=True, timeout=10, check=False)
+        data: object = json.loads(done.stdout) if done.returncode == 0 else {}
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return Status([], [])
+    raw: object = cast("dict[str, Any]", data).get("holders") if isinstance(data, dict) else None
     holders: list[Holder] = []
-    for path in sorted(locks_dir().glob("holder.*.json")):
-        try:
-            data = json.loads(path.read_text())
-        except (OSError, ValueError):
+    for item in cast("list[object]", raw) if isinstance(raw, list) else []:
+        if not isinstance(item, dict):
             continue
+        h = cast("dict[str, Any]", item)
+        uses = cast("dict[str, Any]", h.get("uses") or {})
+        label = str(h.get("label") or "")
         try:
-            holder = Holder(**data)
-        except TypeError:
-            continue
-        if psutil.pid_exists(holder.pid):
-            holders.append(holder)
-        else:
-            path.unlink(missing_ok=True)
-    return Status(holders, _queue())
+            since = float(h.get("since_ms") or 0) / 1000
+        except (TypeError, ValueError):
+            since = 0.0
+        holders.append(Holder(0, label if h.get("pipeline") == "starpipe" else "", label, since,
+                              slots=["exclusive"] if h.get("exclusive") else [f"{k}={v}" for k, v in uses.items()]))
+    return Status(holders, [])

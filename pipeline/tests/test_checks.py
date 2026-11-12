@@ -129,7 +129,6 @@ def test_hung_check_is_reported_as_hung(tmp_path: Path, monkeypatch: pytest.Monk
     result = runner.run_spec(spec, wt, "origin/develop", tmp_path)
     assert result.status == "hung" and not result.green
     assert "made no progress" in result.detail and "time.sleep(60)" in result.detail and "rerun run_checks" in result.detail
-    assert heavy.status().holders == [], "the lock was released"
 
     def hung_runner(_w: Path, _b: str, _t: set[str] | None = None, /) -> list[ledger.Result]:
         return [result]

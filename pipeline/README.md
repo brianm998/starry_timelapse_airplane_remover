@@ -18,6 +18,6 @@ cd pipeline && uv sync && uv run pytest -q && uv run ruff check . && uv run pyri
 ```
 
 - `src/starpipe/adapter_star.py` is the only module that names star paths and tools.
-- State is in `~/.star-pipeline/` (`STARPIPE_HOME` overrides it): `locks/`, `results.jsonl` (the results
+- State is in `~/.star-pipeline/` (`STARPIPE_HOME` overrides it): `results.jsonl` (the results
   ledger), `checks/<sha>/` (logs), `build/<worktree>/` (DerivedData).
 - `hooks/heavy_wrap.py` is the interactive-session hook wired in `.claude/settings.json`.

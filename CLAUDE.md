@@ -45,11 +45,13 @@ nothing broke: don't open a PR to get a change reviewed or checked first, and do
 rule and "Swift and Kotlin clients change together" above are about star's product code and do not
 apply to it: don't translate it and don't build a Kotlin twin.
 
-- **Heavy jobs go through `pipeline/bin/starpipe heavy -- <cmd>`**: every `swift build|test`,
-  `xcodebuild`, `gradlew` and star run. The lock is shared with the pipeline and keeps apart only
-  what conflicts: compiles run side by side, test suites one at a time, and star runs, UI, Gherkin and
-  unrecognised commands get the machine to themselves (`pipeline/src/starpipe/heavy.py`). An
-  interactive caller goes first; then the ticket furthest along the pipeline. `.claude/settings.json` wraps them for
+- **Heavy jobs queue in masond**, MASON's daemon, the one arbiter of this Mac: every `swift build|test`, `xcodebuild`, `gradlew`
+  and star run goes through `pipeline/bin/starpipe heavy -- <cmd>` (a client of masond: it runs `mason run`) or `mason run` itself.
+  Classes: build → `compile`, test → `test-suite`, star runs, UI, Gherkin and unrecognised commands → `--exclusive`. From a
+  ticket stage the job ranks as starpipe's (`--pipeline starpipe`, furthest-along ticket first), from a person's session as a
+  person's, under a MASON task as that task. If masond cannot be reached the job waits and alerts after 10 minutes; it never runs
+  unqueued. starpipe has no queue of its own any more: no `~/.star-pipeline/locks`. MASON's own suites (`.mason/mason.toml`) ask
+  for the machine's classes directly and are not wrapped in `starpipe heavy`. `.claude/settings.json` wraps commands for
   interactive sessions automatically (`STARPIPE_NO_WRAP=1` turns that off).
 - **Tests never wake this Mac's display or appear on it.** The mac gui's XCUITest runs (`starUITests`) drive the real mouse and
   keyboard and wake the display, so under the default `ui_local = "ci"` (`~/.star-pipeline/config.toml`) they do not run here:
@@ -58,9 +60,12 @@ apply to it: don't translate it and don't build a Kotlin twin.
   wake a sleeping display), `"always"` runs them unconditionally. `STARPIPE_UI_NOW=1` lets the owner run one; it is ignored for a
   ticket. `test:gui` (`-only-testing:starTests`) still runs here, unseen: `StarMain` hosts it in a background-only app with no windows.
   Never give it `ui=True`: that wraps it in `caffeinate -d -u`, and `-u` turns a sleeping display on.
-- **To stop all automated testing at once: `pipeline/bin/starpipe freeze`** (`thaw` lets go). It holds every heavy-lock slot,
-  including the one-slot file older code uses, so the daemon, the agents in ticket worktrees (which run their own older
-  `heavy.py`) and wrapped session commands all wait instead of starting. It does not stop a run already going: kill that first.
+- **To stop all automated testing at once: `pipeline/bin/starpipe freeze`** (`thaw` lets go). It is MASON-backed: it runs
+  `mason pause --mode all` and holds `mason hold --exclusive --pipeline starpipe --label freeze`, so MASON's tasks, the daemon,
+  the agents in ticket worktrees and wrapped session commands all wait in masond's queue. It does not stop a run already
+  going: kill that first.
+- **Model sessions are limited by MASON**: each starpipe session holds `llm:claude` (`mason hold`) for its life, and the count is
+  MASON's (`mason resources limit llm:claude N`). starpipe has no `max_llm_sessions` or CPU gate; `starpipe limits` says so.
 - `pipeline/bin/starpipe check --explain` says which builds and tests a change needs;
   `starpipe check` runs them and proves each from its own output.
 - To queue work for the pipeline, use the file-tickets skill (`.claude/skills/file-tickets`).
