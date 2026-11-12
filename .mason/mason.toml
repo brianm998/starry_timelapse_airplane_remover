@@ -46,7 +46,40 @@ next = "test"
 [step.test]
 type = "test"
 category = "testing"
-# The suites that run are the ones the impact map selects for the diff (levels t0 and t1, below).
+# The suites that may run are the ones listed here (every [suite.*] table below, levels t0 and t1); MASON
+# runs only a step's own list, and the bindings and impact map choose among them for the diff.
+# Without this list the registration's `test =` command runs instead.
+suites = [
+  "t0-diff-check",
+  "t0-i18n",
+  "t0-pipeline-static",
+  "t0-proto-sync",
+  "t0-gherkin-generated",
+  "build-logging",
+  "build-StarCpp",
+  "build-StarCore",
+  "build-cli",
+  "build-daemon",
+  "build-trail_tools",
+  "build-decision_tree_generator",
+  "build-monitor",
+  "build-gui",
+  "build-desktop",
+  "test-logging",
+  "test-monitor",
+  "test-StarCpp",
+  "test-StarCpp-qos",
+  "test-StarCpp-wgpu",
+  "test-StarCore",
+  "test-daemon",
+  "test-cli",
+  "test-trail_tools",
+  "test-decision_tree_generator",
+  "test-gherkin",
+  "test-gui",
+  "test-desktop",
+  "test-pipeline",
+]
 max_rounds = 3
 on_red = "develop"
 next = "review"
