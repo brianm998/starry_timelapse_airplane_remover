@@ -49,7 +49,8 @@ def run_argv(kind: str, argv: list[str], *, ticket: str = "", stage: str = "", t
     from .heavy import PROGRESS  # heavy imports this module
 
     out = [binary(), "run"]
-    out += ["--exclusive"] if kind not in CLASS_FLAGS else ["--needs", CLASS_FLAGS[kind]]
+    # mason requires --needs on every run; `--exclusive` only adds the whole-machine class on top of it
+    out += ["--needs", "exclusive", "--exclusive"] if kind not in CLASS_FLAGS else ["--needs", CLASS_FLAGS[kind]]
     if label:
         out += ["--label", label]
     if not under_mason_task() and ticket:
@@ -110,8 +111,8 @@ class Hold:
     @classmethod
     def start(cls, needs: str | None, label: str, *, exclusive: bool = False, pipeline: str = "starpipe") -> Self:
         argv = [binary(), "hold"]
-        if needs:
-            argv += ["--needs", needs]
+        if needs or exclusive:  # mason requires --needs; an exclusive hold names the whole-machine class
+            argv += ["--needs", needs or "exclusive"]
         if exclusive:
             argv.append("--exclusive")
         argv += ["--pipeline", pipeline, "--label", label]

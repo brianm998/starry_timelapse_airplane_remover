@@ -384,7 +384,7 @@ def test_a_ticket_stage_job_ranks_as_starpipes_with_its_class(monkeypatch: pytes
     monkeypatch.setenv("STARPIPE_TICKET", "42")
     monkeypatch.setenv("STARPIPE_STAGE", "ci-fix")
     monkeypatch.setenv("STARPIPE_TICKET_PRIORITY", "1")
-    for kind, flags in ((heavy.BUILD, ["--needs", "compile"]), (heavy.TEST, ["--needs", "test-suite"]), (heavy.EXCLUSIVE, ["--exclusive"])):
+    for kind, flags in ((heavy.BUILD, ["--needs", "compile"]), (heavy.TEST, ["--needs", "test-suite"]), (heavy.EXCLUSIVE, ["--needs", "exclusive", "--exclusive"])):
         fake_mason.write_text("")
         assert heavy.run_job([sys.executable, "-c", "pass"], config=CFG, job_class=kind).code == 0
         (line,) = mason_lines(fake_mason)

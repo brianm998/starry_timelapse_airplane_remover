@@ -400,6 +400,9 @@ if args[:1] == ["resources"]:
         print('{{"holders": []}}')
         sys.exit(0)
     print('{{"holders": [{{"label": "starpipe #7 develop", "pipeline": "starpipe", "exclusive": false, "since_ms": 1000, "uses": {{"compile": 1}}}}]}}')
+elif args[:1] in (["run"], ["hold"]) and "--needs" not in args:
+    print("error: say what it needs: --needs compile", file=sys.stderr)  # the real mason requires --needs on run and hold
+    sys.exit(1)
 elif args[:1] == ["run"]:
     note("run " + " ".join(args))
     wait = float(os.environ.get("FAKE_MASON_WAIT", "0"))

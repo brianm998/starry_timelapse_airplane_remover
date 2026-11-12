@@ -192,7 +192,7 @@ def _tree(leader: int) -> list[psutil.Process]:
 
 
 def _signal_tree(leader: int, tree: list[psutil.Process], sig: signal.Signals) -> None:
-    with contextlib.suppress(ProcessLookupError):
+    with contextlib.suppress(OSError):  # ProcessLookupError, or EPERM once macOS has reaped the group's leader
         os.killpg(leader, sig)
     for p in tree:
         with contextlib.suppress(psutil.Error, OSError):
@@ -276,7 +276,7 @@ def run_job(
 
     def forward(signum: int, _frame: object) -> None:
         if proc.poll() is None:
-            with contextlib.suppress(ProcessLookupError):
+            with contextlib.suppress(OSError):
                 os.killpg(proc.pid, signum)
 
     # Signal handlers can only be set on the main thread. The daemon runs this on a worker thread, so there the child

@@ -30,7 +30,7 @@ def test_freeze_pauses_mason_and_holds_the_machine_exclusively_until_thawed(fake
         assert wait_until(lambda: any(ln.startswith("hold ") for ln in lines(fake_mason)))
         log = lines(fake_mason)
         assert log[0] == "pause --mode all"
-        assert "hold hold --exclusive --pipeline starpipe --label freeze" in log
+        assert "hold hold --needs exclusive --exclusive --pipeline starpipe --label freeze" in log
         assert pause.paused_pid() == holder
         assert pause.pause() == holder, "freezing twice is one freeze"
     finally:
