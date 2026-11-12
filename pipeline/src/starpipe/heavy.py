@@ -142,7 +142,8 @@ class _Activity:
             except psutil.Error:
                 continue
             used = t.user + t.system
-            self.total += max(0.0, used - self.seen.get(p.pid, 0.0))
+            if self.samples:  # the first sample is only a baseline: CPU used before the watch began is not the watch's
+                self.total += max(0.0, used - self.seen.get(p.pid, 0.0))
             self.seen[p.pid] = used
             with contextlib.suppress(psutil.Error):
                 rss += p.memory_info().rss
