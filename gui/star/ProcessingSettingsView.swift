@@ -591,7 +591,7 @@ struct ProcessingSettingsView: View {
           }
           .frame(minWidth: 1000)
           .padding(20)
-          .background(.gray)
+          .background(Color.starDialogBackground)
           .onAppear {
               // Only when there is not one already.  A settings change the user made and
               // then dismissed without processing is still a change the frames on disk do
