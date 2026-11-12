@@ -77,5 +77,6 @@ struct ToolHelpView: View {
         }
           .padding(20)
           .frame(width: 520, height: 560)
+          .starDialogStyle()
     }
 }

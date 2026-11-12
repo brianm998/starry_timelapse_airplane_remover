@@ -135,6 +135,7 @@ struct VideoImportSheetView: View {
               probe = await Task.detached { VideoProbe.probe(videoAt: path) }.value
               if !extractInBackgroundChosen, let probe { extractInBackground = probe.extractInBackgroundByDefault }
           }
+          .starDialogStyle()
     }
 
     @ViewBuilder private var diskUsage: some View {
@@ -297,5 +298,6 @@ struct SequenceLocationSheetView: View {
               let path = pending.path
               inputBytes = await Task.detached { DiskSpaceCheck.sequenceInputBytes(inDirectory: path) }.value
           }
+          .starDialogStyle()
     }
 }

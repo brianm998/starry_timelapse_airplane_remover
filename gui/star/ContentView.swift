@@ -118,7 +118,7 @@ struct ContentView: View {
             }
               .padding(40)
               .frame(maxWidth: 480)
-              .background(.regularMaterial)
+              .starDialogStyle()
               .cornerRadius(16)
         }
     }

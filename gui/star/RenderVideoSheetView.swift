@@ -76,6 +76,7 @@ struct RenderVideoSheetView: View {
                   startRender()
               }
           }
+          .starDialogStyle()
     }
 
     private func startRender() {

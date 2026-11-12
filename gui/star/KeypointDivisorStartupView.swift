@@ -142,9 +142,6 @@ struct KeypointDivisorStartupView: View {
     /// that panel will also accept.
     static let maxDivisor: Double = 8.0
 
-    /// The ground the sheet's white text sits on: the gray of the cleanup dialog behind it.
-    static let sheetBackground = Color.gray
-
     private var divisor: Double { draft.current }
 
     private var advice: Config.KeypointDivisorAdvice? {
@@ -172,11 +169,7 @@ struct KeypointDivisorStartupView: View {
         }
           .frame(maxWidth: 640, alignment: .leading)
           .padding(24)
-          // A sheet takes the system's light background, and everything in it is white text:
-          // give it the dark gray of the dialog it opens from, and the dark appearance so the
-          // checkboxes and the field are drawn for a dark ground.
-          .background(Self.sheetBackground)
-          .preferredColorScheme(.dark)
+          .starDialogStyle()
           .onChange(of: customText) { applyCustomTextIfValid() }
           .onChange(of: divisor) {
               // Resync the field when a preset moved the value, but never while it is
