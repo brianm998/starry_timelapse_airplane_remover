@@ -1,96 +1,108 @@
 ---
 name: file-tickets
-description: Turn an approved task list into GitHub tickets for the starpipe pipeline. Use when the owner asks to queue, file or hand off a body of work, or says "file tickets" / "send this to the pipeline".
+description: Turn an approved task list into MASON tasks for star. Use when the owner asks to queue, file or hand off a body of work, or says "file tickets", "file it in MASON" or "send this to the pipeline".
 ---
 
-# Filing tickets for the pipeline
+# Filing star work in MASON
 
-The owner no longer writes `plans/*.md` for another agent. They approve a task list in conversation and you file it.
-Design: `plans/PIPELINE.md` §6. Approval is the only gate, so do not file before it.
+The owner approves a task list in conversation and you file each task in MASON, the pipeline that explores, develops,
+tests, reviews and lands work on `develop`. Approval is the only gate, so do not file before it. starpipe no longer takes
+new work: never run `starpipe ticket new` (CLAUDE.md, "File every new star ticket in MASON"). `mason help filing` is
+MASON's own reference.
 
 ## Flow
 
 1. Turn the conversation into a **numbered task list**. Each task has a title, a goal, acceptance criteria, tests and
-   dependencies on other tasks.
-2. **Show the list and wait for approval.** Filing applies the `pipeline` label, which is the owner's go-ahead to run.
-3. Write each body to a temp file (scratchpad) and file in dependency order, noting each printed issue number:
+   the tasks that must land before it.
+2. **Show the list and wait for approval.** A task filed without `--proposed` is queued at once, so filing is the
+   go-ahead to run.
+3. Write each body to a file in the scratchpad and file in dependency order. Note the number each one prints
+   (`Filed task #203 in star`):
 
    ```bash
-   pipeline/bin/starpipe ticket lint body.md
-   pipeline/bin/starpipe ticket new --title "…" --body-file body.md [--blocked-by 41,42] [--priority p1]
+   ~/.config/mason/bin/mason task add "<title>" --project star --body-file body.md [--after 201,202] [--explored] [--priority high]
    ```
-4. Print the issue links, then `pipeline/bin/starpipe status` once it exists.
+4. Check each task with `~/.config/mason/bin/mason task show <id>`: its state, what it waits for, and whether exploring
+   was skipped and why. Then give the owner the task numbers. They follow the work in the MASON monitor, or with
+   `mason status`.
+
+- `mason task add` files the task in MASON only. No GitHub issue is opened, so don't look for one.
+- `--after` takes MASON task numbers, not GitHub issue numbers.
+- The title is 1 to 200 characters and the body at most 100,000 bytes. Priority is `urgent`, `high`, `normal` (the
+  default) or `low`.
+- Filing many tasks: render the bodies from one script, check every `file:line` you cite against `origin/develop`
+  before filing, and file in dependency order so each `--after` names a task that already exists.
 
 ## Proposing instead of queueing
 
-You queue a ticket (the default) only when the owner approved it in conversation. If you are an agent that was **not** given that
-approval (a review, a nightly, a stage that noticed out-of-scope work, a session working on something else), file it as a proposal:
+Queue a task only when the owner approved it in conversation. If you were not given that approval (a review, a session
+working on something else, out-of-scope work you noticed), add `--proposed`. Nothing runs until the owner runs
+`mason task approve <id>`, or `mason task reject <id> --reason "…"` to turn it down.
 
-```bash
-STARPIPE_AGENT="<who you are>" pipeline/bin/starpipe ticket new --propose --title "…" --body-file body.md
-```
+## Body
 
-It gets `pipe:proposed` and no `pipeline` label, so nothing runs. The owner sees it with `starpipe proposals` and either
-`starpipe approve 41 [--priority p1]` or `starpipe reject 41 "why"`. Every ticket records who filed it. `ticket new` refuses a title that
-nearly matches an open issue (`--force` overrides) and refuses past the caps (`max_open_tickets`, `max_proposed` in config.toml); do not
-work around either: if you hit a cap, the owner has plenty to look at already. This is a workflow guard, not security: everything runs
-with the owner's GitHub token.
-
-## Body (section headers are exact)
+When exploring is skipped, the developing agent's plan reads "(no plan was recorded)", so the body is all it has. Write
+for a cold agent that has never seen this conversation:
 
 ```markdown
 ## Goal
+<one or two sentences: what is true once this lands>
 ## Context
+<what the conversation established: files, commits, numbers, measurements, traps already found>
+## Approach
+- <step>
+- <repo path>:<line> — <what is there, and what changes>
 ## Acceptance criteria
 - A1: <observable outcome> — check: <test name | command | "review: <what to look at>">
 ## Tests
-<tests to add, or `none: <reason>`>
+- <test file> <test name> — shows A1 [— fails before the fix]
 ## Out of scope
-## Pipeline
-(optional) effort_develop: high · gherkin: <feature> · skip_review: no
-(`model_<stage>` / `effort_<stage>` exist for explore, develop, fix, review, resolve, ci_fix and conflict; efforts: low, medium, high, xhigh, max)
-**Leave `model_<stage>` out.** Every stage runs sonnet by default, and the daemon ignores `model_<stage>: opus` unless the owner picked it in
-the monitor or ran `starpipe allow-opus <n>`. Never write opus into a ticket on your own: only when the owner has told you to.
+<what this task leaves alone, and where that work goes instead>
 ```
 
-- Every acceptance criterion has a `check:`. A bug's tests say "fails without the fix"; `none:` for a bug needs a real
-  reason, not "visual" or "hard to test".
-- **Size:** one reviewable, independently landable change, about 400 changed lines or fewer. Bigger work is several
-  tickets with `--blocked-by`. Lint warns past 6 criteria.
-- Put in Context what the conversation established (files, commits, numbers) so a cold agent can start.
-- Filing is all or nothing per ticket: on failure the command closes what it created and says so.
-- Never apply `pipeline` to something the owner has not approved, and never treat an outsider's issue as approved work.
+- Every acceptance criterion has a `check:`. A bug's tests fail without the fix. A bug with no test needs a real reason:
+  "visual" or "hard to test" is not one.
+- For every user-visible change, say what happens in both clients (`gui/` and `star-desktop/`) and in all 22
+  catalogues, or why one side cannot do it. The developing and reviewing agents are given CLAUDE.md's rules, so a body
+  that leaves out the twin or the translations gets a red review.
+- **Size:** one reviewable change, about 400 changed lines or fewer. Bigger work is several tasks joined with `--after`.
+- `## Pipeline` lines (`effort_*`, `model_*`, `gherkin:`) were starpipe's, and MASON ignores them. star's MASON runs
+  every agent step on Sonnet. A bigger model is the owner's decision in `.mason/mason.toml`, never a line in a task.
+- The suites that run are chosen from the diff by the impact map in `.mason/mason.toml`, not by the body.
 
-## Carrying a plan (skips EXPLORE)
+## Skipping exploration
 
-EXPLORE costs up to 45 minutes. When the conversation that produced the ticket already settled the approach **and you opened the
-files you name**, add a `## Plan` section and the pipeline builds `plan.json` from it with no EXPLORE session. Leave it out otherwise:
-a ticket nobody planned should go through EXPLORE, and a guessed plan is worse than none, because the pipeline only checks that each
-`file:` exists and has that line, not that your claim about it is true.
+Exploring costs an agent session. When the conversation already settled the approach **and you opened the files you
+name**, the task already is a plan: pass `--explored`, or start the body with front matter:
 
 ```markdown
-## Plan
-summary: <one or two sentences>
-parity: neither | both | gui-only — <reason> | desktop-only — <reason>
-localization: yes | no
-- approach: <step>
-- file: <repo path>:<line> — <what is there and why it matters>
-- risk: <risk>
+---
+explored: true
+---
 ```
 
-- `summary`, `parity` and `localization` are required, with at least one `approach`. `file:` and `risk:` lines are optional but a
-  `file:` line per place you looked is what makes the plan checkable. `parity` and `localization` are the two cross-client decisions
-  CLAUDE.md makes mandatory (a `pipeline/` or docs-only change is `neither` / `no`).
-- The criteria are your `A<n> … — check:` lines (each check becomes the plan's acceptance check). `## Pipeline` must say `gherkin:`
-  explicitly, a feature list or `no`.
-- `## Tests` must then be structured, one per line, or `none:`:
+Leave it off otherwise. A guessed plan is worse than none, because the developing agent trusts it. If a plan turns out
+not to hold up, the developing agent sends the task back to exploring: no failure is charged, but the work is wasted.
 
-  ```markdown
-  - <unit|daemon|cli-gherkin|ui>: <target path> <test name> — shows: A<n>[ — fails before fix]
-  none: <reason>
-  ```
-  A bug's tests say `— fails before fix`.
-- `starpipe ticket lint` checks all of this without a worktree. At claim time the same checks EXPLORE's plan has to pass run against
-  the fresh worktree; if they fail, the ticket goes to EXPLORE and its prompt lists what was wrong with your plan.
-- A plan is used from any ticket the owner's token filed: an interactive session, a `$STARPIPE_AGENT` filing, or an approved proposal
-  (`--propose`). Only tickets the pipeline files itself (its own follow-ups) always run EXPLORE.
+Without the flag, MASON's clarity check still skips exploring when the body has all three of:
+
+- named files that exist on `develop`. A file you will create needs `(new)` on the same line.
+- a section whose heading contains "acceptance" or "criteria", with at least one `- ` item.
+- a section whose heading contains "approach", "plan", "implementation" or "how", with at least 8 words.
+
+Traps in that check:
+
+- Any token that looks like a file name counts as one, even inside backticks: `word.ext` with a 2 to 6 letter
+  extension, or anything with a `/`. So `Config.set`, `Bundle.module`, `json.dumps`, `homography.db` or `config.json`
+  make the body unclear unless that file exists on `develop` or the line says `(new)`.
+- The first heading that contains "how" is read as the approach, so a `## How to test` above `## Approach` is taken
+  instead.
+
+`mason task show <id>` says whether exploring was skipped, and whether by the flag or the clarity check.
+`mason task explore-anyway <id>` sends a task back to exploring.
+
+## Moving a starpipe ticket
+
+A ticket already filed in starpipe moves by label, not by refiling: `starpipe cancel <n>`, swap `pipeline` and any
+`pipe:*` labels for `mason`, wait about a minute for the import, then `mason task approve <id>`. GitHub's "blocked by"
+links come across as blockers.
