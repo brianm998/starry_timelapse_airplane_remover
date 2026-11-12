@@ -71,16 +71,16 @@ apply to it: don't translate it and don't build a Kotlin twin.
   sets and clears `stop_line` for its own landing train, but files nothing.
 - `pipeline/bin/starpipe check --explain` says which builds and tests a change needs;
   `starpipe check` runs them and proves each from its own output.
-- **File every new star ticket in MASON, never with starpipe.** Don't run `starpipe ticket new`, and don't use the
-  file-tickets skill to file: it still files through starpipe. The owner approves the task list in conversation
-  first, as before. Then file each task with
+- **File every new star ticket in MASON, never with starpipe.** Don't run `starpipe ticket new`; the file-tickets
+  skill files through MASON. The owner approves the task list in conversation first, as before. Then file each
+  task with
   `~/.config/mason/bin/mason task add "<title>" --project star --body-file <file>`, adding `--after <task ids>` for
   tasks that must land first. `mason help filing` is the reference. MASON's configuration is `.mason/` (pipeline
   tooling, like `pipeline/`: no translation, no Kotlin twin).
 - **Every ticket you file is already a plan**, so MASON skips exploring: the agent filing the ticket *is* the
   exploration agent. Open the files you name, settle the approach, and write into the body the files to change, how,
-  and an `## Acceptance criteria` section (the "Carrying a plan" format in `.claude/skills/file-tickets/SKILL.md`
-  still works). Pass `--explored` once the plan is settled. Without it, MASON's clarity check explores any body that
+  and an `## Acceptance criteria` section (the body template in `.claude/skills/file-tickets/SKILL.md`). Pass
+  `--explored` once the plan is settled. Without it, MASON's clarity check explores any body that
   names a file not yet on the base branch, unless that file is marked `(new)`. A guessed plan is worse than none:
   leave the flag off when you haven't explored the code.
 - starpipe still runs until the switch. It claims only issues labelled `pipeline`, MASON claims only `mason`, and an
