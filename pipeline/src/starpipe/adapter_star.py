@@ -7,6 +7,7 @@ live in config.toml, not here.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import sys
@@ -48,7 +49,9 @@ def gherkin_test_name(feature: str) -> str:
 # code requirement is its cdhash, which changes with every build, so macOS never matches an earlier Allow and asks again on every
 # run ("“Star” would like to access files on a removable volume": the worktrees are on the external /Volumes/sp). A certificate gives
 # one requirement for every build and worktree, so one Allow sticks. CI (.github/workflows) has no certificate and stays ad hoc.
-LOCAL_SIGNING = ("CODE_SIGN_IDENTITY=Apple Development", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=G3L75S65V9")
+_SIGN_IDENTITY = os.environ.get("STAR_TEST_SIGN_IDENTITY") or "Apple Development"  # "-" keeps ad hoc, as for the MASON suites
+LOCAL_SIGNING = (f"CODE_SIGN_IDENTITY={_SIGN_IDENTITY}", "CODE_SIGN_STYLE=Manual",
+                 "DEVELOPMENT_TEAM=" + ("" if _SIGN_IDENTITY == "-" else "G3L75S65V9"))
 
 NIGHTLY_ENV = (("STAR_TEST_DATA", "{test_data}"), ("STAR_FFMPEG_DIR", "{root}/external_binaries/bin"),
                ("STAR_REMOVAL_REPORTS", "{build}/removal-reports"))
