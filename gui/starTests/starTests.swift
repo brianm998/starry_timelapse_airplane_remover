@@ -2910,14 +2910,12 @@ final class StarDialogStyleTests: XCTestCase {
         return (color.redComponent, color.greenComponent, color.blueComponent)
     }
 
-    /// The dialog ground is `Color.gray` drawn under the dark colour scheme, which is what the modifier sets, so the expected value is
-    /// that same swatch drawn under the same scheme (the gray resolves differently in the dark scheme than in the light one).
+    /// The dialog ground is white 0.12, the desktop client's `StarColors.prefsCard`.
     private func assertDialogGround(_ rgb: (r: CGFloat, g: CGFloat, b: CGFloat), _ name: String,
                                     file: StaticString = #filePath, line: UInt = #line) {
-        let expected = cornerColor(of: Rectangle().fill(Color.gray).frame(width: 200, height: 200)
-                                       .environment(\.colorScheme, .dark))
+        let expected: (r: CGFloat, g: CGFloat, b: CGFloat) = (0.12, 0.12, 0.12)
         for (channel, value, want) in [("red", rgb.r, expected.r), ("green", rgb.g, expected.g), ("blue", rgb.b, expected.b)] {
-            XCTAssertLessThan(abs(value - want), 0.08,
+            XCTAssertLessThan(abs(value - want), 0.03,
                               "\(name): \(channel) of the corner is \(value), not the dialog grey \(want)",
                               file: file, line: line)
         }
