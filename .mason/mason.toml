@@ -394,6 +394,8 @@ level = "t1"
 "i18n/**" = ["t0-i18n"]
 ".claude/**" = []
 # MASON configuration and exit scripts: pipeline tooling, no star code to build or run on a GPU.
+".mason/**" = ["test-pipeline", "t0-pipeline-static"]
+"scripts/**" = ["test-pipeline", "t0-pipeline-static"]
 "CLAUDE.md" = []
 ".github/**" = []
 "docs/**" = []
