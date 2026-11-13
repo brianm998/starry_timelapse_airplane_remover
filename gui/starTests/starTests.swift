@@ -4163,6 +4163,14 @@ final class SharedConstantsTests: XCTestCase {
         XCTAssertEqual(localized("ui.update"), "Update", "ui.update keeps its value: the settings sheet uses it too")
     }
 
+    /// Art: the Change Mode dialog's clean choices map to their tiles; both dirty modes share one.
+    func testChangeModeTiles() {
+        XCTAssertEqual(HighLevelCleanMethod.automatic.changeModeArt, .changeModeAutomatic)
+        XCTAssertEqual(HighLevelCleanMethod.selective.changeModeArt, .changeModeSelective)
+        XCTAssertEqual(HighLevelCleanMethod.dirty.changeModeArt, .changeModeDirty)
+        XCTAssertEqual(ArtImage(HighLevelCleanMethod.dirty.changeModeArt).displaySize, CGSize(width: 40, height: 40))
+    }
+
     /// Art A4: every StarArt slot is an imageset in the app's asset catalog and loads at its display size or larger.
     func testEveryStarArtSlotLoads() throws {
         XCTAssertEqual(StarArt.allCases.count, 62)
