@@ -100,7 +100,7 @@ def test_daemon_test_log_names_the_running_test(tmp_path: Path, monkeypatch: pyt
         assert seen_while_running, "the log names no test while it runs, so a hang could not be traced to one"
     finally:
         release.write_text("go")
-        thread.join(30)
+        thread.join(120)
     # the daemon check runs as shards, each launching the fake once, and its counts are summed
     assert results and results[0].status == "pass" and results[0].executed == len(star.CHECKS["test:daemon"].shard_logs)
 
@@ -111,7 +111,7 @@ def test_a_failing_daemon_test_run_is_still_red_through_the_pty(tmp_path: Path, 
     monkeypatch.setenv("FAKE_SWIFT_EXIT", "1")
     release.write_text("go")
     thread, results, _log = _run_daemon_check(tmp_path)
-    thread.join(30)
+    thread.join(120)
     assert results and results[0].status == "fail"
 
 

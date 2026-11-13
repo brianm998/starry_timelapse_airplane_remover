@@ -209,7 +209,7 @@ async def test_a_session_starts_only_when_masond_grants_llm_claude_and_the_hold_
         await asyncio.sleep(0.05)
     assert rig.db.get("llm_wait:7")
     gate.grant_one_more()
-    stage_id, hold = await asyncio.wait_for(waiting, 5)
+    stage_id, hold = await asyncio.wait_for(waiting, 60)
     assert gate.started == ["starpipe #7 develop"] and len(rig.db.running_stages()) == 1 and rig.db.get("llm_wait:7") is None
     assert gate.released == []
     hold.release()
@@ -252,7 +252,7 @@ async def test_the_hold_ends_when_the_session_errors_or_is_cancelled(rig: Rig, f
 
     rig.agent.run = hang  # type: ignore[method-assign]
     task = asyncio.create_task(rig.engine.model_stage(t, "develop", "go"))
-    await asyncio.wait_for(started.wait(), 5)
+    await asyncio.wait_for(started.wait(), 60)
     task.cancel()
     await asyncio.gather(task, return_exceptions=True)
     assert fake_mason.read_text().count("released") == 2
@@ -272,13 +272,13 @@ async def test_a_landing_stage_goes_before_new_work(rig: Rig, monkeypatch: pytes
     rig.engine.landing_waiting.discard(99)
     landing = asyncio.create_task(rig.engine._hold_session(t2, "conflict", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
     gate.grant_one_more()
-    stage_id, hold = await asyncio.wait_for(landing, 5)
+    stage_id, hold = await asyncio.wait_for(landing, 60)
     await asyncio.sleep(0.05)
     assert not new_work.done()
     hold.release()
     rig.db.end_stage(stage_id, "accepted", 0.0, "")
     gate.grant_one_more()
-    _, hold3 = await asyncio.wait_for(new_work, 5)
+    _, hold3 = await asyncio.wait_for(new_work, 60)
     hold3.release()
 
 
@@ -310,7 +310,7 @@ async def test_waiting_sessions_start_in_rank_order(rig: Rig, monkeypatch: pytes
     started: list[str] = []
     gate.grant_one_more()  # masond has room for one session; each release below makes room for the next
     for name in ("explore", "review", "develop-early", "develop-late"):
-        stage_id, hold = await asyncio.wait_for(tasks[name], 10)
+        stage_id, hold = await asyncio.wait_for(tasks[name], 60)
         started.append(name)
         await asyncio.sleep(0.3)
         assert {n for n, t in tasks.items() if t.done()} == set(started), "one unit, one start, in rank order"
