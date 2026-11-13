@@ -245,7 +245,7 @@ uses = { compile = 1 }
 [suite.build-gui]
 # s27-shadow: remove at the switch
 # Builds the app only. It runs no tests, so it never touches the display.
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 .mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd build 2>&1 && echo BUILD-build-gui-OK"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 .mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd build 2>&1 && .mason/scripts/check-gui-signing.sh && echo BUILD-build-gui-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-gui-OK$"
 fail_regex = "error:|BUILD FAILED"
