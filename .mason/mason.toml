@@ -171,72 +171,82 @@ uses = { compile = 1 }
 # T1 builds (starpipe `build:*`). The dependents of a changed package are built too (impact map).
 # ---------------------------------------------------------------------------------------------
 [suite.build-logging]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path logging 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path logging 2>&1 && echo BUILD-build-logging-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-logging-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-StarCpp]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCpp 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCpp 2>&1 && echo BUILD-build-StarCpp-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-StarCpp-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-StarCore]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCore 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCore 2>&1 && echo BUILD-build-StarCore-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-StarCore-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-cli]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path cli 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path cli 2>&1 && echo BUILD-build-cli-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-cli-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-daemon]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path daemon -c release 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path daemon -c release 2>&1 && echo BUILD-build-daemon-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-daemon-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-trail_tools]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path trail_tools 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path trail_tools 2>&1 && echo BUILD-build-trail_tools-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-trail_tools-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-decision_tree_generator]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path decision_tree_generator 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path decision_tree_generator 2>&1 && echo BUILD-build-decision_tree_generator-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-decision_tree_generator-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-monitor]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path pipeline/monitor 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path pipeline/monitor 2>&1 && echo BUILD-build-monitor-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-monitor-OK$"
 fail_regex = "error:|Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-gui]
 # Builds the app only. It runs no tests, so it never touches the display.
-command = "env STAR_USE_GPU_FOR_MERGE=0 xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build 2>&1 && echo BUILD-build-gui-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-gui-OK$"
 fail_regex = "error:|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
 [suite.build-desktop]
-command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop compileKotlin compileTestKotlin --no-daemon 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop compileKotlin compileTestKotlin --no-daemon 2>&1 && echo BUILD-build-desktop-OK"
 parser = "regex"
+pass_regex = "^BUILD-build-desktop-OK$"
 fail_regex = "FAILURE: Build failed|error:"
 level = "t1"
 uses = { compile = 1 }
@@ -297,7 +307,7 @@ uses = { test-suite = 1 }
 command = "env STAR_USE_GPU_FOR_MERGE=0 python3 .mason/scripts/shards.py --package-path daemon --junit .build/test-daemon.xml --workers 8 --shard ExportSequenceTests --shard ExportVideoAudioTests,SessionConfigPersistenceTests --serial-shard BackgroundExtractionSessionTests 2>&1"
 parser = "junit"
 results_file = ".build/test-daemon.xml"
-min_tests = 314
+min_tests = 313 # measured 2026-11-12: 316 test cases, 3 skipped, 313 run; the junit count excludes skips
 level = "t1"
 uses = { test-suite = 1 }
 
@@ -350,7 +360,7 @@ level = "t1"
 uses = { exclusive = 1 }
 
 [suite.test-pipeline]
-command = "cd pipeline && STAR_USE_GPU_FOR_MERGE=0 uv run pytest -q 2>&1"
+command = "cd pipeline && STAR_USE_GPU_FOR_MERGE=0 uv run pytest -v 2>&1"
 parser = "pytest"
 min_tests = 1 # UNMEASURED
 level = "t1"
@@ -383,8 +393,9 @@ level = "t1"
 "pipeline/monitor/**" = ["test-monitor", "build-monitor"]
 "i18n/**" = ["t0-i18n"]
 ".claude/**" = []
-".mason/**" = []
-"scripts/**" = []
+# MASON configuration and exit scripts: pipeline tooling, no star code to build or run on a GPU.
+".mason/**" = ["test-pipeline", "t0-pipeline-static"]
+"scripts/**" = ["test-pipeline", "t0-pipeline-static"]
 "CLAUDE.md" = []
 ".github/**" = []
 "docs/**" = []
@@ -403,5 +414,11 @@ level = "t1"
 "packaging/**" = []
 "demo_videos/**" = []
 "test_data/**" = []
+# Paths every task touches that run no code of their own. Unmapped, each selected every suite
+# (~2,300 tests a round): on 2026-11-12, 10 of 13 star task branches ran everything only for these.
+"scripts/exit/**" = []   # each task's own exit script; no suite runs them
+".mason/**" = []         # suites run from the base branch's definition, so a task's edit here changes nothing it runs
+"art/**" = []            # source art and its export script; exported images land under gui/ and star-desktop/, which are mapped
+".gitattributes" = []
 "**/*.md" = []
 "emacs_load_swift.sh" = []
