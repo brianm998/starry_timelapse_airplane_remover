@@ -2919,6 +2919,7 @@ final class StarDialogStyleTests: XCTestCase {
         let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
                                       styleMask: [.titled, .closable],
                                       backing: .buffered, defer: false)
+        defer { window.orderOut(nil); window.contentView = nil; window.close() }
         window.appearance = NSAppearance(named: .aqua)
         window.contentView = host
         window.setContentSize(host.fittingSize)
