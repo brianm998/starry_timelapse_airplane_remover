@@ -246,6 +246,21 @@ final class HorizonPaintStateTests: XCTestCase {
         XCTAssertNil(paint.lastGestureBounds)
     }
 
+    /// Each tool but none has its own before-and-after diagram in the help.
+    func testEveryToolHasHelpArt() {
+        var seen = Set<StarArt>()
+        for tool in ToolType.allCases {
+            if tool == .none {
+                XCTAssertNil(tool.helpArt)
+            } else {
+                let art = tool.helpArt
+                XCTAssertNotNil(art, "\(tool) has no help art")
+                if let art { XCTAssertTrue(seen.insert(art).inserted, "\(tool) shares its diagram") }
+            }
+        }
+        XCTAssertEqual(seen.count, 8)
+    }
+
     /// Every per-column array is indexed by view x, so they all have to be exactly as wide as
     /// the view or a stroke near the right edge would run off the end.
     func testEveryPerColumnArrayIsAsWideAsTheView() {
