@@ -4629,6 +4629,35 @@ final class AlignmentWindowTextsTests: XCTestCase {
         }
     }
 
+    /// The waiting robot is drawn exactly when the window shows empty-state lines, and the trouble and waiting art is in its views.
+    func testAlignmentEmptyStateArt() throws {
+        let states = try XCTUnwrap(try vector()["emptyStates"] as? [[String: Any]])
+        var checked = 0
+        for state in states {
+            let hasSequence = try XCTUnwrap(state["hasSequence"] as? Bool)
+            let fetched = try XCTUnwrap(state["fetched"] as? Bool)
+            if hasSequence && !fetched { continue }
+            let lines = try XCTUnwrap(state["lines"] as? [String])
+            let art = AlignmentWindowView.emptyStateArt(
+              hasSequence: hasSequence,
+              hasData: try XCTUnwrap(state["hasData"] as? Bool),
+              processing: try XCTUnwrap(state["processing"] as? Bool))
+            XCTAssertEqual(art, lines.isEmpty ? nil : .waiting, "state \(state["id"] ?? "")")
+            checked += 1
+        }
+        XCTAssertGreaterThanOrEqual(checked, 5)
+        func src(_ f: String) throws -> String {
+            try String(contentsOf: Self.root.appendingPathComponent("gui/star/\(f)"), encoding: .utf8)
+        }
+        XCTAssertTrue(try src("AlignmentWindowView.swift").contains("WaitingArt()"))
+        XCTAssertTrue(try src("BlobProcessingView.swift").contains("WaitingArt()"))
+        XCTAssertTrue(try src("OutlierGroupTable.swift").contains("WaitingArt()"))
+        XCTAssertTrue(try src("ContentView.swift").contains("ArtImage(.oops)"))
+        XCTAssertTrue(try src("ContentView.swift").contains("ArtImage(.holdOn)"))
+        XCTAssertEqual(try src("AppDelegate.swift").components(separatedBy: "alert.icon = NSImage(named: StarArt.holdOn.rawValue)").count - 1, 2)
+        XCTAssertTrue(try src("NewReleaseSheetView.swift").contains("ArtImage(.newRelease)"))
+    }
+
     func testTheChartLabelsAreTheVectors() throws {
         let doc = try vector()
         let labels = try XCTUnwrap(doc["chartLabels"] as? [String: String])
