@@ -193,7 +193,7 @@ public enum InfoType: CaseIterable {
 extension Color {
     /// The ground every dialog is drawn on. Equal to the desktop client's `StarColors.prefsCard`
     /// (`Color(0.12f, 0.12f, 0.12f)`, #1F1F1F) in star-desktop/.../ui/theme/StarColors.kt.
-    static let starDialogBackground = Color(white: 0.12)
+    static let starDialogBackground = Color(.sRGB, white: 0.12, opacity: 1)
 }
 
 extension View {
