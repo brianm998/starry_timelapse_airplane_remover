@@ -166,7 +166,8 @@ struct UserPreferencesEditingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 12) {
+                ArtImage(.settings)
                 Text(localized("ui.preferences"))
                     .font(.title)
                     .foregroundColor(.white)
