@@ -56,6 +56,12 @@ class SayAnnouncer:
                 self.play(kind, n)
             except Exception:
                 log.warning("announcement %s #%d failed", kind, n, exc_info=True)
+            finally:
+                self._queue.task_done()
+
+    def wait_idle(self) -> None:
+        """Block until every queued announcement has been played (for tests)."""
+        self._queue.join()
 
     @staticmethod
     def play(kind: Kind, n: int) -> None:
