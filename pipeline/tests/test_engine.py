@@ -1042,6 +1042,9 @@ def test_the_real_announcer_swallows_missing_binaries_and_never_blocks(monkeypat
     announce.SayAnnouncer.play("landed", 1)  # no exception
     a = announce.SayAnnouncer()
     a.announce("attention", 2)  # returns at once; the worker thread swallows the failure
+    # Wait for the worker while the binaries are still patched. Without this the test returned first, the
+    # patch was undone, and the worker played the real Sosumi + "Star issue number 2 needs your attention".
+    a.wait_idle()
 
 
 PLAN_TICKET = """## Goal
