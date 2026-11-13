@@ -120,6 +120,26 @@ struct SequenceProgressPanel: View {
     /// Which sequence this is, then how far it got — two pairs rather than four evenly
     /// spaced lines, so the caption under each line reads as belonging to it.
     private var header: some View {
+        HStack(alignment: .top, spacing: 16) {
+            ArtImage(Self.progressArt(for: progress), fitting: 64)
+            headerText
+        }
+          .padding(20)
+          .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// The robot beside the header, following the same decision as `statusText`.
+    static func progressArt(for progress: SequenceProgress) -> StarArt {
+        if progress.isComplete {
+            .done
+        } else if progress.needsRebuild {
+            .rebuilding
+        } else {
+            .review
+        }
+    }
+
+    private var headerText: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(localized("ui.where_this_sequence_left_off"))
@@ -150,7 +170,6 @@ struct SequenceProgressPanel: View {
                   .foregroundColor(.gray)
             }
         }
-          .padding(20)
           .frame(maxWidth: .infinity, alignment: .leading)
     }
 

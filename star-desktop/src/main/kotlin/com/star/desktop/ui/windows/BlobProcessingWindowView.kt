@@ -66,6 +66,7 @@ private fun typeName(type: DetectionType): String = localized("detection_type." 
 fun BlobProcessingWindowView(session: Boolean, current: DetectionType, onSelectType: (DetectionType) -> Unit, model: BlobProcessingModel) {
     Column(Modifier.fillMaxSize().background(StarColors.appBackground).padding(16.dp)) {
         if (!session) {
+            com.star.desktop.ui.components.WaitingArt(Modifier.align(Alignment.CenterHorizontally))
             Text(localized("ui.no_image_sequence_loaded"), color = StarColors.textPrimary, fontSize = 14.sp)
             Text(localized("ui.load_an_image_sequence_in_the_main_star_2"), color = StarColors.textSecondary, fontSize = 12.sp)
             return@Column

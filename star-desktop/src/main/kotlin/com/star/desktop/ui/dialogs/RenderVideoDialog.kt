@@ -46,6 +46,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.ArtImage
+import com.star.desktop.ui.components.StarArt
 import com.star.desktop.ui.components.modalScrim
 import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.domain.RenderState
@@ -285,6 +287,8 @@ internal fun RenderOptions(app: AppViewModel, state: RenderOptionsState, frameCo
 /** What the render has got to: the file, the frame, a bar, and a Cancel that makes the daemon terminate ffmpeg. */
 @Composable
 private fun RenderingView(state: RenderState.Rendering, onCancel: () -> Unit) {
+    // above the text rather than beside it, so the bar keeps its width
+    renderStateArt(state)?.let { ArtImage(it, fitting = 96) }
     Text(localized("ui.rendering_file", state.fileName), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
     Text(localized("ui.frame_n_of_m", state.current, state.total), color = StarColors.textSecondary, fontSize = 13.sp)
     LinearProgressIndicator(progress = { state.fraction }, modifier = Modifier.fillMaxWidth(), color = StarColors.green, trackColor = StarColors.cellDefault)
@@ -293,11 +297,20 @@ private fun RenderingView(state: RenderState.Rendering, onCancel: () -> Unit) {
     }
 }
 
+/** The robot for a render state (macOS `RenderVideoSheetView.renderArt`); states with no picture of their own have none. */
+internal fun renderStateArt(state: RenderState): StarArt? = when (state) {
+    is RenderState.Rendering -> StarArt.ART_RENDERING
+    is RenderState.Succeeded -> StarArt.ART_DONE
+    is RenderState.Failed -> StarArt.ART_OOPS
+    else -> null
+}
+
 /** Where the video went, and the button that shows it. */
 @Composable
 private fun SucceededView(state: RenderState.Succeeded, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var problem by remember { mutableStateOf<String?>(null) }
+    renderStateArt(state)?.let { ArtImage(it, fitting = 96) }
     Text(renderedStatus(state.path, state.fileName), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.semantics(mergeDescendants = true) { testTag = "render.done" })
     state.path?.let { Text(it, color = StarColors.textSecondary, fontSize = 11.sp) }
     problem?.let { Text(it, color = StarColors.red, fontSize = 12.sp) }
@@ -317,6 +330,7 @@ private fun SucceededView(state: RenderState.Succeeded, onDismiss: () -> Unit) {
 /** Why it failed: its own view, as on the Mac, with the message to read and copy. */
 @Composable
 private fun FailedView(state: RenderState.Failed, onDismiss: () -> Unit) {
+    renderStateArt(state)?.let { ArtImage(it, fitting = 96) }
     androidx.compose.foundation.text.selection.SelectionContainer {
         Text(localized("ui.rendering_error", state.message), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, modifier = Modifier.semantics(mergeDescendants = true) { testTag = "render.error" })
     }

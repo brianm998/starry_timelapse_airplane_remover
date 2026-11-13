@@ -2634,6 +2634,37 @@ final class SequenceProgressTests: XCTestCase {
         XCTAssertEqual(SequenceProgressAction.settings.accessibilityIdentifier,
                        "sequenceprogress.settings")
     }
+
+    /// Render and progress robots A1: the header robot follows the complete / rebuild / not-yet / partial decision.
+    func testSequenceProgressArt() {
+        let steps = surveyed([.merge], frameCount: 19, [.merge: 19])
+        let complete = progress(frameCount: 19, framesComplete: 19, steps: steps)
+        XCTAssertEqual(SequenceProgressPanel.progressArt(for: complete), .done)
+
+        let rebuild = SequenceProgress(sequenceName: "a_sequence", frameCount: 19, framesComplete: 0,
+                                       steps: steps, staleStages: [.keypoints])
+        XCTAssertTrue(rebuild.needsRebuild)
+        XCTAssertEqual(SequenceProgressPanel.progressArt(for: rebuild), .rebuilding)
+
+        let untouched = progress(frameCount: 19, framesComplete: 0,
+                                 steps: surveyed([.merge], frameCount: 19, [:]))
+        XCTAssertEqual(SequenceProgressPanel.progressArt(for: untouched), .review)
+
+        let partial = progress(frameCount: 19, framesComplete: 4,
+                               steps: surveyed([.merge], frameCount: 19, [.merge: 4]))
+        XCTAssertEqual(SequenceProgressPanel.progressArt(for: partial), .review)
+    }
+
+    /// Render robots A4 (and the fitting size arithmetic): rendering, success and failure each have their robot.
+    func testRenderStateArt() {
+        XCTAssertEqual(RenderVideoSheetView.renderArt(for: .rendering), .rendering)
+        XCTAssertEqual(RenderVideoSheetView.renderArt(for: .success), .done)
+        XCTAssertEqual(RenderVideoSheetView.renderArt(for: .failure), .oops)
+
+        XCTAssertEqual(ArtImage(.done).displaySize, StarArt.done.size)
+        XCTAssertEqual(ArtImage(.done, fitting: 64).displaySize, CGSize(width: 62, height: 64))
+        XCTAssertEqual(ArtImage(.rendering, fitting: 96).displaySize, CGSize(width: 96, height: 84))
+    }
 }
 
 /// The re-open panel's Settings button: what it does is in the view model, which cannot be
@@ -2910,14 +2941,12 @@ final class StarDialogStyleTests: XCTestCase {
         return (color.redComponent, color.greenComponent, color.blueComponent)
     }
 
-    /// The dialog ground is `Color.gray` drawn under the dark colour scheme, which is what the modifier sets, so the expected value is
-    /// that same swatch drawn under the same scheme (the gray resolves differently in the dark scheme than in the light one).
+    /// The dialog ground is white 0.12, the desktop client's `StarColors.prefsCard`.
     private func assertDialogGround(_ rgb: (r: CGFloat, g: CGFloat, b: CGFloat), _ name: String,
                                     file: StaticString = #filePath, line: UInt = #line) {
-        let expected = cornerColor(of: Rectangle().fill(Color.gray).frame(width: 200, height: 200)
-                                       .environment(\.colorScheme, .dark))
+        let expected: (r: CGFloat, g: CGFloat, b: CGFloat) = (0.12, 0.12, 0.12)
         for (channel, value, want) in [("red", rgb.r, expected.r), ("green", rgb.g, expected.g), ("blue", rgb.b, expected.b)] {
-            XCTAssertLessThan(abs(value - want), 0.08,
+            XCTAssertLessThan(abs(value - want), 0.03,
                               "\(name): \(channel) of the corner is \(value), not the dialog grey \(want)",
                               file: file, line: line)
         }
@@ -4168,7 +4197,7 @@ final class SharedConstantsTests: XCTestCase {
 
     /// Art A4: every StarArt slot is an imageset in the app's asset catalog and loads at its display size or larger.
     func testEveryStarArtSlotLoads() throws {
-        XCTAssertEqual(StarArt.allCases.count, 32)
+        XCTAssertEqual(StarArt.allCases.count, 62)
         for art in StarArt.allCases {
             let image = try XCTUnwrap(NSImage(named: art.rawValue), "\(art.rawValue) is not in the asset catalog")
             XCTAssertGreaterThan(image.size.width, 0, art.rawValue)
@@ -4661,6 +4690,35 @@ final class AlignmentWindowTextsTests: XCTestCase {
                 XCTAssertNotEqual(localized(key), key, "\(key) is missing from the catalogue")
             }
         }
+    }
+
+    /// The waiting robot is drawn exactly when the window shows empty-state lines, and the trouble and waiting art is in its views.
+    func testAlignmentEmptyStateArt() throws {
+        let states = try XCTUnwrap(try vector()["emptyStates"] as? [[String: Any]])
+        var checked = 0
+        for state in states {
+            let hasSequence = try XCTUnwrap(state["hasSequence"] as? Bool)
+            let fetched = try XCTUnwrap(state["fetched"] as? Bool)
+            if hasSequence && !fetched { continue }
+            let lines = try XCTUnwrap(state["lines"] as? [String])
+            let art = AlignmentWindowView.emptyStateArt(
+              hasSequence: hasSequence,
+              hasData: try XCTUnwrap(state["hasData"] as? Bool),
+              processing: try XCTUnwrap(state["processing"] as? Bool))
+            XCTAssertEqual(art, lines.isEmpty ? nil : .waiting, "state \(state["id"] ?? "")")
+            checked += 1
+        }
+        XCTAssertGreaterThanOrEqual(checked, 5)
+        func src(_ f: String) throws -> String {
+            try String(contentsOf: Self.root.appendingPathComponent("gui/star/\(f)"), encoding: .utf8)
+        }
+        XCTAssertTrue(try src("AlignmentWindowView.swift").contains("WaitingArt()"))
+        XCTAssertTrue(try src("BlobProcessingView.swift").contains("WaitingArt()"))
+        XCTAssertTrue(try src("OutlierGroupTable.swift").contains("WaitingArt()"))
+        XCTAssertTrue(try src("ContentView.swift").contains("ArtImage(.oops)"))
+        XCTAssertTrue(try src("ContentView.swift").contains("ArtImage(.holdOn)"))
+        XCTAssertEqual(try src("AppDelegate.swift").components(separatedBy: "alert.icon = NSImage(named: StarArt.holdOn.rawValue)").count - 1, 2)
+        XCTAssertTrue(try src("NewReleaseSheetView.swift").contains("ArtImage(.newRelease)"))
     }
 
     func testTheChartLabelsAreTheVectors() throws {

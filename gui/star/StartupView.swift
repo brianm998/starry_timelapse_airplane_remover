@@ -117,7 +117,7 @@ struct StartupView: View {
             .animation(.easeInOut(duration: 0.35), value: viewModel.startupState)
         }
           .padding(20)
-          .background(.gray)
+          .background(Color.starDialogBackground)
     }
 }
 

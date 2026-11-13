@@ -30,6 +30,7 @@ import com.star.desktop.domain.ReopenVerdict
 import com.star.desktop.domain.SequenceProgressButton
 import com.star.desktop.domain.StepRow
 import com.star.desktop.i18n.localized
+import com.star.desktop.ui.components.ArtImage
 import com.star.desktop.ui.app.AppViewModel
 import com.star.desktop.ui.components.HoverTip
 import com.star.desktop.ui.components.defaultAction
@@ -64,21 +65,24 @@ fun SequenceProgressDialog(app: AppViewModel, progress: SequenceProgress) {
                 .background(StarColors.prefsCard),
         ) {
             // Which sequence this is, then how far it got: two pairs, so the caption under each line reads as belonging to it.
-            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(localized("ui.where_this_sequence_left_off"), color = StarColors.white, fontSize = 18.sp)
-                    // The sequence's own name, because Open Recent is a list of paths and it is entirely possible to have opened the wrong one.
-                    Text(progress.sequenceName, color = StarColors.textSecondary, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        localized(verdict.statusKey),
-                        color = if (verdict == ReopenVerdict.COMPLETE) StarColors.green else StarColors.white, fontSize = 13.sp,
-                    )
-                    Text(
-                        localized("progress.frames_complete", progress.framesComplete, progress.frameCount),
-                        color = StarColors.textSecondary, fontSize = 11.sp,
-                    )
+            Row(Modifier.fillMaxWidth().padding(20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                ArtImage(verdict.art, fitting = 64)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(localized("ui.where_this_sequence_left_off"), color = StarColors.white, fontSize = 18.sp)
+                        // The sequence's own name, because Open Recent is a list of paths and it is entirely possible to have opened the wrong one.
+                        Text(progress.sequenceName, color = StarColors.textSecondary, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            localized(verdict.statusKey),
+                            color = if (verdict == ReopenVerdict.COMPLETE) StarColors.green else StarColors.white, fontSize = 13.sp,
+                        )
+                        Text(
+                            localized("progress.frames_complete", progress.framesComplete, progress.frameCount),
+                            color = StarColors.textSecondary, fontSize = 11.sp,
+                        )
+                    }
                 }
             }
             HorizontalDivider(color = StarColors.cellDefault)

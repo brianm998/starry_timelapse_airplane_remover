@@ -1,0 +1,18 @@
+{
+  "images": [
+    {
+      "filename": "art_paint_touch_up1x.jpg",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "art_paint_touch_up2x.jpg",
+      "idiom": "universal",
+      "scale": "2x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

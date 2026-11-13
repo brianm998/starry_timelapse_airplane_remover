@@ -210,14 +210,26 @@ enum StarArt: String, CaseIterable {{
 /// Draws a piece of artwork at its display size. Art is decoration: it adds no strings and is hidden from accessibility.
 struct ArtImage: View {{
     let art: StarArt
+    /// When set, the picture is scaled (aspect kept) so its longer side is this many points.
+    let side: CGFloat?
 
-    init(_ art: StarArt) {{ self.art = art }}
+    init(_ art: StarArt, fitting side: CGFloat? = nil) {{
+        self.art = art
+        self.side = side
+    }}
+
+    /// The size the picture is drawn at.
+    var displaySize: CGSize {{
+        guard let side else {{ return art.size }}
+        let scale = side / max(art.size.width, art.size.height)
+        return CGSize(width: (art.size.width * scale).rounded(), height: (art.size.height * scale).rounded())
+    }}
 
     var body: some View {{
         Image(art.rawValue)
             .resizable()
             .interpolation(.high)
-            .frame(width: art.size.width, height: art.size.height)
+            .frame(width: displaySize.width, height: displaySize.height)
             .accessibilityHidden(true)
     }}
 }}
@@ -245,14 +257,22 @@ enum class StarArt(val slot: String, val file: String, val kind: ArtKind, val wi
     val resourcePath: String get() = "art/$file"
 }}
 
-/** Draws a piece of artwork at its display size. Art is decoration: it adds no strings (no content description). */
+/** Draws a piece of artwork at its display size (or fitted to [fitting]). Art is decoration: it adds no strings (no content description). */
 @Composable
-fun ArtImage(art: StarArt, modifier: Modifier = Modifier) {{
+fun ArtImage(art: StarArt, modifier: Modifier = Modifier, fitting: Int? = null) {{
+    val (w, h) = art.fittedSize(fitting)
     Image(
         painter = painterResource(art.resourcePath),
         contentDescription = null,
-        modifier = modifier.size(art.width.dp, art.height.dp),
+        modifier = modifier.size(w.dp, h.dp),
     )
+}}
+
+/** The display size in dp; with [side] the longer side is scaled to it and the aspect is kept. */
+fun StarArt.fittedSize(side: Int?): Pair<Int, Int> {{
+    if (side == null) return width to height
+    val scale = side.toDouble() / maxOf(width, height)
+    return Math.round(width * scale).toInt() to Math.round(height * scale).toInt()
 }}
 '''
 
