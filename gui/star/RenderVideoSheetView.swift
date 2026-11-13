@@ -112,12 +112,24 @@ struct RenderVideoSheetView: View {
         }
     }
 
+    /// The three states of a render that have a robot.
+    enum RenderArtState { case rendering, success, failure }
+
+    static func renderArt(for state: RenderArtState) -> StarArt {
+        switch state {
+        case .rendering: .rendering
+        case .success: .done
+        case .failure: .oops
+        }
+    }
+
     // shown when the video is rendering with a progress bar
     private var renderingView: some View {
         HStack {
             Space(width: 20)
             VStack {
                 Space(height: 20)
+                ArtImage(Self.renderArt(for: .rendering), fitting: 96)
                 Text(localized("ui.rendering_file", videoFilename))
                   .font(.title)
                 Text(localized("ui.frame_n_of_m", encodingFrameNumber, totalFrames))
@@ -140,6 +152,7 @@ struct RenderVideoSheetView: View {
             ScrollView {
                 VStack {
                     Space(height: 20)
+                    ArtImage(Self.renderArt(for: .failure), fitting: 96)
                     Text(localized("ui.rendering_error", renderingError))
                       .accessibilityIdentifier("render.error")
                       .font(.title)
@@ -159,6 +172,7 @@ struct RenderVideoSheetView: View {
             Space(width: 20)
             VStack {
                 Space(height: 20)
+                ArtImage(Self.renderArt(for: .success), fitting: 96)
                 Text(localized("ui.successfully_rendered", videoFilename))
                   .font(.title)
                   .accessibilityIdentifier("render.done")

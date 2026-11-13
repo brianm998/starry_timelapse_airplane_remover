@@ -39,7 +39,10 @@ fun NewReleaseDialog(release: GitHubRelease, runningVersion: String, onLater: ()
     val version = release.version?.toString() ?: release.tagName
     val installer = ReleaseCheck.installerFor(release, os)
     PromptCard(onScrimClick = null, onDefaultAction = onLater, onEscape = onLater) {
-        Text(localized("ui.there_is_a_new_release_of_star_available"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            com.star.desktop.ui.components.ArtImage(com.star.desktop.ui.components.StarArt.ART_NEW_RELEASE)
+            Text(localized("ui.there_is_a_new_release_of_star_available"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+        }
         Text(localized("ui.new_release_available", runningVersion, version), color = StarColors.textSecondary, fontSize = 14.sp)
 
         release.body?.takeIf { it.isNotBlank() }?.let { body ->
