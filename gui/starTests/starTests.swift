@@ -1071,8 +1071,6 @@ final class WarningAlertTests: XCTestCase {
         let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
                                       styleMask: [.titled, .resizable, .closable],
                                       backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        defer { window.orderOut(nil); window.close() }
         window.contentView = host
         window.setContentSize(NSSize(width: 900, height: 600))
         settle()
@@ -1314,8 +1312,6 @@ final class WarningAlertTests: XCTestCase {
         let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
                                       styleMask: [.titled, .resizable, .closable],
                                       backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        defer { window.orderOut(nil); window.close() }
         window.contentView = host
         window.setContentSize(NSSize(width: 900, height: 600))
         settle()
@@ -2923,8 +2919,8 @@ final class StarDialogStyleTests: XCTestCase {
         let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
                                       styleMask: [.titled, .closable],
                                       backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        defer { window.orderOut(nil); window.close() }
+        window.isReleasedWhenClosed = false  // ARC owns it; close() would release it a second time
+        defer { window.orderOut(nil); window.contentView = nil; window.close() }
         window.appearance = NSAppearance(named: .aqua)
         window.contentView = host
         window.setContentSize(host.fittingSize)
@@ -2939,7 +2935,7 @@ final class StarDialogStyleTests: XCTestCase {
         }
         host.cacheDisplay(in: host.bounds, to: rep)
         OffDisplayWindow.assertNothingShowsOnADisplay()
-        guard let color = rep.colorAt(x: 4, y: 4)?.usingColorSpace(.sRGB) else {
+        guard let color = rep.colorAt(x: 24, y: 24)?.usingColorSpace(.sRGB) else {
             XCTFail("the corner pixel has no sRGB value")
             return (0, 0, 0)
         }
@@ -2947,16 +2943,15 @@ final class StarDialogStyleTests: XCTestCase {
         return (color.redComponent, color.greenComponent, color.blueComponent)
     }
 
-    /// The dialog ground is white 0.12, the desktop client's `StarColors.prefsCard`.
+    /// The dialog ground is white 0.12, the desktop client's `StarColors.prefsCard`. The bitmap a hosted view is cached into is in
+    /// the display's colour space, which on some Macs reads a plain sRGB 0.12 back as 0.188, so the expectation is a plain
+    /// sRGB 0.12 swatch put through the same pipeline rather than the absolute number.
     private func assertDialogGround(_ rgb: (r: CGFloat, g: CGFloat, b: CGFloat), _ name: String,
                                     file: StaticString = #filePath, line: UInt = #line) {
-        // The bitmap goes through the window's colour management, so the ground reads a little lighter than 0.12 (0.188 here).
-        // Compare with the dialog colour itself rendered the same way, and require it to be dark, not the light window ground.
-        let expected = cornerColor(of: Color.starDialogBackground.frame(width: 100, height: 100))
-        XCTAssertLessThan(expected.r, 0.3, "the reference ground is not dark")
+        let expected = cornerColor(of: Color(.sRGB, white: 0.12, opacity: 1).frame(width: 300, height: 300))
         for (channel, value, want) in [("red", rgb.r, expected.r), ("green", rgb.g, expected.g), ("blue", rgb.b, expected.b)] {
             XCTAssertLessThan(abs(value - want), 0.03,
-                              "\(name): \(channel) of the corner is \(value), not the dialog ground \(want)",
+                              "\(name): \(channel) of the corner is \(value), not the dialog grey \(want)",
                               file: file, line: line)
         }
     }
