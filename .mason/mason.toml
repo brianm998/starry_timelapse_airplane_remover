@@ -423,5 +423,11 @@ level = "t1"
 "packaging/**" = []
 "demo_videos/**" = []
 "test_data/**" = []
+# Paths every task touches that run no code of their own. Unmapped, each selected every suite
+# (~2,300 tests a round): on 2026-11-12, 10 of 13 star task branches ran everything only for these.
+"scripts/exit/**" = []   # each task's own exit script; no suite runs them
+".mason/**" = []         # suites run from the base branch's definition, so a task's edit here changes nothing it runs
+"art/**" = []            # source art and its export script; exported images land under gui/ and star-desktop/, which are mapped
+".gitattributes" = []
 "**/*.md" = []
 "emacs_load_swift.sh" = []
