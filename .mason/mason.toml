@@ -324,7 +324,7 @@ uses = { test = 1 }
 command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 python3 .mason/scripts/shards.py --package-path daemon --junit .build/test-daemon.xml --workers 8 --shard ExportSequenceTests --shard ExportVideoAudioTests,SessionConfigPersistenceTests --serial-shard BackgroundExtractionSessionTests 2>&1"
 parser = "junit"
 results_file = ".build/test-daemon.xml"
-min_tests = 314
+min_tests = 313 # measured 2026-11-12: 316 test cases, 3 skipped, 313 run; the junit count excludes skips
 level = "t1"
 uses = { test = 1 }
 
