@@ -434,7 +434,6 @@ level = "t1"
 "tile_extractor/**" = []
 "tools/**" = []
 "packaging/**" = []
-"scripts/**" = []
 "demo_videos/**" = []
 "test_data/**" = []
 # Paths every task touches that run no code of their own. Unmapped, each selected every suite
