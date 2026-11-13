@@ -8,6 +8,8 @@
 #                                                                         opencv/include restored; 1: no such asset
 #   ci_release_asset.sh upload   <asset-prefix> <os-dir> <sentinel-lib>   create the release if absent, then
 #                                                                         upload (--clobber: a racing build is harmless)
+#   ci_release_asset.sh exists   <asset-prefix> <os-dir> <sentinel-lib>   exit 0: the release has the asset; 1: it
+#                                                                         does not (or there is no release yet)
 #
 # The asset is <asset-prefix>-<cache_key.sh>.tar.gz. The prefix is the actions/cache key prefix (it encodes
 # the runner image and, on Windows, the MSVC toolset), so a changed toolchain never matches an old asset.
@@ -41,6 +43,15 @@ download)
     rm -rf "$asset" "lib/$os_dir" include
     exit 1
     ;;
+exists)
+    if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null \
+        | grep -qxF "$asset"; then
+        echo "$asset is in release $tag"
+        exit 0
+    fi
+    echo "no $asset in release $tag"
+    exit 1
+    ;;
 upload)
     [ -f "lib/$os_dir/$sentinel" ] || { echo "no lib/$os_dir/$sentinel to upload"; exit 1; }
     tar -czf "$asset" "lib/$os_dir" include
@@ -56,7 +67,7 @@ upload)
     echo "uploaded $asset"
     ;;
 *)
-    echo "usage: $0 download|upload <asset-prefix> <os-dir> <sentinel-lib>" >&2
+    echo "usage: $0 download|upload|exists <asset-prefix> <os-dir> <sentinel-lib>" >&2
     exit 2
     ;;
 esac

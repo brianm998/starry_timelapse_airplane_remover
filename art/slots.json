@@ -86,8 +86,8 @@
    "height": 150,
    "crop": "26:15",
    "anchor": [
-    1.0,
-    0.5
+    0.5,
+    1.0
    ]
   },
   {
@@ -236,6 +236,216 @@
    "kind": "cutout",
    "width": 80,
    "height": 80
+  },
+  {
+   "name": "art_drop",
+   "source": "WL-2",
+   "kind": "cutout",
+   "width": 96,
+   "height": 96
+  },
+  {
+   "name": "art_format_tiff16",
+   "source": "IM-2a",
+   "kind": "tile",
+   "width": 40,
+   "height": 40
+  },
+  {
+   "name": "art_format_tiff8",
+   "source": "IM-2b",
+   "kind": "tile",
+   "width": 40,
+   "height": 40
+  },
+  {
+   "name": "art_format_jpeg",
+   "source": "IM-2c",
+   "kind": "tile",
+   "width": 40,
+   "height": 40
+  },
+  {
+   "name": "art_step_import",
+   "source": "WL-4a",
+   "kind": "tile",
+   "width": 64,
+   "height": 64
+  },
+  {
+   "name": "art_step_horizon",
+   "source": "PR-3b",
+   "kind": "tile",
+   "width": 64,
+   "height": 64
+  },
+  {
+   "name": "art_step_align",
+   "source": "PR-3c",
+   "kind": "tile",
+   "width": 64,
+   "height": 64
+  },
+  {
+   "name": "art_step_merge",
+   "source": "PR-3d",
+   "kind": "tile",
+   "width": 64,
+   "height": 64
+  },
+  {
+   "name": "art_step_review",
+   "source": "PR-3e",
+   "kind": "tile",
+   "width": 64,
+   "height": 64
+  },
+  {
+   "name": "art_step_render",
+   "source": "PR-3f",
+   "kind": "tile",
+   "width": 64,
+   "height": 64
+  },
+  {
+   "name": "art_paint_brush",
+   "source": "HZ-1a",
+   "kind": "scene",
+   "width": 190,
+   "height": 110
+  },
+  {
+   "name": "art_paint_fill",
+   "source": "HZ-1b",
+   "kind": "scene",
+   "width": 190,
+   "height": 110
+  },
+  {
+   "name": "art_paint_touch_up",
+   "source": "HZ-1c",
+   "kind": "scene",
+   "width": 190,
+   "height": 110
+  },
+  {
+   "name": "art_paint_moving",
+   "source": "HZ-2",
+   "kind": "scene",
+   "width": 190,
+   "height": 110
+  },
+  {
+   "name": "art_setting_neighbors",
+   "source": "ST-2",
+   "kind": "scene",
+   "width": 320,
+   "height": 140
+  },
+  {
+   "name": "art_setting_threshold",
+   "source": "ST-3",
+   "kind": "scene",
+   "width": 320,
+   "height": 140
+  },
+  {
+   "name": "art_setting_clouds",
+   "source": "ST-4",
+   "kind": "scene",
+   "width": 320,
+   "height": 140
+  },
+  {
+   "name": "art_setting_spikes",
+   "source": "ST-7",
+   "kind": "scene",
+   "width": 320,
+   "height": 140
+  },
+  {
+   "name": "art_setting_memory",
+   "source": "ST-8",
+   "kind": "scene",
+   "width": 320,
+   "height": 140
+  },
+  {
+   "name": "art_tool_remove",
+   "source": "TL-4a",
+   "kind": "scene",
+   "width": 200,
+   "height": 60
+  },
+  {
+   "name": "art_tool_keep",
+   "source": "TL-4b",
+   "kind": "scene",
+   "width": 200,
+   "height": 60
+  },
+  {
+   "name": "art_tool_razor",
+   "source": "TL-4c",
+   "kind": "scene",
+   "width": 200,
+   "height": 60
+  },
+  {
+   "name": "art_tool_shovel",
+   "source": "TL-4d",
+   "kind": "scene",
+   "width": 200,
+   "height": 60
+  },
+  {
+   "name": "art_tool_trash",
+   "source": "TL-4e",
+   "kind": "scene",
+   "width": 200,
+   "height": 60
+  },
+  {
+   "name": "art_tool_get_from_trash",
+   "source": "TL-4f",
+   "kind": "scene",
+   "width": 200,
+   "height": 60
+  },
+  {
+   "name": "art_tool_multi",
+   "source": "TL-4g",
+   "kind": "scene",
+   "width": 200,
+   "height": 60
+  },
+  {
+   "name": "art_tool_information",
+   "source": "TL-4h",
+   "kind": "scene",
+   "width": 200,
+   "height": 60
+  },
+  {
+   "name": "art_change_mode_automatic",
+   "source": "SU-5a",
+   "kind": "tile",
+   "width": 40,
+   "height": 40
+  },
+  {
+   "name": "art_change_mode_selective",
+   "source": "SU-5b",
+   "kind": "tile",
+   "width": 40,
+   "height": 40
+  },
+  {
+   "name": "art_change_mode_dirty",
+   "source": "TL-7",
+   "kind": "tile",
+   "width": 40,
+   "height": 40
   }
  ]
 }
