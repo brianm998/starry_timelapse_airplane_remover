@@ -226,7 +226,7 @@ struct MultiChoiceSheetView: View {
                               endIndex: Int? = nil)
     {
 //        Task.detached(priority: .userInitiated) {
-            Log.d("update frames shouldRemove \(shouldRemove) startIndex \(startIndex) endIndex \(endIndex)")
+            Log.d("update frames shouldRemove \(shouldRemove) startIndex \(startIndex) endIndex \(String(describing: endIndex))")
             let end = endIndex ?? frames.count
             for frame in frames {
                 if frame.frameIndex >= startIndex,
@@ -242,7 +242,7 @@ struct MultiChoiceSheetView: View {
         if let frame = frameView.frame {
             let new_value = shouldRemove
 //            Task.detached(priority: .userInitiated) {
-                await frame.userSelectAllOutliers(toShouldRemove: new_value,
+                _ = await frame.userSelectAllOutliers(toShouldRemove: new_value,
                                                   overlapping: multiChoiceOutlierView.groupViewModel.group)
                 // save outlier paintability changes here
                 await frame.writeOutliersRemoveReasons()
