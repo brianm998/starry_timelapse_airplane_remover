@@ -245,7 +245,10 @@ uses = { compile = 1 }
 [suite.build-gui]
 # s27-shadow: remove at the switch
 # Builds the app only. It runs no tests, so it never touches the display.
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build 2>&1 && echo BUILD-build-gui-OK"
+# Signed with the owner's Apple Development certificate, not ad hoc (`-`): an ad-hoc build's identity is its
+# cdhash, new every build, so the "access files on a removable volume" Allow (worktrees are on /Volumes/sp)
+# never sticks. test-gui signs the same way. See LOCAL_SIGNING in pipeline/src/starpipe/adapter_star.py.
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd CODE_SIGN_IDENTITY=\"Apple Development\" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=G3L75S65V9 build 2>&1 && echo BUILD-build-gui-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-gui-OK$"
 fail_regex = "error:|BUILD FAILED"
@@ -367,7 +370,7 @@ uses = { exclusive = 1 }
 # Exclusive because starpipe classes every `xcodebuild test` that way.
 [suite.test-gui]
 # s27-shadow: remove at the switch
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= -only-testing:starTests test 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd CODE_SIGN_IDENTITY=\"Apple Development\" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=G3L75S65V9 -only-testing:starTests test 2>&1"
 parser = "xctest"
 min_tests = 1 # UNMEASURED
 level = "t1"
