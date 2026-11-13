@@ -78,7 +78,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.components.ArtImage
 import com.star.desktop.ui.components.HoverTip
+import com.star.desktop.ui.components.StarArt
 import com.star.desktop.ui.sequence.SequenceViewModel
 import com.star.desktop.ui.theme.StarColors
 import com.star.proto.HorizonBandMethod
@@ -574,6 +576,11 @@ private inline fun runsOf(width: Int, valueAt: (Int) -> Int): List<IntRange> {
     return runs
 }
 
+/** The diagrams above the instruction text: brush, fill, touch-up, then moving when the footage moved. */
+internal fun horizonPainterDiagrams(isMoving: Boolean): List<StarArt> =
+    listOf(StarArt.ART_PAINT_BRUSH, StarArt.ART_PAINT_FILL, StarArt.ART_PAINT_TOUCH_UP) +
+        if (isMoving) listOf(StarArt.ART_PAINT_MOVING) else emptyList()
+
 // ---- instruction tip (startup only; macOS HorizonPainterStartupInstructionsView) ----
 
 @Composable
@@ -592,6 +599,11 @@ private fun HorizonInstructionTip(prefs: com.star.desktop.data.LocalPreferences,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(localized("ui.selecting_the_horizon_with_star_is_easy"), color = Color.White, fontSize = 15.sp)
+        val diagrams = horizonPainterDiagrams(isMoving)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            diagrams.take(3).forEach { ArtImage(it) }
+        }
+        diagrams.drop(3).forEach { ArtImage(it) }
         Text(
             localized(if (isMoving) "ui.horizon_painter_instructions_moving" else "ui.horizon_painter_instructions_static") + "\n\n" +
                 localized("ui.horizon_painter_instructions_brushing"),
