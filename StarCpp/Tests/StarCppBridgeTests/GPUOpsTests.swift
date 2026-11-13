@@ -9,7 +9,8 @@ import Metal
 /// there is no mock or simulator for Metal here. `GPUCapability.isAvailable()`
 /// gates every test below; on a machine with no supported GPU they report as
 /// skipped rather than failed, since "no GPU" is a real, supported configuration
-/// and not a bug.
+/// and not a bug. They also skip when `STAR_USE_GPU_FOR_MERGE=0` (or false/no/off)
+/// forces the CPU merge, which is how every local run on the owner's Mac is set up.
 ///
 /// These reuse `MedianMergeTests`' small-synthetic-image approach rather than
 /// real 42MP frames — the kernels are exercised through the exact same
@@ -20,6 +21,8 @@ final class GPUOpsTests: XCTestCase {
     private var scratch: URL!
 
     override func setUpWithError() throws {
+        try XCTSkipIf(GPUCapability.mergeForcedOff(),
+                      "STAR_USE_GPU_FOR_MERGE=0 forces the CPU merge; GPU tests are CI-only on this machine")
         try XCTSkipUnless(GPUCapability.isAvailable(), "no supported GPU on this machine")
         GPUOps.registerIfAvailable()
         scratch = URL(fileURLWithPath: NSTemporaryDirectory())
