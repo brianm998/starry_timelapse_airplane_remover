@@ -191,7 +191,7 @@ public actor UpdatableLog {
             let wait = redrawInterval - since
             Task {
                 try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
-                await self.trailingDraw()
+                self.trailingDraw()
             }
         }
     }

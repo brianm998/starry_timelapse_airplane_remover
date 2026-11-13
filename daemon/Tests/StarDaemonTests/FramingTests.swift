@@ -64,7 +64,7 @@ final class FramingTests: XCTestCase {
 
         let serialized = try env.serializedData()
         let frame      = encodeFrame(serialized)
-        let decoded    = try XCTUnwrap(decodeFrame(from: frame))
+        let decoded    = XCTUnwrap(decodeFrame(from: frame))
         let back       = try Star_V1_Envelope(serializedBytes: decoded)
 
         XCTAssertEqual(back.id,     42)
@@ -85,7 +85,7 @@ final class FramingTests: XCTestCase {
         var offset = 0
         for expected in payloads {
             let slice = buffer.subdata(in: offset..<buffer.count)
-            let got   = try XCTUnwrap(decodeFrame(from: slice))
+            let got   = XCTUnwrap(decodeFrame(from: slice))
             XCTAssertEqual(got, expected)
             offset += 4 + expected.count
         }

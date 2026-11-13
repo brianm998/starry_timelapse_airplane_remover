@@ -107,7 +107,7 @@ public class Processor {
           config: config,
           imageSequence: imageSequence,
           frameIndexToBaseNameMap: frameIndexToBaseNameMap
-        ) { [weak self] image, frameIndex, type, size in
+        ) { image, frameIndex, type, size in
             Task { @MainActor in
                 Log.d("frame \(frameIndex) saved image of type \(type) at size \(size)")
 //                self?.frames[frameIndex].saved(image: image, ofType: type, atSize: size)

@@ -120,7 +120,7 @@ public actor EarthHomographyChain {
     // MARK: - internals
 
     private func useDatabase(_ database: HomographyDatabase) async {
-        let path = await database.dbPath
+        let path = database.dbPath
         guard path != databasePath else { return }
         databasePath = path
         records = [:]

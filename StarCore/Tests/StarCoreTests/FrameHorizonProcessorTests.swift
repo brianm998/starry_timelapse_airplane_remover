@@ -116,7 +116,7 @@ final class FrameHorizonProcessorTests: FrameHarnessTestCase {
         try await processor(h, at: 0).saveTunedHorizonParameters(params)
 
         for index in 0..<3 {
-            let loaded = try await processor(h, at: index).loadTunedHorizonParameters()
+            let loaded = await processor(h, at: index).loadTunedHorizonParameters()
             XCTAssertEqual(loaded.smoothingRadius, 21, "frame \(index) did not see the tuning")
         }
     }

@@ -87,7 +87,7 @@ extension Dispatcher {
         let t = self
         let s = sessions
 
-        let scratchRoot = await s.scratchRoot
+        let scratchRoot = s.scratchRoot
 
         // Daemon
         register(method: "Daemon.Hello")    { id, payload, transport in await DaemonHandlers.hello(id: id, payload: payload, transport: transport, scratchRoot: scratchRoot); await t.taskCompleted(id: id) }
