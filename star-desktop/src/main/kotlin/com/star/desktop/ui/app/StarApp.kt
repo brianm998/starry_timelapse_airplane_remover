@@ -297,6 +297,7 @@ private fun ErrorOverlay(message: String, onDismiss: () -> Unit) {
                 .background(StarColors.red.copy(alpha = 0.92f))
                 .padding(40.dp),
         ) {
+            com.star.desktop.ui.components.ArtImage(com.star.desktop.ui.components.StarArt.ART_OOPS, Modifier.padding(bottom = 8.dp))
             Text(localized("ui.error"), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 12.dp))
             androidx.compose.foundation.text.selection.SelectionContainer {
@@ -317,6 +318,7 @@ private fun ErrorOverlay(message: String, onDismiss: () -> Unit) {
 @Composable
 private fun ConfirmCloseOverlay(confirmation: com.star.desktop.domain.CloseConfirmation, onConfirm: () -> Unit, onCancel: () -> Unit) {
     PromptCard(onScrimClick = null, onDefaultAction = onCancel, onEscape = onCancel) {
+        com.star.desktop.ui.components.ArtImage(com.star.desktop.ui.components.StarArt.ART_HOLD_ON)
         Text(localized("ui.work_in_progress"), color = StarColors.textPrimary, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, fontSize = 18.sp)
         Text(confirmation.message, color = StarColors.textSecondary, fontSize = 13.sp)
         androidx.compose.foundation.layout.Row(

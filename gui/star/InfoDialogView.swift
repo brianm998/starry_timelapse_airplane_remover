@@ -49,7 +49,7 @@ struct InfoDialogView: View {
                     }
                       .padding(20)
                     //.frame(maxWidth: 500)
-                      .background(.gray)
+                      .background(Color.starDialogBackground)
                       .cornerRadius(20)
 
                     Spacer()
@@ -190,6 +190,12 @@ public enum InfoType: CaseIterable {
     }
 }
 
+extension Color {
+    /// The ground every dialog is drawn on. Equal to the desktop client's `StarColors.prefsCard`
+    /// (`Color(0.12f, 0.12f, 0.12f)`, #1F1F1F) in star-desktop/.../ui/theme/StarColors.kt.
+    static let starDialogBackground = Color(white: 0.12)
+}
+
 extension View {
     /// Draws a sheet, popover or card in the star dialog style: the grey dialog ground, white
     /// text by default, and the dark appearance so controls are drawn for a dark ground.
@@ -199,7 +205,7 @@ extension View {
     /// `.preferredColorScheme`, which would propagate up to the presenting window.
     func starDialogStyle() -> some View {
         self
-          .background(Color.gray)
+          .background(Color.starDialogBackground)
           .foregroundColor(.white)
           .environment(\.colorScheme, .dark)
     }

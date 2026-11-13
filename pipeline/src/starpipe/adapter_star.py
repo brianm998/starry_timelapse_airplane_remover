@@ -98,6 +98,7 @@ IGNORED_TOP_LEVEL = {
     "horizon_test_bench", "outlier_feature_data_classifier",
     "tile_extractor", "tools", "emacs_load_swift.sh", "packaging",
     ".mason", "scripts",  # MASON tooling: its configuration and per-stage exit scripts, not star code
+    "assets",  # static art (SVG icons), no code, not yet wired into the clients
 }
 
 

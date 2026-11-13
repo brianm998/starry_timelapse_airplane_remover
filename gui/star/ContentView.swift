@@ -92,6 +92,8 @@ struct ContentView: View {
               .opacity(0.5)
 
             VStack(spacing: 0) {
+                ArtImage(.holdOn)
+                  .padding(.bottom, 16)
                 Text(localized("ui.work_in_progress"))
                   .font(.headline)
                   .padding(.bottom, 16)
@@ -131,6 +133,7 @@ struct ContentView: View {
               .opacity(0.5)
 
             VStack {
+                ArtImage(.oops)
                 Text(localized("ui.error"))
 
                 Spacer()
@@ -166,7 +169,8 @@ struct UserPreferencesEditingView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 12) {
+                ArtImage(.settings)
                 Text(localized("ui.preferences"))
                     .font(.title)
                     .foregroundColor(.white)

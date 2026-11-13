@@ -5,6 +5,7 @@ name: opencv
 #   1. actions/cache, key <prefix>-<opencv/cache_key.sh>
 #   2. the asset <prefix>-<opencv/cache_key.sh>.tar.gz of the `opencv-prebuilt` pre-release (opencv/ci_release_asset.sh)
 #   3. a build (opencv/release.sh, or opencv/build.sh on Windows), which is then uploaded as that asset
+# A tier-1 hit also uploads the asset when the release lacks it, so tier 2 fills even when nothing is rebuilt.
 # Tier 2 is what makes a build reusable across refs: a cache saved by a PR is visible to that PR only, so
 # without it develop's push run, and the next batch PR, would each build OpenCV again.
 # macOS looks up tier 2 first on ubuntu-24.04 (job macos-lookup, no macOS runner); the macos-15 job, which runs
@@ -81,6 +82,17 @@ jobs:
         shell: bash
         # a read-only token (a fork's PR) must not fail a build that worked
         run: opencv/ci_release_asset.sh upload opencv-linux linux libopencv2.a || echo "::warning::could not upload the OpenCV build to the opencv-prebuilt release"
+
+      # A cache hit runs no build, so the step above never uploads. Seed the release from the cache once, or tier 2
+      # stays empty: the Linux lookup then misses on every run, and each run waits for a macOS runner only to restore
+      # this cache (seen 2026-11-12: the opencv-prebuilt release did not exist at all).
+      - name: Seed the release asset from the cache
+        if: steps.cache.outputs.cache-hit == 'true'
+        shell: bash
+        run: |
+          if ! opencv/ci_release_asset.sh exists opencv-linux linux libopencv2.a; then
+            opencv/ci_release_asset.sh upload opencv-linux linux libopencv2.a || echo "::warning::could not seed the opencv-prebuilt release from the cache"
+          fi
 
       - name: Which tier
         shell: bash
@@ -214,6 +226,17 @@ jobs:
         shell: bash
         # a read-only token (a fork's PR) must not fail a build that worked
         run: opencv/ci_release_asset.sh upload opencv-macos15 macos libopencv2.a || echo "::warning::could not upload the OpenCV build to the opencv-prebuilt release"
+
+      # A cache hit runs no build, so the step above never uploads. Seed the release from the cache once, or tier 2
+      # stays empty: the Linux lookup then misses on every run, and each run waits for a macOS runner only to restore
+      # this cache (seen 2026-11-12: the opencv-prebuilt release did not exist at all).
+      - name: Seed the release asset from the cache
+        if: steps.cache.outputs.cache-hit == 'true'
+        shell: bash
+        run: |
+          if ! opencv/ci_release_asset.sh exists opencv-macos15 macos libopencv2.a; then
+            opencv/ci_release_asset.sh upload opencv-macos15 macos libopencv2.a || echo "::warning::could not seed the opencv-prebuilt release from the cache"
+          fi
 
       - name: Which tier
         shell: bash
@@ -396,6 +419,17 @@ jobs:
         shell: bash
         # a read-only token (a fork's PR) must not fail a build that worked
         run: opencv/ci_release_asset.sh upload opencv-windows-msvc14.40-sdk22621 windows opencv2.lib || echo "::warning::could not upload the OpenCV build to the opencv-prebuilt release"
+
+      # A cache hit runs no build, so the step above never uploads. Seed the release from the cache once, or tier 2
+      # stays empty: the Linux lookup then misses on every run, and each run waits for a macOS runner only to restore
+      # this cache (seen 2026-11-12: the opencv-prebuilt release did not exist at all).
+      - name: Seed the release asset from the cache
+        if: steps.cache.outputs.cache-hit == 'true'
+        shell: bash
+        run: |
+          if ! opencv/ci_release_asset.sh exists opencv-windows-msvc14.40-sdk22621 windows opencv2.lib; then
+            opencv/ci_release_asset.sh upload opencv-windows-msvc14.40-sdk22621 windows opencv2.lib || echo "::warning::could not seed the opencv-prebuilt release from the cache"
+          fi
 
       - name: Which tier
         shell: bash

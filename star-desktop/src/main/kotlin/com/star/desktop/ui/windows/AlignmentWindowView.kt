@@ -71,7 +71,10 @@ private fun AlignmentWindowContent(svm: SequenceViewModel, showInfo: () -> Unit)
             hasSequence = true, fetched = alignment != null, hasData = alignment != null && (alignment.hasStar || alignment.hasEarth), processing = processing,
         )
         if (alignment == null || empty.isNotEmpty()) {
-            EmptyState(empty)
+            val art = AlignmentWindowTexts.emptyStateArt(
+                hasSequence = true, fetched = alignment != null, hasData = alignment != null && (alignment.hasStar || alignment.hasEarth), processing = processing,
+            )
+            EmptyState(empty, art)
             return@Row
         }
         val earthShowing = alignment.allowEarth && alignment.hasEarth
@@ -126,9 +129,10 @@ private fun AlignmentWindowContent(svm: SequenceViewModel, showInfo: () -> Unit)
 
 /** What the window says in place of its charts, centred, one line each (the gui's layout). */
 @Composable
-private fun EmptyState(lines: List<String>) {
+private fun EmptyState(lines: List<String>, art: com.star.desktop.ui.components.StarArt?) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (art != null) com.star.desktop.ui.components.WaitingArt()
             for (key in lines) Text(localized(key), color = StarColors.textDisabled, fontSize = 12.sp)
         }
     }
