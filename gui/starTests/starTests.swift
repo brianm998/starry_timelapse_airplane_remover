@@ -2634,6 +2634,37 @@ final class SequenceProgressTests: XCTestCase {
         XCTAssertEqual(SequenceProgressAction.settings.accessibilityIdentifier,
                        "sequenceprogress.settings")
     }
+
+    /// Render and progress robots A1: the header robot follows the complete / rebuild / not-yet / partial decision.
+    func testSequenceProgressArt() {
+        let steps = surveyed([.merge], frameCount: 19, [.merge: 19])
+        let complete = progress(frameCount: 19, framesComplete: 19, steps: steps)
+        XCTAssertEqual(SequenceProgressPanel.progressArt(for: complete), .done)
+
+        let rebuild = SequenceProgress(sequenceName: "a_sequence", frameCount: 19, framesComplete: 0,
+                                       steps: steps, staleStages: [.keypoints])
+        XCTAssertTrue(rebuild.needsRebuild)
+        XCTAssertEqual(SequenceProgressPanel.progressArt(for: rebuild), .rebuilding)
+
+        let untouched = progress(frameCount: 19, framesComplete: 0,
+                                 steps: surveyed([.merge], frameCount: 19, [:]))
+        XCTAssertEqual(SequenceProgressPanel.progressArt(for: untouched), .review)
+
+        let partial = progress(frameCount: 19, framesComplete: 4,
+                               steps: surveyed([.merge], frameCount: 19, [.merge: 4]))
+        XCTAssertEqual(SequenceProgressPanel.progressArt(for: partial), .review)
+    }
+
+    /// Render robots A4 (and the fitting size arithmetic): rendering, success and failure each have their robot.
+    func testRenderStateArt() {
+        XCTAssertEqual(RenderVideoSheetView.renderArt(for: .rendering), .rendering)
+        XCTAssertEqual(RenderVideoSheetView.renderArt(for: .success), .done)
+        XCTAssertEqual(RenderVideoSheetView.renderArt(for: .failure), .oops)
+
+        XCTAssertEqual(ArtImage(.done).displaySize, StarArt.done.size)
+        XCTAssertEqual(ArtImage(.done, fitting: 64).displaySize, CGSize(width: 62, height: 64))
+        XCTAssertEqual(ArtImage(.rendering, fitting: 96).displaySize, CGSize(width: 96, height: 84))
+    }
 }
 
 /// The re-open panel's Settings button: what it does is in the view model, which cannot be

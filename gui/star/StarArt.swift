@@ -117,14 +117,26 @@ enum StarArt: String, CaseIterable {
 /// Draws a piece of artwork at its display size. Art is decoration: it adds no strings and is hidden from accessibility.
 struct ArtImage: View {
     let art: StarArt
+    /// When set, the picture is scaled (aspect kept) so its longer side is this many points.
+    let side: CGFloat?
 
-    init(_ art: StarArt) { self.art = art }
+    init(_ art: StarArt, fitting side: CGFloat? = nil) {
+        self.art = art
+        self.side = side
+    }
+
+    /// The size the picture is drawn at.
+    var displaySize: CGSize {
+        guard let side else { return art.size }
+        let scale = side / max(art.size.width, art.size.height)
+        return CGSize(width: (art.size.width * scale).rounded(), height: (art.size.height * scale).rounded())
+    }
 
     var body: some View {
         Image(art.rawValue)
             .resizable()
             .interpolation(.high)
-            .frame(width: art.size.width, height: art.size.height)
+            .frame(width: displaySize.width, height: displaySize.height)
             .accessibilityHidden(true)
     }
 }

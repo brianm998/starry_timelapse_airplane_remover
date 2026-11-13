@@ -6,11 +6,16 @@ struct PostProcessingRenderPromptView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(localized("ui.processing_complete"))
-              .font(.title)
+            HStack(spacing: 16) {
+                ArtImage(.done)
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(localized("ui.processing_complete"))
+                      .font(.title)
 
-            Text(localized("ui.render_video_now"))
-              .font(.title2)
+                    Text(localized("ui.render_video_now"))
+                      .font(.title2)
+                }
+            }
 
             HStack {
                 Button(localized("ui.cancel")) {
