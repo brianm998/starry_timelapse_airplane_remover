@@ -245,7 +245,7 @@ uses = { compile = 1 }
 [suite.build-gui]
 # s27-shadow: remove at the switch
 # Builds the app only. It runs no tests, so it never touches the display.
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= build 2>&1 && echo BUILD-build-gui-OK"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 .mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd build 2>&1 && echo BUILD-build-gui-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-gui-OK$"
 fail_regex = "error:|BUILD FAILED"
@@ -367,7 +367,7 @@ uses = { exclusive = 1 }
 # Exclusive because starpipe classes every `xcodebuild test` that way.
 [suite.test-gui]
 # s27-shadow: remove at the switch
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= -only-testing:starTests test 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 .mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd -only-testing:starTests test 2>&1"
 parser = "xctest"
 min_tests = 1 # UNMEASURED
 level = "t1"
