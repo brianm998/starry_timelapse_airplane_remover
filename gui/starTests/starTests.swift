@@ -1071,6 +1071,8 @@ final class WarningAlertTests: XCTestCase {
         let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
                                       styleMask: [.titled, .resizable, .closable],
                                       backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil); window.close() }
         window.contentView = host
         window.setContentSize(NSSize(width: 900, height: 600))
         settle()
@@ -1312,6 +1314,8 @@ final class WarningAlertTests: XCTestCase {
         let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
                                       styleMask: [.titled, .resizable, .closable],
                                       backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil); window.close() }
         window.contentView = host
         window.setContentSize(NSSize(width: 900, height: 600))
         settle()
@@ -2919,6 +2923,8 @@ final class StarDialogStyleTests: XCTestCase {
         let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
                                       styleMask: [.titled, .closable],
                                       backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil); window.close() }
         window.appearance = NSAppearance(named: .aqua)
         window.contentView = host
         window.setContentSize(host.fittingSize)
@@ -2933,7 +2939,7 @@ final class StarDialogStyleTests: XCTestCase {
         }
         host.cacheDisplay(in: host.bounds, to: rep)
         OffDisplayWindow.assertNothingShowsOnADisplay()
-        guard let color = rep.colorAt(x: 24, y: 24)?.usingColorSpace(.sRGB) else {
+        guard let color = rep.colorAt(x: 4, y: 4)?.usingColorSpace(.sRGB) else {
             XCTFail("the corner pixel has no sRGB value")
             return (0, 0, 0)
         }
