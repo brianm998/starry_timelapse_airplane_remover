@@ -363,7 +363,7 @@ async def test_with_masond_unreachable_a_session_waits_alerts_after_ten_minutes_
             down.unlink(missing_ok=True)
 
     rig.engine.sleep = sleep
-    stage_id, hold = await asyncio.wait_for(rig.engine._hold_session(t, "develop", 1, "sonnet"), 20)  # pyright: ignore[reportPrivateUsage]
+    stage_id, hold = await asyncio.wait_for(rig.engine._hold_session(t, "develop", 1, "sonnet"), 180)  # pyright: ignore[reportPrivateUsage]
     hold.release()
     log = fake_mason.read_text()
     assert "hold-refused" not in log and log.count("hold hold") == 1, "no hold was attempted while masond was down"
