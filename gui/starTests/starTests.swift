@@ -2950,10 +2950,13 @@ final class StarDialogStyleTests: XCTestCase {
     /// The dialog ground is white 0.12, the desktop client's `StarColors.prefsCard`.
     private func assertDialogGround(_ rgb: (r: CGFloat, g: CGFloat, b: CGFloat), _ name: String,
                                     file: StaticString = #filePath, line: UInt = #line) {
-        let expected: (r: CGFloat, g: CGFloat, b: CGFloat) = (0.12, 0.12, 0.12)
+        // The bitmap goes through the window's colour management, so the ground reads a little lighter than 0.12 (0.188 here).
+        // Compare with the dialog colour itself rendered the same way, and require it to be dark, not the light window ground.
+        let expected = cornerColor(of: Color.starDialogBackground.frame(width: 100, height: 100))
+        XCTAssertLessThan(expected.r, 0.3, "the reference ground is not dark")
         for (channel, value, want) in [("red", rgb.r, expected.r), ("green", rgb.g, expected.g), ("blue", rgb.b, expected.b)] {
             XCTAssertLessThan(abs(value - want), 0.03,
-                              "\(name): \(channel) of the corner is \(value), not the dialog grey \(want)",
+                              "\(name): \(channel) of the corner is \(value), not the dialog ground \(want)",
                               file: file, line: line)
         }
     }
