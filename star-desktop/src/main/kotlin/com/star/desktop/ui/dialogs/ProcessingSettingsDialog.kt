@@ -601,13 +601,14 @@ private fun InfoButton(open: Boolean, onClick: () -> Unit) {
  * sheet's Show Info and Hide Info can open and close every one at once, the ones in folded groups too.
  */
 @Composable
-private fun InfoRow(id: String, open: SnapshotStateMap<String, Boolean>, help: String?, content: @Composable () -> Unit) {
+private fun InfoRow(id: String, open: SnapshotStateMap<String, Boolean>, help: String?, art: StarArt? = null, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { content() }
             if (help != null) InfoButton(open[id] == true) { open[id] = open[id] != true }
         }
         if (help != null && open[id] == true) {
+            if (art != null) ArtImage(art, Modifier.padding(start = 4.dp, bottom = 4.dp))
             Text(help, color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
         }
     }
@@ -667,6 +668,15 @@ internal sealed interface ExpertField {
     /** The catalogue entries that explain this setting (macOS's per-row info text), shown a paragraph each; none for a setting with nothing to say. */
     val helpKeys: List<String> get() = FIELD_HELP[label].orEmpty()
 }
+
+/** The diagram shown above a field's help text when its (i) is open, by label; every label here must be a field with help. */
+internal val FIELD_ART: Map<String, StarArt> = mapOf(
+    "Neighbor frames" to StarArt.ART_SETTING_NEIGHBORS,
+    "Pixel threshold" to StarArt.ART_SETTING_THRESHOLD,
+    "Cloud-aware merge" to StarArt.ART_SETTING_CLOUDS,
+    "Spike removal" to StarArt.ART_SETTING_SPIKES,
+    "Memory budget" to StarArt.ART_SETTING_MEMORY,
+)
 
 /** What explains each field: the long-form text macOS shows under a row's (i), for those that have one, and what its two choices mean for a yes/no setting. */
 internal val FIELD_HELP: Map<String, List<String>> = mapOf(
@@ -936,7 +946,7 @@ private fun ExpertGroup(
             }
             val commit = { drafts.remove(f.label)?.let { textEdits[f.label] = it }; Unit }
             val revert = { drafts.remove(f.label); Unit }
-            InfoRow(f.label, info, f.helpText()) {
+            InfoRow(f.label, info, f.helpText(), FIELD_ART[f.label]) {
                 when (f) {
                     is BoolField -> {
                         val value = boolEdits[f.label] ?: f.get(cfg)
@@ -990,7 +1000,7 @@ private fun GpuGroup(cfg: Config, edit: SettingsEdit, boolEdits: SnapshotStateMa
         PERFORMANCE_FIELDS.forEach { f ->
             if (!f.has(cfg)) { UnsupportedRow(localized(f.labelKey).removeSuffix(":"), daemonVersion); return@forEach }
             if (f is BoolField) {
-                InfoRow(f.label, info, f.helpText()) {
+                InfoRow(f.label, info, f.helpText(), FIELD_ART[f.label]) {
                     ToggleRow(
                         localized(f.labelKey).removeSuffix(":"),
                         if (!f.enabled(edit)) false else (boolEdits[f.label] ?: f.get(cfg)),

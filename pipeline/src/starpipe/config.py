@@ -34,22 +34,13 @@ class Config(BaseModel):
     # monitor, ran `starpipe allow-opus <n>`, or sets this. Tickets filed by agent sessions had copied opus from the skill's example.
     allow_opus: bool = False
 
-    # What limits starting work is resources, not a count of tickets: LLM sessions running at once and measured CPU use (load.py).
-    max_llm_sessions: int = 3
-    cpu_limit_pct: float = 85.0  # rolling average over cpu_window_s; only a reason to wait while another session is running
-    cpu_window_s: int = 60
+    # How many model sessions run at once is MASON's `llm:claude` limit (`mason resources limit llm:claude N`), not a setting here.
     landing_mode: str = "batch"  # "batch": the landing train, one CI for many tickets; "single": a PR and a CI per ticket
     batch_window_s: int = 120  # wait this long for more tickets once one is ready and no batch is running; a batch takes everything ready
     # Batches in CI at once. A second batch forms only from ready tickets whose files no in-flight batch touches; 1 is the old
     # one-at-a-time train. GitHub has 5 macOS runners and one batch's CI wants about 8 macOS jobs, so more than 2 would just queue.
     batch_parallel: int = 2
     max_in_ci: int = 3  # tickets in CI or landing at once; a finished ticket waits as `ready` for room (runners are shared)
-    # The heavy lock (heavy.py) keeps apart only what conflicts: compiles share the machine (up to heavy_build_slots at once, beside
-    # one test suite); test suites run one at a time; star runs, UI, Gherkin and unrecognised commands get the machine alone. A job
-    # that would start beside another also needs heavy_free_mem_pct of memory free. heavy_split = false is the old one-at-a-time.
-    heavy_split: bool = True
-    heavy_build_slots: int = 3
-    heavy_free_mem_pct: float = 50.0
     # `swift test --parallel --num-workers N` for the big suites (StarCore, StarCpp, daemon): they used one core of 18 (sampled 2026-11-03)
     heavy_test_workers: int = 8
     auto_self_update: bool = True  # switch the daemon to a new pinned runtime when origin/develop has newer pipeline/ code; the kill switch
@@ -91,12 +82,7 @@ class Config(BaseModel):
     # rerun) lets the batch land with a note on its PR. `macos_gate_hard` holds the batch instead (and dispatches the gate again each wait).
     macos_gate_wait_s: float = 3 * 3600.0
     macos_gate_hard: bool = False
-    heavy_wait_report_s: float = 60.0
-    # A heavy job whose process group used under 1% of a core and wrote nothing to its log for this long is killed and reported
-    # as hung (0 turns it off). A wedged xctest sat 1h35m at 0% CPU on the only slot (2026-11-03).
-    heavy_idle_kill_s: float = 900.0
-    heavy_idle_grace_s: float = 10.0  # SIGTERM, then SIGKILL after this
-    heavy_idle_poll_s: float = 5.0
+    heavy_idle_poll_s: float = 5.0  # how often a running job's CPU and memory are sampled (starpipe never stops it: masond does)
     api_port: int = 47231
     java_home: str = ""  # JDK 21 for star-desktop builds; empty: $JAVA_HOME, else the adapter's candidates
     remote: str = "https"  # "https" (the daemon, token from github.env or gh) or "origin" (tests, a local bare repo)
@@ -110,9 +96,13 @@ class Config(BaseModel):
     checkout: str = ""  # the main checkout the worktrees hang off; default: found from the cwd
 
 
+# Settings that masond took over (ticket #169). An old config.toml may still carry them: ignored, not an error.
+REMOVED_KEYS = frozenset({"max_llm_sessions", "cpu_limit_pct", "cpu_window_s", "heavy_split", "heavy_build_slots", "heavy_free_mem_pct"})
+
+
 def load(path: Path | None = None) -> Config:
     path = path or home() / "config.toml"
     if not path.exists():
         return Config()
     with path.open("rb") as handle:
-        return Config(**tomllib.load(handle))
+        return Config(**{k: v for k, v in tomllib.load(handle).items() if k not in REMOVED_KEYS})
