@@ -132,6 +132,14 @@ struct KeypointDivisorStartupView: View {
                blurb: localized("ui.preset_fastest_blurb")),
     ] }
 
+    /// The tile beside a preset's name; nil for a divisor that is not one of the three.
+    static func presetArt(_ divisor: Double) -> StarArt? {
+        if abs(divisor - 1.0) < 0.005 { return .presetBestQuality }
+        if abs(divisor - Config.recommendedReducedKeypointDivisor) < 0.005 { return .presetBestBalance }
+        if abs(divisor - 2.0) < 0.005 { return .presetFastest }
+        return nil
+    }
+
     /// Above this, say so. Not a limit — the value is still accepted, because someone
     /// desperate for speed on a machine this footage does not fit may want it anyway.
     static let tooHighDivisor: Double = 4.0
@@ -156,6 +164,9 @@ struct KeypointDivisorStartupView: View {
               .foregroundColor(.white)
             Space(height: 12)
             explanation
+            Space(height: 14)
+            ArtImage(.settingKeypointSize)
+              .frame(maxWidth: .infinity)
             Space(height: 14)
             presetRows
             Space(height: 12)
@@ -265,6 +276,9 @@ struct KeypointDivisorStartupView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Toggle(isOn: selection(of: preset.divisor)) {
                         HStack(spacing: 8) {
+                            if let art = Self.presetArt(preset.divisor) {
+                                ArtImage(art)
+                            }
                             Text(preset.name)
                               .font(.title3)
                               .foregroundColor(.white)
@@ -289,7 +303,7 @@ struct KeypointDivisorStartupView: View {
                       .font(.caption)
                       .foregroundColor(.white)
                       .opacity(0.7)
-                      .padding(.leading, 20)
+                      .padding(.leading, 68)
                       .fixedSize(horizontal: false, vertical: true)
                 }
             }
