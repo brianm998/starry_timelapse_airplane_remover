@@ -510,6 +510,13 @@
    "kind": "scene",
    "width": 320,
    "height": 140
+  },
+  {
+   "name": "art_paint_robot",
+   "source": "SU-3a",
+   "kind": "cutout",
+   "width": 96,
+   "height": 96
   }
  ]
 }

@@ -71,6 +71,7 @@ enum StarArt: String, CaseIterable {
     case presetFastest = "art_preset_fastest"
     case settingHorizonExtension = "art_setting_horizon_extension"
     case settingKeypointSize = "art_setting_keypoint_size"
+    case paintRobot = "art_paint_robot"
 
     enum Kind { case cutout, tile, scene }
 
@@ -144,6 +145,7 @@ enum StarArt: String, CaseIterable {
         case .presetFastest: return .tile
         case .settingHorizonExtension: return .scene
         case .settingKeypointSize: return .scene
+        case .paintRobot: return .cutout
         }
     }
 
@@ -218,6 +220,7 @@ enum StarArt: String, CaseIterable {
         case .presetFastest: return CGSize(width: 40, height: 40)
         case .settingHorizonExtension: return CGSize(width: 210, height: 140)
         case .settingKeypointSize: return CGSize(width: 210, height: 140)
+        case .paintRobot: return CGSize(width: 96, height: 90)
         }
     }
 }
