@@ -68,8 +68,13 @@ struct ToolHelpView: View {
               .bold()
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(localized("ui.tool_help_intro"))
-                    Text(localized("ui.tool_help_selective"))
+                    HStack(alignment: .top, spacing: 12) {
+                        ArtImage(.review)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(localized("ui.tool_help_intro"))
+                            Text(localized("ui.tool_help_selective"))
+                        }
+                    }
                     ForEach(ToolType.allCases, id: \.self) { tool in
                         HStack(alignment: .top, spacing: 10) {
                             Image(tool.iconName)
