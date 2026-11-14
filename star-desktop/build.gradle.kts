@@ -518,6 +518,10 @@ tasks.test {
         fileTree(File(sharedRoot, "gherkin/ui")),
         fileTree(File(sharedRoot, "StarCore/Sources/StarCore/Resources/Localizations")),
     )
+    // Never "up to date": a skipped task writes no results, and a check that reads build/test-results/test/*.xml after the run (MASON's
+    // test-desktop suite) then finds only an earlier run's files and calls the suite red. Unchanged inputs still come FROM-CACHE, which
+    // rewrites the XML, so this costs a cache restore, not a test run.
+    outputs.upToDateWhen { false }
 }
 
 // The Gherkin desktop tests (gherkin/features/*.feature, tagged @desktop): a `gherkinTest` source set of generated test entry points
