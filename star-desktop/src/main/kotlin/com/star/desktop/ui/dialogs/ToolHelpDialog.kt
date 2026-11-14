@@ -68,8 +68,13 @@ fun ToolHelpDialog(onClose: () -> Unit) {
                 Modifier.weight(1f).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(localized("ui.tool_help_intro"), color = StarColors.white, fontSize = 13.sp)
-                Text(localized("ui.tool_help_selective"), color = StarColors.white, fontSize = 13.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+                    ArtImage(StarArt.ART_REVIEW)
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(localized("ui.tool_help_intro"), color = StarColors.white, fontSize = 13.sp)
+                        Text(localized("ui.tool_help_selective"), color = StarColors.white, fontSize = 13.sp)
+                    }
+                }
                 ToolType.selectable.forEach { t ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Icon(toolPainter(t), contentDescription = t.displayName, tint = Color.Unspecified, modifier = Modifier.size(35.dp))
