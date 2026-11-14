@@ -469,11 +469,10 @@ internal fun ProcessingRobot(angle: () -> Float = rememberGearAngle()) {
 
 @Composable
 internal fun rememberGearAngle(): () -> Float {
-    val turn = rememberInfiniteTransition(label = "processing gear")
+    val turn = rememberInfiniteTransition()
     val angle by turn.animateFloat(
         0f, 360f,
         infiniteRepeatable(tween(ProcessingRobotGeometry.MILLIS_PER_TURN, easing = LinearEasing), RepeatMode.Restart),
-        label = "gear angle",
     )
     return { angle }
 }
