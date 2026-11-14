@@ -6,4 +6,7 @@
 ident="${STAR_TEST_SIGN_IDENTITY-Apple Development}"
 [ -n "$ident" ] || ident="Apple Development"
 if [ "$ident" = "-" ]; then team=""; else team="G3L75S65V9"; fi
-exec xcodebuild "$@" CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=$ident" "DEVELOPMENT_TEAM=$team"
+# -IDEBuildLocationStyle=Unique: this Mac's Xcode prefs set a custom, project-relative build location
+# (IDEBuildLocationStyle=Custom, IDECustomDerivedDataLocation=DerivedData), which beats -derivedDataPath
+# and puts the products in gui/DerivedData; Unique puts them back under -derivedDataPath.
+exec xcodebuild -IDEBuildLocationStyle=Unique "$@" CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=$ident" "DEVELOPMENT_TEAM=$team"
