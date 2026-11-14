@@ -9,7 +9,8 @@ import Metal
 /// there is no mock or simulator for Metal here. `GPUCapability.isAvailable()`
 /// gates every test below; on a machine with no supported GPU they report as
 /// skipped rather than failed, since "no GPU" is a real, supported configuration
-/// and not a bug.
+/// and not a bug. They also skip when `STAR_USE_GPU_FOR_MERGE=0` (or false/no/off)
+/// forces the CPU merge, which is how every local run on the owner's Mac is set up.
 ///
 /// These reuse `MedianMergeTests`' small-synthetic-image approach rather than
 /// real 42MP frames — the kernels are exercised through the exact same
@@ -20,6 +21,8 @@ final class GPUOpsTests: XCTestCase {
     private var scratch: URL!
 
     override func setUpWithError() throws {
+        try XCTSkipIf(GPUCapability.mergeForcedOff(),
+                      "STAR_USE_GPU_FOR_MERGE=0 forces the CPU merge; GPU tests are CI-only on this machine")
         try XCTSkipUnless(GPUCapability.isAvailable(), "no supported GPU on this machine")
         GPUOps.registerIfAvailable()
         scratch = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -599,5 +602,139 @@ final class GPUDeviceBusyTests: XCTestCase {
         GPUOps.recordDevice(startTime: 5, endTime: 4)
         GPUOps.recordDevice(startTime: 0, endTime: 3)
         XCTAssertEqual(GPUOps.deviceBusySeconds, before, accuracy: 1e-9)
+    }
+}
+
+/// The other half of `GPUOpsTests`' skip: when `STAR_USE_GPU_FOR_MERGE=0` forces the CPU merge,
+/// every `ImageAligner` entry point those tests drive with `useGPU: true` has to run on the CPU
+/// instead. This is what keeps a local test run off the Metal merge path on a Mac that the GPU
+/// merge can crash, so it is checked here directly: no GPU merge is counted, and the result is,
+/// byte for byte, the one `useGPU: false` gives. The inputs are ones where the GPU's arithmetic
+/// differs from the CPU's, so a GPU result would not pass for a CPU one.
+///
+/// With the variable unset (CI) there is nothing to check here, and `GPUOpsTests` runs instead.
+final class GPUMergeForcedOffTests: XCTestCase {
+
+    private var scratch: URL!
+
+    override func setUpWithError() throws {
+        try XCTSkipUnless(GPUCapability.mergeForcedOff(),
+                          "STAR_USE_GPU_FOR_MERGE is not forcing the CPU merge; GPUOpsTests covers the GPU")
+        // Registered, so a GPU merge would be counted if one ran.
+        _ = GPUOps.registerIfAvailable()
+        scratch = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("GPUMergeForcedOffTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+        ImageCache.setLoader { MatWrapper.load(fromFilename: $0) }
+    }
+
+    override func tearDownWithError() throws {
+        if let scratch { try? FileManager.default.removeItem(at: scratch) }
+    }
+
+    private func makeMat(width: Int, height: Int, _ value: (Int, Int) -> UInt16) -> MatWrapper {
+        let data = UnsafeMutablePointer<UInt16>.allocate(capacity: width * height)
+        for y in 0..<height {
+            for x in 0..<width { data[y * width + x] = value(x, y) }
+        }
+        return MatWrapper(width: width, height: height,
+                          cvType: MatWrapper.cvType(forBitsPerComponent: 16, componentsPerPixel: 1),
+                          bytesPerRow: width * MemoryLayout<UInt16>.size,
+                          data: UnsafeMutableRawPointer(data), takeOwnership: true)
+    }
+
+    private func samples(of mat: MatWrapper) throws -> [[UInt16]] {
+        let base = try XCTUnwrap(mat.dataPtr)
+        return (0..<mat.rows).map { y in
+            let row = base.advanced(by: y * mat.step).assumingMemoryBound(to: UInt16.self)
+            return (0..<(mat.cols * mat.channels)).map { row[$0] }
+        }
+    }
+
+    /// Close-but-distinct levels per column, a different set per source: the case in which the
+    /// GPU kernel's float32 statistics and the CPU's double ones can pick different values.
+    private func sources(width: Int = 9, height: Int = 3, count: Int = 9) -> [MatWrapper] {
+        let levels: [Int] = [10000, 10037, 10091, 10122, 10188, 10241, 10305, 10362, 10420]
+        var frames: [MatWrapper] = []
+        for k in 0..<count {
+            frames.append(makeMat(width: width, height: height) { (x: Int, y: Int) -> UInt16 in
+                let level: Int = levels[(x + k) % levels.count]
+                let jitter: Int = (k * 7 + y * 3) % 11
+                return UInt16(level + jitter)
+            })
+        }
+        return frames
+    }
+
+    private func write(_ mat: MatWrapper, named name: String) throws -> String {
+        let path = scratch.appendingPathComponent("\(name).tiff").path
+        XCTAssertTrue(mat.write(to: path), "could not write \(path)")
+        return path
+    }
+
+    /// Runs `body` asked for the GPU and for the CPU and holds the two to the same bytes, with no
+    /// GPU merge counted in between.
+    private func assertRunsOnTheCPU(_ what: String, _ body: (Bool) throws -> MatWrapper,
+                                    file: StaticString = #filePath, line: UInt = #line) throws {
+        let before = GPUOps.mergeCounts()
+        let askedForGPU = try samples(of: try body(true))
+        let after = GPUOps.mergeCounts()
+        XCTAssertEqual(after.inPlace, before.inPlace, "\(what) ran a GPU merge in place", file: file, line: line)
+        XCTAssertEqual(after.copied, before.copied, "\(what) ran a GPU merge on copies", file: file, line: line)
+        let cpu = try samples(of: try body(false))
+        XCTAssertEqual(askedForGPU, cpu, "\(what) asked for the GPU did not give the CPU's result",
+                       file: file, line: line)
+    }
+
+    func testTheAlignedMergeAskedForTheGPURunsOnTheCPU() throws {
+        let frames = sources()
+        var infos: [AlignmentNeighborInfo] = []
+        var homography: [Int: MatWrapper] = [:]
+        for (k, frame) in frames.dropFirst().enumerated() {
+            infos.append(AlignmentNeighborInfo(filename: try write(frame, named: "aligned-\(k)"),
+                                               maskFilename: nil, keypoints: nil,
+                                               frameIndex: Int32(k + 1)))
+            homography[k + 1] = MatWrapper(homographyValues: [1, 0, 0.37 * Double(k % 3),
+                                                              0, 1, 0, 0, 0, 1])
+        }
+        try assertRunsOnTheCPU("alignAndMedianMerge") { useGPU in
+            let result = try XCTUnwrap(ImageAligner.alignAndMedianMerge(
+              baseImage: frames[0], baseFrameIndex: 0, neighbors: infos, homography: homography,
+              outlierThreshold: 1.2, includeAll: false, useGPU: useGPU))
+            XCTAssertEqual(result.warpCount, infos.count)
+            return result.merged
+        }
+    }
+
+    func testTheFilenameMergeAskedForTheGPURunsOnTheCPU() throws {
+        let frames = sources()
+        let filenames = try frames.dropFirst().enumerated().map { try write($0.element, named: "named-\($0.offset)") }
+        try assertRunsOnTheCPU("medianMergeImage") { useGPU in
+            try XCTUnwrap(ImageAligner.medianMergeImage(frames[0], withFilenames: filenames,
+                                                        outlierThreshold: 1.2, includeAll: false,
+                                                        useGPU: useGPU))
+        }
+    }
+
+    func testTheStandaloneMergeAskedForTheGPURunsOnTheCPU() throws {
+        let frames = sources()
+        try assertRunsOnTheCPU("debugMedianMerge") { useGPU in
+            try XCTUnwrap(ImageAligner.debugMedianMerge(frames, misses: nil, outlierThreshold: 1.2,
+                                                        includeAll: false, useGPU: useGPU))
+        }
+    }
+
+    /// The full-frame-width rotation `GPUOpsTests.testWarpStepMismatchesAtFullFrameWidthAreRare`
+    /// uses: there the GPU and OpenCV's CPU warp land on different 1/32 steps at a fraction of the
+    /// pixels, so identical bytes mean the CPU warped both.
+    func testTheWarpAskedForTheGPURunsOnTheCPU() throws {
+        let src = makeMat(width: 6000, height: 96) { x, _ in UInt16((x % 90) * 700) }
+        let theta = 0.0004
+        let homography = MatWrapper(homographyValues: [cos(theta), -sin(theta), 3.37,
+                                                        sin(theta), cos(theta), 1.21,
+                                                        0, 0, 1])
+        try assertRunsOnTheCPU("debugWarp") { useGPU in
+            try XCTUnwrap(ImageAligner.debugWarp(src, homography: homography, useGPU: useGPU))
+        }
     }
 }
