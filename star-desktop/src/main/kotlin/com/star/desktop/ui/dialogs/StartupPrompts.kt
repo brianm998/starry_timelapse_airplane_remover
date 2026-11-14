@@ -9,7 +9,11 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import com.star.desktop.ui.components.ArtImage
 import com.star.desktop.ui.components.StarArt
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -220,6 +224,27 @@ internal fun cleanupTile(method: CleanMethod): StarArt = when (method) {
     else -> StarArt.ART_MODE_AUTOMATIC
 }
 
+/**
+ * [content] with [art] drawn at the start of it, up to [side] dp wide and no taller than [content] is.
+ * The tile never adds to the row's height (the sheet already runs to the bottom of a 768 pt screen):
+ * it shrinks, aspect kept, when the text beside it is shorter than [side].
+ */
+@Composable
+private fun WithTile(art: StarArt, side: Int, alignment: Alignment, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Box(modifier) {
+        Box(Modifier.padding(start = (side + 10).dp)) { content() }
+        Box(Modifier.matchParentSize()) {
+            Image(
+                painter = painterResource(art.resourcePath),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                alignment = alignment,
+                modifier = Modifier.width(side.dp).fillMaxHeight(),
+            )
+        }
+    }
+}
+
 @Composable
 private fun RemovalPrompt(app: AppViewModel, onOpenSpeedModal: () -> Unit) {
     var selective by remember { mutableStateOf(false) }
@@ -243,8 +268,7 @@ private fun RemovalPrompt(app: AppViewModel, onOpenSpeedModal: () -> Unit) {
         HorizontalDivider(color = StarColors.cellDefault)
         ModeChoice(cleanupTile(CleanMethod.CLEAN_AUTOMATIC), localized("ui.startup_mode_automatic"), localized("ui.startup_mode_automatic_desc"), !selective, "startup.removal.automatic") { selective = false }
         if (!selective) {
-            Row(Modifier.padding(start = 34.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                ArtImage(cleanupTile(CleanMethod.CLEAN_AUTOMATIC_TRUE), fitting = CLEANUP_AUTO_SELECTIVE_TILE)
+            WithTile(cleanupTile(CleanMethod.CLEAN_AUTOMATIC_TRUE), CLEANUP_AUTO_SELECTIVE_TILE, Alignment.CenterStart, Modifier.padding(start = 34.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     ToggleRow(localized("ui.startup_auto_selective_toggle"), autoSelective, "startup.removal.autoselective") { autoSelective = it }
                     Body(localized("ui.startup_auto_selective_desc"))
@@ -253,8 +277,7 @@ private fun RemovalPrompt(app: AppViewModel, onOpenSpeedModal: () -> Unit) {
         }
         ModeChoice(cleanupTile(CleanMethod.CLEAN_SELECTIVE), localized("ui.startup_mode_selective"), localized("ui.startup_mode_selective_desc"), selective, "startup.removal.selective") { selective = true }
         HorizontalDivider(color = StarColors.cellDefault)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            ArtImage(CLEANUP_GROUND_ALIGNMENT_ART, fitting = CLEANUP_GROUND_ALIGNMENT_TILE)
+        WithTile(CLEANUP_GROUND_ALIGNMENT_ART, CLEANUP_GROUND_ALIGNMENT_TILE, Alignment.CenterStart) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 ToggleRow(localized("ui.startup_ground_alignment_toggle"), groundAlignment, "startup.removal.groundalignment") { groundAlignment = it }
                 Body(localized("ui.startup_ground_alignment_desc"))
@@ -487,10 +510,11 @@ private fun ModeChoice(art: StarArt, title: String, description: String, selecte
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         RadioButton(selected = selected, onClick = null)
-        ArtImage(art, fitting = CLEANUP_MODE_TILE)
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, color = StarColors.textPrimary, fontSize = 17.sp)
-            Body(description)
+        WithTile(art, CLEANUP_MODE_TILE, Alignment.TopStart) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, color = StarColors.textPrimary, fontSize = 17.sp)
+                Body(description)
+            }
         }
     }
 }

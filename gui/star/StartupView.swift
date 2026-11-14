@@ -371,6 +371,24 @@ enum CleanupTiles {
     }
 }
 
+extension View {
+    /// Draws `art` at the leading edge of this view, up to `side` pt wide and never taller than the view.
+    /// The tile is an overlay, so it adds nothing to the row's height (the cleanup sheet already runs to
+    /// the bottom of a 768 pt screen): it shrinks, aspect kept, when the text beside it is shorter.
+    fileprivate func cleanupTile(_ art: StarArt, side: CGFloat, alignment: Alignment) -> some View {
+        self
+          .padding(.leading, side + 10)
+          .overlay(alignment: alignment) {
+              Image(art.rawValue)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: side)
+                .accessibilityHidden(true)
+          }
+    }
+}
+
 /// One of the two top-level processing modes: a radio-style row with a short description beneath it.
 private struct ModeChoice: View {
     let art: StarArt
@@ -386,7 +404,6 @@ private struct ModeChoice: View {
                 Image(systemName: selected ? "largecircle.fill.circle" : "circle")
                   .font(.title2)
                   .foregroundColor(.white)
-                ArtImage(art, fitting: CleanupTiles.modeSize)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                       .font(.title)
@@ -397,6 +414,7 @@ private struct ModeChoice: View {
                       .opacity(0.8)
                       .fixedSize(horizontal: false, vertical: true)
                 }
+                  .cleanupTile(art, side: CleanupTiles.modeSize, alignment: .topLeading)
                 Spacer(minLength: 0)
             }
               .padding(.vertical, 6)
@@ -456,7 +474,6 @@ struct RemovalView: View {
                        identifier: "startup.removal.automatic") { selectiveMode = false }
             if !selectiveMode {
                 HStack(alignment: .center, spacing: 10) {
-                  ArtImage(CleanupTiles.tile(for: .automatic(true)), fitting: CleanupTiles.autoSelectiveSize)
                   VStack(alignment: .leading, spacing: 4) {
                     Toggle(localized("ui.startup_auto_selective_toggle"), isOn: $autoSelective)
                       .accessibilityIdentifier("startup.removal.autoselective")
@@ -468,6 +485,7 @@ struct RemovalView: View {
                       .opacity(0.8)
                       .fixedSize(horizontal: false, vertical: true)
                   }
+                    .cleanupTile(CleanupTiles.tile(for: .automatic(true)), side: CleanupTiles.autoSelectiveSize, alignment: .leading)
                 }
                   .padding(.leading, 34)
             }
@@ -479,7 +497,6 @@ struct RemovalView: View {
 
             Divider()
             HStack(alignment: .center, spacing: 10) {
-              ArtImage(CleanupTiles.groundAlignment, fitting: CleanupTiles.groundAlignmentSize)
               VStack(alignment: .leading, spacing: 4) {
                 Toggle(localized("ui.startup_ground_alignment_toggle"), isOn: $groundAlignment)
                   .accessibilityIdentifier("startup.removal.groundalignment")
@@ -491,6 +508,7 @@ struct RemovalView: View {
                   .opacity(0.8)
                   .fixedSize(horizontal: false, vertical: true)
               }
+                .cleanupTile(CleanupTiles.groundAlignment, side: CleanupTiles.groundAlignmentSize, alignment: .leading)
             }
               .frame(maxWidth: .infinity, alignment: .leading)
 
