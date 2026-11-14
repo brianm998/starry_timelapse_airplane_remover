@@ -1,12 +1,16 @@
 #!/bin/bash
-# Checks the built star.app is team-signed with a stable designated requirement
+# Checks the built Star.app is team-signed with a stable designated requirement
 # (a team + bundle id requirement, never a cdhash). Skips the team checks when
 # STAR_TEST_SIGN_IDENTITY=- (ad hoc). Usage: check-gui-signing.sh [app]
-app="${1:-.build/gui-dd/Build/Products/Debug/star.app}"
-# A machine whose Xcode has IDECustomDerivedDataLocation set (this Mac: "DerivedData") ignores
-# -derivedDataPath and builds under gui/DerivedData instead; accept that location too.
-[ -d "$app" ] || [ -n "${1-}" ] || { [ -d gui/DerivedData/Build/Products/Debug/Star.app ] && app=gui/DerivedData/Build/Products/Debug/Star.app; }
-[ -d "$app" ] || { echo "SIGNING-CHECK: no app at $app"; exit 1; }
+cands=".build/gui-dd/Build/Products/Debug/Star.app gui/DerivedData/Build/Products/Debug/Star.app"
+if [ -n "${1-}" ]; then app="$1"; tried="$1"
+else
+  # A machine whose Xcode has IDECustomDerivedDataLocation set (this Mac: "DerivedData") ignores
+  # -derivedDataPath and builds under gui/DerivedData instead; look in both.
+  app=""; tried="$cands"
+  for c in $cands; do [ -d "$c" ] && { app="$c"; break; }; done
+fi
+[ -d "$app" ] || { echo "SIGNING-CHECK: no app at $tried"; exit 1; }
 if [ "${STAR_TEST_SIGN_IDENTITY-}" = "-" ]; then echo "SIGNING-CHECK: ad hoc requested; skipped"; exit 0; fi
 codesign -dv "$app" 2>&1 | grep -q "TeamIdentifier=G3L75S65V9" || { echo "SIGNING-CHECK: not signed by team G3L75S65V9"; exit 1; }
 req=$(codesign -d -r- "$app" 2>&1 | grep designated)
