@@ -2919,6 +2919,8 @@ final class StarDialogStyleTests: XCTestCase {
         let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
                                       styleMask: [.titled, .closable],
                                       backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false  // ARC owns it; close() would release it a second time
+        defer { window.orderOut(nil); window.contentView = nil; window.close() }
         window.appearance = NSAppearance(named: .aqua)
         window.contentView = host
         window.setContentSize(host.fittingSize)
@@ -2941,10 +2943,12 @@ final class StarDialogStyleTests: XCTestCase {
         return (color.redComponent, color.greenComponent, color.blueComponent)
     }
 
-    /// The dialog ground is white 0.12, the desktop client's `StarColors.prefsCard`.
+    /// The dialog ground is white 0.12, the desktop client's `StarColors.prefsCard`. The bitmap a hosted view is cached into is in
+    /// the display's colour space, which on some Macs reads a plain sRGB 0.12 back as 0.188, so the expectation is a plain
+    /// sRGB 0.12 swatch put through the same pipeline rather than the absolute number.
     private func assertDialogGround(_ rgb: (r: CGFloat, g: CGFloat, b: CGFloat), _ name: String,
                                     file: StaticString = #filePath, line: UInt = #line) {
-        let expected: (r: CGFloat, g: CGFloat, b: CGFloat) = (0.12, 0.12, 0.12)
+        let expected = cornerColor(of: Color(.sRGB, white: 0.12, opacity: 1).frame(width: 300, height: 300))
         for (channel, value, want) in [("red", rgb.r, expected.r), ("green", rgb.g, expected.g), ("blue", rgb.b, expected.b)] {
             XCTAssertLessThan(abs(value - want), 0.03,
                               "\(name): \(channel) of the corner is \(value), not the dialog grey \(want)",
@@ -5656,5 +5660,19 @@ final class DarkAppearanceTests: XCTestCase {
         XCTAssertEqual(
             alert.window.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]), .darkAqua,
             "a fresh NSAlert must be drawn dark")
+    }
+}
+
+final class LoadingRingArtTests: XCTestCase {
+    func testLoadingRingArtSize() {
+        // The mac ring at its 500 pt frame: stroke 80, so outer 580 and inner 420; 60% is 252, capped at 120.
+        XCTAssertEqual(loadingRingArtSize(outerDiameter: 580, stroke: 80), 120)
+        // A small ring scales: inner 100 -> 60.
+        XCTAssertEqual(loadingRingArtSize(outerDiameter: 260, stroke: 80), 60, accuracy: 0.001)
+        // The desktop's 160/10 ring: inner 140 -> 84.
+        XCTAssertEqual(loadingRingArtSize(outerDiameter: 160, stroke: 10), 84, accuracy: 0.001)
+        // No inner room, no robot.
+        XCTAssertEqual(loadingRingArtSize(outerDiameter: 160, stroke: 80), 0)
+        XCTAssertEqual(loadingRingArtSize(outerDiameter: 100, stroke: 80), 0)
     }
 }

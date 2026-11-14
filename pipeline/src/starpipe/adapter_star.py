@@ -7,6 +7,7 @@ live in config.toml, not here.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import sys
@@ -43,6 +44,14 @@ HEAVY_PATTERN = re.compile(
 def gherkin_test_name(feature: str) -> str:
     return "test" + feature[:1].upper() + feature[1:] + "Feature"
 
+
+# Local gui builds sign with the owner's Apple Development certificate (team G3L75S65V9), not ad hoc (`-`). An ad-hoc signature's
+# code requirement is its cdhash, which changes with every build, so macOS never matches an earlier Allow and asks again on every
+# run ("“Star” would like to access files on a removable volume": the worktrees are on the external /Volumes/sp). A certificate gives
+# one requirement for every build and worktree, so one Allow sticks. CI (.github/workflows) has no certificate and stays ad hoc.
+_SIGN_IDENTITY = os.environ.get("STAR_TEST_SIGN_IDENTITY") or "Apple Development"  # "-" keeps ad hoc, as for the MASON suites
+LOCAL_SIGNING = (f"CODE_SIGN_IDENTITY={_SIGN_IDENTITY}", "CODE_SIGN_STYLE=Manual",
+                 "DEVELOPMENT_TEAM=" + ("" if _SIGN_IDENTITY == "-" else "G3L75S65V9"))
 
 NIGHTLY_ENV = (("STAR_TEST_DATA", "{test_data}"), ("STAR_FFMPEG_DIR", "{root}/external_binaries/bin"),
                ("STAR_REMOVAL_REPORTS", "{build}/removal-reports"))
@@ -81,7 +90,7 @@ def nightly_gherkin_ui(root: Path, env: tuple[tuple[str, str], ...]) -> CheckSpe
         "gherkin:gui-ui", f"gherkin mac gui @ui ({len(features)} features)",
         ("xcodebuild", "test", "-project", "gui/star.xcodeproj", "-scheme", "star", "-configuration", "Release",
          "-derivedDataPath", "{build}/gui-ui-dd", "ENABLE_TESTABILITY=YES", *only,
-         "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM="),
+         *LOCAL_SIGNING),
         parser="xctest", expect=len(features), ui=True, env=tuple((("TEST_RUNNER_" + k, v) for k, v in env)) + env,
     )
 
@@ -353,7 +362,7 @@ CHECKS: dict[str, CheckSpec] = {
         CheckSpec(
             "build:gui", "xcodebuild gui (scheme star)",
             ("xcodebuild", "-project", "gui/star.xcodeproj", "-scheme", "star", "-configuration", "Debug",
-             "-derivedDataPath", GUI_DD, "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "build"),
+             "-derivedDataPath", GUI_DD, *LOCAL_SIGNING, "build"),
         ),
         CheckSpec(
             "build:desktop", "gradle compile star-desktop",
@@ -373,7 +382,7 @@ CHECKS: dict[str, CheckSpec] = {
         CheckSpec(
             "test:gui", "xcodebuild test gui starTests",
             ("xcodebuild", "-project", "gui/star.xcodeproj", "-scheme", "star", "-configuration", "Debug",
-             "-derivedDataPath", GUI_DD, "CODE_SIGN_IDENTITY=-", "CODE_SIGN_STYLE=Manual", "DEVELOPMENT_TEAM=", "-only-testing:starTests", "test"),
+             "-derivedDataPath", GUI_DD, *LOCAL_SIGNING, "-only-testing:starTests", "test"),
             parser="xctest",  # never ui=True: that is `caffeinate -u`, which turns a sleeping display on, and these tests need no display
         ),
         CheckSpec(

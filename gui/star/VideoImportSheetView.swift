@@ -46,9 +46,14 @@ struct VideoImportSheetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(localized("ui.video_import_title")).font(.title)
-            Text((pending.path as NSString).lastPathComponent).font(.headline)
-            Text(localized("ui.video_import_blurb")).fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 16) {
+                ScaledArtImage(.import, height: 96)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(localized("ui.video_import_title")).font(.title)
+                    Text((pending.path as NSString).lastPathComponent).font(.headline)
+                    Text(localized("ui.video_import_blurb")).fixedSize(horizontal: false, vertical: true)
+                }
+            }
 
             Picker(localized("ui.video_frame_format"), selection: $kind) {
                 Text(localized("ui.frame_format_tiff16")).tag(FrameDecodeFormat.Kind.tiff16)
@@ -271,8 +276,13 @@ struct SequenceLocationSheetView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(localized("ui.sequence_location_title")).font(.title)
-            Text((pending.path as NSString).lastPathComponent).font(.headline)
+            HStack(alignment: .top, spacing: 16) {
+                ScaledArtImage(.import, height: 96)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(localized("ui.sequence_location_title")).font(.title)
+                    Text((pending.path as NSString).lastPathComponent).font(.headline)
+                }
+            }
             WorkingLocationSectionView(source: pending.path, outputDir: $outputDir, inputBytes: inputBytes)
             HStack {
                 Spacer()
