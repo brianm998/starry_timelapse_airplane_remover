@@ -5,6 +5,8 @@
 cands=".build/gui-dd/Build/Products/Debug/Star.app gui/DerivedData/Build/Products/Debug/Star.app"
 if [ -n "${1-}" ]; then app="$1"; tried="$1"
 else
+  # Builds made before xcodebuild-signed.sh pinned SYMROOT landed under gui/DerivedData on this Mac
+  # (custom Xcode build location); accept that location too.
   # A machine whose Xcode has IDECustomDerivedDataLocation set (this Mac: "DerivedData") ignores
   # -derivedDataPath and builds under gui/DerivedData instead; look in both.
   app=""; tried="$cands"
