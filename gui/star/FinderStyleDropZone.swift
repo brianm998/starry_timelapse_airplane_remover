@@ -21,9 +21,7 @@ struct FinderStyleDropZone: View {
                 .animation(.easeInOut(duration: 0.15), value: isTargeted)
 
             VStack(spacing: 6) {
-                Image(systemName: "doc.on.doc")
-                    .font(.system(size: 32))
-                    .foregroundColor(.white)
+                ArtImage(.drop)
                 Text(localized("ui.drop_a_video_an_image_sequence_or_an"))
                   .foregroundColor(.white)
                     .font(.headline)
