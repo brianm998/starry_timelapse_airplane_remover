@@ -63,7 +63,7 @@ struct RenderVideoSheetView: View {
         Group {
             if isRendering {
                 self.renderingView
-            } else if let renderingError {
+            } else if renderingError != nil {
                 self.renderingErrorView
             } else if renderSuccess {
                 self.renderingSuccessView
@@ -153,7 +153,7 @@ struct RenderVideoSheetView: View {
                 VStack {
                     Space(height: 20)
                     ArtImage(Self.renderArt(for: .failure), fitting: 96)
-                    Text(localized("ui.rendering_error", renderingError))
+                    Text(localized("ui.rendering_error", String(describing: renderingError)))
                       .accessibilityIdentifier("render.error")
                       .font(.title)
                     Button(localized("ui.dismiss")) {
@@ -231,9 +231,9 @@ struct RenderVideoSheetView: View {
 
     /// What the custom frame rate field accepts: from 0.01 to 1000 (the daemon refuses 0).  The desktop's rule is the same:
     /// `gherkin/ui/vectors/constants.json` holds the cases both are checked against.
-    static let customFrameRateRange: ClosedRange<Double> = 0.01...1000
+    nonisolated static let customFrameRateRange: ClosedRange<Double> = 0.01...1000
 
-    static func customFrameRate(_ text: String) -> Double? {
+    nonisolated static func customFrameRate(_ text: String) -> Double? {
         guard let value = Double(text.trimmingCharacters(in: .whitespaces)),
               value.isFinite, customFrameRateRange.contains(value) else { return nil }
         return value

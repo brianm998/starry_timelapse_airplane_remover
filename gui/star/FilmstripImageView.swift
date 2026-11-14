@@ -44,7 +44,8 @@ struct FilmstripImageView: View {
                       .layoutPriority(1)
                       .foregroundColor(.yellow)
                       .animation(Animation.easeInOut(duration:1)
-                                   .repeatForever(autoreverses:true))
+                                   .repeatForever(autoreverses:true),
+                                 value: frameView.outliersLoaded)
                     // XXX add .onHover() here
                     
                 case .loaded:

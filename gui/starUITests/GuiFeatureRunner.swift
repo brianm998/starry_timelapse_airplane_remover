@@ -575,7 +575,7 @@ final class GuiFeatureRunner {
         var stall = ProgressStall(limit: stallLimit)
         try waitFor("\(identifier) at the end of processing", timeout: 20 * 60, interval: 3, detail: { "(last progress: \(last))" }) {
             if target.exists { return true }
-            func text(_ e: XCUIElement) -> String { e.exists ? e.label : "(not shown)" }
+            let text = { (e: XCUIElement) -> String in e.exists ? e.label : "(not shown)" }
             last = "progress \(text(progress)), overall \(text(overall)), headline \(text(headline))"
             try stall.observe(last)
             return false

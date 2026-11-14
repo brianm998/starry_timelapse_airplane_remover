@@ -67,7 +67,7 @@ struct FrameEditView: View {
                           }
                       }
                       .onChange(of: currentZoomScale) {
-                          Log.i("onChange(of: currentZoomScale \(currentZoomScale))")
+                          Log.i("onChange(of: currentZoomScale \(String(describing: currentZoomScale)))")
                           if let currentZoomScale {
                               viewModel.currentZoomScale = currentZoomScale
                           }
@@ -446,7 +446,7 @@ struct FrameEditView: View {
                               //var new_outlier_info: [OutlierGroup] = []
                               let _outlierGroupTableRows = ArrayActor<OutlierGroupTableRow>()
                               
-                              await frame.foreachOutlierGroupMulti(between: selectionStart,
+                              _ = await frame.foreachOutlierGroupMulti(between: selectionStart,
                                                                    and: end_location,
                                                                    includingTrash: viewModel.shouldShowTrash) { group, isInTrash in // XXX isInTrash not presented in UI
                                   let new_row = await OutlierGroupTableRow(group)

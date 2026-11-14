@@ -140,7 +140,7 @@ struct KeypointDivisorStartupView: View {
     /// more, it is a typo. Inclusive, matching the `maxValue: 8` this same setting already
     /// has in the Advanced panel's `EditableNumberView`, so a value entered here is one
     /// that panel will also accept.
-    static let maxDivisor: Double = 8.0
+    nonisolated static let maxDivisor: Double = 8.0
 
     private var divisor: Double { draft.current }
 
@@ -220,7 +220,7 @@ struct KeypointDivisorStartupView: View {
 
     /// What the field holds as a value, or nil while it is not one: the digits and points of
     /// `text`, read as a number from 1 to `maxDivisor`.
-    static func parse(_ text: String) -> Double? {
+    nonisolated static func parse(_ text: String) -> Double? {
         let filtered = text.filter { $0.isNumber || $0 == "." }
         guard let value = Double(filtered), value >= 1.0, value <= maxDivisor else { return nil }
         return value
