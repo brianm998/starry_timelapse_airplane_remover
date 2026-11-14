@@ -41,6 +41,8 @@ import com.star.desktop.domain.FrameFormatChoice
 import com.star.desktop.domain.TiffCompressionChoice
 import com.star.desktop.domain.VideoImport
 import com.star.desktop.domain.VideoImportOptions
+import com.star.desktop.ui.components.ScaledArtImage
+import com.star.desktop.ui.components.StarArt
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
@@ -83,9 +85,14 @@ fun VideoImportDialog(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(localized("ui.video_import_title"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-            Text(File(videoPath).name, color = StarColors.textPrimary, fontSize = 13.sp)
-            Text(localized("ui.video_import_blurb"), color = StarColors.textSecondary, fontSize = 12.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                ScaledArtImage(StarArt.ART_IMPORT, 96.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(localized("ui.video_import_title"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                    Text(File(videoPath).name, color = StarColors.textPrimary, fontSize = 13.sp)
+                    Text(localized("ui.video_import_blurb"), color = StarColors.textSecondary, fontSize = 12.sp)
+                }
+            }
 
             Text(localized("ui.video_frame_format"), color = StarColors.textSecondary, fontSize = 12.sp)
             FrameFormatChoice.entries.forEach { choice ->
