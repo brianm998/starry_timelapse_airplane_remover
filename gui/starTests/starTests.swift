@@ -4187,6 +4187,14 @@ final class SharedConstantsTests: XCTestCase {
         XCTAssertEqual(localized("ui.update"), "Update", "ui.update keeps its value: the settings sheet uses it too")
     }
 
+    /// Art: the Change Mode dialog's clean choices map to their tiles; both dirty modes share one.
+    func testChangeModeTiles() {
+        XCTAssertEqual(HighLevelCleanMethod.automatic.changeModeArt, .changeModeAutomatic)
+        XCTAssertEqual(HighLevelCleanMethod.selective.changeModeArt, .changeModeSelective)
+        XCTAssertEqual(HighLevelCleanMethod.dirty.changeModeArt, .changeModeDirty)
+        XCTAssertEqual(ArtImage(HighLevelCleanMethod.dirty.changeModeArt).displaySize, CGSize(width: 40, height: 40))
+    }
+
     private func assertPictures(_ rows: [StartupPictureChoice], _ expected: [(String, String, String, String)],
                                 file: StaticString = #filePath, line: UInt = #line) throws {
         StarLocalization.shared.languageOverride = "en"
