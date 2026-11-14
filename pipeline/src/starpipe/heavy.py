@@ -88,38 +88,23 @@ def current_requester() -> Requester:
 
 
 @dataclass(frozen=True)
-class Hung:
-    """A job that was killed because it made no progress."""
-    cmd: str
-    idle_s: float
-
-
-@dataclass(frozen=True)
 class RunResult:
     code: int  # UI_TESTS_REFUSED when the job never started
     waited: float
-    hung: Hung | None = None
     seconds: float = 0.0  # how long the job held the lock
     cpu_mean: float = 0.0  # cores: the job tree's CPU seconds over the hold
     cpu_peak: float = 0.0  # cores: the busiest interval between two samples
     rss_peak_mb: float = 0.0  # the largest sum of the tree's resident sets seen
 
 
-@dataclass
-class _Sample:
-    at: float
-    cpu: float  # cumulative CPU seconds used by the job's group, exiting children never lowering it
-    log_size: int
-
-
 class _Activity:
-    """Judges whether a job has been idle: CPU in its whole process group, or its log growing, counts as activity."""
+    """Records a job's CPU and memory for results.jsonl. It never judges or stops the job: masond watches `mason run` trees."""
 
-    def __init__(self, leader: int, log_fd: int | None, idle_s: float) -> None:
-        self.leader, self.log_fd, self.idle_s = leader, log_fd, idle_s
+    def __init__(self, leader: int) -> None:
+        self.leader = leader
         self.seen: dict[int, float] = {}
         self.total = 0.0
-        self.samples: list[_Sample] = []
+        self.sampled = False
         self.start = self.last_at = time.monotonic()
         self.last_total = 0.0
         self.cpu_peak = 0.0
@@ -144,7 +129,7 @@ class _Activity:
             except psutil.Error:
                 continue
             used = t.user + t.system
-            if self.samples:  # the first sample is only a baseline: CPU used before the watch began is not the watch's
+            if self.sampled:  # the first sample is only a baseline: CPU used before the watch began is not the watch's
                 self.total += max(0.0, used - self.seen.get(p.pid, 0.0))
             self.seen[p.pid] = used
             with contextlib.suppress(psutil.Error):
@@ -153,25 +138,7 @@ class _Activity:
             self.cpu_peak = max(self.cpu_peak, (self.total - self.last_total) / (now - self.last_at))
         self.last_at, self.last_total = now, self.total
         self.rss_peak = max(self.rss_peak, rss)
-        size = 0
-        if self.log_fd is not None:
-            try:
-                size = os.fstat(self.log_fd).st_size
-            except OSError:
-                pass
-        self.samples.append(_Sample(now, self.total, size))
-        while len(self.samples) > 1 and self.samples[1].at <= now - self.idle_s:
-            self.samples.pop(0)
-
-    def idle_for(self, now: float) -> float | None:
-        """Seconds the job has been idle, once that is at least idle_s; else None."""
-        first, last = self.samples[0], self.samples[-1]
-        span = now - first.at
-        if span < self.idle_s:
-            return None
-        if last.cpu - first.cpu >= 0.01 * span or last.log_size > first.log_size:
-            return None
-        return span
+        self.sampled = True
 
 
 def _tree(leader: int) -> list[psutil.Process]:
@@ -248,9 +215,8 @@ def run_job(
     job_class: str | None = None,
 ) -> RunResult:
     """Queue argv in masond (`mason run`) unless MASON already holds the machine for it (masonq.admitted), and run it in its own
-    process group. A job idle for `heavy_idle_kill_s` once it runs is
-    killed and reported as hung, so a wedged test run cannot hold its lease until the owner notices. `priority` is not used:
-    masond ranks by who asks (see masonq.run_argv)."""
+    process group. starpipe never kills or wakes the job for being idle: masond watches `mason run` trees and stops a silent one.
+    `priority` is not used: masond ranks by who asks (see masonq.run_argv)."""
     del priority
     cfg = config or load()
     cmd = " ".join(argv)
@@ -286,7 +252,7 @@ def run_job(
             mason = masonq.run_argv(kind, marked, ticket=who.ticket, stage=who.stage, ticket_priority=who.ticket_priority,
                                     label=label)
             result = _attempt(mason, cmd, cfg, cwd, stdout, env, direct=False, waited=waited)
-            if os.path.exists(marker) or result.hung or result.code == 0 or drops >= REQUEUE_MAX:
+            if os.path.exists(marker) or result.code == 0 or drops >= REQUEUE_MAX:
                 return result
             drops += 1
             waited = result.waited
@@ -317,7 +283,6 @@ def _attempt(argv: list[str], cmd: str, cfg: Config, cwd: str | None, stdout: in
     old = {}
     if threading.current_thread() is threading.main_thread():
         old = {s: signal.signal(s, forward) for s in (signal.SIGINT, signal.SIGTERM)}
-    hung: Hung | None = None
     watch: _Activity | None = None
     try:
         while True:
@@ -330,15 +295,8 @@ def _attempt(argv: list[str], cmd: str, cfg: Config, cwd: str | None, stdout: in
                 if not direct and not _job_started(proc):  # still queued in masond: not idle, not running
                     continue
                 waited += time.monotonic() - queued_at
-                watch = _Activity(proc.pid, stdout, cfg.heavy_idle_kill_s)
-            now = time.monotonic()
-            watch.sample(now)
-            idle = watch.idle_for(now) if cfg.heavy_idle_kill_s > 0 else None
-            if idle is not None:
-                hung = Hung(cmd, idle)
-                _kill_group(proc, cfg.heavy_idle_grace_s)
-                code = proc.returncode
-                break
+                watch = _Activity(proc.pid)
+            watch.sample(time.monotonic())
     except BaseException:
         _kill_group(proc, 0)  # never leave any of the job running
         raise
@@ -348,10 +306,9 @@ def _attempt(argv: list[str], cmd: str, cfg: Config, cwd: str | None, stdout: in
     if watch is None:
         waited += time.monotonic() - queued_at
     code = 128 + -code if code < 0 else code
-    code = code or (128 + signal.SIGTERM if hung else 0)
     if watch is None:
-        return RunResult(code, waited, hung)
-    return RunResult(code, waited, hung, time.monotonic() - watch.start, watch.cpu_mean, watch.cpu_peak, watch.rss_peak_mb)
+        return RunResult(code, waited)
+    return RunResult(code, waited, time.monotonic() - watch.start, watch.cpu_mean, watch.cpu_peak, watch.rss_peak_mb)
 
 
 def run(argv: list[str], **kwargs: Any) -> tuple[int, float]:

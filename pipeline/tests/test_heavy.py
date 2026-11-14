@@ -88,15 +88,13 @@ def test_a_child_is_killed_if_the_wait_is_interrupted() -> None:
     assert pids and not psutil.pid_exists(pids[0])
 
 
-FAST = Config(heavy_idle_kill_s=1.5, heavy_idle_grace_s=1.0, heavy_idle_poll_s=0.2)
+FAST = Config(heavy_idle_poll_s=0.2)
 
 
-def test_idle_job_is_killed_and_lock_released() -> None:
-    start = time.monotonic()
-    result = heavy.run_job([sys.executable, "-c", "import time;time.sleep(60)"], config=FAST)
-    assert time.monotonic() - start < 20
-    assert result.code != 0
-    assert result.hung is not None and "time.sleep(60)" in result.hung.cmd and result.hung.idle_s >= FAST.heavy_idle_kill_s
+def test_a_silent_job_is_not_killed_by_starpipe() -> None:
+    """masond watches `mason run` trees; starpipe leaves a quiet job alone."""
+    result = heavy.run_job([sys.executable, "-c", "import time;time.sleep(3)"], config=FAST)
+    assert result.code == 0
 
 
 def _spawn_tree_script(pidfile: Path) -> str:
@@ -117,21 +115,6 @@ def _gone(pid: int) -> bool:
         return psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
     except psutil.NoSuchProcess:
         return True
-
-
-def test_idle_kill_reaches_a_child_in_its_own_process_group(tmp_path: Path) -> None:
-    pidfile = tmp_path / "child.pid"
-    result = heavy.run_job([sys.executable, "-c", _spawn_tree_script(pidfile)], config=FAST)
-    assert result.hung is not None
-    child = int(pidfile.read_text())
-    try:
-        assert _gone(child)
-    finally:
-        import os
-        import signal
-
-        if not _gone(child):
-            os.kill(child, signal.SIGKILL)
 
 
 def test_an_interrupted_job_kills_children_in_other_groups(tmp_path: Path) -> None:
@@ -172,12 +155,12 @@ def test_busy_job_is_not_killed(tmp_path: Path) -> None:
     script = f"import subprocess,sys;ps=[subprocess.Popen([sys.executable,'-c',{spin!r}]),subprocess.Popen([sys.executable,'-c',{writer!r}])];[p.wait() for p in ps]"
     with (tmp_path / "log").open("wb") as out:
         busy = heavy.run_job([sys.executable, "-c", script], config=FAST, stdout=out.fileno())
-        assert busy.hung is None and busy.code == 0
+        assert busy.code == 0
         # the writer alone, with no CPU to speak of
         quiet = heavy.run_job([sys.executable, "-c", writer], config=FAST, stdout=out.fileno())
-        assert quiet.hung is None and quiet.code == 0
+        assert quiet.code == 0
     spinner = heavy.run_job([sys.executable, "-c", spin], config=FAST)
-    assert spinner.hung is None and spinner.code == 0
+    assert spinner.code == 0
 
 
 def test_a_hold_records_its_cpu_and_memory(state_home: Path) -> None:
@@ -421,7 +404,7 @@ def test_the_jobs_exit_code_comes_back_through_mason() -> None:
 def test_the_queue_wait_is_counted_and_not_mistaken_for_idle(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("FAKE_MASON_WAIT", "3")  # queued in masond for 3 s: longer than the idle limit, but nothing is running
     result = heavy.run_job([sys.executable, "-c", "pass"], config=FAST)
-    assert result.code == 0 and result.hung is None and result.waited >= 2.5
+    assert result.code == 0 and result.waited >= 2.5
 
 
 def test_status_reads_masonds_holders(fake_mason: Path) -> None:
