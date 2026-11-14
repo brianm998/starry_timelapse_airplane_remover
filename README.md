@@ -1,6 +1,8 @@
 
 # Starry Timelapse Airplane Remover (Star)
 
+![Star, the robot on a rock with a laptop under a calm night sky](docs/readme-hero.jpg)
+
 Star removes airplane and satellite trails from night-sky timelapse videos. It takes a sequence of still images, automatically detects and paints out bright transient streaks, and writes back a cleaned sequence ready to render into video.
 
 ## Example comparisons

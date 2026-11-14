@@ -15,6 +15,14 @@ links=(
   gui/videos
   external_binaries/bin
 )
+# Linked only when the main checkout has it: wgpu-native comes from wgpu/fetch.sh, and a machine
+# without it builds StarCpp's wgpu backend as stubs (StarCpp/Package.swift).
+arch=$(uname -m); [ "$arch" = arm64 ] && arch=aarch64
+case "$(uname -s)" in
+  Darwin) optional=("wgpu/macos-$arch") ;;
+  Linux) optional=("wgpu/linux-$arch") ;;
+  *) optional=() ;;
+esac
 here=$(pwd -P)
 main=${STAR_MAIN_CHECKOUT:-}
 if [ -z "$main" ]; then
@@ -31,6 +39,15 @@ for rel in "${links[@]}"; do
   if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then continue; fi
   if [ -e "$dst" ] || [ -L "$dst" ]; then echo "link-artifacts: $dst is in the way" >&2; bad=1; continue; fi
   mkdir -p "$(dirname "$dst")"
+  ln -s "$src" "$dst"
+  echo "link-artifacts: $rel"
+done
+for rel in ${optional[@]+"${optional[@]}"}; do
+  src="$main/$rel"
+  dst="$here/$rel"
+  [ -e "$src" ] || continue
+  if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then continue; fi
+  if [ -e "$dst" ] || [ -L "$dst" ]; then echo "link-artifacts: $dst is in the way" >&2; bad=1; continue; fi
   ln -s "$src" "$dst"
   echo "link-artifacts: $rel"
 done
