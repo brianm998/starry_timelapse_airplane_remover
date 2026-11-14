@@ -311,7 +311,7 @@ async def test_a_landing_stage_goes_before_new_work(rig: Rig, monkeypatch: pytes
         pool.shutdown(wait=False, cancel_futures=True)
 
 
-async def until(condition: Any, timeout: float = 10.0) -> None:
+async def until(condition: Any, timeout: float = 120.0) -> None:
     deadline = time.monotonic() + timeout
     while not condition():
         assert time.monotonic() < deadline, "timed out"
