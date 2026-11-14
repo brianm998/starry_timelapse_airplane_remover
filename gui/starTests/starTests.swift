@@ -5889,3 +5889,13 @@ final class LoadingRingArtTests: XCTestCase {
         XCTAssertEqual(loadingRingArtSize(outerDiameter: 100, stroke: 80), 0)
     }
 }
+
+
+/// The How To tab's strip lists the six workflow steps in order.
+final class WorkflowStripTests: XCTestCase {
+    func testWorkflowStripOrder() {
+        XCTAssertEqual(workflowStripSteps.map(\.rawValue),
+                       ["art_step_import", "art_step_horizon", "art_step_align",
+                        "art_step_merge", "art_step_review", "art_step_render"])
+    }
+}

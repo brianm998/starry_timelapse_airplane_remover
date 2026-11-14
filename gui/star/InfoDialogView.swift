@@ -36,9 +36,14 @@ struct InfoDialogView: View {
                               .font(.title)
 
                             ScrollView {
-                                Text(viewModel.currentInfoType.infoText)
-                                  .font(.title)
-                                  .foregroundColor(.white)
+                                VStack(alignment: .leading, spacing: 16) {
+                                    if viewModel.currentInfoType == .howTo {
+                                        WorkflowStrip()
+                                    }
+                                    Text(viewModel.currentInfoType.infoText)
+                                      .font(.title)
+                                      .foregroundColor(.white)
+                                }
                             }
                         }
 
@@ -226,5 +231,25 @@ struct InfoBanner: View {
           .frame(width: WelcomeArt.bannerWidth, height: WelcomeArt.bannerHeight, alignment: .top)
           .clipped()
           .accessibilityHidden(true)
+    }
+}
+
+/// The six steps of the workflow, in order, as the How To tab's strip shows them.
+let workflowStripSteps: [StarArt] = [.stepImport, .stepHorizon, .stepAlign, .stepMerge, .stepReview, .stepRender]
+
+/// A row of the six step tiles joined by arrows drawn in code. Art only: it adds no strings.
+struct WorkflowStrip: View {
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(Array(workflowStripSteps.enumerated()), id: \.offset) { index, step in
+                if index > 0 {
+                    Image(systemName: "arrow.right")
+                      .foregroundColor(.secondary)
+                      .frame(width: 16)
+                      .accessibilityHidden(true)
+                }
+                ArtImage(step)
+            }
+        }
     }
 }
