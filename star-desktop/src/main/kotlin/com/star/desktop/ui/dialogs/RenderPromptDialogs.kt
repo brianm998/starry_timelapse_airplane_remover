@@ -35,6 +35,8 @@ import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 import com.star.desktop.i18n.localized
+import com.star.desktop.ui.components.ArtImage
+import com.star.desktop.ui.components.StarArt
 
 /**
  * Pre-processing prompt (macOS `PreProcessingRenderPromptView`): auto-render after processing? Like the macOS
@@ -44,11 +46,16 @@ import com.star.desktop.i18n.localized
 @Composable
 fun PreProcessingRenderPrompt(app: AppViewModel) {
     PromptCard(onScrimClick = null, onDefaultAction = app::chooseRenderOptions) {
-        Text(localized("ui.render_video_after_processing"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-        Text(
-            localized("ui.once_frame_processing_finishes_would_you"),
-            color = StarColors.textSecondary, fontSize = 13.sp,
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            ArtImage(StarArt.ART_RENDERING, fitting = 96)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(localized("ui.render_video_after_processing"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                Text(
+                    localized("ui.once_frame_processing_finishes_would_you"),
+                    color = StarColors.textSecondary, fontSize = 13.sp,
+                )
+            }
+        }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             HoverTip(localized("ui.start_processing_now_and_stop_showing_render")) {
                 OutlinedButton(onClick = { app.confirmStartProcessing(autoRender = false, dontAskAgain = true) }) {
@@ -105,8 +112,13 @@ fun PreRenderOptionsDialog(app: AppViewModel) {
 @Composable
 fun PostProcessingRenderPrompt(app: AppViewModel) {
     PromptCard(onScrimClick = app::dismissPostRenderPrompt, onDefaultAction = app::confirmRenderAfterProcessing) {
-        Text(localized("ui.processing_complete"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-        Text(localized("ui.render_video_now"), color = StarColors.textSecondary, fontSize = 15.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            ArtImage(StarArt.ART_DONE)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(localized("ui.processing_complete"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                Text(localized("ui.render_video_now"), color = StarColors.textSecondary, fontSize = 15.sp)
+            }
+        }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             OutlinedButton(onClick = app::dismissPostRenderPrompt, modifier = Modifier.testTag("prompt.post.cancel")) { Text(localized("ui.cancel")) }
             Box(Modifier.weight(1f))
