@@ -357,7 +357,8 @@ uses = { exclusive = 1 }
 [suite.test-desktop]
 command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop test --no-daemon 2>&1"
 parser = "junit"
-results_file = "star-desktop/build/test-results/test/*.xml"
+# results_file is a literal path, not a glob: MASON reads it with fs::read.
+results_file = "star-desktop/build/test-results/test-all.xml"
 min_tests = 1 # UNMEASURED
 level = "t1"
 uses = { exclusive = 1 }
