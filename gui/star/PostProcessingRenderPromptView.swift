@@ -4,6 +4,31 @@ import StarCore
 struct PostProcessingRenderPromptView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
+    /// The frame on screen as it was and as star left it; left out unless both pictures exist.
+    @ViewBuilder
+    private var beforeAndAfter: some View {
+        if let frame = viewModel.currentFrame,
+           let before = frame.imageAccessor.urlForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .preview),
+           let after = frame.imageAccessor.urlForImage(frameIndex: frame.frameIndex, ofType: .final, atSize: .preview)
+        {
+            HStack(spacing: 8) {
+                picture(before)
+                Image(systemName: "arrow.right")
+                picture(after)
+            }
+              .frame(maxWidth: .infinity)
+        }
+    }
+
+    private func picture(_ url: URL) -> some View {
+        AsyncImage(url: url) { image in
+            image.resizable().aspectRatio(contentMode: .fit)
+        } placeholder: {
+            Color.clear
+        }
+          .frame(width: 240, height: 160)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 16) {
@@ -11,6 +36,8 @@ struct PostProcessingRenderPromptView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(localized("ui.processing_complete"))
                       .font(.title)
+
+                    beforeAndAfter
 
                     Text(localized("ui.render_video_now"))
                       .font(.title2)

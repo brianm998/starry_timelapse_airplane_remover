@@ -19,7 +19,9 @@ struct InfoDialogView: View {
                 HStack {
                     Spacer()
                       .frame(maxWidth: 200)
-                    VStack {
+                    VStack(spacing: 0) {
+                        InfoBanner()
+                        VStack {
                         Text(localized("ui.information_about_star"))
                           .font(.largeTitle)
                           .foregroundColor(.white)
@@ -46,11 +48,11 @@ struct InfoDialogView: View {
                             Text(localized("ui.close"))
                               .buttonStyle(ShrinkingButton())
                         }
+                          }
+                          .padding(20)
                     }
-                      .padding(20)
-                    //.frame(maxWidth: 500)
                       .background(Color.starDialogBackground)
-                      .cornerRadius(20)
+                      .clipShape(RoundedRectangle(cornerRadius: 20))
 
                     Spacer()
                       .frame(maxWidth: 200)
@@ -208,5 +210,21 @@ extension View {
           .background(Color.starDialogBackground)
           .foregroundColor(.white)
           .environment(\.colorScheme, .dark)
+    }
+}
+
+/// art_robot_and_dog cropped to the band that keeps the robot and dog whole, at the dialog's width.
+struct InfoBanner: View {
+    var body: some View {
+        let art = StarArt.robotAndDog
+        let top = WelcomeArt.bannerTop * art.size.height
+        Image(art.rawValue)
+          .resizable()
+          .interpolation(.high)
+          .frame(width: art.size.width, height: art.size.height)
+          .offset(y: -top)
+          .frame(width: WelcomeArt.bannerWidth, height: WelcomeArt.bannerHeight, alignment: .top)
+          .clipped()
+          .accessibilityHidden(true)
     }
 }

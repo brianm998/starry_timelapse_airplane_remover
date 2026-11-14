@@ -1,5 +1,6 @@
 package com.star.desktop.ui.dialogs
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -22,6 +26,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.star.desktop.ui.components.StarArt
+import com.star.desktop.ui.initial.WelcomeArt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -153,14 +162,24 @@ fun InfoDialog(selected: InfoType, onSelect: (InfoType) -> Unit, onClose: () -> 
     ) {
         Column(
             Modifier
-                .widthIn(max = 720.dp)
+                .widthIn(max = WelcomeArt.bannerWidth)
                 .fillMaxHeight(0.8f)
                 .clip(RoundedCornerShape(20.dp))
                 .background(StarColors.prefsCard)
-                .clickable(enabled = false) {}
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .clickable(enabled = false) {},
         ) {
+            // art_robot_and_dog cropped to the band that keeps the robot and dog whole, edge to edge so the dialog's corners clip it.
+            val art = StarArt.ART_ROBOT_AND_DOG
+            Box(Modifier.width(WelcomeArt.bannerWidth).height(WelcomeArt.bannerHeight).clipToBounds()) {
+                Image(
+                    painter = painterResource(art.resourcePath),
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier.requiredSize(art.width.dp, art.height.dp)
+                        .offset(y = -(art.height * WelcomeArt.BANNER_TOP).dp),
+                )
+            }
+            Column(Modifier.weight(1f).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(localized("ui.information_about_star"), color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 24.sp)
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 com.star.desktop.ui.components.VerticalStarPicker(
@@ -179,6 +198,7 @@ fun InfoDialog(selected: InfoType, onSelect: (InfoType) -> Unit, onClose: () -> 
             }
             Button(onClick = onClose, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
                 Text(localized("ui.close"))
+            }
             }
         }
     }
