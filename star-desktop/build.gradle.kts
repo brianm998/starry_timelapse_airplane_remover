@@ -483,7 +483,20 @@ tasks.named<ProcessResources>("processResources") {
     }
 }
 
+// MASON reads a suite's results_file as one literal path (no glob), so merge the per-class TEST-*.xml into one <testsuites> file.
+// finalizedBy: runs even when a test fails, which is when the verdict matters most.
+val mergeTestResults by tasks.registering {
+    val dir = layout.buildDirectory.dir("test-results/test")
+    val out = layout.buildDirectory.file("test-results/test-all.xml")
+    doLast {
+        val files = dir.get().asFile.listFiles { f -> f.name.startsWith("TEST-") && f.name.endsWith(".xml") }?.sortedBy { it.name } ?: emptyList()
+        val body = files.joinToString("\n") { it.readText().replace(Regex("^\\s*<\\?xml[^>]*\\?>"), "").trim() }
+        out.get().asFile.writeText("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<testsuites>\n$body\n</testsuites>\n")
+    }
+}
+
 tasks.test {
+    finalizedBy(mergeTestResults)
     useJUnitPlatform()
     // Print the failure message: the layout and no-hard-coded-strings tests list the offending labels and `file:line: "text"`s in it, and
     // without this the CI log shows only the assertion line.
