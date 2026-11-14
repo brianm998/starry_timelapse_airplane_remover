@@ -655,11 +655,15 @@ final class GPUMergeForcedOffTests: XCTestCase {
     /// GPU kernel's float32 statistics and the CPU's double ones can pick different values.
     private func sources(width: Int = 9, height: Int = 3, count: Int = 9) -> [MatWrapper] {
         let levels: [Int] = [10000, 10037, 10091, 10122, 10188, 10241, 10305, 10362, 10420]
-        return (0..<count).map { k in
-            makeMat(width: width, height: height) { x, y in
-                UInt16(levels[(x + k) % levels.count] + (k * 7 + y * 3) % 11)
-            }
+        var frames: [MatWrapper] = []
+        for k in 0..<count {
+            frames.append(makeMat(width: width, height: height) { (x: Int, y: Int) -> UInt16 in
+                let level: Int = levels[(x + k) % levels.count]
+                let jitter: Int = (k * 7 + y * 3) % 11
+                return UInt16(level + jitter)
+            })
         }
+        return frames
     }
 
     private func write(_ mat: MatWrapper, named name: String) throws -> String {
