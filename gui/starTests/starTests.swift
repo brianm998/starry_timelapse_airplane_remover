@@ -1086,6 +1086,8 @@ final class WarningAlertTests: XCTestCase {
         let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
                                       styleMask: [.titled, .resizable, .closable],
                                       backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil); window.contentView = nil; window.close() }
         window.contentView = host
         window.setContentSize(NSSize(width: 900, height: 600))
         settle()
@@ -1327,6 +1329,8 @@ final class WarningAlertTests: XCTestCase {
         let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
                                       styleMask: [.titled, .resizable, .closable],
                                       backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil); window.contentView = nil; window.close() }
         window.contentView = host
         window.setContentSize(NSSize(width: 900, height: 600))
         settle()
