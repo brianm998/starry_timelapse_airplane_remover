@@ -1,8 +1,8 @@
 #!/bin/bash
-# Checks the built star.app is team-signed with a stable designated requirement
+# Checks the built Star.app (the product is "Star"; worktrees sit on a case-sensitive volume) is team-signed with a stable designated requirement
 # (a team + bundle id requirement, never a cdhash). Skips the team checks when
 # STAR_TEST_SIGN_IDENTITY=- (ad hoc). Usage: check-gui-signing.sh [app]
-app="${1:-.build/gui-dd/Build/Products/Debug/star.app}"
+app="${1:-.build/gui-dd/Build/Products/Debug/Star.app}"
 # A machine whose Xcode has IDECustomDerivedDataLocation set (this Mac: "DerivedData") ignores
 # -derivedDataPath and builds under gui/DerivedData instead; accept that location too.
 [ -d "$app" ] || [ -n "${1-}" ] || { [ -d gui/DerivedData/Build/Products/Debug/Star.app ] && app=gui/DerivedData/Build/Products/Debug/Star.app; }
