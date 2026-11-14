@@ -7,6 +7,9 @@ Writes (all deterministic, so a second run changes nothing):
   gui/star/StarArt.swift
   star-desktop/src/main/kotlin/com/star/desktop/ui/components/StarArt.kt
 
+  gui/star/Assets.xcassets/AppIcon.appiconset/icon_*.png   (BR-2 below 128 px, BR-1 from 128 px)
+  star-desktop/packaging/{star.icns,star.ico,star.png}      (same split; star.png is BR-1 at 512)
+
   python3 art/export.py            write everything
   python3 art/export.py --check    write nothing; exit 1 if any output would change
   python3 art/export.py --sheet P  also write a contact sheet of every slot on #050A17 to P
@@ -277,6 +280,65 @@ fun StarArt.fittedSize(side: Int?): Pair<Int, Int> {{
 '''
 
 
+APPICON = os.path.join(ROOT, "gui", "star", "Assets.xcassets", "AppIcon.appiconset")
+PACKAGING = os.path.join(ROOT, "star-desktop", "packaging")
+APPICON_SLOTS = {"16x16": 16, "16x16@2x": 32, "32x32": 32, "32x32@2x": 64, "128x128": 128, "128x128@2x": 256,
+                 "256x256": 256, "256x256@2x": 512, "512x512": 512, "512x512@2x": 1024}
+ICON_SPLIT = 128   # below this the simplified BR-2 is used, from here up BR-1
+
+
+def icon_body(name):
+    """The master's body only: alpha < 128 is cleared (stray specks) and the canvas trimmed to the rest."""
+    im = Image.open(os.path.join(ART, "masters", name + ".png")).convert("RGBA")
+    a = np.asarray(im)[..., 3]
+    ys, xs = np.where(a >= 128)
+    box = (xs.min(), ys.min(), xs.max() + 1, ys.max() + 1)
+    arr = np.array(im)
+    keep = np.zeros(a.shape, bool)
+    keep[box[1]:box[3], box[0]:box[2]] = True
+    arr[~keep] = 0
+    return Image.fromarray(arr, "RGBA").crop(box)
+
+
+def icon_png(body, size, fill=824 / 1024):
+    w = round(size * fill)
+    h = max(1, round(body.height * w / body.width))
+    r = body.resize((w, h), Image.LANCZOS)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.paste(r, ((size - w) // 2, (size - h) // 2))
+    return encode(canvas, "png")
+
+
+def icon_files():
+    bodies = {"BR-1": icon_body("BR-1"), "BR-2": icon_body("BR-2")}
+    def png(size, fill=824 / 1024):
+        return icon_png(bodies["BR-2" if size < ICON_SPLIT else "BR-1"], size, fill)
+    files = {}
+    for slot, px in APPICON_SLOTS.items():
+        files[os.path.join(APPICON, f"icon_{slot}.png")] = png(px)
+    # icns: 'icns' + length, then (type, length, PNG) chunks
+    chunks = b""
+    for typ, px in (("ic11", 32), ("ic12", 64), ("ic07", 128), ("ic13", 256), ("ic08", 256),
+                    ("ic14", 512), ("ic09", 512), ("ic10", 1024)):
+        d = png(px)
+        chunks += typ.encode() + (8 + len(d)).to_bytes(4, "big") + d
+    files[os.path.join(PACKAGING, "star.icns")] = b"icns" + (8 + len(chunks)).to_bytes(4, "big") + chunks
+    # ico: ICONDIR + entries, PNG payloads
+    sizes = (16, 24, 32, 48, 64, 128, 256)
+    datas = [png(px) for px in sizes]
+    head = (0).to_bytes(2, "little") + (1).to_bytes(2, "little") + len(sizes).to_bytes(2, "little")
+    off = 6 + 16 * len(sizes)
+    ents = b""
+    for px, d in zip(sizes, datas):
+        b = 0 if px >= 256 else px
+        ents += bytes([b, b, 0, 0]) + (1).to_bytes(2, "little") + (32).to_bytes(2, "little") \
+            + len(d).to_bytes(4, "little") + off.to_bytes(4, "little")
+        off += len(d)
+    files[os.path.join(PACKAGING, "star.ico")] = head + ents + b"".join(datas)
+    files[os.path.join(PACKAGING, "star.png")] = icon_png(bodies["BR-1"], 512, 0.94)
+    return files
+
+
 def build():
     slots = json.load(open(os.path.join(ART, "slots.json")))["slots"]
     files, rows, images = {}, [], {}
@@ -290,6 +352,7 @@ def build():
         files[os.path.join(DESKTOP_RES, f"{n}.{ext}")] = files[os.path.join(d, f"{n}2x.{ext}")]
         rows.append({"name": n, "file": f"{n}.{ext}", "kind": slot["kind"], "w": im1.width, "h": im1.height})
         images[n] = (im1, slot, cleaned)
+    files.update(icon_files())
     files[SWIFT_OUT] = swift_src(rows).encode()
     files[KOTLIN_OUT] = kotlin_src(rows).encode()
     return files, images
