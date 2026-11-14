@@ -4262,7 +4262,7 @@ final class SharedConstantsTests: XCTestCase {
 
     /// Art A4: every StarArt slot is an imageset in the app's asset catalog and loads at its display size or larger.
     func testEveryStarArtSlotLoads() throws {
-        XCTAssertEqual(StarArt.allCases.count, 68)
+        XCTAssertEqual(StarArt.allCases.count, 69)
         for art in StarArt.allCases {
             let image = try XCTUnwrap(NSImage(named: art.rawValue), "\(art.rawValue) is not in the asset catalog")
             XCTAssertGreaterThan(image.size.width, 0, art.rawValue)
@@ -4270,6 +4270,14 @@ final class SharedConstantsTests: XCTestCase {
             XCTAssertGreaterThan(art.size.width, 0, art.rawValue)
             XCTAssertGreaterThan(art.size.height, 0, art.rawValue)
         }
+    }
+
+    func testSpeedSharpnessPresetArt() {
+        XCTAssertEqual(KeypointDivisorStartupView.presetArt(1.0), .presetBestQuality)
+        XCTAssertEqual(KeypointDivisorStartupView.presetArt(1.5), .presetBestBalance)
+        XCTAssertEqual(KeypointDivisorStartupView.presetArt(2.0), .presetFastest)
+        XCTAssertNil(KeypointDivisorStartupView.presetArt(3.0))
+        XCTAssertNil(KeypointDivisorStartupView.presetArt(1.25))
     }
 
     /// A3: the Speed vs. Sharpness sheet is all white text, so what it is drawn on must not be near-white.
