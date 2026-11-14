@@ -60,6 +60,9 @@ apply to it: don't translate it and don't build a Kotlin twin.
   wake a sleeping display), `"always"` runs them unconditionally. `STARPIPE_UI_NOW=1` lets the owner run one; it is ignored for a
   ticket. `test:gui` (`-only-testing:starTests`) still runs here, unseen: `StarMain` hosts it in a background-only app with no windows.
   Never give it `ui=True`: that wraps it in `caffeinate -d -u`, and `-u` turns a sleeping display on.
+- **A hung heavy job is MASON's to stop, not starpipe's.** masond watches every `mason run` child tree (SIGCONT after 10 silent
+  minutes, kill after 15: `cont_after_s`/`kill_after_s` in the project file). starpipe has no idle kill for heavy jobs and its
+  process watch covers only its own model sessions. To see what is stuck, use `mason task show` and `mason resources`.
 - **To stop all automated testing at once: `pipeline/bin/starpipe freeze`** (`thaw` lets go). It is MASON-backed: it runs
   `mason pause --mode all` and holds `mason hold --exclusive --pipeline starpipe --label freeze`, so MASON's tasks, the daemon,
   the agents in ticket worktrees and wrapped session commands all wait in masond's queue. It does not stop a run already
