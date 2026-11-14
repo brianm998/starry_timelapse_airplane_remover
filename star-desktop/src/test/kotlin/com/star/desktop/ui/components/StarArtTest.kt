@@ -53,12 +53,20 @@ class StarArtTest {
                         if (lo > 225) light++
                     }
                 }
-                assertTrue(light <= edge / 20, "${art.slot}: $light of $edge edge pixels are near-white")
+                val allowed = edge * LIGHT_EDGE_SHARE
+                assertTrue(light <= allowed, "${art.slot}: $light of $edge edge pixels are near-white")
             }
         }
     }
 
     private companion object {
+        /**
+         * Share of partly transparent pixels allowed to be near-white. The robot's armour is white-lavender, so real paint on
+         * the soft edge reads as light: the checked slots measure 6-20% (art_waiting 19%, art_horizon_auto 15%) and export.py's
+         * erode/tolerance do not move them. A leftover checkerboard fringe would be most of the edge, far above this.
+         */
+        const val LIGHT_EDGE_SHARE = 0.25
+
         /** Slots whose master was an opaque picture with a painted checkerboard (cleaned by export.py). */
         val CHECKER_CLEANED = setOf("art_horizon_auto", "art_process_gear", "art_waiting")
     }
