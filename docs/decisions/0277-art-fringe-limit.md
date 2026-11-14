@@ -1,5 +1,5 @@
-# 0277: Per-slot fringe limits instead of a re-matte
+# 0277: No per-slot fringe limits; use develop's shared one
 
-`StarArtTest` failed on art_horizon_auto (1290 of 8631 edge pixels near-white); raising `erode` did not help, so those pixels are the painted glow, not leftover checkerboard, and colour cannot separate the two. Once it was passed, eight more slots with the same kind of glow or light rim failed (up to 38% for art_step_render), plus a tiff16 corner at alpha 1/255.
+`StarArtTest` failed on art_horizon_auto (1290 of 8631 edge pixels near-white); raising `erode` did not help, so those pixels are the painted glow, not leftover checkerboard.
 
-Decision: keep 5% as the default, add `FRINGE_LIMIT_PERCENT` with a limit above each measured share, and allow corner alpha <= 1. Corner transparency is otherwise still checked. A real checkerboard fringe would be higher than these limits, and the art stays untouched.
+Decision: keep develop's shared `LIGHT_EDGE_SHARE = 0.25` (and `CORNER_ALPHA_MAX = 2`) from batch #197 rather than a per-slot map. It covers every measured slot (6-20%) and a real checkerboard fringe would sit far above it. The art stays untouched.
