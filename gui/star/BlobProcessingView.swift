@@ -438,7 +438,7 @@ struct StepRowView<T: Hashable>: View {
 
     var body: some View {
         GridRow {
-            Text("\(argType)")
+            Text(verbatim: String(describing: argType))
               .fixedSize(horizontal: false, vertical: true)
 
             let value = args.value(for: argType)
