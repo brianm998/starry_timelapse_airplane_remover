@@ -121,6 +121,38 @@ struct StartupView: View {
     }
 }
 
+/// The footage's own first frame under a question, so it can be answered by looking.  Draws nothing until frame 0 has a file.
+struct FirstFramePreview: View {
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+
+    var body: some View {
+        if let frame = viewModel.frames.first {
+            FirstFramePicture(frame: frame)
+        }
+    }
+}
+
+private struct FirstFramePicture: View {
+    let frame: FrameViewModel
+
+    var body: some View {
+        // reading existingImages makes this redraw when the preview arrives
+        let _ = frame.existingImages
+        let accessor = frame.imageAccessor
+        let url = accessor.urlForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .preview)
+          ?? accessor.urlForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .original)
+        if let url {
+            AsyncImage(url: url) { image in
+                image.resizable().aspectRatio(contentMode: .fit)
+            } placeholder: {
+                Color.clear
+            }
+              .frame(width: 320)
+              .clipShape(RoundedRectangle(cornerRadius: 6))
+        }
+    }
+}
+
 struct HorizonView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     @Binding fileprivate var state: StartupState
@@ -130,6 +162,7 @@ struct HorizonView: View {
             Text(localized("ui.does_this_video_include_a_horizon"))
               .font(.largeTitle)
               .foregroundColor(.white)
+            FirstFramePreview()
             Space(height: 10)
             HStack {
                 Spacer()
@@ -187,6 +220,7 @@ struct MovingView: View {
             Text(localized("ui.was_it_stationary_on_a_tripod_the_entire"))
               .font(.largeTitle)
               .foregroundColor(.white)
+            FirstFramePreview()
             Space(height: 10)
             HStack {
                 StartupBackButton { self.state = .horizon }

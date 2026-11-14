@@ -149,9 +149,30 @@ private fun PictureChoice(choice: StartupPictureChoice, onClick: () -> Unit) {
     }
 }
 
+/** The footage's own first frame, 320 dp wide; while frame 0 is not extracted yet, asks again each second. */
+@Composable
+private fun FirstFrame(app: AppViewModel) {
+    var picture by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    LaunchedEffect(app) {
+        while (picture == null) {
+            picture = app.framePicture(0, com.star.proto.FrameViewMode.VIEW_ORIGINAL)
+            if (picture == null) kotlinx.coroutines.delay(1000)
+        }
+    }
+    picture?.let {
+        androidx.compose.foundation.Image(
+            bitmap = it,
+            contentDescription = null,
+            modifier = Modifier.width(320.dp).clip(RoundedCornerShape(6.dp)).testTag("startup.firstframe"),
+            contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
+        )
+    }
+}
+
 @Composable
 private fun HorizonPrompt(app: AppViewModel) {
     Title(localized("ui.does_this_video_include_a_horizon"))
+    FirstFrame(app)
     AnswerRow(advanced = { app.startupOpenAdvanced() }) {
         PictureChoice(HORIZON_CHOICES[0]) { app.startupAnswerHorizon(false) }
         PictureChoice(HORIZON_CHOICES[1]) { app.startupAnswerHorizon(true) }
@@ -163,6 +184,7 @@ private fun MovingPrompt(app: AppViewModel) {
     Title(localized("ui.was_the_camera_moving_during_this_video"))
     Title(localized("ui.or"), small = true)
     Title(localized("ui.was_it_stationary_on_a_tripod_the_entire"))
+    FirstFrame(app)
     AnswerRow(back = { app.startupGoBack(StartupStep.MOVING) }, advanced = { app.startupOpenAdvanced() }) {
         PictureChoice(CAMERA_CHOICES[0]) { app.startupAnswerMoving(false) }
         PictureChoice(CAMERA_CHOICES[1]) { app.startupAnswerMoving(true) }
