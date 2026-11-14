@@ -101,6 +101,35 @@ public enum UseCannyEdgeDetectionForHorizon: InstructionOption,
     }
 }
       
+extension SceneType {
+    /// The scene picture the startup question shows for this choice, drawn in the help.
+    var settingsArt: StarArt? {
+        switch self {
+        case .skyHorizon: return .skyAndGround
+        case .skyOnly: return .skyOnly
+        }
+    }
+}
+
+extension CameraMotion {
+    var settingsArt: StarArt? {
+        switch self {
+        case .fixed: return .cameraStatic
+        case .moving: return .cameraMoving
+        }
+    }
+}
+
+extension AutoPreservationMode {
+    /// Automatic then selective for Yes; No has no picture of its own.
+    var settingsArt: StarArt? {
+        switch self {
+        case .yes: return .modeAutoSelective
+        case .no: return nil
+        }
+    }
+}
+
 enum SceneType: String, InstructionOption, Identifiable {
     case skyHorizon = "Sky + Horizon"
     case skyOnly = "Sky Only"
@@ -776,7 +805,8 @@ struct ProcessingSettingsView: View {
         return EnumInstructionGridRow<SceneType>(
           selection: $viewModel.sceneType,
           showInfo: $showSceneTypeInfo,
-          addSpacer: { addSpacer }
+          addSpacer: { addSpacer },
+          art: { $0.settingsArt }
         )        
     }
 
@@ -796,7 +826,8 @@ struct ProcessingSettingsView: View {
         return EnumInstructionGridRow<CameraMotion>(
           selection: $viewModel.cameraMotion,
           showInfo: $showCameraMotionInfo,
-          addSpacer: { addSpacer }
+          addSpacer: { addSpacer },
+          art: { $0.settingsArt }
         )        
     }
 
@@ -805,7 +836,8 @@ struct ProcessingSettingsView: View {
           selection: $autoPreservationMode,
           showInfo: $showAutoPreservationMethodInfo,
           addSpacer: { addSpacer },
-          isPrimary: false
+          isPrimary: false,
+          art: { $0.settingsArt }
         )        
           .disabled(!self.cleanMethod.usesAutoPreservation)
     }
@@ -814,7 +846,8 @@ struct ProcessingSettingsView: View {
         EnumInstructionGridRow<HighLevelCleanMethod>(
           selection: $cleanMethod,
           showInfo: $showProcessingMethodInfo,
-          addSpacer: { addSpacer }
+          addSpacer: { addSpacer },
+          art: { $0.changeModeArt }
         )
     }
 
@@ -1290,7 +1323,8 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showAllowEarthAlignmentInfo,
           addSpacer: { addSpacer },
-          infoText: localized("setting_help.allow_earth_alignment")
+          infoText: localized("setting_help.allow_earth_alignment"),
+          infoArt: .groundAlignment
         ) {
             HStack {
                 HStack {
@@ -1997,19 +2031,23 @@ struct EnumInstructionGridRow<E: InstructionOption>: View {
     /// Why an option cannot be chosen right now, or nil when it can.  The option is switched off and
     /// this takes the place of its hover text.
     let unavailableText: (E) -> String?
+    /// The picture shown between an option's title and its description in the help, or nil for none.
+    let art: (E) -> StarArt?
     
     init(
       selection: Binding<E>,
       showInfo: Binding<Bool>,
       addSpacer: @escaping () -> Bool,
       isPrimary: Bool = true,
-      unavailableText: @escaping (E) -> String? = { _ in nil }
+      unavailableText: @escaping (E) -> String? = { _ in nil },
+      art: @escaping (E) -> StarArt? = { _ in nil }
     ) {
         self._selection = selection
         self._showInfo = showInfo
         self.addSpacer = addSpacer
         self.isPrimary = isPrimary
         self.unavailableText = unavailableText
+        self.art = art
     }
     
     var body: some View {
@@ -2023,7 +2061,11 @@ struct EnumInstructionGridRow<E: InstructionOption>: View {
                         .foregroundColor(.white)
                         .font(.largeTitle)
                         .fixedSize(horizontal: false, vertical: true)
-                      
+
+                      if let picture = art(item) {
+                          ArtImage(picture)
+                      }
+
                       Text(item.descriptionText)
                         .foregroundColor(.white)
                         .font(.body)

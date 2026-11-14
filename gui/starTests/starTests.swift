@@ -4188,6 +4188,15 @@ final class SharedConstantsTests: XCTestCase {
     }
 
     /// Art: the Change Mode dialog's clean choices map to their tiles; both dirty modes share one.
+    func testSettingsChoiceArt() {
+        XCTAssertEqual(SceneType.skyHorizon.settingsArt, .skyAndGround)
+        XCTAssertEqual(SceneType.skyOnly.settingsArt, .skyOnly)
+        XCTAssertEqual(CameraMotion.fixed.settingsArt, .cameraStatic)
+        XCTAssertEqual(CameraMotion.moving.settingsArt, .cameraMoving)
+        XCTAssertEqual(AutoPreservationMode.yes.settingsArt, .modeAutoSelective)
+        XCTAssertNil(AutoPreservationMode.no.settingsArt)
+    }
+
     func testChangeModeTiles() {
         XCTAssertEqual(HighLevelCleanMethod.automatic.changeModeArt, .changeModeAutomatic)
         XCTAssertEqual(HighLevelCleanMethod.selective.changeModeArt, .changeModeSelective)
