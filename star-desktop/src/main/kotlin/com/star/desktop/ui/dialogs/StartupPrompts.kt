@@ -239,6 +239,14 @@ internal const val CLEANUP_AUTO_SELECTIVE_TILE = 40
 internal const val CLEANUP_GROUND_ALIGNMENT_TILE = 48
 internal val CLEANUP_GROUND_ALIGNMENT_ART = StarArt.ART_GROUND_ALIGNMENT
 
+/** The tile beside a Speed vs. Sharpness preset's name; none for a divisor that is not one of the three. */
+internal fun presetArt(divisor: Double): StarArt? = when {
+    KeypointDivisor.matches(divisor, 1.0) -> StarArt.ART_PRESET_BEST_QUALITY
+    KeypointDivisor.matches(divisor, 1.5) -> StarArt.ART_PRESET_BEST_BALANCE
+    KeypointDivisor.matches(divisor, 2.0) -> StarArt.ART_PRESET_FASTEST
+    else -> null
+}
+
 /** The tile for a clean method's row (automatic with auto-selective is the switch's tile). */
 internal fun cleanupTile(method: CleanMethod): StarArt = when (method) {
     CleanMethod.CLEAN_SELECTIVE -> StarArt.ART_MODE_SELECTIVE
@@ -377,6 +385,7 @@ fun SpeedSharpnessDialog(initial: Double, advice: KeypointDivisorAdvice?, onCanc
         ) {
             Title(localized("ui.speed_vs_sharpness"))
             Body(KeypointDivisor.explanation(advice))
+            ArtImage(StarArt.ART_SETTING_KEYPOINT_SIZE, Modifier.align(Alignment.CenterHorizontally))
             for (preset in KeypointDivisor.presets) {
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -385,6 +394,7 @@ fun SpeedSharpnessDialog(initial: Double, advice: KeypointDivisorAdvice?, onCanc
                             // Exclusive: checking one selects it, and unchecking the checked one does nothing.
                             onCheckedChange = { if (it) { draft.choose(preset.divisor); divisor = draft.current } },
                         )
+                        presetArt(preset.divisor)?.let { ArtImage(it) }
                         Text(localized(preset.nameKey), color = StarColors.textPrimary, fontSize = 15.sp)
                         Text(KeypointDivisor.format(preset.divisor), color = StarColors.textDisabled, fontSize = 15.sp)
                         if (KeypointDivisor.isRecommended(advice, preset.divisor)) {
@@ -394,7 +404,7 @@ fun SpeedSharpnessDialog(initial: Double, advice: KeypointDivisorAdvice?, onCanc
                             )
                         }
                     }
-                    Text(localized(preset.blurbKey), color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 42.dp))
+                    Text(localized(preset.blurbKey), color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 88.dp))
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -4263,6 +4263,14 @@ final class SharedConstantsTests: XCTestCase {
         }
     }
 
+    func testSpeedSharpnessPresetArt() {
+        XCTAssertEqual(KeypointDivisorStartupView.presetArt(1.0), .presetBestQuality)
+        XCTAssertEqual(KeypointDivisorStartupView.presetArt(1.5), .presetBestBalance)
+        XCTAssertEqual(KeypointDivisorStartupView.presetArt(2.0), .presetFastest)
+        XCTAssertNil(KeypointDivisorStartupView.presetArt(3.0))
+        XCTAssertNil(KeypointDivisorStartupView.presetArt(1.25))
+    }
+
     /// A3: the Speed vs. Sharpness sheet is all white text, so what it is drawn on must not be near-white.
     @MainActor
     func testSpeedSheetBackgroundIsNotWhite() throws {
