@@ -436,7 +436,10 @@ struct AlignmentKeypointsChart: View {
 
 struct AlignmentDeviationChart: View {
 
-    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    /// Optional so an example chart can be hosted with no sequence at all: SwiftUI resolves a
+    /// non-optional `@Environment(Type.self)` on every update, read or not, and traps when
+    /// nothing provides it.  The real charts always sit under a view model.
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel?
 
     let frames: [[AlignmentWarpInfoCodable]]
 
@@ -556,7 +559,7 @@ struct AlignmentDeviationChart: View {
             }
 
             // === Current frame indicator ===
-            if !isExample {
+            if !isExample, let viewModel {
                 RuleMark(
                   x: .value(localized("ui.current_frame"), viewModel.currentIndex)
                 )
@@ -593,9 +596,9 @@ struct AlignmentDeviationChart: View {
             }
         }
           .chartPlotStyle { $0.clipped() }
-          .onChange(of: isExample ? 0 : viewModel.currentIndex) {
-              guard !isExample else { return }
-              ensureVisible(frame: viewModel.currentIndex)
+          .onChange(of: isExample ? nil : viewModel?.currentIndex) { _, current in
+              guard !isExample, let current else { return }
+              ensureVisible(frame: current)
           }
           .chartXScale(domain: xDomain)
           .chartXAxisLabel {
@@ -635,7 +638,7 @@ struct AlignmentDeviationChart: View {
                     .fill(.clear)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if let hoveredFrame {
+                        if let hoveredFrame, let viewModel {
                             viewModel.currentIndex = hoveredFrame
                         }
                     }
@@ -967,7 +970,6 @@ extension Color {
     }
 }
 
-/// The circled "i" that asks for the explanation of the alignment charts.
 /// The four example charts of the "About the alignment charts" panel: a fixed or a moving
 /// camera, a good alignment or one to watch.  Fixed data, drawn by the real
 /// `AlignmentDeviationChart`; `gherkin/ui/vectors/alignmentExamples.json` holds sample points
@@ -1014,6 +1016,7 @@ enum AlignmentExamples {
     }
 }
 
+/// The circled "i" that asks for the explanation of the alignment charts.
 struct AlignmentInfoButton: View {
     let action: () -> Void
 
