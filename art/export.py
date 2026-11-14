@@ -25,7 +25,7 @@ DESKTOP_RES = os.path.join(ROOT, "star-desktop", "src", "main", "resources", "ar
 SWIFT_OUT = os.path.join(ROOT, "gui", "star", "StarArt.swift")
 KOTLIN_OUT = os.path.join(ROOT, "star-desktop", "src", "main", "kotlin", "com", "star", "desktop", "ui", "components", "StarArt.kt")
 
-# Defaults, overridable per slot in slots.json ("tolerance", "spread", "erode").
+# Defaults, overridable per slot in slots.json ("tolerance", "spread", "erode", "snap", "snap_opaque").
 CHECKER_TOLERANCE = 0.20   # a checker tone this far below white (and neutral) still counts as background
 NEUTRAL_SPREAD = 0.08      # max-min channel spread for "neutral grey"
 BLACK_TOLERANCE = 0.16     # tile corners: pixels this close to black
@@ -130,6 +130,20 @@ def crop_ratio(im, ratio, anchor):
     return im.crop((0, y, w, y + nh))
 
 
+def snap_alpha(im, slot):
+    """Optional per-slot "snap": after sizing, clear edge alpha below snap and make alpha above
+    "snap_opaque" (default 255 - snap) opaque, so no faint near-white rim survives resampling."""
+    snap = slot.get("snap")
+    if not snap:
+        return im
+    keep = slot.get("snap_opaque", 255 - snap)
+    a = np.asarray(im.getchannel("A"))
+    a = np.where(a >= keep, 255, np.where(a < snap, 0, a)).astype(np.uint8)
+    out = im.copy()
+    out.putalpha(Image.fromarray(a, "L"))
+    return out
+
+
 def process(slot):
     """-> (im1x, im2x, ext, cleaned)"""
     kind = slot["kind"]
@@ -153,7 +167,8 @@ def process(slot):
     s2 = min(2 * scale, 1.0)             # never upscale
     s1 = min(scale, s2)
     def sized(s):
-        return im if s == 1.0 else im.resize((max(1, round(iw * s)), max(1, round(ih * s))), Image.LANCZOS)
+        out = im if s == 1.0 else im.resize((max(1, round(iw * s)), max(1, round(ih * s))), Image.LANCZOS)
+        return snap_alpha(out, slot) if kind != "scene" else out
     return sized(s1), sized(s2), ("jpg" if kind == "scene" else "png"), cleaned
 
 

@@ -21,7 +21,7 @@ class NoHardCodedStringsTest {
     )
 
     /** Lines of ProcessingSettingsDialog.kt whose literals are field ids (the key of the edit maps, never drawn): what the row says is its labelKey. */
-    private val FIELD_ID_LINE = Regex("""^\s*((Int|Bool|Double)Field\(|"[^"]*" to listOf\(|(private|internal) (const )?va[lr] [A-Za-z_]+(: [^=]+)? = )""")
+    private val FIELD_ID_LINE = Regex("""^\s*((Int|Bool|Double)Field\(|"[^"]*" to (listOf\(|StarArt\.)|(private|internal) (const )?va[lr] [A-Za-z_]+(: [^=]+)? = )""")
 
     private val sink = Regex(
         """(?:\bText\(\s*(?:text\s*=\s*)?|\bHoverTip\(\s*|\bChip\(\s*|\bSectionTitle\(\s*|\bPrimaryButton\(\s*|\bSecondaryButton\(\s*|""" +

@@ -33,6 +33,67 @@ struct StartupBackButton: View {
 }
 
 
+/// One answer drawn as a picture over its word. The tables below drive the three question views and their tests.
+struct StartupPictureChoice {
+    let id: String
+    let art: StarArt
+    let labelKey: String
+
+    /// Does this video include a horizon? [No, Yes]
+    static let horizon = [
+        StartupPictureChoice(id: "startup.horizon.no", art: .skyOnly, labelKey: "ui.no"),
+        StartupPictureChoice(id: "startup.horizon.yes", art: .skyAndGround, labelKey: "ui.yes"),
+    ]
+    /// Was the camera moving? [Static, Moving]
+    static let camera = [
+        StartupPictureChoice(id: "startup.moving.static", art: .cameraStatic, labelKey: "ui.static"),
+        StartupPictureChoice(id: "startup.moving.moving", art: .cameraMoving, labelKey: "ui.moving"),
+    ]
+    /// Select the horizon yourself? [No, Yes]
+    static let selectHorizon = [
+        StartupPictureChoice(id: "startup.selecthorizon.no", art: .horizonAuto, labelKey: "ui.no"),
+        StartupPictureChoice(id: "startup.selecthorizon.yes", art: .horizonBrush, labelKey: "ui.yes"),
+    ]
+}
+
+/// The picture-over-word button. The accessibility id sits on the Button itself, which the UI features click.
+struct PictureChoiceButton: View {
+    let choice: StartupPictureChoice
+    let action: () -> Void
+    @State private var hovering = false
+    @FocusState private var focused: Bool
+
+    init(_ choice: StartupPictureChoice, action: @escaping () -> Void) {
+        self.choice = choice
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                ArtImage(choice.art)
+                Text(localized(choice.labelKey))
+                  .font(.title)
+                  .foregroundColor(.white)
+            }
+              .padding(8)
+              .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                  .stroke(Color.white, lineWidth: 2)
+                  .opacity(hovering || focused ? 0.9 : 0)
+              )
+              .contentShape(Rectangle())
+        }
+          .buttonStyle(PlainButtonStyle())
+          .focusable()
+          .focused($focused)
+          .onHover { hovering = $0 }
+          .fixedSize(horizontal: true, vertical: true)
+          .accessibilityIdentifier(choice.id)
+    }
+}
+
+
 struct StartupView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
 
@@ -72,42 +133,17 @@ struct HorizonView: View {
             Space(height: 10)
             HStack {
                 Spacer()
-                Button {
+                PictureChoiceButton(StartupPictureChoice.horizon[0]) {
                     self.state = .moving
                     viewModel.horizonDetectionEnabled = false
-                } label: {
-                    Text(localized("ui.no"))
-                      .font(.title)
-                      .foregroundColor(.black)
-                      .padding(10)
-                      .background(
-                        RoundedRectangle(cornerRadius: 20)
-                          .fill(.white)
-                      )
                 }
-                  .fixedSize(horizontal: true, vertical: true)
-                  .buttonStyle(PlainButtonStyle())
-                  .accessibilityIdentifier("startup.horizon.no")
 
                 Space(width: 20)
-                
-                Button {
+
+                PictureChoiceButton(StartupPictureChoice.horizon[1]) {
                     self.state = .moving
                     viewModel.horizonDetectionEnabled = true
-                } label: {
-                    Text(localized("ui.yes"))
-                      .font(.title)
-                      .foregroundColor(.white)
-                      .padding(10)
-                      .background(
-                        RoundedRectangle(cornerRadius: 20)
-                          .fill(Color.blue.opacity(0.7))
-                         
-                      )
                 }
-                  .buttonStyle(PlainButtonStyle())
-                  .accessibilityIdentifier("startup.horizon.yes")
-                  .fixedSize(horizontal: true, vertical: true)
                 Spacer()
                 
                 Button {
@@ -155,49 +191,25 @@ struct MovingView: View {
             HStack {
                 StartupBackButton { self.state = .horizon }
                 Spacer()
-                Button {
+                PictureChoiceButton(StartupPictureChoice.camera[0]) {
                     viewModel.cameraMotion = .fixed
                     if viewModel.horizonDetectionEnabled {
                         self.state = .selectHorizon
                     } else {
                         self.state = .removal
                     }
-                } label: {
-                    Text(localized("ui.static"))
-                      .font(.title)
-                      .foregroundColor(.black)
-                      .padding(10)
-                      .background(
-                        RoundedRectangle(cornerRadius: 20)
-                          .fill(.white)
-                      )
                 }
-                  .fixedSize(horizontal: true, vertical: true)
-                  .buttonStyle(PlainButtonStyle())
-                  .accessibilityIdentifier("startup.moving.static")
 
                 Space(width: 20)
-                
-                Button {
+
+                PictureChoiceButton(StartupPictureChoice.camera[1]) {
                     viewModel.cameraMotion = .moving
                     if viewModel.horizonDetectionEnabled {
                         self.state = .selectMovingHorizons
                     } else {
                         self.state = .removal
                     }
-                } label: {
-                    Text(localized("ui.moving"))
-                      .font(.title)
-                      .foregroundColor(.white)
-                      .padding(10)
-                      .background(
-                        RoundedRectangle(cornerRadius: 20)
-                          .fill(Color.blue.opacity(0.7))
-                      )
                 }
-                  .buttonStyle(PlainButtonStyle())
-                  .accessibilityIdentifier("startup.moving.moving")
-                  .fixedSize(horizontal: true, vertical: true)
                 Spacer()
                 
                 Button {
@@ -242,6 +254,8 @@ struct SelectMovingHorizonsView: View {
             Text(localized("ui.star_allows_you_to_tell_it_where_the_horizon_2"))
               .font(.body)
               .foregroundColor(.white)
+            Space(height: 10)
+            ArtImage(.horizonKeyframes)
             Space(height: 10)
             HStack {
                 StartupBackButton { self.state = .moving }
@@ -325,39 +339,15 @@ struct SelectHorizonView: View {
             HStack {
                 StartupBackButton { self.state = .moving }
                 Spacer()
-                Button {
+                PictureChoiceButton(StartupPictureChoice.selectHorizon[0]) {
                     self.state = .removal
-                } label: {
-                    Text(localized("ui.no"))
-                      .font(.title)
-                      .foregroundColor(.black)
-                      .padding(10)
-                      .background(
-                        RoundedRectangle(cornerRadius: 20)
-                          .fill(.white)
-                      )
                 }
-                  .fixedSize(horizontal: true, vertical: true)
-                  .buttonStyle(PlainButtonStyle())
-                  .accessibilityIdentifier("startup.selecthorizon.no")
 
                 Space(width: 20)
 
-                Button {
+                PictureChoiceButton(StartupPictureChoice.selectHorizon[1]) {
                     viewModel.startStaticHorizonStartupFlow()
-                } label: {
-                    Text(localized("ui.yes"))
-                      .font(.title)
-                      .foregroundColor(.white)
-                      .padding(10)
-                      .background(
-                        RoundedRectangle(cornerRadius: 20)
-                          .fill(Color.blue.opacity(0.7))
-                      )
                 }
-                  .buttonStyle(PlainButtonStyle())
-                  .fixedSize(horizontal: true, vertical: true)
-                  .accessibilityIdentifier("startup.selecthorizon.yes")
                 Spacer()
             }
         }

@@ -13,7 +13,7 @@ here names a star path or class: the caller (adapter_star) passes the class grou
 Shard logs are `DIR/NAME.shard<k>.log`: k = 0 is the catch-all (every class of the bundle no other shard names, so a class
 added later is still run), then the concurrent shards in order, then the serial ones. Serial shards run one at a time after
 every concurrent shard has ended, alone on the machine. Everything is also streamed to stdout with a `[shard k]` prefix, so
-the heavy job's idle watchdog sees activity and a hung test's name stays visible. Exit non-zero if the build or any shard
+masond's stall watch sees activity and a hung test's name stays visible. Exit non-zero if the build or any shard
 failed, or if a shard names a class the bundle does not have.
 """
 
