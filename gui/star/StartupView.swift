@@ -149,6 +149,7 @@ private struct FirstFramePicture: View {
             }
               .frame(width: 320)
               .clipShape(RoundedRectangle(cornerRadius: 6))
+              .accessibilityIdentifier("startup.firstframe")
         }
     }
 }
