@@ -292,10 +292,7 @@ uses = { exclusive = 1 }
 [suite.test-StarCpp-wgpu]
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path StarCpp --filter StarCppWGPUTests 2>&1"
 parser = "xctest"
-# Every StarCppWGPUTests case skips ("built without wgpu-native") unless wgpu/fetch.sh has put wgpu-native
-# in wgpu/<platform>/, and this Mac has neither that artifact nor a GPU we may drive. So the suite passing
-# means "builds, nothing failed"; the tests really run on CI, which fetches wgpu-native.
-min_tests = 0
+min_tests = 1 # UNMEASURED
 level = "t1"
 uses = { test-suite = 1 }
 
