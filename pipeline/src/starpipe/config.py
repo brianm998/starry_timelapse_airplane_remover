@@ -82,12 +82,7 @@ class Config(BaseModel):
     # rerun) lets the batch land with a note on its PR. `macos_gate_hard` holds the batch instead (and dispatches the gate again each wait).
     macos_gate_wait_s: float = 3 * 3600.0
     macos_gate_hard: bool = False
-    heavy_wait_report_s: float = 60.0
-    # A heavy job whose process group used under 1% of a core and wrote nothing to its log for this long is killed and reported
-    # as hung (0 turns it off). A wedged xctest sat 1h35m at 0% CPU on the only slot (2026-11-03).
-    heavy_idle_kill_s: float = 900.0
-    heavy_idle_grace_s: float = 10.0  # SIGTERM, then SIGKILL after this
-    heavy_idle_poll_s: float = 5.0
+    heavy_idle_poll_s: float = 5.0  # how often a running job's CPU and memory are sampled (starpipe never stops it: masond does)
     api_port: int = 47231
     java_home: str = ""  # JDK 21 for star-desktop builds; empty: $JAVA_HOME, else the adapter's candidates
     remote: str = "https"  # "https" (the daemon, token from github.env or gh) or "origin" (tests, a local bare repo)

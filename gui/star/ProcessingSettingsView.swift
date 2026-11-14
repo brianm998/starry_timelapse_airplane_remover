@@ -834,7 +834,8 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showNeighborFrameInfo,
           addSpacer: { addSpacer },
-          infoText: localized("setting_help.neighbor_frames")
+          infoText: localized("setting_help.neighbor_frames"),
+          infoArt: .settingNeighbors
         ) {
             HStack {
                 HStack {
@@ -906,7 +907,8 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showPixelThresholdInfo,
           addSpacer: { addSpacer },
-          infoText: localized("setting_help.pixel_threshold")
+          infoText: localized("setting_help.pixel_threshold"),
+          infoArt: .settingThreshold
         ) {
             HStack {
                 HStack {
@@ -1384,7 +1386,8 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showCloudAwareMergeInfo,
           addSpacer: { addSpacer },
-          infoText: localized("setting_help.cloud_aware_merge")
+          infoText: localized("setting_help.cloud_aware_merge"),
+          infoArt: .settingClouds
         ) {
             HStack {
                 HStack {
@@ -1716,7 +1719,8 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showHorizonSpikeRemovalEnabledInfo,
           addSpacer: { addSpacer },
-          infoText: localized("setting_help.spike_removal")
+          infoText: localized("setting_help.spike_removal"),
+          infoArt: .settingSpikes
         ) {
             HStack {
                 HStack {
@@ -1957,6 +1961,7 @@ struct InfoTextInstructionGridRow<Content: View>: View {
     @Binding var showInfo: Bool
     let addSpacer: () -> Bool
     let infoText: String
+    var infoArt: StarArt? = nil
     let contentView: () -> Content
 
     var body: some View {
@@ -1964,10 +1969,15 @@ struct InfoTextInstructionGridRow<Content: View>: View {
           showInfo: $showInfo,
           addSpacer: addSpacer,
           infoView: {
-              Text(infoText)
-                .foregroundColor(.white)
-                .lineLimit(nil)
-                .fixedSize(horizontal: false, vertical: true)
+              VStack(alignment: .leading, spacing: 8) {
+                  if let infoArt {
+                      ArtImage(infoArt)
+                  }
+                  Text(infoText)
+                    .foregroundColor(.white)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+              }
           },
           contentView: contentView
         )
@@ -2061,7 +2071,8 @@ extension ProcessingSettingsView {
         return InfoTextInstructionGridRow(
           showInfo: $showMemoryBudgetFractionInfo,
           addSpacer: { addSpacer },
-          infoText: localized("setting_help.memory_budget")
+          infoText: localized("setting_help.memory_budget"),
+          infoArt: .settingMemory
         ) {
             HStack {
                 HStack {
