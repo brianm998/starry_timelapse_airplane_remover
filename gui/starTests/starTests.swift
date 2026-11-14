@@ -5722,6 +5722,13 @@ final class DarkAppearanceTests: XCTestCase {
             alert.window.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]), .darkAqua,
             "a fresh NSAlert must be drawn dark")
     }
+
+    func testHorizonPainterDiagrams() {
+        XCTAssertEqual(horizonPainterDiagrams(isMoving: false),
+                       [.paintBrush, .paintFill, .paintTouchUp])
+        XCTAssertEqual(horizonPainterDiagrams(isMoving: true),
+                       [.paintBrush, .paintFill, .paintTouchUp, .paintMoving])
+    }
 }
 
 
