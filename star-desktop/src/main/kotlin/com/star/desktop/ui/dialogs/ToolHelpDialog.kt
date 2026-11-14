@@ -28,8 +28,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.ToolType
 import com.star.desktop.i18n.localized
+import com.star.desktop.ui.components.ArtImage
+import com.star.desktop.ui.components.StarArt
 import com.star.desktop.ui.components.toolPainter
 import com.star.desktop.ui.theme.StarColors
+
+/** The before-and-after diagram under a tool's description; null for [ToolType.NONE]. */
+fun toolHelpArt(t: ToolType): StarArt? = when (t) {
+    ToolType.REMOVE -> StarArt.ART_TOOL_REMOVE
+    ToolType.KEEP -> StarArt.ART_TOOL_KEEP
+    ToolType.RAZOR -> StarArt.ART_TOOL_RAZOR
+    ToolType.SHOVEL -> StarArt.ART_TOOL_SHOVEL
+    ToolType.TRASH -> StarArt.ART_TOOL_TRASH
+    ToolType.REMOVE_FROM_TRASH -> StarArt.ART_TOOL_GET_FROM_TRASH
+    ToolType.MULTI -> StarArt.ART_TOOL_MULTI
+    ToolType.INFORMATION -> StarArt.ART_TOOL_INFORMATION
+    ToolType.NONE -> null
+}
 
 /** Detailed explanation of every editing tool (macOS `ToolHelpView`); opened by the "i" in the right panel. */
 @Composable
@@ -61,6 +76,7 @@ fun ToolHelpDialog(onClose: () -> Unit) {
                         Column {
                             Text(t.displayName, color = StarColors.white, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             Text(t.helpText, color = StarColors.white, fontSize = 13.sp)
+                            toolHelpArt(t)?.let { ArtImage(it) }
                         }
                     }
                 }
