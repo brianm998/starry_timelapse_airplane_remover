@@ -4223,6 +4223,21 @@ final class SharedConstantsTests: XCTestCase {
         XCTAssertEqual(ArtImage(HighLevelCleanMethod.dirty.changeModeArt).displaySize, CGSize(width: 40, height: 40))
     }
 
+    /// Art: each Welcome button shows its 48 pt tile; the greeter steps aside in small windows; the banner keeps the robot and dog.
+    func testWelcomeButtonTiles() {
+        XCTAssertEqual(InitialView.OpenKind.video.tileArt, .tileLoadVideo)
+        XCTAssertEqual(InitialView.OpenKind.sequence.tileArt, .tileLoadSequence)
+        XCTAssertEqual(InitialView.OpenKind.config.tileArt, .tileLoadConfig)
+        for art in [StarArt.tileLoadVideo, .tileLoadSequence, .tileLoadConfig, .tileLearn] {
+            XCTAssertEqual(ArtImage(art).displaySize, CGSize(width: 48, height: 48))
+        }
+        XCTAssertFalse(WelcomeArt.greeterShown(window: CGSize(width: 700, height: 500)))
+        XCTAssertFalse(WelcomeArt.greeterShown(window: CGSize(width: 1280, height: 500)))
+        XCTAssertTrue(WelcomeArt.greeterShown(window: CGSize(width: 1280, height: 800)))
+        XCTAssertTrue(WelcomeArt.bannerTop <= 0.35 && WelcomeArt.bannerBottom >= 0.92)
+        XCTAssertEqual(WelcomeArt.bannerHeight, 294)
+    }
+
     private func assertPictures(_ rows: [StartupPictureChoice], _ expected: [(String, String, String, String)],
                                 file: StaticString = #filePath, line: UInt = #line) throws {
         StarLocalization.shared.languageOverride = "en"
