@@ -17,7 +17,7 @@ class StarArtTest {
 
     @Test
     fun everySlotLoads() {
-        assertEquals(62, StarArt.entries.size)
+        assertEquals(68, StarArt.entries.size)
         for (art in StarArt.entries) {
             val img = load(art)
             // The resource is the 2x image, or the largest the master allows (never upscaled).
@@ -73,6 +73,6 @@ class StarArtTest {
         const val CORNER_ALPHA_MAX = 2
 
         /** Slots whose master was an opaque picture with a painted checkerboard (cleaned by export.py). */
-        val CHECKER_CLEANED = setOf("art_horizon_auto", "art_process_gear", "art_waiting")
+        val CHECKER_CLEANED = setOf("art_horizon_auto", "art_waiting")
     }
 }

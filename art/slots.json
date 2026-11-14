@@ -468,6 +468,48 @@
    "kind": "tile",
    "width": 40,
    "height": 40
+  },
+  {
+   "name": "art_drop_hover",
+   "source": "WL-3",
+   "kind": "cutout",
+   "width": 96,
+   "height": 96
+  },
+  {
+   "name": "art_preset_best_quality",
+   "source": "SU-7a",
+   "kind": "tile",
+   "width": 40,
+   "height": 40
+  },
+  {
+   "name": "art_preset_best_balance",
+   "source": "SU-7b",
+   "kind": "tile",
+   "width": 40,
+   "height": 40
+  },
+  {
+   "name": "art_preset_fastest",
+   "source": "SU-7c",
+   "kind": "tile",
+   "width": 40,
+   "height": 40
+  },
+  {
+   "name": "art_setting_horizon_extension",
+   "source": "ST-5",
+   "kind": "scene",
+   "width": 320,
+   "height": 140
+  },
+  {
+   "name": "art_setting_keypoint_size",
+   "source": "ST-6",
+   "kind": "scene",
+   "width": 320,
+   "height": 140
   }
  ]
 }

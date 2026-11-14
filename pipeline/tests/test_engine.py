@@ -185,6 +185,8 @@ def gated(rig: Rig, monkeypatch: pytest.MonkeyPatch, capacity: int) -> Gate:
 
     gate = Gate(capacity)
     monkeypatch.setattr(masonq.Hold, "start", staticmethod(gate.start))
+    # the gate is masond here: probing a fake `mason` process per attempt only adds load-sensitive delay (it timed a CI run out)
+    monkeypatch.setattr(masonq, "reachable", lambda: True)
 
     async def sleep(_: float) -> None:
         await asyncio.sleep(0.01)

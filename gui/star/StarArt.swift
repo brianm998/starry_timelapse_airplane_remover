@@ -65,6 +65,12 @@ enum StarArt: String, CaseIterable {
     case changeModeAutomatic = "art_change_mode_automatic"
     case changeModeSelective = "art_change_mode_selective"
     case changeModeDirty = "art_change_mode_dirty"
+    case dropHover = "art_drop_hover"
+    case presetBestQuality = "art_preset_best_quality"
+    case presetBestBalance = "art_preset_best_balance"
+    case presetFastest = "art_preset_fastest"
+    case settingHorizonExtension = "art_setting_horizon_extension"
+    case settingKeypointSize = "art_setting_keypoint_size"
 
     enum Kind { case cutout, tile, scene }
 
@@ -132,6 +138,12 @@ enum StarArt: String, CaseIterable {
         case .changeModeAutomatic: return .tile
         case .changeModeSelective: return .tile
         case .changeModeDirty: return .tile
+        case .dropHover: return .cutout
+        case .presetBestQuality: return .tile
+        case .presetBestBalance: return .tile
+        case .presetFastest: return .tile
+        case .settingHorizonExtension: return .scene
+        case .settingKeypointSize: return .scene
         }
     }
 
@@ -140,8 +152,8 @@ enum StarArt: String, CaseIterable {
         switch self {
         case .wordmark: return CGSize(width: 360, height: 69)
         case .welcomeBackground: return CGSize(width: 1279, height: 720)
-        case .robotAndDog: return CGSize(width: 680, height: 383)
-        case .greeter: return CGSize(width: 157, height: 220)
+        case .robotAndDog: return CGSize(width: 680, height: 453)
+        case .greeter: return CGSize(width: 150, height: 220)
         case .tileLoadVideo: return CGSize(width: 48, height: 48)
         case .tileLoadSequence: return CGSize(width: 48, height: 48)
         case .tileLoadConfig: return CGSize(width: 48, height: 48)
@@ -159,8 +171,8 @@ enum StarArt: String, CaseIterable {
         case .modeAutoSelective: return CGSize(width: 64, height: 64)
         case .groundAlignment: return CGSize(width: 64, height: 64)
         case .settings: return CGSize(width: 49, height: 64)
-        case .process: return CGSize(width: 56, height: 51)
-        case .processBody: return CGSize(width: 43, height: 56)
+        case .process: return CGSize(width: 56, height: 56)
+        case .processBody: return CGSize(width: 41, height: 56)
         case .processGear: return CGSize(width: 56, height: 56)
         case .done: return CGSize(width: 116, height: 120)
         case .rendering: return CGSize(width: 96, height: 84)
@@ -200,6 +212,12 @@ enum StarArt: String, CaseIterable {
         case .changeModeAutomatic: return CGSize(width: 40, height: 40)
         case .changeModeSelective: return CGSize(width: 40, height: 40)
         case .changeModeDirty: return CGSize(width: 40, height: 40)
+        case .dropHover: return CGSize(width: 75, height: 96)
+        case .presetBestQuality: return CGSize(width: 40, height: 40)
+        case .presetBestBalance: return CGSize(width: 40, height: 40)
+        case .presetFastest: return CGSize(width: 40, height: 40)
+        case .settingHorizonExtension: return CGSize(width: 210, height: 140)
+        case .settingKeypointSize: return CGSize(width: 210, height: 140)
         }
     }
 }
