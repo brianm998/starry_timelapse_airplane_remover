@@ -943,7 +943,8 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showAlignmentGroundHorizonExtensionInfo,
           addSpacer: { addSpacer },
-          infoText: localized("setting_help.ground_horizon_extension")
+          infoText: localized("setting_help.ground_horizon_extension"),
+          infoArt: .settingHorizonExtension
         ) {
             HStack {
                 HStack {
@@ -977,7 +978,8 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showAlignmentSkyHorizonExtensionInfo,
           addSpacer: { addSpacer },
-          infoText: localized("setting_help.sky_horizon_extension")
+          infoText: localized("setting_help.sky_horizon_extension"),
+          infoArt: .settingHorizonExtension
         ) {
             HStack {
                 HStack {
@@ -1047,7 +1049,8 @@ struct ProcessingSettingsView: View {
         return InfoTextInstructionGridRow(
           showInfo: $showAlignmentKeypointDivisorInfo,
           addSpacer: { addSpacer },
-          infoText: localized("setting_help.keypoint_divisor")
+          infoText: localized("setting_help.keypoint_divisor"),
+          infoArt: .settingKeypointSize
         ) {
             HStack {
                 HStack {

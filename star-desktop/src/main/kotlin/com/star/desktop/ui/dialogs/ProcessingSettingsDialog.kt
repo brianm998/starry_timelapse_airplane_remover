@@ -676,6 +676,9 @@ internal val FIELD_ART: Map<String, StarArt> = mapOf(
     "Cloud-aware merge" to StarArt.ART_SETTING_CLOUDS,
     "Spike removal" to StarArt.ART_SETTING_SPIKES,
     "Memory budget" to StarArt.ART_SETTING_MEMORY,
+    "Ground horizon extension" to StarArt.ART_SETTING_HORIZON_EXTENSION,
+    "Sky horizon extension" to StarArt.ART_SETTING_HORIZON_EXTENSION,
+    "Keypoint detection divisor" to StarArt.ART_SETTING_KEYPOINT_SIZE,
 )
 
 /** What explains each field: the long-form text macOS shows under a row's (i), for those that have one, and what its two choices mean for a yes/no setting. */
