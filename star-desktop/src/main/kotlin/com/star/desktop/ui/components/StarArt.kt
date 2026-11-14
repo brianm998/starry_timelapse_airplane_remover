@@ -14,8 +14,8 @@ enum class ArtKind { CUTOUT, TILE, SCENE }
 enum class StarArt(val slot: String, val file: String, val kind: ArtKind, val width: Int, val height: Int) {
     ART_WORDMARK("art_wordmark", "art_wordmark.png", ArtKind.CUTOUT, 360, 69),
     ART_WELCOME_BACKGROUND("art_welcome_background", "art_welcome_background.jpg", ArtKind.SCENE, 1279, 720),
-    ART_ROBOT_AND_DOG("art_robot_and_dog", "art_robot_and_dog.jpg", ArtKind.SCENE, 680, 383),
-    ART_GREETER("art_greeter", "art_greeter.png", ArtKind.CUTOUT, 157, 220),
+    ART_ROBOT_AND_DOG("art_robot_and_dog", "art_robot_and_dog.jpg", ArtKind.SCENE, 680, 453),
+    ART_GREETER("art_greeter", "art_greeter.png", ArtKind.CUTOUT, 150, 220),
     ART_TILE_LOAD_VIDEO("art_tile_load_video", "art_tile_load_video.png", ArtKind.TILE, 48, 48),
     ART_TILE_LOAD_SEQUENCE("art_tile_load_sequence", "art_tile_load_sequence.png", ArtKind.TILE, 48, 48),
     ART_TILE_LOAD_CONFIG("art_tile_load_config", "art_tile_load_config.png", ArtKind.TILE, 48, 48),
@@ -33,8 +33,8 @@ enum class StarArt(val slot: String, val file: String, val kind: ArtKind, val wi
     ART_MODE_AUTO_SELECTIVE("art_mode_auto_selective", "art_mode_auto_selective.png", ArtKind.TILE, 64, 64),
     ART_GROUND_ALIGNMENT("art_ground_alignment", "art_ground_alignment.png", ArtKind.TILE, 64, 64),
     ART_SETTINGS("art_settings", "art_settings.png", ArtKind.CUTOUT, 49, 64),
-    ART_PROCESS("art_process", "art_process.png", ArtKind.CUTOUT, 56, 51),
-    ART_PROCESS_BODY("art_process_body", "art_process_body.png", ArtKind.CUTOUT, 43, 56),
+    ART_PROCESS("art_process", "art_process.png", ArtKind.CUTOUT, 56, 56),
+    ART_PROCESS_BODY("art_process_body", "art_process_body.png", ArtKind.CUTOUT, 41, 56),
     ART_PROCESS_GEAR("art_process_gear", "art_process_gear.png", ArtKind.CUTOUT, 56, 56),
     ART_DONE("art_done", "art_done.png", ArtKind.CUTOUT, 116, 120),
     ART_RENDERING("art_rendering", "art_rendering.png", ArtKind.CUTOUT, 96, 84),
@@ -73,7 +73,14 @@ enum class StarArt(val slot: String, val file: String, val kind: ArtKind, val wi
     ART_TOOL_INFORMATION("art_tool_information", "art_tool_information.jpg", ArtKind.SCENE, 180, 60),
     ART_CHANGE_MODE_AUTOMATIC("art_change_mode_automatic", "art_change_mode_automatic.png", ArtKind.TILE, 40, 40),
     ART_CHANGE_MODE_SELECTIVE("art_change_mode_selective", "art_change_mode_selective.png", ArtKind.TILE, 40, 40),
-    ART_CHANGE_MODE_DIRTY("art_change_mode_dirty", "art_change_mode_dirty.png", ArtKind.TILE, 40, 40);
+    ART_CHANGE_MODE_DIRTY("art_change_mode_dirty", "art_change_mode_dirty.png", ArtKind.TILE, 40, 40),
+    ART_DROP_HOVER("art_drop_hover", "art_drop_hover.png", ArtKind.CUTOUT, 75, 96),
+    ART_PRESET_BEST_QUALITY("art_preset_best_quality", "art_preset_best_quality.png", ArtKind.TILE, 40, 40),
+    ART_PRESET_BEST_BALANCE("art_preset_best_balance", "art_preset_best_balance.png", ArtKind.TILE, 40, 40),
+    ART_PRESET_FASTEST("art_preset_fastest", "art_preset_fastest.png", ArtKind.TILE, 40, 40),
+    ART_SETTING_HORIZON_EXTENSION("art_setting_horizon_extension", "art_setting_horizon_extension.jpg", ArtKind.SCENE, 210, 140),
+    ART_SETTING_KEYPOINT_SIZE("art_setting_keypoint_size", "art_setting_keypoint_size.jpg", ArtKind.SCENE, 210, 140),
+    ART_PAINT_ROBOT("art_paint_robot", "art_paint_robot.png", ArtKind.CUTOUT, 96, 90);
 
     val resourcePath: String get() = "art/$file"
 }

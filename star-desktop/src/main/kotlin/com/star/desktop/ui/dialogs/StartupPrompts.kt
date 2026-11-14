@@ -9,7 +9,11 @@ import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import com.star.desktop.ui.components.ArtImage
 import com.star.desktop.ui.components.StarArt
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -149,9 +153,30 @@ private fun PictureChoice(choice: StartupPictureChoice, onClick: () -> Unit) {
     }
 }
 
+/** The footage's own first frame, 320 dp wide; while frame 0 is not extracted yet, asks again each second. */
+@Composable
+private fun FirstFrame(app: AppViewModel) {
+    var picture by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    LaunchedEffect(app) {
+        while (picture == null) {
+            picture = app.framePicture(0, com.star.proto.FrameViewMode.VIEW_ORIGINAL)
+            if (picture == null) kotlinx.coroutines.delay(1000)
+        }
+    }
+    picture?.let {
+        androidx.compose.foundation.Image(
+            bitmap = it,
+            contentDescription = null,
+            modifier = Modifier.width(320.dp).clip(RoundedCornerShape(6.dp)).testTag("startup.firstframe"),
+            contentScale = androidx.compose.ui.layout.ContentScale.FillWidth,
+        )
+    }
+}
+
 @Composable
 private fun HorizonPrompt(app: AppViewModel) {
     Title(localized("ui.does_this_video_include_a_horizon"))
+    FirstFrame(app)
     AnswerRow(advanced = { app.startupOpenAdvanced() }) {
         PictureChoice(HORIZON_CHOICES[0]) { app.startupAnswerHorizon(false) }
         PictureChoice(HORIZON_CHOICES[1]) { app.startupAnswerHorizon(true) }
@@ -163,6 +188,7 @@ private fun MovingPrompt(app: AppViewModel) {
     Title(localized("ui.was_the_camera_moving_during_this_video"))
     Title(localized("ui.or"), small = true)
     Title(localized("ui.was_it_stationary_on_a_tripod_the_entire"))
+    FirstFrame(app)
     AnswerRow(back = { app.startupGoBack(StartupStep.MOVING) }, advanced = { app.startupOpenAdvanced() }) {
         PictureChoice(CAMERA_CHOICES[0]) { app.startupAnswerMoving(false) }
         PictureChoice(CAMERA_CHOICES[1]) { app.startupAnswerMoving(true) }
@@ -208,6 +234,47 @@ private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
     }
 }
 
+internal const val CLEANUP_MODE_TILE = 64
+internal const val CLEANUP_AUTO_SELECTIVE_TILE = 40
+internal const val CLEANUP_GROUND_ALIGNMENT_TILE = 48
+internal val CLEANUP_GROUND_ALIGNMENT_ART = StarArt.ART_GROUND_ALIGNMENT
+
+/** The tile beside a Speed vs. Sharpness preset's name; none for a divisor that is not one of the three. */
+internal fun presetArt(divisor: Double): StarArt? = when {
+    KeypointDivisor.matches(divisor, 1.0) -> StarArt.ART_PRESET_BEST_QUALITY
+    KeypointDivisor.matches(divisor, 1.5) -> StarArt.ART_PRESET_BEST_BALANCE
+    KeypointDivisor.matches(divisor, 2.0) -> StarArt.ART_PRESET_FASTEST
+    else -> null
+}
+
+/** The tile for a clean method's row (automatic with auto-selective is the switch's tile). */
+internal fun cleanupTile(method: CleanMethod): StarArt = when (method) {
+    CleanMethod.CLEAN_SELECTIVE -> StarArt.ART_MODE_SELECTIVE
+    CleanMethod.CLEAN_AUTOMATIC_TRUE -> StarArt.ART_MODE_AUTO_SELECTIVE
+    else -> StarArt.ART_MODE_AUTOMATIC
+}
+
+/**
+ * [content] with [art] drawn at the start of it, up to [side] dp wide and no taller than [content] is.
+ * The tile never adds to the row's height (the sheet already runs to the bottom of a 768 pt screen):
+ * it shrinks, aspect kept, when the text beside it is shorter than [side].
+ */
+@Composable
+private fun WithTile(art: StarArt, side: Int, alignment: Alignment, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Box(modifier) {
+        Box(Modifier.padding(start = (side + 10).dp)) { content() }
+        Box(Modifier.matchParentSize()) {
+            Image(
+                painter = painterResource(art.resourcePath),
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                alignment = alignment,
+                modifier = Modifier.width(side.dp).fillMaxHeight(),
+            )
+        }
+    }
+}
+
 @Composable
 private fun RemovalPrompt(app: AppViewModel, onOpenSpeedModal: () -> Unit) {
     var selective by remember { mutableStateOf(false) }
@@ -229,17 +296,23 @@ private fun RemovalPrompt(app: AppViewModel, onOpenSpeedModal: () -> Unit) {
         Row(Modifier.fillMaxWidth()) { BackButton { app.startupGoBack(StartupStep.REMOVAL) } }
         Title(localized("ui.startup_mode_title"))
         HorizontalDivider(color = StarColors.cellDefault)
-        ModeChoice(localized("ui.startup_mode_automatic"), localized("ui.startup_mode_automatic_desc"), !selective, "startup.removal.automatic") { selective = false }
+        ModeChoice(cleanupTile(CleanMethod.CLEAN_AUTOMATIC), localized("ui.startup_mode_automatic"), localized("ui.startup_mode_automatic_desc"), !selective, "startup.removal.automatic") { selective = false }
         if (!selective) {
-            Column(Modifier.padding(start = 34.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                ToggleRow(localized("ui.startup_auto_selective_toggle"), autoSelective, "startup.removal.autoselective") { autoSelective = it }
-                Body(localized("ui.startup_auto_selective_desc"))
+            WithTile(cleanupTile(CleanMethod.CLEAN_AUTOMATIC_TRUE), CLEANUP_AUTO_SELECTIVE_TILE, Alignment.CenterStart, Modifier.padding(start = 34.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    ToggleRow(localized("ui.startup_auto_selective_toggle"), autoSelective, "startup.removal.autoselective") { autoSelective = it }
+                    Body(localized("ui.startup_auto_selective_desc"))
+                }
             }
         }
-        ModeChoice(localized("ui.startup_mode_selective"), localized("ui.startup_mode_selective_desc"), selective, "startup.removal.selective") { selective = true }
+        ModeChoice(cleanupTile(CleanMethod.CLEAN_SELECTIVE), localized("ui.startup_mode_selective"), localized("ui.startup_mode_selective_desc"), selective, "startup.removal.selective") { selective = true }
         HorizontalDivider(color = StarColors.cellDefault)
-        ToggleRow(localized("ui.startup_ground_alignment_toggle"), groundAlignment, "startup.removal.groundalignment") { groundAlignment = it }
-        Body(localized("ui.startup_ground_alignment_desc"))
+        WithTile(CLEANUP_GROUND_ALIGNMENT_ART, CLEANUP_GROUND_ALIGNMENT_TILE, Alignment.CenterStart) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                ToggleRow(localized("ui.startup_ground_alignment_toggle"), groundAlignment, "startup.removal.groundalignment") { groundAlignment = it }
+                Body(localized("ui.startup_ground_alignment_desc"))
+            }
+        }
         HorizontalDivider(color = StarColors.cellDefault)
         KeypointDivisorSummaryRow(app, onOpenSpeedModal)
         HorizontalDivider(color = StarColors.cellDefault)
@@ -312,6 +385,7 @@ fun SpeedSharpnessDialog(initial: Double, advice: KeypointDivisorAdvice?, onCanc
         ) {
             Title(localized("ui.speed_vs_sharpness"))
             Body(KeypointDivisor.explanation(advice))
+            ArtImage(StarArt.ART_SETTING_KEYPOINT_SIZE, Modifier.align(Alignment.CenterHorizontally))
             for (preset in KeypointDivisor.presets) {
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -320,6 +394,7 @@ fun SpeedSharpnessDialog(initial: Double, advice: KeypointDivisorAdvice?, onCanc
                             // Exclusive: checking one selects it, and unchecking the checked one does nothing.
                             onCheckedChange = { if (it) { draft.choose(preset.divisor); divisor = draft.current } },
                         )
+                        presetArt(preset.divisor)?.let { ArtImage(it) }
                         Text(localized(preset.nameKey), color = StarColors.textPrimary, fontSize = 15.sp)
                         Text(KeypointDivisor.format(preset.divisor), color = StarColors.textDisabled, fontSize = 15.sp)
                         if (KeypointDivisor.isRecommended(advice, preset.divisor)) {
@@ -329,7 +404,7 @@ fun SpeedSharpnessDialog(initial: Double, advice: KeypointDivisorAdvice?, onCanc
                             )
                         }
                     }
-                    Text(localized(preset.blurbKey), color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 42.dp))
+                    Text(localized(preset.blurbKey), color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 88.dp))
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -461,15 +536,17 @@ private fun ToggleRow(label: String, value: Boolean, tag: String, onChange: (Boo
 }
 
 @Composable
-private fun ModeChoice(title: String, description: String, selected: Boolean, tag: String, onSelect: () -> Unit) {
+private fun ModeChoice(art: StarArt, title: String, description: String, selected: Boolean, tag: String, onSelect: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().selectable(selected = selected, role = Role.RadioButton, onClick = onSelect).testTag(tag).padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         RadioButton(selected = selected, onClick = null)
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, color = StarColors.textPrimary, fontSize = 17.sp)
-            Body(description)
+        WithTile(art, CLEANUP_MODE_TILE, Alignment.TopStart) {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, color = StarColors.textPrimary, fontSize = 17.sp)
+                Body(description)
+            }
         }
     }
 }

@@ -579,6 +579,14 @@ struct FrameEditView: View {
 
 // MARK: - Horizon painter startup instructions
 
+/// The diagrams above the instructions text: brush, fill and touch-up, then the
+/// repeated-brushing diagram when the footage moved. The first three share a line.
+func horizonPainterDiagrams(isMoving: Bool) -> [StarArt] {
+    var art: [StarArt] = [.paintBrush, .paintFill, .paintTouchUp]
+    if isMoving { art.append(.paintMoving) }
+    return art
+}
+
 struct HorizonPainterStartupInstructionsView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     @State private var isDismissed = false
@@ -588,31 +596,43 @@ struct HorizonPainterStartupInstructionsView: View {
         viewModel.horizonPainterStartupFrameIndices.count > 1
     }
 
+    private var diagrams: [StarArt] { horizonPainterDiagrams(isMoving: isMoving) }
+
     var body: some View {
         if !isDismissed && (viewModel.userPreferences.showHorizonPainterInstructions ?? true) {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(localized("ui.selecting_the_horizon_with_star_is_easy"))
-                  .font(.headline)
-                  .foregroundColor(.white)
-
-                Text(localized(isMoving ? "ui.horizon_painter_instructions_moving"
-                                        : "ui.horizon_painter_instructions_static")
-                     + "\n\n" + localized("ui.horizon_painter_instructions_brushing"))
-                  .font(.body)
-                  .foregroundColor(.white)
-
-                HStack(spacing: 16) {
-                    Toggle(localized("ui.don_t_show_again"), isOn: $dontShowAgain)
+            HStack(alignment: .top, spacing: 12) {
+                ArtImage(.paintRobot)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(localized("ui.selecting_the_horizon_with_star_is_easy"))
+                      .font(.headline)
                       .foregroundColor(.white)
 
-                    Button(localized("ui.got_it")) {
-                        if dontShowAgain {
-                            viewModel.userPreferences.showHorizonPainterInstructions = false
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 12) {
+                            ForEach(Array(diagrams.prefix(3)), id: \.self) { ArtImage($0) }
                         }
-                        withAnimation { isDismissed = true }
+                        ForEach(Array(diagrams.dropFirst(3)), id: \.self) { ArtImage($0) }
                     }
-                    .buttonStyle(.borderedProminent)
-                }
+
+                    Text(localized(isMoving ? "ui.horizon_painter_instructions_moving"
+                                            : "ui.horizon_painter_instructions_static")
+                         + "\n\n" + localized("ui.horizon_painter_instructions_brushing"))
+                      .font(.body)
+                      .foregroundColor(.white)
+
+                    HStack(spacing: 16) {
+                        Toggle(localized("ui.don_t_show_again"), isOn: $dontShowAgain)
+                          .foregroundColor(.white)
+
+                        Button(localized("ui.got_it")) {
+                            if dontShowAgain {
+                                viewModel.userPreferences.showHorizonPainterInstructions = false
+                            }
+                            withAnimation { isDismissed = true }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+            }
             }
             .padding(16)
             .background(

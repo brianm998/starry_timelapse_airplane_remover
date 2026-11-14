@@ -1,0 +1,310 @@
+{
+  "_comment": "The four example charts of the 'About the alignment charts' panel (AlignmentExamples.swift in AlignmentWindowView.swift, domain/AlignmentExamples.kt): 48 frames, neighbors -4..-1 and +1..+4, every reading in the homography-success state. Each sample is frame, offset, the signed deviation to 3 decimals and whether the reading is good (not a red dot). Both clients' tests check their generator against these.",
+  "frameCount": 48,
+  "offsets": [
+    -4,
+    -3,
+    -2,
+    -1,
+    1,
+    2,
+    3,
+    4
+  ],
+  "fixedGood": [
+    {
+      "frame": 0,
+      "offset": -4,
+      "deviation": -23.823,
+      "good": true
+    },
+    {
+      "frame": 5,
+      "offset": -1,
+      "deviation": -5.613,
+      "good": true
+    },
+    {
+      "frame": 10,
+      "offset": 1,
+      "deviation": 5.675,
+      "good": true
+    },
+    {
+      "frame": 15,
+      "offset": 2,
+      "deviation": 12.331,
+      "good": true
+    },
+    {
+      "frame": 20,
+      "offset": 3,
+      "deviation": 17.664,
+      "good": true
+    },
+    {
+      "frame": 25,
+      "offset": -3,
+      "deviation": -17.655,
+      "good": true
+    },
+    {
+      "frame": 30,
+      "offset": 4,
+      "deviation": 23.628,
+      "good": true
+    },
+    {
+      "frame": 35,
+      "offset": -2,
+      "deviation": -11.635,
+      "good": true
+    },
+    {
+      "frame": 40,
+      "offset": 1,
+      "deviation": 5.915,
+      "good": true
+    },
+    {
+      "frame": 44,
+      "offset": 2,
+      "deviation": 12.373,
+      "good": true
+    },
+    {
+      "frame": 47,
+      "offset": -1,
+      "deviation": -6.178,
+      "good": true
+    },
+    {
+      "frame": 47,
+      "offset": 4,
+      "deviation": 24.388,
+      "good": true
+    }
+  ],
+  "fixedBad": [
+    {
+      "frame": 0,
+      "offset": -4,
+      "deviation": -23.823,
+      "good": true
+    },
+    {
+      "frame": 5,
+      "offset": -1,
+      "deviation": -5.613,
+      "good": true
+    },
+    {
+      "frame": 15,
+      "offset": 2,
+      "deviation": 42.331,
+      "good": false
+    },
+    {
+      "frame": 16,
+      "offset": -3,
+      "deviation": 11.763,
+      "good": false
+    },
+    {
+      "frame": 20,
+      "offset": 1,
+      "deviation": 5.866,
+      "good": true
+    },
+    {
+      "frame": 30,
+      "offset": 3,
+      "deviation": 9.884,
+      "good": true
+    },
+    {
+      "frame": 31,
+      "offset": 3,
+      "deviation": 9.635,
+      "good": true
+    },
+    {
+      "frame": 38,
+      "offset": -2,
+      "deviation": -12.013,
+      "good": false
+    },
+    {
+      "frame": 40,
+      "offset": 4,
+      "deviation": 24.244,
+      "good": false
+    },
+    {
+      "frame": 41,
+      "offset": 1,
+      "deviation": 6.399,
+      "good": false
+    },
+    {
+      "frame": 44,
+      "offset": 2,
+      "deviation": 12.373,
+      "good": true
+    },
+    {
+      "frame": 47,
+      "offset": -1,
+      "deviation": -6.178,
+      "good": true
+    }
+  ],
+  "movingGood": [
+    {
+      "frame": 0,
+      "offset": -4,
+      "deviation": -23.546,
+      "good": true
+    },
+    {
+      "frame": 6,
+      "offset": -1,
+      "deviation": -7.825,
+      "good": true
+    },
+    {
+      "frame": 12,
+      "offset": 1,
+      "deviation": 8.533,
+      "good": true
+    },
+    {
+      "frame": 18,
+      "offset": 2,
+      "deviation": 16.401,
+      "good": true
+    },
+    {
+      "frame": 24,
+      "offset": 3,
+      "deviation": 18.21,
+      "good": true
+    },
+    {
+      "frame": 30,
+      "offset": -3,
+      "deviation": -12.231,
+      "good": true
+    },
+    {
+      "frame": 36,
+      "offset": 4,
+      "deviation": 12.306,
+      "good": true
+    },
+    {
+      "frame": 40,
+      "offset": -2,
+      "deviation": -6.961,
+      "good": true
+    },
+    {
+      "frame": 44,
+      "offset": 1,
+      "deviation": 5.098,
+      "good": true
+    },
+    {
+      "frame": 47,
+      "offset": 2,
+      "deviation": 11.376,
+      "good": true
+    },
+    {
+      "frame": 47,
+      "offset": -4,
+      "deviation": -22.119,
+      "good": true
+    },
+    {
+      "frame": 10,
+      "offset": -4,
+      "deviation": -35.344,
+      "good": true
+    }
+  ],
+  "movingBad": [
+    {
+      "frame": 0,
+      "offset": -4,
+      "deviation": -23.546,
+      "good": true
+    },
+    {
+      "frame": 10,
+      "offset": 1,
+      "deviation": 9.492,
+      "good": true
+    },
+    {
+      "frame": 19,
+      "offset": 2,
+      "deviation": 16.253,
+      "good": true
+    },
+    {
+      "frame": 20,
+      "offset": 2,
+      "deviation": 27.163,
+      "good": true
+    },
+    {
+      "frame": 30,
+      "offset": -2,
+      "deviation": 13.857,
+      "good": true
+    },
+    {
+      "frame": 33,
+      "offset": -2,
+      "deviation": 15.508,
+      "good": true
+    },
+    {
+      "frame": 35,
+      "offset": -2,
+      "deviation": 15.67,
+      "good": true
+    },
+    {
+      "frame": 36,
+      "offset": 3,
+      "deviation": 20.731,
+      "good": false
+    },
+    {
+      "frame": 40,
+      "offset": 1,
+      "deviation": 15.639,
+      "good": false
+    },
+    {
+      "frame": 44,
+      "offset": -4,
+      "deviation": -5.877,
+      "good": false
+    },
+    {
+      "frame": 45,
+      "offset": 4,
+      "deviation": 31.212,
+      "good": true
+    },
+    {
+      "frame": 47,
+      "offset": -1,
+      "deviation": 6.153,
+      "good": true
+    }
+  ]
+}

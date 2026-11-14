@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.components.modalScrim
 import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.i18n.localized
+import com.star.desktop.ui.components.ArtImage
+import com.star.desktop.ui.components.StarArt
 import com.star.desktop.ui.components.VerticalStarPicker
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.domain.CleanMethodChoice
@@ -45,6 +47,13 @@ internal fun frameModeNameKey(m: CleanMethod) = when (m) {
     CleanMethod.CLEAN_AUTOMATIC_TRUE -> "ui.frame_mode_auto_selective"
     CleanMethod.CLEAN_DIRTY -> "ui.dirty"
     else -> "ui.frame_mode_selective"
+}
+
+/** The 40 pt tile beside a clean method; both dirty modes share one tile. */
+internal fun cleanArt(c: HighLevelClean) = when (c) {
+    HighLevelClean.AUTOMATIC -> StarArt.ART_CHANGE_MODE_AUTOMATIC
+    HighLevelClean.SELECTIVE -> StarArt.ART_CHANGE_MODE_SELECTIVE
+    HighLevelClean.DIRTY -> StarArt.ART_CHANGE_MODE_DIRTY
 }
 
 private fun descriptionKey(m: CleanMethod) = when (m) {
@@ -102,6 +111,7 @@ fun ChangeProcessingModeDialog(
                 label = { localized(CleanMethodTexts.titleKey(it)) },
                 onSelect = { clean = it },
                 modifier = Modifier.fillMaxWidth(),
+                leading = { ArtImage(cleanArt(it)) },
             )
 
             Column(Modifier.alpha(if (automatic) 1f else 0.4f), verticalArrangement = Arrangement.spacedBy(6.dp)) {

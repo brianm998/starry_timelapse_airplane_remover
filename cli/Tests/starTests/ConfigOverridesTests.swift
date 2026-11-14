@@ -245,7 +245,8 @@ final class ConfigOverridesTests: XCTestCase {
 
     func testUseGPUHasThreeStatesAndNeedsAllOfThem() throws {
         var disabled = Config()
-        XCTAssertTrue(disabled.useGPUForMerge, "GPU acceleration is on by default")
+        disabled.useGPUForMerge = true  // the default follows GPU availability and STAR_USE_GPU_FOR_MERGE; pin the starting state
+        XCTAssertTrue(disabled.useGPUForMerge)
         try StarCli.parse(["--no-use-gpu", "/some/seq"]).configOverrides.apply(to: &disabled)
         XCTAssertFalse(disabled.useGPUForMerge, "--no-use-gpu turns it off")
 
