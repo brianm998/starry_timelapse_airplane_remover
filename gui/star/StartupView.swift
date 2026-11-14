@@ -138,9 +138,9 @@ private struct FirstFramePicture: View {
     var body: some View {
         // reading existingImages makes this redraw when the preview arrives
         let _ = frame.existingImages
-        let accessor = frame.imageAccessor
-        let url = accessor.urlForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .preview)
-          ?? accessor.urlForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .original)
+        let accessor = frame.frame?.imageAccessor
+        let url = accessor?.urlForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .preview)
+          ?? accessor?.urlForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .original)
         if let url {
             AsyncImage(url: url) { image in
                 image.resizable().aspectRatio(contentMode: .fit)
