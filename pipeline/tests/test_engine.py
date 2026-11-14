@@ -287,20 +287,22 @@ async def test_a_landing_stage_goes_before_new_work(rig: Rig, monkeypatch: pytes
         new_work = asyncio.create_task(rig.engine._hold_session(t3, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
         tasks.append(new_work)
         await until(lambda: rig.db.get("llm_wait:3") == "a landing stage is waiting for a session")
-        assert not new_work.done()
+        assert not new_work.done() and gate.requested == []
         landing = asyncio.create_task(rig.engine._hold_session(t2, "conflict", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
         tasks.append(landing)
         await until(lambda: 2 in rig.engine.landing_waiting or 2 in rig.engine.holding)  # it is registered before the placeholder goes,
         rig.engine.landing_waiting.discard(99)  # or new work could slip in between the two and take the only unit
+        await until(lambda: gate.requested == ["starpipe #2 conflict"])  # the landing hold is queued in the gate before a unit appears
         gate.grant_one_more()
         stage_id, hold = await settle(landing, "landing hold", rig, gate)
         for _ in range(20):  # let new work have every chance to wrongly take a unit
             await asyncio.sleep(0)
-        assert not new_work.done()
+        assert not new_work.done() and gate.started == ["starpipe #2 conflict"]
         hold.release()
         rig.db.end_stage(stage_id, "accepted", 0.0, "")
         gate.grant_one_more()
         _, hold3 = await settle(new_work, "new work hold", rig, gate)
+        assert gate.started == ["starpipe #2 conflict", "starpipe #3 develop"]
         hold3.release()
     finally:
         for t in tasks:
