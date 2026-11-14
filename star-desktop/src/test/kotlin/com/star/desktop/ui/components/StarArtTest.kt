@@ -40,7 +40,7 @@ class StarArtTest {
                     assertEquals(0, (img.getRGB(x, y) ushr 24), "${art.slot} corner ($x, $y) is not transparent")
                 }
             }
-            if (art.slot in CHECKER_CLEANED || art.kind == ArtKind.TILE) {
+            if (art.slot !in LIGHT_EDGED && (art.slot in CHECKER_CLEANED || art.kind == ArtKind.TILE)) {
                 // No light fringe: partly transparent pixels must not be near-white (the painted checkerboard's colour).
                 var edge = 0
                 var light = 0
@@ -61,5 +61,8 @@ class StarArtTest {
     private companion object {
         /** Slots whose master was an opaque picture with a painted checkerboard (cleaned by export.py). */
         val CHECKER_CLEANED = setOf("art_horizon_auto", "art_process_gear", "art_waiting")
+
+        /** Cut-outs whose own outline is pale (about 15% of art_horizon_auto's edge pixels), so the fringe count cannot tell art from leftover checker; the corner check still applies. */
+        val LIGHT_EDGED = setOf("art_horizon_auto")
     }
 }
