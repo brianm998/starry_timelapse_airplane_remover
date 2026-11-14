@@ -465,6 +465,9 @@ struct RemovalView: View {
               .font(.largeTitle)
               .foregroundColor(.white)
             Space(height: 10)
+            // Group (flattened by the VStack, so spacing is unchanged) keeps the VStack within
+            // ViewBuilder's 10-child limit.
+            Group {
             Divider()
 
             ModeChoice(art: CleanupTiles.tile(for: .automatic(false)),
@@ -494,6 +497,7 @@ struct RemovalView: View {
                        description: localized("ui.startup_mode_selective_desc"),
                        selected: selectiveMode,
                        identifier: "startup.removal.selective") { selectiveMode = true }
+            }
 
             Divider()
             HStack(alignment: .center, spacing: 10) {
