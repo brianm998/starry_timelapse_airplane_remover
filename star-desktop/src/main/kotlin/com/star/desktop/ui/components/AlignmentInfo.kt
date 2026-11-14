@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +18,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.domain.AlignmentExamples
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.theme.StarColors
 
@@ -57,13 +60,25 @@ fun AlignmentInfoOverlay(cameraMoving: Boolean, onClose: () -> Unit) {
             Text(localized("ui.alignment_info_title"), color = StarColors.white, fontSize = 18.sp)
             Section("ui.alignment_info_what_title", "ui.alignment_info_what_body")
             Section("ui.alignment_info_good_title", if (cameraMoving) "ui.alignment_info_good_body_moving" else "ui.alignment_info_good_body_fixed")
+            ExampleChart(cameraMoving, good = true)
             Section("ui.alignment_info_bad_title", if (cameraMoving) "ui.alignment_info_bad_body_moving" else "ui.alignment_info_bad_body_fixed")
+            ExampleChart(cameraMoving, good = false)
             Text(localized("ui.alignment_info_use_body"), color = StarColors.textSecondary, fontSize = 11.sp)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Button(onClick = onClose, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.done")) }
             }
         }
     }
+}
+
+/** An example deviation chart, drawn by the real chart from fixed data (see [AlignmentExamples]). */
+@Composable
+private fun ExampleChart(moving: Boolean, good: Boolean) {
+    val points = remember(moving, good) { AlignmentExamples.points(moving, good) }
+    DeviationChart(
+        points, frameCount = AlignmentExamples.FRAME_COUNT, current = -1, onPick = {},
+        chartHeight = 100.dp, compact = true, example = true, modifier = Modifier.width(240.dp),
+    )
 }
 
 @Composable

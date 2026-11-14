@@ -436,7 +436,10 @@ struct AlignmentKeypointsChart: View {
 
 struct AlignmentDeviationChart: View {
 
-    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
+    /// Optional so an example chart can be hosted with no sequence at all: SwiftUI resolves a
+    /// non-optional `@Environment(Type.self)` on every update, read or not, and traps when
+    /// nothing provides it.  The real charts always sit under a view model.
+    @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel?
 
     let frames: [[AlignmentWarpInfoCodable]]
 
@@ -446,20 +449,41 @@ struct AlignmentDeviationChart: View {
     @State private var hoveredOffset: Int?
 
     @State private var xDomain: ClosedRange<Int>
-    
+
+    /// The points of an example chart (the "About the alignment charts" panel), taken as they
+    /// are.  An example has no height slider, no current-frame line, no hover and no tap, so it
+    /// reads nothing from the sequence (and never touches `viewModel`).
+    private let examplePoints: [DeviationPoint]?
+
+    private var isExample: Bool { examplePoints != nil }
+
     init(
       frames: [[AlignmentWarpInfoCodable]],
       foregroundColor: Color
     ) {
         self.frames = frames
         self.foregroundColor = foregroundColor
+        self.examplePoints = nil
 
         let maxFrame = max(frames.count - 1, 0)
         _xDomain = State(initialValue: 0 ... maxFrame)
      }
+
+    init(
+      example points: [DeviationPoint],
+      foregroundColor: Color
+    ) {
+        self.frames = []
+        self.foregroundColor = foregroundColor
+        self.examplePoints = points
+
+        let maxFrame = max((points.map(\.baseFrame).max() ?? 0), 0)
+        _xDomain = State(initialValue: 0 ... maxFrame)
+     }
      
     private var points: [DeviationPoint] {
-        makeDeviationPoints(
+        if let examplePoints { return examplePoints }
+        return makeDeviationPoints(
           frames: frames
         )
     }
@@ -479,6 +503,7 @@ struct AlignmentDeviationChart: View {
 
     var body: some View {
         VStack(spacing: 2) {
+            if !isExample {
             HStack(spacing: 4) {/*
                 Text("\(Int(maxVisibleDeviation))")
                   .font(.caption2)
@@ -492,6 +517,7 @@ struct AlignmentDeviationChart: View {
                   .frame(maxWidth: .infinity)
                   .frame(height: 30)
                 Spacer()
+            }
             }
             chartView
         }
@@ -533,16 +559,18 @@ struct AlignmentDeviationChart: View {
             }
 
             // === Current frame indicator ===
-            RuleMark(
-              x: .value(localized("ui.current_frame"), viewModel.currentIndex)
-            )
-              .lineStyle(StrokeStyle(lineWidth: 2))
-              .foregroundStyle(.red)
-              .annotation(position: .top, alignment: .leading) {
-                  Text(localized("ui.current"))
-                    .font(.caption)
-                    .foregroundColor(.red)
-              }
+            if !isExample, let viewModel {
+                RuleMark(
+                  x: .value(localized("ui.current_frame"), viewModel.currentIndex)
+                )
+                  .lineStyle(StrokeStyle(lineWidth: 2))
+                  .foregroundStyle(.red)
+                  .annotation(position: .top, alignment: .leading) {
+                      Text(localized("ui.current"))
+                        .font(.caption)
+                        .foregroundColor(.red)
+                  }
+            }
 
             // === Hover indicator ===
             if let hoveredFrame, let hoveredOffset {
@@ -568,17 +596,22 @@ struct AlignmentDeviationChart: View {
             }
         }
           .chartPlotStyle { $0.clipped() }
-          .onChange(of: viewModel.currentIndex) { 
-              ensureVisible(frame: viewModel.currentIndex)
+          .onChange(of: isExample ? nil : viewModel?.currentIndex) { _, current in
+              guard !isExample, let current else { return }
+              ensureVisible(frame: current)
           }
           .chartXScale(domain: xDomain)
           .chartXAxisLabel {
-              Text(localized("ui.frame_index"))
-                .foregroundColor(foregroundColor)
+              if !isExample {
+                  Text(localized("ui.frame_index"))
+                    .foregroundColor(foregroundColor)
+              }
           }
           .chartYAxisLabel {
-              Text(localized("ui.deviation"))
-                .foregroundColor(foregroundColor)
+              if !isExample {
+                  Text(localized("ui.deviation"))
+                    .foregroundColor(foregroundColor)
+              }
           }
           .chartLegend(.hidden)
           .chartYScale(domain: -maxVisibleDeviation ... maxVisibleDeviation)
@@ -600,11 +633,12 @@ struct AlignmentDeviationChart: View {
           }
           .chartOverlay { proxy in
               GeometryReader { geo in
+                  if !isExample {
                   Rectangle()
                     .fill(.clear)
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        if let hoveredFrame {
+                        if let hoveredFrame, let viewModel {
                             viewModel.currentIndex = hoveredFrame
                         }
                     }
@@ -637,6 +671,7 @@ struct AlignmentDeviationChart: View {
                         }
                     }
                     .scrollWheelZoom { zoom(by: $0) }
+                  }
               }
           }
     }
@@ -937,6 +972,52 @@ extension Color {
     }
 }
 
+/// The four example charts of the "About the alignment charts" panel: a fixed or a moving
+/// camera, a good alignment or one to watch.  Fixed data, drawn by the real
+/// `AlignmentDeviationChart`; `gherkin/ui/vectors/alignmentExamples.json` holds sample points
+/// the desktop client's `AlignmentExamples` gives too.
+enum AlignmentExamples {
+    static let frameCount = 48
+    static let offsets = [-4, -3, -2, -1, 1, 2, 3, 4]
+
+    static func points(moving: Bool, good: Bool) -> [DeviationPoint] {
+        var out: [DeviationPoint] = []
+        for frame in 0 ..< frameCount {
+            for offset in offsets {
+                let f = Double(frame)
+                let o = Double(offset)
+                var deviation: Double
+                var isGood = true
+                if moving {
+                    deviation = o * (6 + 3 * sin(2 * Double.pi * f / 48)) + 0.6 * sin(1.3 * f + o)
+                    if !good {
+                        if frame >= 20 { deviation += 12 }
+                        if offset == -2 && (30 ... 35).contains(frame) { deviation += 10 }
+                        if (36 ... 44).contains(frame) { isGood = false }
+                    }
+                } else {
+                    deviation = 6 * o + 0.4 * sin(1.7 * f + 0.9 * o)
+                    if !good {
+                        if frame == 15 || frame == 16 { deviation += 30; isGood = false }
+                        if offset == 3 && frame >= 30 { deviation -= 8 }
+                        if (38 ... 41).contains(frame) { isGood = false }
+                    }
+                }
+                out.append(
+                  DeviationPoint(
+                    baseFrame: frame,
+                    offset: offset,
+                    signedDeviation: deviation,
+                    alignmentState: .homographySuccess,
+                    isGood: isGood
+                  )
+                )
+            }
+        }
+        return out
+    }
+}
+
 /// The circled "i" that asks for the explanation of the alignment charts.
 struct AlignmentInfoButton: View {
     let action: () -> Void
@@ -968,6 +1049,16 @@ struct AlignmentInfoContent: View {
         }
     }
 
+    /// An example deviation chart, drawn by the real chart from fixed data; it reads nothing
+    /// from the sequence, so the panel looks the same from the window and the modal.
+    private func example(good: Bool) -> some View {
+        AlignmentDeviationChart(
+          example: AlignmentExamples.points(moving: cameraMoving, good: good),
+          foregroundColor: .white
+        )
+          .frame(width: 240, height: 100)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(localized("ui.alignment_info_title"))
@@ -975,8 +1066,10 @@ struct AlignmentInfoContent: View {
             section("ui.alignment_info_what_title", "ui.alignment_info_what_body")
             section("ui.alignment_info_good_title",
                     cameraMoving ? "ui.alignment_info_good_body_moving" : "ui.alignment_info_good_body_fixed")
+            example(good: true)
             section("ui.alignment_info_bad_title",
                     cameraMoving ? "ui.alignment_info_bad_body_moving" : "ui.alignment_info_bad_body_fixed")
+            example(good: false)
             Text(localized("ui.alignment_info_use_body"))
               .font(.caption)
               .foregroundColor(.secondary)

@@ -113,13 +113,15 @@ fun DeviationChart(
     modifier: Modifier = Modifier,
     chartHeight: androidx.compose.ui.unit.Dp = 240.dp,
     compact: Boolean = false,
+    /** An example (the "About the alignment charts" panel) draws no Height slider, no current-frame line and takes no pointer input. */
+    example: Boolean = false,
 ) {
     var height by remember { mutableStateOf(AlignmentCharts.DEFAULT_HEIGHT.toFloat()) }
     val series = remember(points) { AlignmentCharts.byOffset(points) }
     val byFrame = remember(points) { points.groupBy { it.frame } }
 
     Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!example) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(localized("ui.height_2"), color = StarColors.textSecondary, fontSize = 11.sp)
             Slider(
                 value = height, onValueChange = { height = it },
@@ -131,7 +133,7 @@ fun DeviationChart(
         TimelineChart(
             frameCount = frameCount, current = current, onPick = onPick,
             yRange = { -height.toDouble()..height.toDouble() },
-            xTitle = localized(AlignmentWindowTexts.X_AXIS), yTitle = localized("ui.deviation"), compact = compact,
+            xTitle = localized(AlignmentWindowTexts.X_AXIS), yTitle = localized("ui.deviation"), compact = compact, example = example,
             modifier = Modifier.fillMaxWidth().height(chartHeight),
             drawSeries = { domain, x, y ->
                 for ((offset, pts) in series) {
@@ -220,6 +222,7 @@ private fun TimelineChart(
     yTitle: String,
     compact: Boolean,
     modifier: Modifier,
+    example: Boolean = false,
     seriesName: String? = null,
     valueName: String? = null,
     drawSeries: DrawScope.(domain: XDomain, x: (Int) -> Float, y: (Double) -> Float) -> Unit,
@@ -245,7 +248,7 @@ private fun TimelineChart(
     fun valueAt(py: Float): Double = range.start + ((plot.bottom - py) / plot.height) * (range.endInclusive - range.start)
     fun frameAt(px: Float): Int = AlignmentCharts.frameAt(px - plot.left, plot.width, domain)
 
-    val hovering = pointer?.takeIf { plot.contains(it) }?.let { p -> hover(frameAt(p.x), valueAt(p.y)) }
+    val hovering = pointer?.takeIf { !example }?.takeIf { plot.contains(it) }?.let { p -> hover(frameAt(p.x), valueAt(p.y)) }
 
     // What the gui's chart names its marks (`.value(...)`), for assistive technology: the current frame, the hovered one, the series and its value.
     val description = buildList {
@@ -260,38 +263,42 @@ private fun TimelineChart(
             .background(StarColors.prefsCard)
             .semantics { contentDescription = description }
             .onSizeChanged { size = it }
-            .onPointerEvent(PointerEventType.Move) { pointer = it.changes.first().position }
-            .onPointerEvent(PointerEventType.Exit) { pointer = null }
-            .onPointerEvent(PointerEventType.Scroll) { event ->
-                val change = event.changes.first()
-                val modifiers = event.keyboardModifiers
-                when {
-                    // Zoomed about the frame under the pointer, with Ctrl (⌘ on a Mac) held: the plain wheel is for scrolling the page the charts are
-                    // on, which a chart that took every turn of it would stop at.
-                    modifiers.isCtrlPressed || modifiers.isMetaPressed -> {
-                        val factor = 1.12.pow((-change.scrollDelta.y).toDouble())
-                        domain = domain.zoomed(factor, frameCount, anchor = frameAt(change.position.x).toDouble())
-                        change.consume()
-                    }
-                    // A sideways scroll (a trackpad swipe, Shift and the wheel) moves along the frames, a twentieth of the picture a notch.
-                    abs(change.scrollDelta.x) > 0f -> {
-                        val step = (change.scrollDelta.x * domain.span * 0.05f).let { if (abs(it) < 1f) Math.signum(it) else it }
-                        domain = domain.panned(step.roundToInt(), frameCount)
-                        change.consume()
+            .let { base ->
+                // An example reads no pointer: it is a picture.
+                if (example) base else base
+                .onPointerEvent(PointerEventType.Move) { pointer = it.changes.first().position }
+                .onPointerEvent(PointerEventType.Exit) { pointer = null }
+                .onPointerEvent(PointerEventType.Scroll) { event ->
+                    val change = event.changes.first()
+                    val modifiers = event.keyboardModifiers
+                    when {
+                        // Zoomed about the frame under the pointer, with Ctrl (⌘ on a Mac) held: the plain wheel is for scrolling the page the charts are
+                        // on, which a chart that took every turn of it would stop at.
+                        modifiers.isCtrlPressed || modifiers.isMetaPressed -> {
+                            val factor = 1.12.pow((-change.scrollDelta.y).toDouble())
+                            domain = domain.zoomed(factor, frameCount, anchor = frameAt(change.position.x).toDouble())
+                            change.consume()
+                        }
+                        // A sideways scroll (a trackpad swipe, Shift and the wheel) moves along the frames, a twentieth of the picture a notch.
+                        abs(change.scrollDelta.x) > 0f -> {
+                            val step = (change.scrollDelta.x * domain.span * 0.05f).let { if (abs(it) < 1f) Math.signum(it) else it }
+                            domain = domain.panned(step.roundToInt(), frameCount)
+                            change.consume()
+                        }
                     }
                 }
-            }
-            .pointerInput(frameCount, plot.left, plot.width) { detectTapGestures { pos -> if (pos.x >= plot.left) onPick(frameAt(pos.x)) } }
-            .pointerInput(frameCount, plot.width) {
-                var carried = 0f
-                detectDragGestures(onDragEnd = { carried = 0f }, onDragCancel = { carried = 0f }) { change, drag ->
-                    change.consume()
-                    // Dragging moves the picture with the pointer: the frames it passes over, a whole number at a time.
-                    carried -= drag.x / plot.width * domain.span
-                    val whole = carried.toInt()
-                    if (whole != 0) {
-                        carried -= whole
-                        domain = domain.panned(whole, frameCount)
+                .pointerInput(frameCount, plot.left, plot.width) { detectTapGestures { pos -> if (pos.x >= plot.left) onPick(frameAt(pos.x)) } }
+                .pointerInput(frameCount, plot.width) {
+                    var carried = 0f
+                    detectDragGestures(onDragEnd = { carried = 0f }, onDragCancel = { carried = 0f }) { change, drag ->
+                        change.consume()
+                        // Dragging moves the picture with the pointer: the frames it passes over, a whole number at a time.
+                        carried -= drag.x / plot.width * domain.span
+                        val whole = carried.toInt()
+                        if (whole != 0) {
+                            carried -= whole
+                            domain = domain.panned(whole, frameCount)
+                        }
                     }
                 }
             },
@@ -300,7 +307,7 @@ private fun TimelineChart(
             drawAxes(measurer, plot, domain, range, xTitle, yTitle, compact)
             clipRect(plot.left, plot.top - 1f, plot.right, plot.bottom + 1f) {
                 drawSeries(domain, ::xOf, ::yOf)
-                if (current in domain) {
+                if (current in domain && !example) {
                     drawLine(StarColors.red, Offset(xOf(current), plot.top), Offset(xOf(current), plot.bottom), 2f)
                 }
                 hovering?.let {
@@ -308,7 +315,7 @@ private fun TimelineChart(
                     drawCircle(Color.White, 5f, Offset(xOf(it.frame), yOf(it.value)))
                 }
             }
-            if (current in domain) {
+            if (current in domain && !example) {
                 drawText(measurer, localized("ui.current"), Offset(xOf(current) + 4f, 1f), TextStyle(color = StarColors.red, fontSize = if (compact) 9.sp else 11.sp))
             }
         }

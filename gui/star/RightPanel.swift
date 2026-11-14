@@ -394,6 +394,17 @@ extension CleanMethod {
 
 /// Changes the current frame's processing mode.  The two choices are held here and only
 /// reach the frame when OK is pressed; Cancel leaves the frame as it was.
+extension HighLevelCleanMethod {
+    /// The 40 pt tile beside this method in the Change Mode dialog; both dirty modes share one tile.
+    var changeModeArt: StarArt {
+        switch self {
+        case .automatic: return .changeModeAutomatic
+        case .selective: return .changeModeSelective
+        case .dirty: return .changeModeDirty
+        }
+    }
+}
+
 struct ChangeProcessingModeView: View {
     @Environment(ImageSequenceViewModel.self) var viewModel: ImageSequenceViewModel
     @Environment(\.dismiss) private var dismiss
@@ -427,11 +438,7 @@ struct ChangeProcessingModeView: View {
             Picker(localized("ui.clean"), selection: $clean) {
                 ForEach(HighLevelCleanMethod.allCases, id: \.id) { value in
                     HStack {
-                        switch value {
-                        case .automatic: AutoIcon()
-                        case .selective: SelectiveIcon()
-                        case .dirty: AutoIcon()
-                        }
+                        ArtImage(value.changeModeArt)
                         Text(value.titleText)
                     }
                 }

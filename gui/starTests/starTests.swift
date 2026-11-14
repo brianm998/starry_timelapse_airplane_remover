@@ -247,6 +247,21 @@ final class HorizonPaintStateTests: XCTestCase {
         XCTAssertNil(paint.lastGestureBounds)
     }
 
+    /// Each tool but none has its own before-and-after diagram in the help.
+    func testEveryToolHasHelpArt() {
+        var seen = Set<StarArt>()
+        for tool in ToolType.allCases {
+            if tool == .none {
+                XCTAssertNil(tool.helpArt)
+            } else {
+                let art = tool.helpArt
+                XCTAssertNotNil(art, "\(tool) has no help art")
+                if let art { XCTAssertTrue(seen.insert(art).inserted, "\(tool) shares its diagram") }
+            }
+        }
+        XCTAssertEqual(seen.count, 8)
+    }
+
     /// Every per-column array is indexed by view x, so they all have to be exactly as wide as
     /// the view or a stroke near the right edge would run off the end.
     func testEveryPerColumnArrayIsAsWideAsTheView() {
@@ -4172,6 +4187,14 @@ final class SharedConstantsTests: XCTestCase {
         XCTAssertEqual(localized("ui.update"), "Update", "ui.update keeps its value: the settings sheet uses it too")
     }
 
+    /// Art: the Change Mode dialog's clean choices map to their tiles; both dirty modes share one.
+    func testChangeModeTiles() {
+        XCTAssertEqual(HighLevelCleanMethod.automatic.changeModeArt, .changeModeAutomatic)
+        XCTAssertEqual(HighLevelCleanMethod.selective.changeModeArt, .changeModeSelective)
+        XCTAssertEqual(HighLevelCleanMethod.dirty.changeModeArt, .changeModeDirty)
+        XCTAssertEqual(ArtImage(HighLevelCleanMethod.dirty.changeModeArt).displaySize, CGSize(width: 40, height: 40))
+    }
+
     private func assertPictures(_ rows: [StartupPictureChoice], _ expected: [(String, String, String, String)],
                                 file: StaticString = #filePath, line: UInt = #line) throws {
         StarLocalization.shared.languageOverride = "en"
@@ -4204,9 +4227,33 @@ final class SharedConstantsTests: XCTestCase {
             ("startup.selecthorizon.no", "art_horizon_auto", "No", ""), ("startup.selecthorizon.yes", "art_horizon_brush", "Yes", "")])
     }
 
+    /// Cleanup sheet tiles: Automatic and Selective rows at 64 pt.
+    func testCleanupModeRowTiles() throws {
+        XCTAssertEqual(CleanupTiles.modeSize, 64)
+        for (method, name) in [(CleanMethod.automatic(false), "art_mode_automatic"), (.selective, "art_mode_selective")] {
+            let art = CleanupTiles.tile(for: method)
+            XCTAssertEqual(art.rawValue, name)
+            XCTAssertNotNil(NSImage(named: name), "\(name) is not in the asset catalog")
+            let size = ArtImage(art, fitting: CleanupTiles.modeSize).displaySize
+            XCTAssertEqual(max(size.width, size.height), 64)
+        }
+    }
+
+    /// Cleanup sheet: the auto-selective switch at 40 pt, ground alignment at 48 pt.
+    func testAutoSelectiveTile() throws {
+        let art = CleanupTiles.tile(for: .automatic(true))
+        XCTAssertEqual(art.rawValue, "art_mode_auto_selective")
+        XCTAssertNotNil(NSImage(named: art.rawValue))
+        let size = ArtImage(art, fitting: CleanupTiles.autoSelectiveSize).displaySize
+        XCTAssertEqual(max(size.width, size.height), 40)
+        XCTAssertEqual(CleanupTiles.groundAlignment.rawValue, "art_ground_alignment")
+        let g = ArtImage(CleanupTiles.groundAlignment, fitting: CleanupTiles.groundAlignmentSize).displaySize
+        XCTAssertEqual(max(g.width, g.height), 48)
+    }
+
     /// Art A4: every StarArt slot is an imageset in the app's asset catalog and loads at its display size or larger.
     func testEveryStarArtSlotLoads() throws {
-        XCTAssertEqual(StarArt.allCases.count, 62)
+        XCTAssertEqual(StarArt.allCases.count, 69)
         for art in StarArt.allCases {
             let image = try XCTUnwrap(NSImage(named: art.rawValue), "\(art.rawValue) is not in the asset catalog")
             XCTAssertGreaterThan(image.size.width, 0, art.rawValue)
@@ -4214,6 +4261,14 @@ final class SharedConstantsTests: XCTestCase {
             XCTAssertGreaterThan(art.size.width, 0, art.rawValue)
             XCTAssertGreaterThan(art.size.height, 0, art.rawValue)
         }
+    }
+
+    func testSpeedSharpnessPresetArt() {
+        XCTAssertEqual(KeypointDivisorStartupView.presetArt(1.0), .presetBestQuality)
+        XCTAssertEqual(KeypointDivisorStartupView.presetArt(1.5), .presetBestBalance)
+        XCTAssertEqual(KeypointDivisorStartupView.presetArt(2.0), .presetFastest)
+        XCTAssertNil(KeypointDivisorStartupView.presetArt(3.0))
+        XCTAssertNil(KeypointDivisorStartupView.presetArt(1.25))
     }
 
     /// A3: the Speed vs. Sharpness sheet is all white text, so what it is drawn on must not be near-white.
@@ -5698,8 +5753,45 @@ final class DarkAppearanceTests: XCTestCase {
             alert.window.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]), .darkAqua,
             "a fresh NSAlert must be drawn dark")
     }
+
+    func testHorizonPainterDiagrams() {
+        XCTAssertEqual(horizonPainterDiagrams(isMoving: false),
+                       [.paintBrush, .paintFill, .paintTouchUp])
+        XCTAssertEqual(horizonPainterDiagrams(isMoving: true),
+                       [.paintBrush, .paintFill, .paintTouchUp, .paintMoving])
+    }
 }
 
+/// The "About the alignment charts" example charts: the generator gives the sample points of
+/// `gherkin/ui/vectors/alignmentExamples.json`, which the desktop's `AlignmentExamplesTest` checks too.
+final class AlignmentExamplesTests: XCTestCase {
+    func testAlignmentExamplesMatchVectors() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let doc = try XCTUnwrap(JSONSerialization.jsonObject(
+            with: Data(contentsOf: root.appendingPathComponent("gherkin/ui/vectors/alignmentExamples.json"))) as? [String: Any])
+        XCTAssertEqual(doc["frameCount"] as? Int, AlignmentExamples.frameCount)
+        XCTAssertEqual(doc["offsets"] as? [Int], AlignmentExamples.offsets)
+        let cases: [(String, Bool, Bool)] = [
+            ("fixedGood", false, true), ("fixedBad", false, false), ("movingGood", true, true), ("movingBad", true, false),
+        ]
+        for (name, moving, good) in cases {
+            let points = AlignmentExamples.points(moving: moving, good: good)
+            XCTAssertEqual(points.count, 48 * 8, name)
+            XCTAssertTrue(points.allSatisfy { $0.alignmentState == .homographySuccess }, name)
+            let samples = try XCTUnwrap(doc[name] as? [[String: Any]])
+            XCTAssertGreaterThanOrEqual(samples.count, 12, "\(name) lost samples")
+            for s in samples {
+                let frame = try XCTUnwrap(s["frame"] as? Int)
+                let offset = try XCTUnwrap(s["offset"] as? Int)
+                let deviation = try XCTUnwrap(s["deviation"] as? Double)
+                let isGood = try XCTUnwrap(s["good"] as? Bool)
+                let p = try XCTUnwrap(points.first { $0.baseFrame == frame && $0.offset == offset })
+                XCTAssertEqual(p.signedDeviation, deviation, accuracy: 0.0006, "\(name) \(frame) \(offset)")
+                XCTAssertEqual(p.isGood, isGood, "\(name) \(frame) \(offset)")
+            }
+        }
+    }
+}
 
 /// `SplitRevealVideoView.videoAspectRatio(of:)`: the Initial screen sizes its video from the first video track's natural size with the
 /// preferred transform applied, so a rotated clip reads as portrait.

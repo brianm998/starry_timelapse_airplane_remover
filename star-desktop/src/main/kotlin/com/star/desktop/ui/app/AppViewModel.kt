@@ -240,6 +240,13 @@ class AppViewModel(
 
     private var currentSequence: SequenceViewModel? = null
 
+    /** A frame's picture from the open sequence (null until it exists, or with no sequence). */
+    suspend fun framePicture(index: Int, mode: com.star.proto.FrameViewMode, thumbnail: Boolean = false): androidx.compose.ui.graphics.ImageBitmap? =
+        currentSequence?.loadThumb(index, mode, thumbnail)
+
+    /** The open sequence's current frame index; 0 without one. */
+    val currentFrameIndex: Int get() = currentSequence?.currentIndex?.value ?: 0
+
     /** What this class itself runs for the open session (the render-prompt and error collectors); cancelled when it closes. */
     private var sessionScope: CoroutineScope? = null
 
