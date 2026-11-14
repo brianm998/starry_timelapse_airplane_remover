@@ -378,7 +378,7 @@ uses = { exclusive = 1 }
 
 [suite.test-desktop]
 # s27-shadow: remove at the switch
-command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop test --no-daemon 2>&1"
+command = "pipeline/bin/starpipe heavy -- env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop test --rerun --no-daemon 2>&1"
 parser = "junit"
 results_file = "star-desktop/build/test-results/test/*.xml"
 min_tests = 1 # UNMEASURED
