@@ -26,7 +26,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.star.desktop.ui.components.ArtImage
+import com.star.desktop.ui.components.StarArt
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
@@ -62,7 +65,14 @@ fun OutlierLinesPanel(vm: SequenceViewModel, windowFrame: Int, selection: Set<In
     Row(Modifier.fillMaxWidth().height(250.dp).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
             when (selection.size) {
-                0 -> Text(localized("ui.select_some_outliers"), color = StarColors.textSecondary, fontSize = 12.sp)
+                0 -> Column(
+                    Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ArtImage(StarArt.ART_REVIEW)
+                    Text(localized("ui.select_some_outliers"), color = StarColors.textSecondary, fontSize = 12.sp)
+                }
                 1 -> {
                     val id = selection.first()
                     LinesTable(vm, windowFrame, id, groups.firstOrNull { it.id == id }, argsVersion)

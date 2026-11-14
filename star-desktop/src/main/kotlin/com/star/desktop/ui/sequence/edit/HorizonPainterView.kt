@@ -598,25 +598,30 @@ private fun HorizonInstructionTip(prefs: com.star.desktop.data.LocalPreferences,
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(localized("ui.selecting_the_horizon_with_star_is_easy"), color = Color.White, fontSize = 15.sp)
-        val diagrams = horizonPainterDiagrams(isMoving)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            diagrams.take(3).forEach { ArtImage(it) }
-        }
-        diagrams.drop(3).forEach { ArtImage(it) }
-        Text(
-            localized(if (isMoving) "ui.horizon_painter_instructions_moving" else "ui.horizon_painter_instructions_static") + "\n\n" +
-                localized("ui.horizon_painter_instructions_brushing"),
-            color = StarColors.textSecondary, fontSize = 12.sp,
-        )
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
-            androidx.compose.material3.Checkbox(checked = dontShowAgain, onCheckedChange = { dontShowAgain = it })
-            Text(localized("ui.don_t_show_again"), color = Color.White, fontSize = 12.sp)
-            Spacer(Modifier.size(16.dp))
-            OutlinedButton(onClick = {
-                if (dontShowAgain) prefs.showHorizonPainterInstructions = false
-                dismissed = true
-            }) { Text(localized("ui.got_it")) }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+            ArtImage(StarArt.ART_PAINT_ROBOT)
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(localized("ui.selecting_the_horizon_with_star_is_easy"), color = Color.White, fontSize = 15.sp)
+                val diagrams = horizonPainterDiagrams(isMoving)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    diagrams.take(3).forEach { ArtImage(it) }
+                }
+                diagrams.drop(3).forEach { ArtImage(it) }
+                Text(
+                    localized(if (isMoving) "ui.horizon_painter_instructions_moving" else "ui.horizon_painter_instructions_static") + "\n\n" +
+                        localized("ui.horizon_painter_instructions_brushing"),
+                    color = StarColors.textSecondary, fontSize = 12.sp,
+                )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End) {
+                    androidx.compose.material3.Checkbox(checked = dontShowAgain, onCheckedChange = { dontShowAgain = it })
+                    Text(localized("ui.don_t_show_again"), color = Color.White, fontSize = 12.sp)
+                    Spacer(Modifier.size(16.dp))
+                    OutlinedButton(onClick = {
+                        if (dontShowAgain) prefs.showHorizonPainterInstructions = false
+                        dismissed = true
+                    }) { Text(localized("ui.got_it")) }
+                }
+            }
         }
     }
 }
