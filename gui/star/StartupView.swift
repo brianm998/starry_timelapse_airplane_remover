@@ -366,6 +366,7 @@ enum CleanupTiles {
         switch method {
         case .selective: return .modeSelective
         case .automatic(let autoSelective): return autoSelective ? .modeAutoSelective : .modeAutomatic
+        case .dirty: return .changeModeDirty
         }
     }
 }
