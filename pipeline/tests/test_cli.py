@@ -162,7 +162,7 @@ def test_status_says_when_a_self_update_holds_claims(monkeypatch: pytest.MonkeyP
 
 
 def test_limits_and_status_say_model_sessions(monkeypatch: pytest.MonkeyPatch) -> None:
-    res: dict[str, object] = {"llm_active": 2, "llm_max": 3, "cpu_pct": 10.0, "cpu_limit": 80.0, "waiting": "", "overridden": False}
+    res: dict[str, object] = {"llm_active": 2, "limit": "MASON's", "waiting": ""}
 
     class FakeClient:
         def call(self, _method: str, path: str, _body: dict[str, object] | None = None) -> dict[str, object]:
@@ -171,8 +171,10 @@ def test_limits_and_status_say_model_sessions(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr("starpipe.cli._client", lambda: FakeClient())
     for args in (["status"], ["limits"]):
         out = CliRunner().invoke(main, args)
-        assert out.exit_code == 0 and "model sessions 2/3" in out.output and "LLM" not in out.output, out.output
-    assert "model sessions at once" in CliRunner().invoke(main, ["limits", "--help"]).output
+        assert out.exit_code == 0 and "model sessions 2" in out.output and "LLM" not in out.output and "CPU" not in out.output, out.output
+    shown = CliRunner().invoke(main, ["limits"]).output
+    assert "mason resources limit llm:claude N" in shown
+    assert "--llm" not in CliRunner().invoke(main, ["limits", "--help"]).output
 
 
 class FakeDaemon:

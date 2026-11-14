@@ -33,22 +33,18 @@ def main() -> None:
 
 @main.command(context_settings={"ignore_unknown_options": True})
 @click.option("--priority", type=click.IntRange(0, 2), default=None,
-              help="0 interactive, 1 pipeline, 2 nightly (default: from STARPIPE_TICKET / STARPIPE_NIGHTLY)")
-@click.option("--status", "show_status", is_flag=True, help="Show the holder and the queue, then exit.")
+              help="Ignored: masond ranks by who asks (a ticket stage, a person, a MASON task).")
+@click.option("--status", "show_status", is_flag=True, help="Show what masond holds, then exit.")
 @click.argument("command", nargs=-1, type=click.UNPROCESSED)
 def heavy_cmd(priority: int | None, show_status: bool, command: tuple[str, ...]) -> None:
-    """Run COMMAND under the machine-wide heavy-job lock: starpipe heavy -- swift test ..."""
+    """Run COMMAND queued in masond (`mason run`): starpipe heavy -- swift test ..."""
     if show_status:
         st = heavy.status()
         for h in st.holders:
-            use = f"  [{h.job_class or '?'}, cpu {h.cpu_mean:.1f} mean / {h.cpu_peak:.1f} peak cores, rss peak {h.rss_peak_mb:.0f} MB]"
             where = f" {h.stage}" if h.stage else ""
-            click.echo(f"holder  {h.ticket or 'interactive'}{where}  {h.cmd}{use}  slots {','.join(h.slots) or '?'}")
-        for i, w in enumerate(st.queue, 1):
-            where = f" {w.stage}" if w.stage else ""
-            click.echo(f"queue {i}  p{w.priority}  {w.ticket or 'interactive'}{where}  [{w.job_class}]  {w.cmd}")
-        if not st.holders and not st.queue:
-            click.echo("idle")
+            click.echo(f"holder  {h.ticket or 'other'}{where}  {h.cmd}  {','.join(h.slots) or '?'}")
+        if not st.holders:
+            click.echo("idle (masond keeps the queue: `mason resources`)")
         return
     if not command:
         raise click.UsageError("no command given")
@@ -61,19 +57,25 @@ main.add_command(heavy_cmd, "heavy")
 
 @main.command()
 def freeze() -> None:
-    """Hold the whole heavy lock: no test, build or UI run starts until `starpipe thaw`. Works on every pipeline version."""
+    """Stop all automated work: `mason pause --mode all` plus an exclusive hold in masond, until `starpipe thaw`."""
     from . import pause as paused
 
-    pid = paused.pause()
-    click.echo(f"frozen (holder pid {pid}): nothing heavy starts; a run already going is not stopped. `starpipe thaw` lets go")
+    try:
+        pid = paused.pause()
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"frozen (holder pid {pid}): nothing starts in masond; a run already going is not stopped. `starpipe thaw` lets go")
 
 
 @main.command()
 def thaw() -> None:
-    """Let go of the lock `starpipe freeze` holds."""
+    """Let go of the hold and the pause `starpipe freeze` took."""
     from . import pause as paused
 
-    click.echo("thawed" if paused.resume() else "was not frozen")
+    try:
+        click.echo("thawed" if paused.resume() else "was not frozen")
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @main.command()
@@ -333,7 +335,7 @@ def status(as_json: bool) -> None:
         click.echo(f"daemon up, pid {d['pid']}" + (f"  last error: {d['error']}" if d.get("error") else ""))
     res = data.get("resources")
     if res:
-        click.echo(f"model sessions {res['llm_active']}/{res['llm_max']} · CPU {res['cpu_pct']:.0f}% (limit {res['cpu_limit']:.0f}%)"
+        click.echo(f"model sessions {res['llm_active']} (limit is MASON's)"
                    + (f" · new sessions wait: {res['waiting']}" if res.get("waiting") else ""))
     if data.get("pause"):
         click.echo(f"PAUSED: {data['pause']}")
@@ -469,22 +471,17 @@ def unblock(number: int, blocker: int) -> None:
 
 
 @main.command()
-@click.option("--llm", type=int, default=None, help="Most model sessions at once (1 to 6; the monitor's stepper sets the same value).")
-@click.option("--cpu", type=float, default=None, help="Do not start another session while CPU use is above this percent.")
-@click.option("--reset", is_flag=True, help="Go back to the values in config.toml.")
-def limits(llm: int | None, cpu: float | None, reset: bool) -> None:
-    """Show or change what limits starting work: model sessions at once, and CPU use (a runtime override of config.toml)."""
+def limits() -> None:
+    """Show the model-session count: the limit is MASON's, not starpipe's."""
     from . import client as client_mod
 
     try:
-        client = _client()
-        res = client.call("POST", "/v1/limits", {"llm": llm, "cpu": cpu, "reset": reset}) if (llm or cpu or reset) \
-            else client.call("GET", "/v1/limits")
+        res = _client().call("GET", "/v1/limits")
     except (client_mod.DaemonDown, RuntimeError) as exc:
         raise click.ClickException(str(exc)) from exc
-    click.echo(f"model sessions {res['llm_active']}/{res['llm_max']} · CPU {res['cpu_pct']:.0f}% (limit {res['cpu_limit']:.0f}%)"
-               + (" · overridden at runtime" if res["overridden"] else " · from config.toml")
-               + (f" · new sessions wait: {res['waiting']}" if res["waiting"] else ""))
+    click.echo(f"model sessions {res['llm_active']} open (llm:claude is shared with MASON's own sessions)\n"
+               "the limit is MASON's: change it with `mason resources limit llm:claude N`"
+               + (f"\nnew sessions wait: {res['waiting']}" if res.get("waiting") else ""))
 
 
 @main.command()

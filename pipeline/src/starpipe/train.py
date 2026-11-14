@@ -115,6 +115,7 @@ class Train:
         self._drivers: dict[int, asyncio.Task[None]] = {}  # one task per active batch, driving it through CI and landing
         self._wake = asyncio.Event()  # set when a driver ends, so the loop forms the next batch at once
         self._asked_polled: dict[int, float] = {}  # when each asking batch's anchor issue was last read for an answer
+        self._fixing: set[int] = set()  # tickets in their CI-FIX stage: ready again, but not to be batched until the stage is over
         self._git_lock = threading.Lock()  # fetches and worktree add/remove from two batches' threads must not race on the shared repo
 
     # the loop ------------------------------------------------------------------------------------------------------
@@ -274,7 +275,7 @@ class Train:
         eng = self.eng
         # a ticket whose catch-up is still running stays out: landing it would delete the worktree the catch-up is working in
         ready = [t for t in eng.db.tickets(("ready",))
-                 if eng.db.batch_of(t.number) is None and t.number not in self._beside]
+                 if eng.db.batch_of(t.number) is None and t.number not in self._beside and t.number not in self._fixing]
         ids = [t.number for t in ready]
         flying = [n for b in eng.db.active_batches() for n in eng.db.batch_members(int(b["id"]))]
         if flying and paths is None:
@@ -940,11 +941,17 @@ class Train:
             eng.db.event("train-split", None, batch=bid, halves=[members[:half], members[half:]])
             await asyncio.to_thread(self._abandon, bid, f"CI red: {verdict.reason}", "failed")
             return
-        await asyncio.to_thread(self._abandon, bid, f"CI red: {verdict.reason}", "failed")
-        t = eng.db.ticket(members[0]) if members else None
-        if t is not None and t.state == "ready" and verdict.blocking:
-            # one ticket and still red: it is the culprit, so it gets the CI-FIX stage and rejoins the queue
-            await ship.ci_fix(eng, t, verdict, rejoin=True)
+        # kept out of the next batch from the moment the abandon makes it `ready` until its CI-FIX stage has ended: the stage
+        # may wait a while for a model session, and the train must not batch the unfixed ticket meanwhile
+        self._fixing.update(members)
+        try:
+            await asyncio.to_thread(self._abandon, bid, f"CI red: {verdict.reason}", "failed")
+            t = eng.db.ticket(members[0]) if members else None
+            if t is not None and t.state == "ready" and verdict.blocking:
+                # one ticket and still red: it is the culprit, so it gets the CI-FIX stage and rejoins the queue
+                await ship.ci_fix(eng, t, verdict, rejoin=True)
+        finally:
+            self._fixing.difference_update(members)
 
     def _abandon(self, bid: int, why: str, final: str = "abandoned") -> None:
         """Give a batch up: close its PR, drop its branch and worktree, and put its tickets back in the queue."""
