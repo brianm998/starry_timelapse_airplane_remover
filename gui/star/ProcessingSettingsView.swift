@@ -456,10 +456,14 @@ struct ProcessingSettingsView: View {
     var body: some View {
         @Bindable var viewModel = viewModel
         return VStack {
-              Text(localized("ui.choose_from_the_following_options_to_let"))
-                .lineLimit(nil)
-                .font(.largeTitle)
-                .foregroundColor(.white)
+              HStack(alignment: .top, spacing: 12) {
+                ArtImage(.settings)
+                Text(localized("ui.choose_from_the_following_options_to_let"))
+                  .lineLimit(nil)
+                  .fixedSize(horizontal: false, vertical: true)
+                  .font(.largeTitle)
+                  .foregroundColor(.white)
+              }
 
               // Under the top label, and only over a sequence that has work on disk this
               // change contradicts.  A sequence nothing has been done to is what this whole
@@ -591,7 +595,7 @@ struct ProcessingSettingsView: View {
           }
           .frame(minWidth: 1000)
           .padding(20)
-          .background(.gray)
+          .background(Color.starDialogBackground)
           .onAppear {
               // Only when there is not one already.  A settings change the user made and
               // then dismissed without processing is still a change the frames on disk do

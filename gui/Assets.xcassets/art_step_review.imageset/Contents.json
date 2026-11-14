@@ -1,0 +1,18 @@
+{
+  "images": [
+    {
+      "filename": "art_step_review1x.png",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "art_step_review2x.png",
+      "idiom": "universal",
+      "scale": "2x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

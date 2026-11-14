@@ -33,6 +33,8 @@ import com.star.desktop.domain.DetectionPreference
 import com.star.desktop.domain.RenderVideo
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.components.ArtImage
+import com.star.desktop.ui.components.StarArt
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
 
@@ -60,7 +62,10 @@ fun PreferencesDialog(app: AppViewModel) {
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(localized("ui.preferences"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 22.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ArtImage(StarArt.ART_SETTINGS)
+                Text(localized("ui.preferences"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 22.sp)
+            }
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 // What was last chosen where it is chosen, which this only reports.
                 PreferenceCard(localized("ui.processing_type"), localized("ui.the_detection_method_used_for_outlier"), value = prefs.string(DetectionPreference.KEY))

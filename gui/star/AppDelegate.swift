@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         alert.messageText = localized("ui.work_in_progress")
         alert.informativeText =
             localized("ui.work_in_progress.quitting", seq.pendingWorkDescription)
+        alert.icon = NSImage(named: StarArt.holdOn.rawValue)
         alert.alertStyle = .warning
         alert.addButton(withTitle: localized("ui.cancel"))
         alert.addButton(withTitle: localized("ui.quit_anyway"))
@@ -71,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             alert.messageText = localized("ui.work_in_progress")
             alert.informativeText =
                 localized("ui.work_in_progress.closing", seq.pendingWorkDescription)
+            alert.icon = NSImage(named: StarArt.holdOn.rawValue)
             alert.alertStyle = .warning
             alert.addButton(withTitle: localized("ui.cancel"))
             alert.addButton(withTitle: localized("ui.close_anyway"))

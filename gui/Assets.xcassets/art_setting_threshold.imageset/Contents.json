@@ -1,0 +1,18 @@
+{
+  "images": [
+    {
+      "filename": "art_setting_threshold1x.jpg",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "art_setting_threshold2x.jpg",
+      "idiom": "universal",
+      "scale": "2x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

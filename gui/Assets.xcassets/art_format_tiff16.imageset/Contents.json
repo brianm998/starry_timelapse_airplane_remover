@@ -1,0 +1,18 @@
+{
+  "images": [
+    {
+      "filename": "art_format_tiff161x.png",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "art_format_tiff162x.png",
+      "idiom": "universal",
+      "scale": "2x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

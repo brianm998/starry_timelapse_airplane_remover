@@ -7,12 +7,17 @@ struct PreProcessingRenderPromptView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(localized("ui.render_video_after_processing"))
-              .font(.title)
+            HStack(spacing: 16) {
+                ArtImage(.rendering, fitting: 96)
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(localized("ui.render_video_after_processing"))
+                      .font(.title)
 
-            Text(localized("ui.once_frame_processing_finishes_would_you"))
-              .lineLimit(nil)
-              .fixedSize(horizontal: false, vertical: true)
+                    Text(localized("ui.once_frame_processing_finishes_would_you"))
+                      .lineLimit(nil)
+                      .fixedSize(horizontal: false, vertical: true)
+                }
+            }
 
             HStack {
                 Button(localized("ui.don_t_ask_me_again")) {

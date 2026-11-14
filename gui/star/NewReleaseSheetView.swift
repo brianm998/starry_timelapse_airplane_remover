@@ -26,8 +26,11 @@ struct NewReleaseSheetView: View {
             {
                 VStack {
                     Space(height: 20)
-                    Text(localized("ui.there_is_a_new_release_of_star_available"))
-                      .font(.title)
+                    HStack {
+                        ArtImage(.newRelease)
+                        Text(localized("ui.there_is_a_new_release_of_star_available"))
+                          .font(.title)
+                    }
                     Space(height: 10)
                     Text(localized("ui.new_release_available", Config.latestVersion, version))
                       .font(.title2)

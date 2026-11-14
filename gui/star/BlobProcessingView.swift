@@ -19,6 +19,7 @@ struct BlobProcessingView: View {
                 self.mainView
             } else {
                 VStack {
+                    WaitingArt()
                     Text(localized("ui.no_image_sequence_loaded"))
                     Text(localized("ui.load_an_image_sequence_in_the_main_star_2"))
                 }

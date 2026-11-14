@@ -34,4 +34,8 @@ object AlignmentWindowTexts {
         !fetched || processing -> listOf(WAITING)
         else -> listOf(PROCESS_FIRST)
     }
+
+    /** The art above the empty-state lines: the waiting robot whenever [emptyState] has lines, nothing otherwise. */
+    fun emptyStateArt(hasSequence: Boolean, fetched: Boolean, hasData: Boolean, processing: Boolean): com.star.desktop.ui.components.StarArt? =
+        if (emptyState(hasSequence, fetched, hasData, processing).isEmpty()) null else com.star.desktop.ui.components.StarArt.ART_WAITING
 }

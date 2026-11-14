@@ -1,0 +1,18 @@
+{
+  "images": [
+    {
+      "filename": "art_tool_information1x.jpg",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "art_tool_information2x.jpg",
+      "idiom": "universal",
+      "scale": "2x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}

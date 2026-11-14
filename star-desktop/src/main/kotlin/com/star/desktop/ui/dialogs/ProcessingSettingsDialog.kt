@@ -63,8 +63,10 @@ import com.star.desktop.engine.EngineStatus
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.app.AppScreen
 import com.star.desktop.ui.app.AppViewModel
+import com.star.desktop.ui.components.ArtImage
 import com.star.desktop.ui.components.GlyphButton
 import com.star.desktop.ui.components.HoverTip
+import com.star.desktop.ui.components.StarArt
 import com.star.desktop.ui.components.StarPicker
 import com.star.desktop.ui.components.numberFieldRules
 import com.star.desktop.ui.theme.StarColors
@@ -133,12 +135,21 @@ fun ProcessingSettingsDialog(app: AppViewModel) {
         if (cfg == null) {
             SheetCard(sheetSize) {
                 // The gui's header (P8): the sentence that says what the sheet is for, and not the name of the menu item that opens it.
-                Text(localized(SETTINGS_TITLE_KEY), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                SettingsHeading()
                 Text(localized("ui.loading"), color = StarColors.textSecondary, fontSize = 13.sp)
             }
         } else {
             SettingsSheet(app, cfg, sheetSize)
         }
+    }
+}
+
+/** The settings robot beside the sheet's heading; the sentence wraps beside it and the robot stays at the top. */
+@Composable
+private fun SettingsHeading() {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        ArtImage(StarArt.ART_SETTINGS)
+        Text(localized(SETTINGS_TITLE_KEY), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.weight(1f))
     }
 }
 
@@ -264,7 +275,7 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
 
     SheetCard(sheetSize) {
         // The gui's header (P8): the sentence that says what the sheet is for, and not the name of the menu item that opens it.
-        Text(localized(SETTINGS_TITLE_KEY), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+        SettingsHeading()
 
         // Under the title, and only over a sequence that has work on disk this change contradicts: a sequence nothing has been done to is
         // what this sheet was built for, and there is nothing to warn about there.
