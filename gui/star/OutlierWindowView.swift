@@ -262,7 +262,7 @@ struct ArgableRowView<T: Hashable>: View {
 
     var body: some View {
         GridRow {
-            Text("\(argType)")
+            Text(verbatim: String(describing: argType))
 
             let value = args.value(for: argType)
             

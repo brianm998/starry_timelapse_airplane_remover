@@ -72,7 +72,7 @@ struct InitialView: View {
             Spacer()
 
             FinderStyleDropZone(onDropAction: { providers in
-                handleDrop(providers: providers)
+                _ = handleDrop(providers: providers)
             }, onTap: loadImageSequence)
               .frame(maxWidth: 1200, maxHeight: 800)
 
@@ -576,6 +576,20 @@ struct SplitRevealVideoView: View {
             )
     }
 
+    /// Width / height of the first video track's displayed size (natural size with the
+    /// preferred transform applied), or nil when `url` has no usable video track.
+    nonisolated static func videoAspectRatio(of url: URL) async -> CGFloat? {
+        let asset = AVURLAsset(url: url)
+        guard let track = try? await asset.loadTracks(withMediaType: .video).first,
+              let (naturalSize, transform) = try? await track.load(.naturalSize, .preferredTransform)
+        else { return nil }
+        let size = naturalSize.applying(transform)
+        let w = abs(size.width)
+        let h = abs(size.height)
+        guard w > 0, h > 0 else { return nil }
+        return CGFloat(w / h)
+    }
+
     // MARK: - ViewModel
     /// Main-thread-only ObservableObject that manages players and aspect ratio.
     @MainActor
@@ -604,45 +618,16 @@ struct SplitRevealVideoView: View {
         }
 
         private func loadAspectRatio() {
-            // Perform work off the main thread to avoid blocking UI
-            DispatchQueue.global(qos: .background).async { [rightURL] in
-                let asset = AVAsset(url: rightURL)
-                // try to read first video track synchronously (may be available)
-                let tracks = asset.tracks(withMediaType: .video)
-                if let track = tracks.first {
-                    let size = track.naturalSize.applying(track.preferredTransform)
-                    let w = abs(size.width)
-                    let h = abs(size.height)
-                    if w > 0, h > 0 {
-                        DispatchQueue.main.async {
-                            self.aspectRatio = CGFloat(w / h)
-                        }
-                        return
-                    }
-                }
-                // Fallback: try the async KVO path if above didn't yield
-                asset.loadValuesAsynchronously(forKeys: ["tracks"]) {
-                    var err: NSError?
-                    let status = asset.statusOfValue(forKey: "tracks", error: &err)
-                    if status == .loaded {
-                        if let track = asset.tracks(withMediaType: .video).first {
-                            let size = track.naturalSize.applying(track.preferredTransform)
-                            let w = abs(size.width)
-                            let h = abs(size.height)
-                            if w > 0, h > 0 {
-                                DispatchQueue.main.async {
-                                    self.aspectRatio = CGFloat(w / h)
-                                }
-                            }
-                        }
-                    }
+            Task { [rightURL] in
+                if let r = await SplitRevealVideoView.videoAspectRatio(of: rightURL) {
+                    self.aspectRatio = r
                 }
             }
         }
 
         func prepareAndPlay() {
 //            let assetL = AVAsset(url: leftURL)
-            let assetR = AVAsset(url: rightURL)
+            let assetR = AVURLAsset(url: rightURL)
 //            let itemL = AVPlayerItem(asset: assetL)
             let itemR = AVPlayerItem(asset: assetR)
 
@@ -652,7 +637,7 @@ struct SplitRevealVideoView: View {
             // Use the same master clock for both players
             let masterClock = CMClockGetHostTimeClock()
 //            playerLeft.masterClock = masterClock
-            playerRight.masterClock = masterClock
+            playerRight.sourceClock = masterClock
 
             observeEndOfItem(itemR)
             isActive = true
