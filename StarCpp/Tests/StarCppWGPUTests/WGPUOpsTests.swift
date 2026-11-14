@@ -19,6 +19,14 @@ import StarCpp
 /// StarCpp/Package.swift), STAR_WGPU is not set, or the machine has no usable adapter.
 final class WGPUOpsTests: XCTestCase {
 
+    /// The Metal comparisons need a real Metal result. With STAR_USE_GPU_FOR_MERGE=0 (required on the
+    /// owner's Mac) `useGPU: true` is overridden and the "Metal" side would silently be the CPU's.
+    private func requireMetalComparison() throws {
+        try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
+        try XCTSkipIf(GPUCapability.mergeForcedOff(),
+                      "STAR_USE_GPU_FOR_MERGE=0 forces the warp/merge onto the CPU, so there is no Metal result to compare with")
+    }
+
     override func setUpWithError() throws {
         // No setenv here (it is not in scope on Windows): wgpu.yml sets STAR_WGPU, and a local run does too.
         try XCTSkipUnless(wgpu_ops_compiled_in(), "built without wgpu-native (wgpu/fetch.sh)")
@@ -178,7 +186,7 @@ final class WGPUOpsTests: XCTestCase {
     /// comment). Measured on noisy frames: 0.13% of 16-bit samples, 0.01% of 8-bit ones. OpenCV's own CPU
     /// warp is off Metal by more than that, so this is the sharper of the two comparisons.
     func testWarpMatchesTheMetalKernelClosely() throws {
-        try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
+        try requireMetalComparison()
         GPUOps.registerIfAvailable()
         for (bits, channels) in [(16, 3), (8, 3), (16, 1)] {
             let src = frame(width: 1500, height: 900, channels: channels, bits: bits, seed: 2)
@@ -294,7 +302,7 @@ final class WGPUOpsTests: XCTestCase {
     /// Measured: 50-88 of 921,600 samples (under 0.01%), a merge picks one value so a flipped warp step
     /// shows up far less than in the warp itself.
     func testAlignedMergeMatchesTheMetalKernelClosely() throws {
-        try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
+        try requireMetalComparison()
         GPUOps.registerIfAvailable()
         for bits in [16, 8] {
             let f = fixture(bits: bits)
@@ -358,7 +366,7 @@ final class WGPUOpsTests: XCTestCase {
     /// Metal's median kernel is the same selection in float; where Metal exists they should agree to the
     /// last sample or very nearly.
     func testMedianMergeMatchesTheMetalKernelClosely() throws {
-        try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
+        try requireMetalComparison()
         GPUOps.registerIfAvailable()
         for bits in [16, 8] {
             let sources = (0..<9).map { frame(width: 301, height: 203, channels: 3, bits: bits, seed: $0 + 10) }
