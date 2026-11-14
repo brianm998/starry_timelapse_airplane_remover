@@ -1,11 +1,11 @@
-"""`starpipe pause` / `resume`: hold every heavy-lock slot so no test, build or UI run starts, whatever version of the pipeline asks.
+"""`starpipe freeze` / `thaw`: stop all automated work on this Mac, through masond (owner decision 0119-5).
 
-The lock is flock on files in ~/.star-pipeline/locks. Every version of the code, back to the one-slot lock (`heavy.slot0`), waits on
-those same files, so a process that holds them all stops the daemon's checks, the agents in ticket worktrees (whose own, older
-`heavy.py` runs) and a session's wrapped commands alike, without any of them knowing about it. Waiting is harmless: they start when
-`resume` lets go. A run already going is not stopped by this; kill it first.
+Freeze is two things: `mason pause --mode all` (MASON's own tasks stop at their next step) and a detached holder of
+`mason hold --exclusive --pipeline starpipe --label freeze`, which keeps every job and session of every pipeline waiting in
+masond's queue. Waiting is harmless: they start when `thaw` lets go. A run already going is not stopped by this; kill it first.
 
-The holder dies with a reboot or a logout, which is a resume."""
+The holder is a process of its own so it outlives the command. If it dies (a reboot, a logout) its hold ends with it; the pause
+stays until `thaw` or `mason resume`."""
 
 from __future__ import annotations
 
@@ -17,12 +17,12 @@ import sys
 import time
 from pathlib import Path
 
-from . import heavy
-from .config import load
+from . import masonq
+from .config import home
 
 
 def pidfile() -> Path:
-    return heavy.locks_dir() / "pause.pid"
+    return home() / "freeze.pid"
 
 
 def paused_pid() -> int | None:
@@ -40,38 +40,49 @@ def _stop(_signum: int, _frame: object) -> None:
 
 
 def hold() -> None:
-    """Take every slot (retrying until each is free: a job that is running lets go when it ends) and sit on them."""
-    names = heavy._all_slots(load())  # pyright: ignore[reportPrivateUsage]
-    held: dict[str, int] = {}
+    """The holder process: take the exclusive hold (it waits in masond's queue for running jobs to end) and sit on it."""
+    pidfile().parent.mkdir(parents=True, exist_ok=True)
     pidfile().write_text(str(os.getpid()))
     signal.signal(signal.SIGTERM, _stop)
-    while len(held) < len(names):
-        for name in names:
-            if name not in held and (fd := heavy._try_slot(name)) is not None:  # pyright: ignore[reportPrivateUsage]
-                held[name] = fd
-        if len(held) < len(names):
-            time.sleep(0.2)
-    while True:
-        time.sleep(3600)
+    held = masonq.acquire(None, "freeze", exclusive=True)
+    try:
+        while True:
+            time.sleep(3600)
+    finally:
+        held.release()
+
+
+def _mason(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([masonq.binary(), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL, check=False)
 
 
 def pause() -> int:
-    """Start the holder, detached; its pid."""
+    """`mason pause --mode all`, then start the holder, detached; its pid."""
     if (pid := paused_pid()) is not None:
         return pid
+    done = _mason("pause", "--mode", "all")
+    if done.returncode != 0:
+        raise RuntimeError(f"mason pause --mode all failed ({done.returncode}): {(done.stderr or done.stdout).strip()}")
     proc = subprocess.Popen([sys.executable, "-m", "starpipe.pause"], start_new_session=True, stdin=subprocess.DEVNULL,
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    pidfile().parent.mkdir(parents=True, exist_ok=True)
+    pidfile().write_text(str(proc.pid))
     return proc.pid
 
 
 def resume() -> bool:
-    """Let go of the slots; whether anything was paused."""
+    """Release the hold and MASON's pause; whether anything was frozen."""
     pid = paused_pid()
     if pid is not None:
         with contextlib.suppress(OSError):
             os.kill(pid, signal.SIGTERM)
     pidfile().unlink(missing_ok=True)
-    return pid is not None
+    if pid is None:
+        return False
+    done = _mason("resume", "--mode", "all")
+    if done.returncode != 0:
+        raise RuntimeError(f"mason resume --mode all failed ({done.returncode}): {(done.stderr or done.stdout).strip()}")
+    return True
 
 
 if __name__ == "__main__":
