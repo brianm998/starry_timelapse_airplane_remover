@@ -269,19 +269,24 @@ async def test_a_landing_stage_goes_before_new_work(rig: Rig, monkeypatch: pytes
     gate = gated(rig, monkeypatch, 0)
     rig.engine.landing_waiting.add(99)  # a landing stage already waits: new work holds back until it has gone
     new_work = asyncio.create_task(rig.engine._hold_session(t3, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
-    await asyncio.sleep(0.1)
-    assert rig.db.get("llm_wait:3") == "a landing stage is waiting for a session" and not new_work.done()
+    await until(lambda: rig.db.get("llm_wait:3") == "a landing stage is waiting for a session", 30)
+    assert not new_work.done() and gate.requested == []
     landing = asyncio.create_task(rig.engine._hold_session(t2, "conflict", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
-    await until(lambda: 2 in rig.engine.landing_waiting or 2 in rig.engine.holding)  # it is registered before the placeholder goes,
+    await until(lambda: 2 in rig.engine.landing_waiting or 2 in rig.engine.holding, 30)  # it is registered before the placeholder goes,
     rig.engine.landing_waiting.discard(99)  # or new work could slip in between the two and take the only unit
+    await until(lambda: gate.requested == ["starpipe #2 conflict"], 30)  # the landing hold is queued in the gate before a unit appears
     gate.grant_one_more()
-    stage_id, hold = await asyncio.wait_for(landing, 60)
+    await until(lambda: landing.done() or new_work.done(), 30)
+    assert landing.done() and not new_work.done() and gate.started == ["starpipe #2 conflict"]
+    stage_id, hold = landing.result()
     await asyncio.sleep(0.05)
     assert not new_work.done()
     hold.release()
     rig.db.end_stage(stage_id, "accepted", 0.0, "")
     gate.grant_one_more()
-    _, hold3 = await asyncio.wait_for(new_work, 60)
+    await until(new_work.done, 30)
+    _, hold3 = new_work.result()
+    assert gate.started == ["starpipe #2 conflict", "starpipe #3 develop"]
     hold3.release()
 
 
