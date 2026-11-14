@@ -88,7 +88,8 @@ class StartScreenTest {
     @Test fun theButtonsAreOneStyleAtTheGuisSize() {
         val source = read("star-desktop/src/main/kotlin/com/star/desktop/ui/initial/InitialView.kt")
         for (key in listOf("ui.learn_about_star", "ui.load_video", "ui.load_image_sequence", "ui.load_config"))
-            assertTrue("Text(localized(\"$key\"), style = StarType.largeTitle)" in source, "$key is not at largeTitle")
+            assertTrue("localized(\"$key\")" in source && ", localized(\"$key\"))" in source, "$key is not on a TiledLabel")
+        assertTrue("Text(text, style = StarType.largeTitle)" in source, "the button label is not at largeTitle")
         assertTrue("ButtonDefaults" !in source && "containerColor" !in source, "a button is accent-filled")
     }
 }
