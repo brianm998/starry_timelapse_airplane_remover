@@ -21,7 +21,10 @@ struct OutlierWindowView: View {
                 Spacer()
                 // put view for hough lines here
                 if outlierWindowViewModel.selectedOutliers.count == 0 {
-                    Text(localized("ui.select_some_outliers")) 
+                    VStack(spacing: 8) {
+                        ArtImage(.review)
+                        Text(localized("ui.select_some_outliers"))
+                    }
                 } else if outlierWindowViewModel.selectedOutliers.count == 1 {
                     VStack {
                         Text(localized("ui.hough_lines_for_the_selected_outlier"))
