@@ -380,3 +380,71 @@ def green_runner(worktree: Path, base: str, tiers: set[str] | None = None, /) ->
     for r in out:
         ledger.record(r)
     return out
+
+
+FAKE_MASON = r'''#!{python}
+"""A stand-in for `mason` that records argv. FAKE_MASON_LOG: the file argv lines go to. FAKE_MASON_DIR: holds the `down` file
+(masond unreachable: `resources` and `hold` fail), `holders` (`resources` lists one holder), `deny` (a hold exits before granting) and `drop`."""
+import os, subprocess, sys
+args = sys.argv[1:]
+log = os.environ["FAKE_MASON_LOG"]
+state = os.environ["FAKE_MASON_DIR"]
+def note(text):
+    with open(log, "a") as f:
+        f.write(text + "\n")
+down = os.path.exists(os.path.join(state, "down"))
+if args[:1] == ["resources"]:
+    if down:
+        sys.exit(1)
+    if not os.path.exists(os.path.join(state, "holders")):
+        print('{{"holders": []}}')
+        sys.exit(0)
+    print('{{"holders": [{{"label": "starpipe #7 develop", "pipeline": "starpipe", "exclusive": false, "since_ms": 1000, "uses": {{"compile": 1}}}}]}}')
+elif args[:1] in (["run"], ["hold"]) and "--needs" not in args:
+    print("error: say what it needs: --needs compile", file=sys.stderr)  # the real mason requires --needs on run and hold
+    sys.exit(1)
+elif args[:1] == ["run"]:
+    note("run " + " ".join(args))
+    drop = os.path.join(state, "drop")  # a count: that many runs end before the job, as masond dropping the queued request
+    left = int(open(drop).read() or "0") if os.path.exists(drop) else 0
+    if left > 0:
+        with open(drop, "w") as f:
+            f.write(str(left - 1))
+        print("error: the daemon dropped the request", file=sys.stderr)
+        sys.exit(1)
+    wait = float(os.environ.get("FAKE_MASON_WAIT", "0"))
+    if wait:
+        import time
+        time.sleep(wait)
+    cmd = args[args.index("--") + 1:]
+    sys.exit(subprocess.run(cmd).returncode)
+elif args[:1] == ["hold"]:
+    if down or os.path.exists(os.path.join(state, "deny")):
+        note("hold-refused " + " ".join(args))
+        sys.exit(1)
+    note("hold " + " ".join(args))
+    print("granted", flush=True)
+    sys.stdin.read()
+    note("released " + " ".join(args))
+elif args[:1] in (["pause"], ["resume"]):
+    note(" ".join(args))
+else:
+    sys.exit(2)
+'''
+
+
+def install_fake_mason(directory: Path, monkeypatch: Any) -> Path:
+    """Put a fake `mason` in `directory`; STARPIPE_MASON points at it. Returns the log of what it was asked."""
+    import sys
+
+    directory.mkdir(parents=True, exist_ok=True)
+    script = directory / "mason"
+    script.write_text(FAKE_MASON.format(python=sys.executable))
+    script.chmod(0o755)
+    log = directory / "mason.log"
+    log.touch()
+    monkeypatch.setenv("STARPIPE_MASON", str(script))
+    monkeypatch.setenv("FAKE_MASON_LOG", str(log))
+    monkeypatch.setenv("FAKE_MASON_DIR", str(directory))
+    monkeypatch.delenv("MASON_TASK", raising=False)
+    return log

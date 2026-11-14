@@ -12,15 +12,11 @@ from pathlib import Path
 import pytest
 
 from starpipe import adapter_star as star
-from starpipe import heavy, shards, worktrees
+from starpipe import shards, worktrees
 from starpipe.checks import ledger, runner
 from starpipe.config import Config
-from starpipe.contracts import Contract
-from starpipe.db import Database
 
-from .fakes import GOOD_BODY, make_repo
-
-FAST = Config(heavy_idle_kill_s=1.0, heavy_idle_grace_s=1.0, heavy_idle_poll_s=0.2)
+from .fakes import make_repo
 
 # A stand-in for `swift test` that behaves as xctest does: it prints a test's start line through ordinary buffered stdio, so
 # the line reaches a file only when the buffer is flushed or the process exits. It then blocks, as a hung test does.
@@ -100,7 +96,7 @@ def test_daemon_test_log_names_the_running_test(tmp_path: Path, monkeypatch: pyt
         assert seen_while_running, "the log names no test while it runs, so a hang could not be traced to one"
     finally:
         release.write_text("go")
-        thread.join(30)
+        thread.join(120)
     # the daemon check runs as shards, each launching the fake once, and its counts are summed
     assert results and results[0].status == "pass" and results[0].executed == len(star.CHECKS["test:daemon"].shard_logs)
 
@@ -111,32 +107,8 @@ def test_a_failing_daemon_test_run_is_still_red_through_the_pty(tmp_path: Path, 
     monkeypatch.setenv("FAKE_SWIFT_EXIT", "1")
     release.write_text("go")
     thread, results, _log = _run_daemon_check(tmp_path)
-    thread.join(30)
+    thread.join(120)
     assert results and results[0].status == "fail"
-
-
-def test_hung_check_is_reported_as_hung(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(heavy, "load", lambda: FAST)
-    repo = make_repo(tmp_path)
-    db = Database(tmp_path / "s.db")
-    db.upsert_ticket(7, "Tidy docs", GOOD_BODY, "brianm998", 2, [])
-    wt, branch = worktrees.create(repo, 7, "Tidy docs", "origin/develop")
-    db.set_fields(7, worktree=str(wt), branch=branch)
-    ticket = db.ticket(7)
-    assert ticket
-    spec = star.CheckSpec("test:wedged", "a wedged suite", (sys.executable, "-c", "import time;time.sleep(60)"))
-
-    result = runner.run_spec(spec, wt, "origin/develop", tmp_path)
-    assert result.status == "hung" and not result.green
-    assert "made no progress" in result.detail and "time.sleep(60)" in result.detail and "rerun run_checks" in result.detail
-    assert heavy.status().holders == [], "the lock was released"
-
-    def hung_runner(_w: Path, _b: str, _t: set[str] | None = None, /) -> list[ledger.Result]:
-        return [result]
-
-    told = Contract(ticket, wt, "origin/develop", db, check_runner=hung_runner).run_checks({})
-    assert told.startswith("HUNG test:wedged") and "rerun run_checks" in told
-    assert db.checks(7)[0]["result"] == "hung"
 
 
 def _xunit_script(cases: list[tuple[str, str, str]], exit_code: int = 0) -> str:

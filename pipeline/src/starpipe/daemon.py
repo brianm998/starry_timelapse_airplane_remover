@@ -26,7 +26,6 @@ from . import (
     gherkin_nightly,
     gitutil,
     heavy,
-    load,
     nightly,
     selfupdate,
     ship,
@@ -135,7 +134,6 @@ def activity(db: Database, t: Ticket, now: float | None = None, mode: str = "bat
 
 
 LAND_NOW_STATES = ("ready", "ci", "landing")
-MAX_ACTIVE_CAP = 6
 GROUPS = ("needs_you", "running", "waiting", "queued", "landed_today", "failed")
 
 
@@ -188,23 +186,12 @@ class Daemon:
         self._runtime: dict[str, object] = {}
         self.nightly_task: asyncio.Task[int] | None = None
         self.train = train.Train(engine)
-        self.cpu = load.CpuMeter(window_s=float(config.cpu_window_s))
-        engine.cpu = self.cpu.average
         self._update_lock = threading.Lock()
         self._blocker_titles: dict[int, str] = {}  # GitHub titles of blockers, fetched once per daemon
         self.proposals: list[dict[str, object]] = []  # open pipe:proposed issues from the last poll; snapshot() never asks GitHub
         self.exit: Callable[[int], None] = hard_exit  # replaced in tests
 
     # supervision ---------------------------------------------------------------------------------------------------
-    def migrate_limits(self) -> None:
-        """`limit_llm` was a second key for the session limit that shadowed `max_active`: fold a leftover into it and delete it."""
-        old = self.db.get("limit_llm")
-        if old is None:
-            return
-        if old.isdigit() and int(old) >= 1:
-            self.db.put("max_active", str(min(int(old), MAX_ACTIVE_CAP)))
-        self.db.put("limit_llm", None)
-
     def reconcile(self) -> None:
         """Mark stages that were running when the daemon died; drive() resumes them by session id."""
         for s in self.db.running_stages():
@@ -454,11 +441,9 @@ class Daemon:
             await asyncio.sleep(600)
 
     def watch_targets(self) -> list[watch.Target]:
-        """Stage sessions (this process's `claude` children) and pipeline-owned heavy jobs. Never an interactive holder."""
+        """Stage sessions (this process's `claude` children) only: masond watches the heavy jobs it runs."""
         import psutil
 
-        state = heavy.status()
-        waiting = frozenset(w.pid for w in state.queue)
         targets: list[watch.Target] = []
         for child in psutil.Process().children():
             try:
@@ -472,10 +457,7 @@ class Daemon:
             def newest(folder: Path = folder) -> float:
                 return max((f.stat().st_mtime for f in folder.glob("*.jsonl")), default=0.0)
 
-            targets.append(watch.Target(f"stage:{ticket}", child.pid, newest, waiting))
-        for h in state.holders:
-            if h.ticket:  # an empty ticket is an interactive caller: not ours to kill
-                targets.append(watch.Target(f"heavy:{h.pid}", h.pid, waiting_pids=waiting))
+            targets.append(watch.Target(f"stage:{ticket}", child.pid, newest))
         return targets
 
     def watch_once(self) -> list[watch.Action]:
@@ -491,17 +473,11 @@ class Daemon:
             await asyncio.to_thread(self.watch_once)
             await asyncio.sleep(30)
 
-    async def cpu_loop(self) -> None:
-        self.cpu.sample()  # psutil's first reading is meaningless; this primes it
-        while True:
-            await asyncio.sleep(5)
-            self.cpu.sample()
-
     def resources(self) -> dict[str, object]:
-        sessions, cpu_limit = self.engine.limits()
-        room = self.engine.llm_room()
-        return {"llm_active": room.llm_active, "llm_max": sessions, "cpu_pct": round(room.cpu, 1), "cpu_limit": cpu_limit,
-                "waiting": room.reason, "overridden": bool(self.db.get("max_active") or self.db.get("limit_cpu"))}
+        """Model sessions: how many are open. The limit is MASON's (`mason resources limit llm:claude N`)."""
+        return {"llm_active": self.engine.llm_active(), "limit": "MASON's: mason resources limit llm:claude N",
+                "waiting": ", ".join(f"#{n}: {self.db.get(f'llm_wait:{n}')}" for n in sorted(self.engine.llm_waiting)
+                                     if self.db.get(f"llm_wait:{n}"))}
 
     async def scheduler(self) -> None:
         while True:
@@ -510,7 +486,6 @@ class Daemon:
 
     # API -----------------------------------------------------------------------------------------------------------
     def status(self) -> dict[str, object]:
-        from . import heavy
 
         hv = heavy.status()
         tickets = [{"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
@@ -928,23 +903,8 @@ class Daemon:
             return web.json_response(self.resources())
 
         @r.post("/v1/limits")
-        async def limits_set(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
-            body = await body_of(req)
-            if body.get("reset"):
-                self.db.put("max_active", None)
-                self.db.put("limit_cpu", None)
-            if body.get("llm") is not None:
-                value = int(str(body["llm"]))
-                if not 1 <= value <= MAX_ACTIVE_CAP:
-                    raise web.HTTPBadRequest(text=f"llm must be between 1 and {MAX_ACTIVE_CAP}")
-                self.db.put("max_active", str(value))  # the one session limit, shared with the monitor's stepper
-            if body.get("cpu") is not None:
-                pct = float(str(body["cpu"]))
-                if not 10 <= pct <= 100:
-                    raise web.HTTPBadRequest(text="cpu must be between 10 and 100")
-                self.db.put("limit_cpu", str(pct))
-            self.db.intervention(None, "limits")
-            return web.json_response(self.resources())
+        async def limits_set(_: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
+            raise web.HTTPBadRequest(text="the session limit is MASON's: mason resources limit llm:claude N")
 
         @r.get("/v1/monitor-update")
         async def monitor_update(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
@@ -1074,12 +1034,8 @@ class Daemon:
 
         @r.post("/v1/settings")
         async def settings(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
-            body = await body_of(req)
-            n = body.get("max_active")
-            if isinstance(n, bool) or not isinstance(n, int) or not 1 <= n <= MAX_ACTIVE_CAP:
-                raise web.HTTPBadRequest(text=f"max_active must be an integer from 1 to {MAX_ACTIVE_CAP}")
-            self.db.put("max_active", str(n))  # lowering it never stops a running ticket, it only stops new claims
-            return web.json_response({"result": "ok"})
+            await body_of(req)
+            raise web.HTTPBadRequest(text="the session limit is MASON's: mason resources limit llm:claude N")
 
         @r.post("/v1/land-all")
         async def land_all(req: web.Request) -> web.Response:  # pyright: ignore[reportUnusedFunction]
@@ -1108,7 +1064,6 @@ class Daemon:
         return app
 
     async def run(self) -> None:
-        self.migrate_limits()
         self.reconcile()
         os.environ["STARPIPE_TICKET"] = "daemon"  # the daemon's own heavy jobs queue at pipeline priority
         runner = web.AppRunner(self.app())
@@ -1120,7 +1075,7 @@ class Daemon:
                                  self.supervise("watcher", self.watcher), self.supervise("nightly", self.nightly_loop),
                                  self.supervise("gherkin-nightly", self.gherkin_nightly_loop),
                                  self.supervise("digest", self.digest_loop), self.supervise("update", self.update_loop),
-                                 self.supervise("train", self.train.run_forever), self.supervise("cpu", self.cpu_loop))
+                                 self.supervise("train", self.train.run_forever))
         finally:
             await runner.cleanup()
 

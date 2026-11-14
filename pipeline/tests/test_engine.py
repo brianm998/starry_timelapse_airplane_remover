@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -136,79 +137,245 @@ async def test_blockers_and_priority_decide_the_claim(rig: Rig) -> None:
     assert t and t.number == 1
 
 
-async def test_a_landing_stage_waits_for_a_free_slot_but_goes_first(rig: Rig) -> None:
-    rig.engine.config.max_llm_sessions = 1
-    rig.gh.add_issue(1, "running", labels=("pipeline", "p2"))
-    rig.gh.add_issue(2, "landing", labels=("pipeline", "p2"))
-    rig.gh.add_issue(3, "new", labels=("pipeline", "p2"))
-    rig.engine.sync_issues()
-    t1, t2, t3 = (rig.db.ticket(n) for n in (1, 2, 3))
-    assert t1 and t2 and t3
-    busy = rig.db.begin_stage(1, "develop", 1, "sonnet")  # the one allowed session is busy
-    assert not rig.engine.llm_room().ok
+class Gate:
+    """masond's `llm:claude` count, as a semaphore: a fake `Hold` takes a unit on `granted()` and gives it back on `release()`."""
+
+    def __init__(self, capacity: int) -> None:
+        self.units = threading.Semaphore(capacity)
+        self.released: list[str] = []
+        self.started: list[str] = []
+        self.requested: list[str] = []
+
+    def start(self, needs: str | None, label: str, **_kw: object) -> Any:
+        gate = self
+        assert needs == "llm:claude"
+        gate.requested.append(label)
+
+        class FakeHold:
+            def __init__(self) -> None:
+                self.cancelled = threading.Event()
+                self.got = False
+
+            def granted(self) -> bool:
+                while not self.cancelled.is_set():
+                    if gate.units.acquire(timeout=0.02):
+                        if self.cancelled.is_set():
+                            gate.units.release()
+                            return False
+                        self.got = True
+                        gate.started.append(label)
+                        return True
+                return False
+
+            def release(self) -> None:
+                self.cancelled.set()
+                if self.got:
+                    self.got = False
+                    gate.units.release()
+                gate.released.append(label)
+
+        return FakeHold()
+
+    def grant_one_more(self) -> None:
+        self.units.release()
+
+
+def gated(rig: Rig, monkeypatch: pytest.MonkeyPatch, capacity: int) -> Gate:
+    from starpipe import masonq
+
+    gate = Gate(capacity)
+    monkeypatch.setattr(masonq.Hold, "start", staticmethod(gate.start))
 
     async def sleep(_: float) -> None:
         await asyncio.sleep(0.01)
 
     rig.engine.sleep = sleep
-    begin = rig.engine._begin_when_room  # pyright: ignore[reportPrivateUsage]
-    new_work = asyncio.create_task(begin(t3, "develop", 1, "sonnet"))
-    landing = asyncio.create_task(begin(t2, "conflict", 1, "sonnet"))
-    await asyncio.sleep(0.05)
-    assert not new_work.done() and not landing.done(), "the limit is a hard cap: even a landing stage waits"
-    assert rig.db.get("llm_wait:2") == "landing: next free session" and rig.db.get("llm_wait:3")
-    assert len(rig.db.running_stages()) == 1
-    rig.db.end_stage(busy, "accepted", 0.0, "")
-    await asyncio.wait_for(landing, 2)  # the landing stage takes the one free slot
-    await asyncio.sleep(0.05)
-    assert not new_work.done() and len(rig.db.running_stages()) == 1
-    rig.db.end_stage(2, "accepted", 0.0, "")  # stage rows: 1 develop (ended), 2 the conflict stage
-    await asyncio.wait_for(new_work, 2)
+    return gate
 
 
-async def test_a_session_waiting_for_the_heavy_lock_still_counts(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
-    from types import SimpleNamespace
+async def test_a_session_starts_only_when_masond_grants_llm_claude_and_the_hold_ends_with_it(
+        rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    gate = gated(rig, monkeypatch, 0)
+    waiting = asyncio.create_task(rig.engine._hold_session(t, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(0.1)
+    assert not waiting.done() and rig.db.running_stages() == []
+    for _ in range(100):  # the probe of masond is a process: give it time
+        if rig.db.get("llm_wait:7"):
+            break
+        await asyncio.sleep(0.05)
+    assert rig.db.get("llm_wait:7")
+    gate.grant_one_more()
+    stage_id, hold = await asyncio.wait_for(waiting, 60)
+    assert gate.started == ["starpipe #7 develop"] and len(rig.db.running_stages()) == 1 and rig.db.get("llm_wait:7") is None
+    assert gate.released == []
+    hold.release()
+    rig.db.end_stage(stage_id, "accepted", 0.0, "")
+    assert gate.released == ["starpipe #7 develop"]
 
-    rig.engine.config.max_llm_sessions = 2
+
+async def test_the_hold_is_asked_for_with_masons_flags_and_ends_with_the_stage(rig: Rig, fake_mason: Path) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    rig.agent.on("explore", explore_ok)
+    await rig.engine.model_stage(t, "explore", "go")
+    lines = [ln for ln in fake_mason.read_text().splitlines() if ln.startswith(("hold", "released"))]
+    asked = "hold hold --needs llm:claude --pipeline starpipe --label starpipe #7 explore"
+    assert lines == [asked, "released " + asked[len("hold "):]]
+
+
+async def test_the_hold_ends_when_the_session_errors_or_is_cancelled(rig: Rig, fake_mason: Path) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+
+    def boom(_req: StageRequest) -> StageOutcome:
+        raise RuntimeError("sdk fell over")
+
+    rig.agent.on("develop", boom)
+    with pytest.raises(RuntimeError):
+        await rig.engine.model_stage(t, "develop", "go")
+    assert fake_mason.read_text().count("released") == 1
+
+    started = asyncio.Event()
+
+    async def hang(_req: StageRequest) -> StageOutcome:
+        started.set()
+        await asyncio.sleep(60)
+        raise AssertionError("not reached")
+
+    rig.agent.run = hang  # type: ignore[method-assign]
+    task = asyncio.create_task(rig.engine.model_stage(t, "develop", "go"))
+    await asyncio.wait_for(started.wait(), 60)
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+    assert fake_mason.read_text().count("released") == 2
+
+
+async def test_a_landing_stage_goes_before_new_work(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
     for n in (1, 2, 3):
         rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p2"))
     rig.engine.sync_issues()
-    rig.db.begin_stage(1, "develop", 1, "sonnet")
-    rig.db.begin_stage(2, "develop", 1, "sonnet")
-    monkeypatch.setattr("starpipe.heavy.status", lambda: SimpleNamespace(queue=[SimpleNamespace(ticket="1"), SimpleNamespace(ticket="2")]))
-    assert rig.engine.llm_active() == 2, "a session blocked on the heavy lock is still open"
-    assert not rig.engine.llm_room().ok and rig.engine.claimable() is None
+    t2, t3 = rig.db.ticket(2), rig.db.ticket(3)
+    assert t2 and t3
+    gate = gated(rig, monkeypatch, 0)
+    rig.engine.landing_waiting.add(99)  # a landing stage already waits: new work holds back until it has gone
+    new_work = asyncio.create_task(rig.engine._hold_session(t3, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
+    await asyncio.sleep(0.1)
+    assert rig.db.get("llm_wait:3") == "a landing stage is waiting for a session" and not new_work.done()
+    rig.engine.landing_waiting.discard(99)
+    landing = asyncio.create_task(rig.engine._hold_session(t2, "conflict", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
+    gate.grant_one_more()
+    stage_id, hold = await asyncio.wait_for(landing, 60)
+    await asyncio.sleep(0.05)
+    assert not new_work.done()
+    hold.release()
+    rig.db.end_stage(stage_id, "accepted", 0.0, "")
+    gate.grant_one_more()
+    _, hold3 = await asyncio.wait_for(new_work, 60)
+    hold3.release()
 
 
-async def test_a_free_session_goes_to_the_ticket_furthest_along_in_the_pipeline(rig: Rig) -> None:
-    rig.engine.config.max_llm_sessions = 1
-    for n in (1, 2, 3, 4):
-        rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p1" if n == 4 else "p2"))
+async def until(condition: Any, timeout: float = 10.0) -> None:
+    deadline = time.monotonic() + timeout
+    while not condition():
+        assert time.monotonic() < deadline, "timed out"
+        await asyncio.sleep(0.02)
+
+
+async def test_waiting_sessions_start_in_rank_order(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    for n in (1, 2, 3, 4, 5):
+        rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p2"))
     rig.engine.sync_issues()
-    t1, t2, t3, t4 = (rig.db.ticket(n) for n in (1, 2, 3, 4))
-    assert t1 and t2 and t3 and t4
-    busy = rig.db.begin_stage(1, "develop", 1, "sonnet")  # the one allowed session is busy
-    async def sleep(_: float) -> None:
-        await asyncio.sleep(0.01)
+    rig.db.set_fields(4, claimed_at=100.0)  # same stage and priority as 5: the earlier claim goes first
+    rig.db.set_fields(5, claimed_at=50.0)
+    ts = {n: rig.db.ticket(n) for n in (1, 2, 3, 4, 5)}
+    assert all(ts.values())
+    gate = gated(rig, monkeypatch, 0)
+    begin = rig.engine._hold_session  # pyright: ignore[reportPrivateUsage]
+    # the first to ask is already queued in masond when the others arrive; the others then go in rank order
+    tasks = {"explore": asyncio.create_task(begin(ts[2], "explore", 1, "sonnet"))}  # type: ignore[arg-type]
+    await until(lambda: gate.requested == ["starpipe #2 explore"])
+    tasks["develop-late"] = asyncio.create_task(begin(ts[4], "develop", 1, "sonnet"))  # type: ignore[arg-type]
+    tasks["develop-early"] = asyncio.create_task(begin(ts[5], "develop", 1, "sonnet"))  # type: ignore[arg-type]
+    tasks["review"] = asyncio.create_task(begin(ts[3], "review", 1, "sonnet"))  # type: ignore[arg-type]
+    await asyncio.sleep(0.2)
+    assert not any(t.done() for t in tasks.values())
+    started: list[str] = []
+    gate.grant_one_more()  # masond has room for one session; each release below makes room for the next
+    for name in ("explore", "review", "develop-early", "develop-late"):
+        stage_id, hold = await asyncio.wait_for(tasks[name], 60)
+        started.append(name)
+        await asyncio.sleep(0.3)
+        assert {n for n, t in tasks.items() if t.done()} == set(started), "one unit, one start, in rank order"
+        hold.release()
+        rig.db.end_stage(stage_id, "accepted", 0.0, "")
+    assert rig.engine.llm_waiting == {}
+
+
+async def test_a_ticket_waiting_for_a_session_holds_back_new_claims(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
+    rig.gh.add_issue(2, "claimed", labels=("pipeline", "p2"))
+    rig.engine.sync_issues()
+    t2 = rig.db.ticket(2)
+    assert t2
+    rig.db.set_state(2, "developing")
+    assert rig.engine.claimable() is not None
+    gate = gated(rig, monkeypatch, 0)
+    waiter = asyncio.create_task(rig.engine._hold_session(t2, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
+    await until(lambda: gate.requested == ["starpipe #2 develop"])
+    assert 2 in rig.engine.llm_waiting and rig.engine.claimable() is None
+    waiter.cancel()
+    await asyncio.gather(waiter, return_exceptions=True)
+    assert 2 not in rig.engine.llm_waiting, "a cancelled waiter leaves the registry, or claims stop for good"
+    assert gate.released == ["starpipe #2 develop"], "and its pending hold in masond is dropped"
+    assert rig.engine.claimable() is not None
+
+
+async def test_with_masond_unreachable_a_session_waits_alerts_after_ten_minutes_and_never_starts_unqueued(
+        rig: Rig, fake_mason: Path) -> None:
+    rig.gh.add_issue(7, "t")
+    rig.engine.sync_issues()
+    t = rig.db.ticket(7)
+    assert t
+    down = fake_mason.parent / "down"
+    down.touch()
+    real_sleep = rig.engine.sleep
+    start = rig.now
+    alerts: list[tuple[str, float]] = []
+    real_alert = rig.engine.notifier.alert
+
+    def alert(kind: str, ticket: int | None, text: str) -> None:
+        alerts.append((kind, rig.now - start))
+        real_alert(kind, ticket, text)
+
+    rig.engine.notifier.alert = alert  # type: ignore[method-assign]
+
+    async def sleep(s: float) -> None:
+        await real_sleep(s)
+        if rig.now > start + 700:  # masond comes back after the alert
+            down.unlink(missing_ok=True)
 
     rig.engine.sleep = sleep
-    begin = rig.engine._begin_when_room  # pyright: ignore[reportPrivateUsage]
-    explore = asyncio.create_task(begin(t4, "explore", 1, "sonnet"))  # p1, but the newest stage
-    develop = asyncio.create_task(begin(t3, "develop", 1, "sonnet"))
-    review = asyncio.create_task(begin(t2, "review", 1, "sonnet"))
-    await asyncio.sleep(0.05)
-    assert not (explore.done() or develop.done() or review.done())
-    rig.db.end_stage(busy, "accepted", 0.0, "")
-    await asyncio.wait_for(review, 2)
-    await asyncio.sleep(0.05)
-    assert not explore.done() and not develop.done(), "one slot, one start: review went first"
-    rig.db.end_stage(2, "accepted", 0.0, "")  # stage rows: 1 develop (ended), 2 the review
-    await asyncio.wait_for(develop, 2)
-    await asyncio.sleep(0.05)
-    assert not explore.done()
-    rig.db.end_stage(3, "accepted", 0.0, "")
-    await asyncio.wait_for(explore, 2)
-    assert rig.engine.llm_waiting == {}
+    stage_id, hold = await asyncio.wait_for(rig.engine._hold_session(t, "develop", 1, "sonnet"), 180)  # pyright: ignore[reportPrivateUsage]
+    hold.release()
+    log = fake_mason.read_text()
+    assert "hold-refused" not in log and log.count("hold hold") == 1, "no hold was attempted while masond was down"
+    assert rig.slept and sum(rig.slept) >= 600
+    assert alerts and all(kind == "masond-unreachable" for kind, _ in alerts) and alerts[0][1] >= 600
+    assert rig.db.get("llm_wait:7") is None and stage_id
+
+
+async def test_max_active_is_masons_not_starpipes(rig: Rig) -> None:
+    assert rig.engine.max_active() == 0
+    rig.db.put("max_active", "2")  # a leftover from before masond owned the limit is ignored
+    assert rig.engine.max_active() == 0
 
 
 async def test_nothing_new_is_claimed_while_a_landing_stage_waits_for_a_session(rig: Rig) -> None:
@@ -222,83 +389,11 @@ async def test_nothing_new_is_claimed_while_a_landing_stage_waits_for_a_session(
 async def test_no_claim_during_a_usage_pause(rig: Rig) -> None:
     rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
     rig.engine.sync_issues()
-    assert rig.engine.llm_active() == 0 and rig.engine.llm_room().ok, "no stage row is open during a pause"
+    assert rig.engine.llm_active() == 0, "no stage row is open during a pause"
     rig.db.put("usage_pause_until", str(rig.now + 600))
     assert rig.engine.claimable() is None
     rig.now += 601
     assert rig.engine.claimable() is not None
-
-
-async def test_a_ticket_waiting_for_a_session_holds_back_new_claims(rig: Rig) -> None:
-    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
-    rig.gh.add_issue(2, "claimed", labels=("pipeline", "p2"))
-    rig.engine.sync_issues()
-    t2 = rig.db.ticket(2)
-    assert t2
-    rig.db.set_state(2, "developing")
-    assert rig.engine.llm_room().ok and rig.engine.claimable() is not None
-
-    async def sleep(_: float) -> None:
-        await asyncio.sleep(0.01)
-
-    rig.engine.sleep = sleep
-    rig.engine.config.max_llm_sessions = 1
-    busy = rig.db.begin_stage(5, "develop", 1, "sonnet")
-    waiter = asyncio.create_task(rig.engine._begin_when_room(t2, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
-    await asyncio.sleep(0.05)
-    assert 2 in rig.engine.llm_waiting and rig.engine.claimable() is None
-    rig.db.end_stage(busy, "accepted", 0.0, "")
-    rig.engine.llm_waiting[9] = (-99, 0, 0.0, 9)  # a better-ranked waiter: room is ok now, yet the claim still waits its turn
-    await asyncio.sleep(0.05)
-    assert rig.engine.llm_room().ok and rig.engine.claimable() is None and not waiter.done()
-    waiter.cancel()
-    await asyncio.gather(waiter, return_exceptions=True)
-    assert 2 not in rig.engine.llm_waiting, "a cancelled waiter leaves the registry, or claims stop for good"
-    rig.engine.llm_waiting.pop(9)
-    assert rig.engine.claimable() is not None
-
-
-async def test_waiting_sessions_start_in_rank_order(rig: Rig) -> None:
-    rig.engine.config.max_llm_sessions = 1
-    for n in (1, 2, 3, 4, 5):
-        rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p2"))
-    rig.engine.sync_issues()
-    rig.db.set_fields(4, claimed_at=100.0)  # same stage and priority as 5: the earlier claim goes first
-    rig.db.set_fields(5, claimed_at=50.0)
-    ts = {n: rig.db.ticket(n) for n in (1, 2, 3, 4, 5)}
-    assert all(ts.values())
-    busy = rig.db.begin_stage(1, "develop", 1, "sonnet")
-
-    async def sleep(_: float) -> None:
-        await asyncio.sleep(0.01)
-
-    rig.engine.sleep = sleep
-    begin = rig.engine._begin_when_room  # pyright: ignore[reportPrivateUsage]
-    tasks = {
-        "explore": asyncio.create_task(begin(ts[2], "explore", 1, "sonnet")),  # type: ignore[arg-type]
-        "develop-late": asyncio.create_task(begin(ts[4], "develop", 1, "sonnet")),  # type: ignore[arg-type]
-        "develop-early": asyncio.create_task(begin(ts[5], "develop", 1, "sonnet")),  # type: ignore[arg-type]
-        "review": asyncio.create_task(begin(ts[3], "review", 1, "sonnet")),  # type: ignore[arg-type]
-    }
-    await asyncio.sleep(0.05)
-    assert not any(t.done() for t in tasks.values())
-    started: list[str] = []
-    rig.db.end_stage(busy, "accepted", 0.0, "")
-    for name in ("review", "develop-early", "develop-late", "explore"):
-        stage_id = await asyncio.wait_for(tasks[name], 2)
-        started.append(name)
-        await asyncio.sleep(0.05)
-        assert {n for n, t in tasks.items() if t.done()} == set(started), "one slot, one start, in rank order"
-        rig.db.end_stage(stage_id, "accepted", 0.0, "")
-    assert rig.engine.llm_waiting == {}
-
-
-async def test_claims_still_happen_when_there_is_room(rig: Rig) -> None:
-    rig.gh.add_issue(1, "queued", labels=("pipeline", "p2"))
-    rig.engine.sync_issues()
-    assert rig.engine.llm_room().ok
-    t = rig.engine.claimable()
-    assert t and t.number == 1
 
 
 async def test_claims_are_held_while_the_update_drains(rig: Rig) -> None:
@@ -352,20 +447,6 @@ async def test_a_develop_stage_is_still_held_by_a_pending_self_update(rig: Rig) 
     await rig.engine.model_stage(t, "develop", "go")
     assert rig.slept and sum(rig.slept) >= drain, "the stage waited out the drain window"
     assert rig.engine.update_hold() is None
-
-
-async def test_the_monitors_max_active_override_is_the_llm_session_limit(rig: Rig) -> None:
-    assert rig.engine.max_active() == rig.engine.config.max_llm_sessions
-    rig.db.put("max_active", "2")
-    assert rig.engine.max_active() == 2
-    rig.db.put("max_active", "junk")
-    assert rig.engine.max_active() == rig.engine.config.max_llm_sessions  # an unreadable override falls back to the file
-    rig.db.put("max_active", "2")
-    rig.db.put("limit_llm", "5")  # a leftover from before there was one setting is ignored here (the daemon migrates it at start)
-    assert rig.engine.max_active() == 2
-    rig.db.put("limit_llm", None)
-    rig.db.put("max_active", None)
-    assert rig.engine.max_active() == rig.engine.config.max_llm_sessions
 
 
 async def test_a_stage_without_a_result_climbs_the_ladder_then_parks(rig: Rig) -> None:

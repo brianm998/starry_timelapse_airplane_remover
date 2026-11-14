@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-from . import gitutil, guards, heavy, landing, load, negctl, ship, tickets, trust, worktrees
+from . import gitutil, guards, heavy, landing, masonq, negctl, ship, tickets, trust, worktrees
 from .agent import CREDITS_USABLE, READ_ONLY_STAGES, STAGE_TOOLS, AgentRunner, StageOutcome, StageRequest
 from .announce import Announcer, Kind, SilentAnnouncer
 from .checks import baseline, impact, ledger
@@ -92,13 +92,13 @@ class Engine:
     shim: str = ""
     baseline_runner: baseline.BaselineRunner = baseline.result_at_base
     parked: set[int] = field(default_factory=lambda: set[int]())
-    cpu: Callable[[], float] = lambda: 0.0  # the rolling CPU average; the daemon injects its meter
     llm_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-start is one step
     issue_memo: dict[int, tuple[str, bool, list[int]]] = field(default_factory=lambda: dict[int, tuple[str, bool, list[int]]]())
     land_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # LAND is serialized (§10.1)
     publish_lock: asyncio.Lock = field(default_factory=asyncio.Lock)  # check-room-then-publish is one step
     landing_waiting: set[int] = field(default_factory=lambda: set[int]())  # tickets whose landing stage is waiting for an LLM slot
     llm_waiting: dict[int, tuple[int, int, float, int]] = field(default_factory=lambda: dict[int, tuple[int, int, float, int]]())  # other waiters' rank
+    holding: set[int] = field(default_factory=lambda: set[int]())  # tickets whose session request is with masond now: one non-landing at a time
     announcer: Announcer = field(default_factory=SilentAnnouncer)  # spoken alerts; the daemon injects the real one
 
     # intake --------------------------------------------------------------------------------------------------------
@@ -211,23 +211,13 @@ class Engine:
 
     # claim ---------------------------------------------------------------------------------------------------------
     # limits ----------------------------------------------------------------------------------------------------------
-    def limits(self) -> tuple[int, float]:
-        """(max LLM sessions, CPU limit %): the owner's runtime override if set (`starpipe limits`), else the config."""
-        sessions, cpu = self.db.get("max_active"), self.db.get("limit_cpu")  # max_active: set by `limits --llm` and the monitor's stepper
-        return (int(sessions) if sessions and sessions.isdigit() and int(sessions) >= 1 else self.config.max_llm_sessions,
-                float(cpu) if cpu else self.config.cpu_limit_pct)
-
     def max_active(self) -> int:
-        """How many LLM sessions may run at once (what the monitor's concurrency control shows)."""
-        return self.limits()[0]
+        """0: how many sessions run at once is MASON's `llm:claude` limit (the monitor decodes this key, so it stays)."""
+        return 0
 
     def llm_active(self) -> int:
-        """Every open model session, including one blocked on the heavy lock: the limit is a hard cap on what is open."""
+        """Every open model session, including one waiting in masond's queue."""
         return len(self.db.running_stages())
-
-    def llm_room(self) -> load.Room:
-        sessions, cpu_limit = self.limits()
-        return load.room(self.llm_active(), self.cpu(), sessions, cpu_limit)
 
     def update_hold(self) -> dict[str, Any] | None:
         """The self-update holding new work, until it swaps: {sha, left_s, waiting_on}; None otherwise.
@@ -248,11 +238,9 @@ class Engine:
         if self.db.get("pause") in ("all", "claims") or self.update_hold():
             return None  # the second is the daemon waiting to swap to new code: nothing new starts until it swaps, at most the cap
         if self._usage_paused_until() > self.clock():
-            return None  # every stage waits in _wait_for_usage with no stage row open, so llm_room() is ok: a claim would only sit idle
+            return None  # every stage waits in _wait_for_usage with no stage row open, so a session would start at once: a claim would only sit idle
         if self.landing_waiting or self.llm_waiting:
             return None  # a ticket already claimed is waiting for a session: it takes the next slot, not a new claim
-        if not self.llm_room().ok:  # a new ticket would start an LLM session at once: only when there is room for one
-            return None
         for t in self.db.tickets(("queued",)):  # ordered by priority then age
             if not self.db.open_blockers(t.number):
                 return t
@@ -438,7 +426,7 @@ class Engine:
                 opening = f"{note}\n\n{opening}"
             if pending:
                 opening = f"The owner's answer to your question:\n\n{pending['answer']}\n\nContinue the stage.\n\n{opening}"
-        landing = stage in LANDING_STAGES if as_landing is None else as_landing  # same decision as _begin_when_room
+        landing = stage in LANDING_STAGES if as_landing is None else as_landing  # same decision as _hold_session
         attempt, crashes = 1, 0
         summary = ""
         nudge: str | None = None  # set to send the nudge in place of the prompt
@@ -448,7 +436,7 @@ class Engine:
             if not landing:  # the landing train waits on a landing stage: a pending self-update must not hold it
                 await self._wait_for_update_hold()
             model, effort = self._stage_choice(t, stage, attempt)
-            stage_id = await self._begin_when_room(t, stage, attempt, model, landing=landing)
+            stage_id, hold = await self._hold_session(t, stage, attempt, model, landing=landing)
             body = prompt if resume or attempt == 1 else f"{prompt}\n\nA previous attempt ended without result. {summary}"
             if nudge:
                 body, nudge = nudge, None
@@ -459,7 +447,10 @@ class Engine:
                                effort, BUDGET_S[stage], contract, self._fence(t, stage), resume,
                                on_session=lambda sid, sid_row=stage_id: self.db.set_session(sid_row, sid),
                                on_usage=self._record_usage_windows, on_credits=self._record_credits)
-            out: StageOutcome = await self.agent.run(req)
+            try:
+                out: StageOutcome = await self.agent.run(req)
+            finally:  # end, error, cancel: the session's llm:claude lease ends with it
+                await asyncio.to_thread(hold.release)
             if out.session_id:
                 self.db.set_session(stage_id, out.session_id)
             self.db.end_stage(stage_id, out.status, contract.lock_wait_s, out.summary[:500])
@@ -492,31 +483,60 @@ class Engine:
             attempt += 1
         return self.park(t, f"{stage}: no accepted result after 3 attempts. {summary}"), contract
 
-    async def _begin_when_room(self, t: Ticket, stage: str, attempt: int, model: str, landing: bool | None = None) -> int:
-        """Start a stage's session only while there is room: fewer than the limit of LLM sessions running and CPU not saturated.
-        Waits (and says why, in the ticket's activity line) instead of starting a session the machine cannot afford."""
+    async def _hold_session(self, t: Ticket, stage: str, attempt: int, model: str,
+                            landing: bool | None = None) -> tuple[int, masonq.Hold]:
+        """Start a stage's session only once masond grants `llm:claude` (`mason hold`), which the caller releases when the stage
+        ends. Waits (and says why, in the ticket's activity line) instead of starting a session the machine cannot afford. Among
+        starpipe's own waiters a landing stage goes first, then the one furthest along. If masond cannot be reached it retries and
+        alerts after 10 minutes; a session never starts without its lease."""
         if landing is None:
             landing = stage in LANDING_STAGES
         if landing:
             self.landing_waiting.add(t.number)
         else:  # rank: furthest along first, then priority (p0 first), then the earlier claim
             self.llm_waiting[t.number] = (-STAGE_DEPTH.get(stage, 0), t.priority, t.claimed_at or 0.0, t.number)
+        label = f"starpipe #{t.number} {stage}"
+        down_since: float | None = None
+        delay = masonq.RETRY_S
         try:
-            while True:
-                async with self.llm_lock:
-                    # The limit is a hard cap, landing stages included. A waiting landing stage takes the next free slot
-                    # ahead of everything else that waits.
-                    room = self.llm_room()
-                    first = landing or t.number == min(self.llm_waiting, key=lambda n: self.llm_waiting[n])
-                    if room.ok and (landing or not self.landing_waiting) and first:
-                        self.db.put(f"llm_wait:{t.number}", None)
-                        return self.db.begin_stage(t.number, stage, attempt, model)
-                reason = ("landing: next free session" if landing and not room.ok
-                          else room.reason if not room.ok else "a landing stage is waiting for a session" if self.landing_waiting
+            # masond serves requests in the order they arrive, so a non-landing stage asks one at a time, the best ranked;
+            # a landing stage asks at once
+            while not landing and (self.holding or self.landing_waiting
+                                   or t.number != min(self.llm_waiting, key=lambda n: self.llm_waiting[n])):
+                reason = ("a landing stage is waiting for a session" if self.landing_waiting
                           else "a ticket further along is waiting for the session first")
                 self.db.put(f"llm_wait:{t.number}", reason)
                 await self.sleep(15)
+            self.holding.add(t.number)
+            while True:
+                if not await asyncio.to_thread(masonq.reachable):
+                    down_since = self.clock() if down_since is None else down_since
+                    waited = self.clock() - down_since
+                    self.db.put(f"llm_wait:{t.number}", f"masond cannot be reached ({int(waited)}s): not starting a session unqueued")
+                    if waited >= masonq.ALERT_AFTER_S:
+                        self.notifier.alert("masond-unreachable", None, f"masond has been unreachable for {int(waited)}s: "
+                                            "starpipe's sessions and heavy jobs are waiting")
+                    await self.sleep(delay)
+                    delay = min(delay * 2, masonq.RETRY_MAX_S)
+                    continue
+                if down_since is not None:
+                    self.notifier.clear("masond-unreachable", None)
+                    down_since, delay = None, masonq.RETRY_S
+                self.db.put(f"llm_wait:{t.number}", "waiting for a model session in masond (llm:claude)")
+                hold = masonq.Hold.start(masonq.LLM_CLASS, label)
+                try:
+                    granted = await asyncio.to_thread(hold.granted)
+                except BaseException:
+                    await asyncio.to_thread(hold.release)
+                    raise
+                if not granted:  # mason exited before granting: masond went away; try again
+                    await asyncio.to_thread(hold.release)
+                    await self.sleep(delay)
+                    continue
+                self.db.put(f"llm_wait:{t.number}", None)
+                return self.db.begin_stage(t.number, stage, attempt, model), hold
         finally:
+            self.holding.discard(t.number)
             self.landing_waiting.discard(t.number)
             self.llm_waiting.pop(t.number, None)
 

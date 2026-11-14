@@ -1,10 +1,9 @@
 """The process watch (plan §9.2): find stalled work by pid with psutil, never by command-line substring.
 
-Two rules, per target (a stage session's CLI, or a heavy-lock holder), judged on the whole process tree under it:
+Two rules, per target (a stage session's CLI; heavy jobs are masond's to watch), judged on the whole process tree under it:
 * silent more than `cont_after` and a descendant is stopped (state T): SIGCONT its own descendants (memory
   processes-sigstopped-on-this-mac), and count it;
 * silent more than `kill_after` with no progress at all: kill the tree, so the attempt ladder takes over.
-A target waiting in the heavy-lock queue is not stalled, so a tree that holds a queued waiter is never killed for silence.
 Progress is CPU movement anywhere in the tree (psutil has no IO counters on macOS), or new output (the caller's `activity`).
 """
 
@@ -28,7 +27,6 @@ class Target:
     label: str
     pid: int
     activity: Callable[[], float] = lambda: 0.0  # mtime of the last output, 0 when unknown
-    waiting_pids: frozenset[int] = frozenset()  # heavy-lock waiters: a tree holding one is queued, not hung
 
 
 @dataclass
@@ -117,7 +115,7 @@ class Watch:
                 st.conts += 1
                 self.sigconts += 1
                 actions.append(Action("sigcont", t.label, descendants))
-            elif silent > self.kill_after and not (t.waiting_pids & set(tree.pids)):
+            elif silent > self.kill_after:
                 for pid in reversed(tree.pids):  # leaves first, so a parent cannot respawn what we just killed
                     self.send(pid, signal.SIGKILL)
                 actions.append(Action("kill", t.label, tree.pids))

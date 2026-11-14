@@ -90,14 +90,6 @@ def test_new_output_counts_as_progress() -> None:
     assert [a.kind for a in w.tick([t], now=3400)] == ["kill"]
 
 
-def test_a_stage_queued_for_the_heavy_lock_is_not_killed() -> None:
-    f = Fake()
-    w = make(f)
-    t = watch.Target("stage:1", 100, waiting_pids=frozenset({101}))  # a `starpipe heavy` waiter inside the tree
-    w.tick([t], now=0)
-    assert w.tick([t], now=7200) == [] and f.sent == []
-
-
 def test_a_target_that_exits_is_forgotten() -> None:
     f = Fake()
     w = make(f)
@@ -119,7 +111,7 @@ def test_a_real_sigstopped_child_is_continued() -> None:
         (child,) = psutil.Process(shell.pid).children()
         child.suspend()
         w = watch.Watch(cont_after=5)
-        t = watch.Target("heavy:x", shell.pid)
+        t = watch.Target("stage:x", shell.pid)
         w.tick([t], now=0)
         (action,) = w.tick([t], now=6)
         assert action.kind == "sigcont" and action.pids == [child.pid]
@@ -132,12 +124,10 @@ def test_a_real_sigstopped_child_is_continued() -> None:
             p.kill()
 
 
-def test_the_daemon_watches_pipeline_heavy_jobs_but_never_interactive_ones(
+def test_the_daemon_watches_stage_sessions_only_never_heavy_jobs(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     rig = Rig(tmp_path)
     d = Daemon(rig.engine, Config(), token="t")
     mine = heavy.Holder(pid=4242, ticket="20", cmd="swift test", since=0.0)
-    other = heavy.Holder(pid=4343, ticket="", cmd="gradlew test", since=0.0)
-    monkeypatch.setattr(heavy, "status", lambda: heavy.Status([mine, other], []))
-    labels = [t.label for t in d.watch_targets()]
-    assert labels == ["heavy:4242"]
+    monkeypatch.setattr(heavy, "status", lambda: heavy.Status([mine], []))
+    assert [t.label for t in d.watch_targets()] == []
