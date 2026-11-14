@@ -333,7 +333,7 @@ struct MultiSelectSheetView: View {
                             do {
                                 try await viewModel.render(frame: frame, now: false)
                             } catch {
-                                await viewModel.report(error: localized("ui.render_failed", error))
+                                viewModel.report(error: localized("ui.render_failed", error))
                             }
                         }
 
@@ -368,7 +368,7 @@ struct MultiSelectSheetView: View {
                     if let frame = frameView.frame {
                         Task {
                             let new_value = shouldRemove
-                            await frame.foreachOutlierGroupMulti(between: selectionStart,
+                            _ = await frame.foreachOutlierGroupMulti(between: selectionStart,
                                                                  and: selectionEnd,
                                                                  includingTrash: includingTrash)
                             { group, isInTrash in
@@ -383,7 +383,7 @@ struct MultiSelectSheetView: View {
                                 do {
                                     try await viewModel.render(frame: frame, now: false, ever: false)
                                 } catch {
-                                    await viewModel.report(error: localized("ui.render_failed", error))
+                                    viewModel.report(error: localized("ui.render_failed", error))
                                 }
                             }
                             

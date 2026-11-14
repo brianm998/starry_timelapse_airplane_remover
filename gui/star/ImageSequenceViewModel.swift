@@ -2457,7 +2457,6 @@ public final class ImageSequenceViewModel {
             // make sure we have all previews for all existing original images
             for frameView in separateFrames {
                 Log.d("frame \(frameView.frameIndex) checking for missing images")
-                var updateFrame = false
                 if let frame = await frameView.frame {
                     // Preview ops load a full-resolution image to downscale it, so they
                     // need a reservation like anything else. Without this the unit is 0
@@ -3143,9 +3142,6 @@ public final class ImageSequenceViewModel {
     func addToViewModel(frame newFrame: FrameAirplaneRemover) async {
         //Log.d("addToViewModel(frame: \(newFrame.frameIndex))")
 
-        if self.config == nil {
-            Log.e("FUCK, config is nil")
-        }
         if self.frameWidth != CGFloat(newFrame.width) ||
              self.frameHeight != CGFloat(newFrame.height)
         {
@@ -3189,7 +3185,7 @@ public final class ImageSequenceViewModel {
         if let frame = frameView.frame {
             // update the real actor in the background
             Task.detached(priority: .userInitiated) {
-                await frame.userSelectUndecidedOutliers(toShouldRemove: shouldRemove,
+                _ = await frame.userSelectUndecidedOutliers(toShouldRemove: shouldRemove,
                                                         includingTrash: self.shouldShowTrash)
 
                 if renderImmediately {
@@ -3212,7 +3208,7 @@ public final class ImageSequenceViewModel {
         if let frame = frameView.frame {
             // update the real actor in the background
             Task.detached {
-                await frame.userSelectAllOutliers(toShouldRemove: shouldRemove,
+                _ = await frame.userSelectAllOutliers(toShouldRemove: shouldRemove,
                                                   includingTrash: self.shouldShowTrash)
 
                 if renderImmediately {
@@ -3274,7 +3270,7 @@ public final class ImageSequenceViewModel {
       overrideReprocessingType: FrameReprocessingType? = nil,
       onlyClearing selectedFrames: [Int]? = nil
     ) {
-        Log.d("processing frames from \(startIndex) to \(endIndex)")
+        Log.d("processing frames from \(startIndex) to \(String(describing: endIndex))")
         //if isProcessingFrames { return }
         // A re-process asked for while a run is in flight (the menu items stay enabled) used to
         // start a second graph over the same frames: the old run's operations were still queued and
@@ -3288,7 +3284,7 @@ public final class ImageSequenceViewModel {
         topViewModel?.menuBarOutcome.runStarted()
         startProcessingModal()
 
-        Log.d("processAllFrames start from \(startIndex) to \(endIndex)")
+        Log.d("processAllFrames start from \(startIndex) to \(String(describing: endIndex))")
 
         Task.detached(priority: .medium) { [self] in
             if supersedingARun {
