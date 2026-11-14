@@ -37,7 +37,10 @@ class StarArtTest {
             val corners = listOf(0 to 0, w - 1 to 0, 0 to h - 1, w - 1 to h - 1)
             if (art.kind == ArtKind.TILE || art.slot in CHECKER_CLEANED) {
                 for ((x, y) in corners) {
-                    assertEquals(0, (img.getRGB(x, y) ushr 24), "${art.slot} corner ($x, $y) is not transparent")
+                    // export.py's has_real_alpha: a master's own alpha counts when its corners are under 16, and is kept as is
+                    // (art_format_tiff16's corners are 1).
+                    val a = img.getRGB(x, y) ushr 24
+                    assertTrue(a < 16, "${art.slot} corner ($x, $y) is not transparent (alpha $a)")
                 }
             }
             if (art.slot in CHECKER_CLEANED) {
