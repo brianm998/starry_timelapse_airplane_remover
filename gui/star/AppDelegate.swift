@@ -11,13 +11,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     /// star has only a dark theme, so every system-drawn dialog (alerts, NSAlerts, open panels,
     /// popovers, sheet backgrounds) is drawn dark too, whatever the Mac's Light/Dark setting is.
     /// Without this, those come up white with black text in the middle of the dark app.
-    static func forceDarkAppearance(_ app: NSApplication) {
+    @MainActor static func forceDarkAppearance(_ app: NSApplication) {
         app.appearance = NSAppearance(named: .darkAqua)
     }
 
     // Runs before the first window is created, so nothing is drawn in the system appearance.
     func applicationWillFinishLaunching(_ notification: Notification) {
-        Self.forceDarkAppearance(NSApplication.shared)
+        MainActor.assumeIsolated { Self.forceDarkAppearance(NSApplication.shared) }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

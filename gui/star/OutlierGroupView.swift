@@ -31,7 +31,7 @@ struct OutlierGroupView: View {
 
     /// The decision a click leaves. A group that has one is flipped, whichever tool is chosen; one that has none takes the tool's: Keep keeps
     /// it and every other tool removes it. (The click used to ignore the tool, so Keep marked an undecided group for removal.)
-    static func decisionAfterClick(_ current: RemoveReason?, tool: ToolType) -> RemoveReason {
+    nonisolated static func decisionAfterClick(_ current: RemoveReason?, tool: ToolType) -> RemoveReason {
         guard let current else { return .userSelected(tool != .keep) }
         return .userSelected(!current.willRemove)
     }
@@ -379,7 +379,7 @@ struct OutlierGroupView: View {
 
         Task {
             // update the view model to show the change quickly
-            await self.groupViewModel.group.shouldRemove(shouldRemove)
+            _ = await self.groupViewModel.group.shouldRemove(shouldRemove)
 
                                  
             // update frame view model too
@@ -389,7 +389,7 @@ struct OutlierGroupView: View {
             {
                 if let outlier_group = await outlierGroups.members[self.groupViewModel.group.id] {
                     // update the outlier group in the background
-                    await outlier_group.shouldRemove(shouldRemove)
+                    _ = await outlier_group.shouldRemove(shouldRemove)
                     await frame.markAsChanged()
                     Task { @MainActor in
                         closure()

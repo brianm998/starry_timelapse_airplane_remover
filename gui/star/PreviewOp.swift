@@ -46,7 +46,7 @@ final class PreviewOp: AsyncOperation, @unchecked Sendable {
             {
                 Log.d("frame \(frameIndex) making scaling original of type \(type) to size \(size)")
                 // have original, missing smaller size
-                try await imageAccessor.makeMissingImage(
+                _ = try await imageAccessor.makeMissingImage(
                   frameIndex: frameIndex,
                   ofType: type,
                   andSize: size
