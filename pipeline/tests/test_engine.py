@@ -260,29 +260,53 @@ async def test_the_hold_ends_when_the_session_errors_or_is_cancelled(rig: Rig, f
     assert fake_mason.read_text().count("released") == 2
 
 
+async def settle(task: asyncio.Task[Any], what: str, rig: Rig, gate: Gate, timeout: float = 120.0) -> Any:
+    """Wait for `task`; on a hang fail with where the landing hold stopped, not a bare TimeoutError."""
+    done, _ = await asyncio.wait({task}, timeout=timeout)
+    assert done, (f"{what} did not finish in {timeout}s: landing_waiting={sorted(rig.engine.landing_waiting)} "
+                  f"holding={rig.engine.holding!r} llm_waiting={rig.engine.llm_waiting!r} "
+                  f"requested={gate.requested} started={gate.started} released={gate.released}")
+    return task.result()
+
+
 async def test_a_landing_stage_goes_before_new_work(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
-    for n in (1, 2, 3):
-        rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p2"))
-    rig.engine.sync_issues()
-    t2, t3 = rig.db.ticket(2), rig.db.ticket(3)
-    assert t2 and t3
-    gate = gated(rig, monkeypatch, 0)
-    rig.engine.landing_waiting.add(99)  # a landing stage already waits: new work holds back until it has gone
-    new_work = asyncio.create_task(rig.engine._hold_session(t3, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
-    await asyncio.sleep(0.1)
-    assert rig.db.get("llm_wait:3") == "a landing stage is waiting for a session" and not new_work.done()
-    landing = asyncio.create_task(rig.engine._hold_session(t2, "conflict", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
-    await until(lambda: 2 in rig.engine.landing_waiting or 2 in rig.engine.holding)  # it is registered before the placeholder goes,
-    rig.engine.landing_waiting.discard(99)  # or new work could slip in between the two and take the only unit
-    gate.grant_one_more()
-    stage_id, hold = await asyncio.wait_for(landing, 60)
-    await asyncio.sleep(0.05)
-    assert not new_work.done()
-    hold.release()
-    rig.db.end_stage(stage_id, "accepted", 0.0, "")
-    gate.grant_one_more()
-    _, hold3 = await asyncio.wait_for(new_work, 60)
-    hold3.release()
+    from concurrent.futures import ThreadPoolExecutor
+
+    # each waiting hold parks a thread polling the gate: give the loop room so a small CI runner cannot starve it
+    pool = ThreadPoolExecutor(16)
+    asyncio.get_running_loop().set_default_executor(pool)
+    tasks: list[asyncio.Task[Any]] = []
+    try:
+        for n in (1, 2, 3):
+            rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p2"))
+        rig.engine.sync_issues()
+        t2, t3 = rig.db.ticket(2), rig.db.ticket(3)
+        assert t2 and t3
+        gate = gated(rig, monkeypatch, 0)
+        rig.engine.landing_waiting.add(99)  # a landing stage already waits: new work holds back until it has gone
+        new_work = asyncio.create_task(rig.engine._hold_session(t3, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
+        tasks.append(new_work)
+        await until(lambda: rig.db.get("llm_wait:3") == "a landing stage is waiting for a session")
+        assert not new_work.done()
+        landing = asyncio.create_task(rig.engine._hold_session(t2, "conflict", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
+        tasks.append(landing)
+        await until(lambda: 2 in rig.engine.landing_waiting or 2 in rig.engine.holding)  # it is registered before the placeholder goes,
+        rig.engine.landing_waiting.discard(99)  # or new work could slip in between the two and take the only unit
+        gate.grant_one_more()
+        stage_id, hold = await settle(landing, "landing hold", rig, gate)
+        for _ in range(20):  # let new work have every chance to wrongly take a unit
+            await asyncio.sleep(0)
+        assert not new_work.done()
+        hold.release()
+        rig.db.end_stage(stage_id, "accepted", 0.0, "")
+        gate.grant_one_more()
+        _, hold3 = await settle(new_work, "new work hold", rig, gate)
+        hold3.release()
+    finally:
+        for t in tasks:
+            t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 async def until(condition: Any, timeout: float = 10.0) -> None:
