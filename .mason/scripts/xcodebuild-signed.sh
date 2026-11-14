@@ -5,6 +5,9 @@
 # Manual signing with no -allowProvisioningUpdates: headless, no Xcode account dialog.
 # With -derivedDataPath, SYMROOT/OBJROOT are pinned under it: an Xcode custom build location
 # (IDECustomDerivedDataLocation) would otherwise send products to gui/DerivedData.
+# Also links the gitignored build artifacts (link-artifacts.sh, idempotent) so the build works in
+# any worktree, including ledger worktrees that never ran the setup step. Failure is non-fatal.
+bash "$(dirname "$0")/link-artifacts.sh" >&2 || echo "xcodebuild-signed: link-artifacts failed; building anyway" >&2
 ident="${STAR_TEST_SIGN_IDENTITY-Apple Development}"
 [ -n "$ident" ] || ident="Apple Development"
 if [ "$ident" = "-" ]; then team=""; else team="G3L75S65V9"; fi
