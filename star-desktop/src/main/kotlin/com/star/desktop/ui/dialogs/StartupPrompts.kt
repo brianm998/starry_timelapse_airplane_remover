@@ -1,7 +1,14 @@
 package com.star.desktop.ui.dialogs
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import com.star.desktop.ui.components.ArtImage
+import com.star.desktop.ui.components.StarArt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -87,7 +94,7 @@ private fun StartupCard(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(StarColors.scrim), contentAlignment = Alignment.Center) {
         Column(
             Modifier
-                .widthIn(min = 420.dp, max = 600.dp)
+                .widthIn(min = 420.dp, max = 780.dp)
                 .clip(StarShapes.card)
                 .background(StarColors.prefsCard)
                 .verticalScroll(rememberScrollState())
@@ -98,12 +105,56 @@ private fun StartupCard(content: @Composable () -> Unit) {
     }
 }
 
+/** One answer drawn as a picture over its word; the tables below drive the three question prompts and their tests. */
+internal data class StartupPictureChoice(val tag: String, val art: StarArt, val labelKey: String)
+
+/** Does this video include a horizon? [No, Yes] */
+internal val HORIZON_CHOICES = listOf(
+    StartupPictureChoice("startup.horizon.no", StarArt.ART_SKY_ONLY, "ui.no"),
+    StartupPictureChoice("startup.horizon.yes", StarArt.ART_SKY_AND_GROUND, "ui.yes"),
+)
+
+/** Was the camera moving? [Static, Moving] */
+internal val CAMERA_CHOICES = listOf(
+    StartupPictureChoice("startup.moving.static", StarArt.ART_CAMERA_STATIC, "ui.static"),
+    StartupPictureChoice("startup.moving.moving", StarArt.ART_CAMERA_MOVING, "ui.moving"),
+)
+
+/** Select the horizon yourself? [No, Yes] */
+internal val SELECT_HORIZON_CHOICES = listOf(
+    StartupPictureChoice("startup.selecthorizon.no", StarArt.ART_HORIZON_AUTO, "ui.no"),
+    StartupPictureChoice("startup.selecthorizon.yes", StarArt.ART_HORIZON_BRUSH, "ui.yes"),
+)
+
+/** The picture-over-word button. The test tag sits on the clickable column, which the UI features click. */
+@Composable
+private fun PictureChoice(choice: StartupPictureChoice, onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    val hovered by source.collectIsHoveredAsState()
+    val focused by source.collectIsFocusedAsState()
+    val outline = if (hovered || focused) Color.White else Color.Transparent
+    Column(
+        Modifier
+            .clip(StarShapes.card)
+            .hoverable(source)
+            .clickable(interactionSource = source, indication = null, onClick = onClick)
+            .border(2.dp, outline, StarShapes.card)
+            .padding(8.dp)
+            .testTag(choice.tag),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        ArtImage(choice.art)
+        Text(localized(choice.labelKey), color = StarColors.textPrimary, fontSize = 20.sp)
+    }
+}
+
 @Composable
 private fun HorizonPrompt(app: AppViewModel) {
     Title(localized("ui.does_this_video_include_a_horizon"))
     AnswerRow(advanced = { app.startupOpenAdvanced() }) {
-        SecondaryButton(localized("ui.no"), "startup.horizon.no") { app.startupAnswerHorizon(false) }
-        PrimaryButton(localized("ui.yes"), "startup.horizon.yes") { app.startupAnswerHorizon(true) }
+        PictureChoice(HORIZON_CHOICES[0]) { app.startupAnswerHorizon(false) }
+        PictureChoice(HORIZON_CHOICES[1]) { app.startupAnswerHorizon(true) }
     }
 }
 
@@ -113,8 +164,8 @@ private fun MovingPrompt(app: AppViewModel) {
     Title(localized("ui.or"), small = true)
     Title(localized("ui.was_it_stationary_on_a_tripod_the_entire"))
     AnswerRow(back = { app.startupGoBack(StartupStep.MOVING) }, advanced = { app.startupOpenAdvanced() }) {
-        SecondaryButton(localized("ui.static"), "startup.moving.static") { app.startupAnswerMoving(false) }
-        PrimaryButton(localized("ui.moving"), "startup.moving.moving") { app.startupAnswerMoving(true) }
+        PictureChoice(CAMERA_CHOICES[0]) { app.startupAnswerMoving(false) }
+        PictureChoice(CAMERA_CHOICES[1]) { app.startupAnswerMoving(true) }
     }
 }
 
@@ -123,8 +174,8 @@ private fun SelectHorizonPrompt(app: AppViewModel) {
     Title(localized("ui.do_you_want_to_select_the_horizon_yourself"))
     Body(localized("ui.star_allows_you_to_tell_it_where_the_horizon"))
     AnswerRow(back = { app.startupGoBack(StartupStep.SELECT_HORIZON) }) {
-        SecondaryButton(localized("ui.no"), "startup.selecthorizon.no") { app.startupAnswerSelectHorizon(false) }
-        PrimaryButton(localized("ui.yes"), "startup.selecthorizon.yes") { app.startupAnswerSelectHorizon(true) }
+        PictureChoice(SELECT_HORIZON_CHOICES[0]) { app.startupAnswerSelectHorizon(false) }
+        PictureChoice(SELECT_HORIZON_CHOICES[1]) { app.startupAnswerSelectHorizon(true) }
     }
 }
 
@@ -139,6 +190,7 @@ private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
 
     Title(localized("ui.do_you_want_to_select_the_horizons_yourself"))
     Body(localized("ui.star_allows_you_to_tell_it_where_the_horizon_2"))
+    ArtImage(StarArt.ART_HORIZON_KEYFRAMES)
     Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         BackButton { app.startupGoBack(StartupStep.SELECT_MOVING_HORIZONS) }
         Spacer(Modifier.weight(1f))

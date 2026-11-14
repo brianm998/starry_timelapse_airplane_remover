@@ -4187,6 +4187,38 @@ final class SharedConstantsTests: XCTestCase {
         XCTAssertEqual(localized("ui.update"), "Update", "ui.update keeps its value: the settings sheet uses it too")
     }
 
+    private func assertPictures(_ rows: [StartupPictureChoice], _ expected: [(String, String, String, String)],
+                                file: StaticString = #filePath, line: UInt = #line) throws {
+        StarLocalization.shared.languageOverride = "en"
+        defer { StarLocalization.shared.languageOverride = nil }
+        XCTAssertEqual(rows.count, expected.count, file: file, line: line)
+        for (row, want) in zip(rows, expected) {
+            XCTAssertEqual(row.id, want.0, file: file, line: line)
+            XCTAssertEqual(row.art.rawValue, want.1, file: file, line: line)
+            let word = localized(row.labelKey)
+            XCTAssertEqual(word, want.2, file: file, line: line)
+            XCTAssertNotNil(NSImage(named: row.art.rawValue), "\(want.1) is not in the asset catalog", file: file, line: line)
+        }
+    }
+
+    /// A1
+    func testHorizonQuestionPictures() throws {
+        try assertPictures(StartupPictureChoice.horizon, [
+            ("startup.horizon.no", "art_sky_only", "No", ""), ("startup.horizon.yes", "art_sky_and_ground", "Yes", "")])
+    }
+
+    /// A2
+    func testCameraQuestionPictures() throws {
+        try assertPictures(StartupPictureChoice.camera, [
+            ("startup.moving.static", "art_camera_static", "Static", ""), ("startup.moving.moving", "art_camera_moving", "Moving", "")])
+    }
+
+    /// A3
+    func testHorizonSelectionPictures() throws {
+        try assertPictures(StartupPictureChoice.selectHorizon, [
+            ("startup.selecthorizon.no", "art_horizon_auto", "No", ""), ("startup.selecthorizon.yes", "art_horizon_brush", "Yes", "")])
+    }
+
     /// Art A4: every StarArt slot is an imageset in the app's asset catalog and loads at its display size or larger.
     func testEveryStarArtSlotLoads() throws {
         XCTAssertEqual(StarArt.allCases.count, 62)

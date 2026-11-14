@@ -37,10 +37,8 @@ class StarArtTest {
             val corners = listOf(0 to 0, w - 1 to 0, 0 to h - 1, w - 1 to h - 1)
             if (art.kind == ArtKind.TILE || art.slot in CHECKER_CLEANED) {
                 for ((x, y) in corners) {
-                    // export.py's has_real_alpha: a master's own alpha counts when its corners are under 16, and is kept as is
-                    // (art_format_tiff16's corners are 1).
-                    val a = img.getRGB(x, y) ushr 24
-                    assertTrue(a < 16, "${art.slot} corner ($x, $y) is not transparent (alpha $a)")
+                    val alpha = img.getRGB(x, y) ushr 24
+                    assertTrue(alpha <= CORNER_ALPHA_MAX, "${art.slot} corner ($x, $y) is not transparent (alpha $alpha)")
                 }
             }
             if (art.slot in CHECKER_CLEANED) {
@@ -70,6 +68,9 @@ class StarArtTest {
          * erode/tolerance do not move them. A leftover checkerboard fringe would be most of the edge, far above this.
          */
         const val LIGHT_EDGE_SHARE = 0.25
+
+        /** The soft-edge blur leaves alpha 1 of 255 in some corners (art_format_tiff16): invisible, so counted as transparent. */
+        const val CORNER_ALPHA_MAX = 2
 
         /** Slots whose master was an opaque picture with a painted checkerboard (cleaned by export.py). */
         val CHECKER_CLEANED = setOf("art_horizon_auto", "art_process_gear", "art_waiting")

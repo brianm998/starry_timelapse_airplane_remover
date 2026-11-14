@@ -441,11 +441,9 @@ class Daemon:
             await asyncio.sleep(600)
 
     def watch_targets(self) -> list[watch.Target]:
-        """Stage sessions (this process's `claude` children) and pipeline-owned heavy jobs. Never an interactive holder."""
+        """Stage sessions (this process's `claude` children) only: masond watches the heavy jobs it runs."""
         import psutil
 
-        state = heavy.status()
-        waiting: frozenset[int] = frozenset()
         targets: list[watch.Target] = []
         for child in psutil.Process().children():
             try:
@@ -459,10 +457,7 @@ class Daemon:
             def newest(folder: Path = folder) -> float:
                 return max((f.stat().st_mtime for f in folder.glob("*.jsonl")), default=0.0)
 
-            targets.append(watch.Target(f"stage:{ticket}", child.pid, newest, waiting))
-        for h in state.holders:
-            if h.ticket and h.pid:  # an empty ticket is an interactive caller: not ours to kill; masond's leases have no pid
-                targets.append(watch.Target(f"heavy:{h.pid}", h.pid, waiting_pids=waiting))
+            targets.append(watch.Target(f"stage:{ticket}", child.pid, newest))
         return targets
 
     def watch_once(self) -> list[watch.Action]:
@@ -491,7 +486,6 @@ class Daemon:
 
     # API -----------------------------------------------------------------------------------------------------------
     def status(self) -> dict[str, object]:
-        from . import heavy
 
         hv = heavy.status()
         tickets = [{"number": t.number, "title": t.title, "state": t.state, "priority": t.priority,
