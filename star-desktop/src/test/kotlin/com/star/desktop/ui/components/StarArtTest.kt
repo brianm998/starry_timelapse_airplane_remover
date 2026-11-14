@@ -40,8 +40,9 @@ class StarArtTest {
                     assertEquals(0, (img.getRGB(x, y) ushr 24), "${art.slot} corner ($x, $y) is not transparent")
                 }
             }
-            if (art.slot in CHECKER_CLEANED || art.kind == ArtKind.TILE) {
+            if (art.slot in CHECKER_CLEANED) {
                 // No light fringe: partly transparent pixels must not be near-white (the painted checkerboard's colour).
+                // Tiles are matted from black, so a light edge on them is the tile's own paint (art_step_render: 38%).
                 var edge = 0
                 var light = 0
                 for (y in 0 until h) for (x in 0 until w) {
