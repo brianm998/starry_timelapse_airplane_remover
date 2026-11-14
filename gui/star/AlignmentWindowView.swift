@@ -796,7 +796,8 @@ private extension AlignmentDeviationChart {
         proxy: ChartProxy,
         geometry: GeometryProxy
     ) {
-        let plotOrigin = geometry[proxy.plotAreaFrame].origin
+        guard let plotFrame = proxy.plotFrame else { return }
+        let plotOrigin = geometry[plotFrame].origin
         let relativeX = location.x - plotOrigin.x
         let relativeY = location.y - plotOrigin.y
 
@@ -876,7 +877,8 @@ private extension AlignmentKeypointsChart {
         proxy: ChartProxy,
         geometry: GeometryProxy
     ) {
-        let plotOrigin = geometry[proxy.plotAreaFrame].origin
+        guard let plotFrame = proxy.plotFrame else { return }
+        let plotOrigin = geometry[plotFrame].origin
         let relativeX = location.x - plotOrigin.x
         let relativeY = location.y - plotOrigin.y
 
@@ -888,10 +890,10 @@ private extension AlignmentKeypointsChart {
         // Find closest offset at this frame
         let candidates = points.filter { $0.baseFrame == frame }
 
-        guard let closest = candidates.min(by: {
+        guard candidates.min(by: {
             abs($0.keyPointCount - Int(keypoints)) <
             abs($1.keyPointCount - Int(keypoints))
-        }) else { return }
+        }) != nil else { return }
 
         hoveredFrame = frame
 //        hoveredOffset = closest.offset
