@@ -217,7 +217,9 @@ Fetch the data first: `test_data/fetch.sh $(cat gherkin/generated/datasets-<clie
   Artifacts (`saveArtifacts`) and the gallery fallback stay in the runner's container tmp: only the runner and CI touch them, so CI's upload paths
   are unchanged. To check a run for the prompt: `log stream --predicate 'subsystem == "com.apple.TCC"'` must show no `kTCCServiceSystemPolicyAppData`
   request for `com.star`. Don't `ls` the runner's container in an interactive session: that read raises the same prompt. If the app (not the
-  runner) ever still prompts, give pipeline builds a stable signing identity instead of `-`.
+  runner) ever still prompts, give pipeline builds a stable signing identity instead of `-`. Since 2026-11-13 the local pipeline's gui
+  builds do (`LOCAL_SIGNING` in `pipeline/src/starpipe/adapter_star.py`, the `build-gui`/`test-gui` suites in `.mason/mason.toml`), because
+  the worktrees on the external `/Volumes/sp` raised "“Star” would like to access files on a removable volume" on every build. CI stays ad hoc.
   Result on this Mac (2026-11-06, ad-hoc signed, GPU merge off): `log show --predicate 'subsystem == "com.apple.TCC"'` over the runs (all 61 @ui
   features once, then reruns of the processed-fixture ones, and `starTests` via `run_checks`) holds no `kTCCServiceSystemPolicyAppData` request and
   no entry naming `com.star` or the runner. The runner wrote its scratch under `/private/tmp` on every run (uiStartupDefaults and the
