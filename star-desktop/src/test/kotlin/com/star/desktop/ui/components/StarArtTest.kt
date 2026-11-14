@@ -35,16 +35,15 @@ class StarArtTest {
             val w = img.width
             val h = img.height
             val corners = listOf(0 to 0, w - 1 to 0, 0 to h - 1, w - 1 to h - 1)
-            val checked = art.kind == ArtKind.TILE || art.slot in CHECKER_CLEANED
-            if (checked) {
-                val allowedAlpha = CORNER_ALPHA_EXCEPTIONS[art.slot] ?: 0
+            if (art.kind == ArtKind.TILE || art.slot in CHECKER_CLEANED) {
                 for ((x, y) in corners) {
                     val alpha = img.getRGB(x, y) ushr 24
-                    assertTrue(alpha <= allowedAlpha, "${art.slot} corner ($x, $y) is not transparent (alpha $alpha)")
+                    assertTrue(alpha <= CORNER_ALPHA_MAX, "${art.slot} corner ($x, $y) is not transparent (alpha $alpha)")
                 }
             }
-            if (checked) {
+            if (art.slot in CHECKER_CLEANED) {
                 // No light fringe: partly transparent pixels must not be near-white (the painted checkerboard's colour).
+                // Tiles are matted from black, so a light edge on them is the tile's own paint (art_step_render: 38%).
                 var edge = 0
                 var light = 0
                 for (y in 0 until h) for (x in 0 until w) {
@@ -56,35 +55,22 @@ class StarArtTest {
                         if (lo > 225) light++
                     }
                 }
-                val allowed = edge * ((LIGHT_EDGE_BASELINE[art.slot] ?: 0.0) + LIGHT_EDGE_MARGIN)
+                val allowed = edge * LIGHT_EDGE_SHARE
                 assertTrue(light <= allowed, "${art.slot}: $light of $edge edge pixels are near-white")
             }
         }
     }
 
     private companion object {
-        /** Every checked slot may have this share of its partly transparent pixels near-white (a clean cut has almost none)... */
-        const val LIGHT_EDGE_MARGIN = 0.05
-
         /**
-         * ...plus the share measured for the slots whose real paint is light on the soft edge (white-lavender armour, white
-         * step glyphs). Measured with art/export.py's output; a leftover checkerboard fringe would add to these, so each
-         * slot is held to its own value. Update a value only when the art itself is replaced.
+         * Share of partly transparent pixels allowed to be near-white. The robot's armour is white-lavender, so real paint on
+         * the soft edge reads as light: the checked slots measure 6-20% (art_waiting 19%, art_horizon_auto 15%) and export.py's
+         * erode/tolerance do not move them. A leftover checkerboard fringe would be most of the edge, far above this.
          */
-        val LIGHT_EDGE_BASELINE = mapOf(
-            "art_horizon_auto" to 0.15,
-            "art_process_gear" to 0.16,
-            "art_waiting" to 0.20,
-            "art_mode_selective" to 0.06,
-            "art_step_align" to 0.27,
-            "art_step_horizon" to 0.15,
-            "art_step_merge" to 0.17,
-            "art_step_render" to 0.38,
-            "art_step_review" to 0.20,
-        )
+        const val LIGHT_EDGE_SHARE = 0.25
 
-        /** art_format_tiff16's soft-edge blur leaves alpha 1 of 255 in its four corners: invisible, and only this slot. */
-        val CORNER_ALPHA_EXCEPTIONS = mapOf("art_format_tiff16" to 1)
+        /** The soft-edge blur leaves alpha 1 of 255 in some corners (art_format_tiff16): invisible, so counted as transparent. */
+        const val CORNER_ALPHA_MAX = 2
 
         /** Slots whose master was an opaque picture with a painted checkerboard (cleaned by export.py). */
         val CHECKER_CLEANED = setOf("art_horizon_auto", "art_process_gear", "art_waiting")

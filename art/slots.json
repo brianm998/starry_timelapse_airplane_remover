@@ -116,7 +116,9 @@
    "width": 200,
    "height": 200,
    "spread": 0.3,
-   "tolerance": 0.25
+   "tolerance": 0.25,
+   "snap": 48,
+   "snap_opaque": 96
   },
   {
    "name": "art_horizon_keyframes",
@@ -137,7 +139,9 @@
    "source": "SU-5b",
    "kind": "tile",
    "width": 64,
-   "height": 64
+   "height": 64,
+   "snap": 48,
+   "snap_opaque": 96
   },
   {
    "name": "art_mode_auto_selective",
@@ -179,7 +183,9 @@
    "source": "PR-5b",
    "kind": "cutout",
    "width": 56,
-   "height": 56
+   "height": 56,
+   "snap": 48,
+   "snap_opaque": 96
   },
   {
    "name": "art_done",
@@ -221,7 +227,9 @@
    "source": "ER-3",
    "kind": "cutout",
    "width": 160,
-   "height": 160
+   "height": 160,
+   "snap": 48,
+   "snap_opaque": 96
   },
   {
    "name": "art_new_release",
@@ -249,7 +257,9 @@
    "source": "IM-2a",
    "kind": "tile",
    "width": 40,
-   "height": 40
+   "height": 40,
+   "snap": 48,
+   "snap_opaque": 96
   },
   {
    "name": "art_format_tiff8",
@@ -270,42 +280,54 @@
    "source": "WL-4a",
    "kind": "tile",
    "width": 64,
-   "height": 64
+   "height": 64,
+   "snap": 48,
+   "snap_opaque": 96
   },
   {
    "name": "art_step_horizon",
    "source": "PR-3b",
    "kind": "tile",
    "width": 64,
-   "height": 64
+   "height": 64,
+   "snap": 48,
+   "snap_opaque": 96
   },
   {
    "name": "art_step_align",
    "source": "PR-3c",
    "kind": "tile",
    "width": 64,
-   "height": 64
+   "height": 64,
+   "snap": 48,
+   "snap_opaque": 96
   },
   {
    "name": "art_step_merge",
    "source": "PR-3d",
    "kind": "tile",
    "width": 64,
-   "height": 64
+   "height": 64,
+   "snap": 48,
+   "snap_opaque": 96
   },
   {
    "name": "art_step_review",
    "source": "PR-3e",
    "kind": "tile",
    "width": 64,
-   "height": 64
+   "height": 64,
+   "snap": 48,
+   "snap_opaque": 96
   },
   {
    "name": "art_step_render",
    "source": "PR-3f",
    "kind": "tile",
    "width": 64,
-   "height": 64
+   "height": 64,
+   "snap": 48,
+   "snap_opaque": 96
   },
   {
    "name": "art_paint_brush",
