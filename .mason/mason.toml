@@ -277,9 +277,7 @@ uses = { test-suite = 1 }
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path StarCpp --filter StarCppBridgeTests --parallel --num-workers 8 --xunit-output .build/test-StarCpp.xml --skip OpenCVQoSTests 2>&1"
 parser = "junit"
 results_file = ".build/test-StarCpp.xml"
-# 254 with the GPU tests running; GPUOpsTests skips under STAR_USE_GPU_FOR_MERGE=0 and
-# skipped tests are absent from the xunit file, so a local run reports 250.
-min_tests = 250
+min_tests = 254
 level = "t1"
 uses = { test-suite = 1 }
 
