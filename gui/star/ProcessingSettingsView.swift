@@ -488,6 +488,7 @@ struct ProcessingSettingsView: View {
 
                           Text(localized("ui.hide_info"))
                             .font(.body)
+                            .foregroundColor(.black)
                             .padding(10)
                       }
                   }
@@ -547,6 +548,7 @@ struct ProcessingSettingsView: View {
 
                               Text(localized("ui.dismiss"))
                                 .font(.title2)
+                                .foregroundColor(.black)
                                 .padding(20)
                           }
                       }
