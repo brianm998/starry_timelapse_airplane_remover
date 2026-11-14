@@ -23,6 +23,7 @@ struct AlignmentWindowView: View {
                 self.mainView(viewModel)
             } else {
                 VStack {
+                    if Self.emptyStateArt(hasSequence: false, hasData: false, processing: false) != nil { WaitingArt() }
                     Text(localized("ui.no_image_sequence_loaded"))
                     Text(localized("ui.load_an_image_sequence_in_the_main_star"))
                 }
@@ -54,6 +55,11 @@ struct AlignmentWindowView: View {
           : ["ui.no_alignment_data_process_the_sequence_first"]
     }
 
+    /// The art above the empty-state lines: the waiting robot whenever `emptyState` has lines, nothing otherwise.
+    static func emptyStateArt(hasSequence: Bool, hasData: Bool, processing: Bool) -> StarArt? {
+        emptyState(hasSequence: hasSequence, hasData: hasData, processing: processing).isEmpty ? nil : .waiting
+    }
+
     func mainView(_ viewModel: ImageSequenceViewModel) -> some View {
         @Bindable var viewModel = viewModel
         let hasData = viewModel.starAlignmentInfo.contains(where: { !$0.isEmpty })
@@ -66,6 +72,9 @@ struct AlignmentWindowView: View {
         if !empty.isEmpty {
             return AnyView(
               VStack {
+                  if Self.emptyStateArt(hasSequence: true, hasData: hasData, processing: viewModel.isProcessingFrames) != nil {
+                      WaitingArt()
+                  }
                   ForEach(empty, id: \.self) { Text(localized($0)) }
               }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1002,5 +1011,17 @@ struct AlignmentInfoOverlay: View {
               .cornerRadius(14)
               .shadow(radius: 24)
         }
+    }
+}
+
+/// The waiting robot for empty windows.  Scaled down to fit a small window rather than clipped.
+struct WaitingArt: View {
+    var body: some View {
+        Image(StarArt.waiting.rawValue)
+          .resizable()
+          .interpolation(.high)
+          .scaledToFit()
+          .frame(maxWidth: 160, maxHeight: 138)
+          .accessibilityHidden(true)
     }
 }
