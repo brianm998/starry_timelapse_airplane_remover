@@ -173,11 +173,11 @@ struct StarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.dismissWindow) private var dismissWindow
 
-    public static let outlierGroupTableWindowName = "outlierGroupTableWindow"
-    public static let blobProcessingStepsWindowName = "blobProcessingStepsWindow"
-    public static let debugWindowName = "debugWindow"
+    public nonisolated static let outlierGroupTableWindowName = "outlierGroupTableWindow"
+    public nonisolated static let blobProcessingStepsWindowName = "blobProcessingStepsWindow"
+    public nonisolated static let debugWindowName = "debugWindow"
     public static let mainWindowName = "mainWindow"
-    public static let alignmentWindowName = "alignmentWindowName"
+    public nonisolated static let alignmentWindowName = "alignmentWindowName"
 
     let viewModel = ViewModel()
 
