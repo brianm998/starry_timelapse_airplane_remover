@@ -208,6 +208,18 @@ private fun SelectMovingHorizonsPrompt(app: AppViewModel) {
     }
 }
 
+internal const val CLEANUP_MODE_TILE = 64
+internal const val CLEANUP_AUTO_SELECTIVE_TILE = 40
+internal const val CLEANUP_GROUND_ALIGNMENT_TILE = 48
+internal val CLEANUP_GROUND_ALIGNMENT_ART = StarArt.ART_GROUND_ALIGNMENT
+
+/** The tile for a clean method's row (automatic with auto-selective is the switch's tile). */
+internal fun cleanupTile(method: CleanMethod): StarArt = when (method) {
+    CleanMethod.CLEAN_SELECTIVE -> StarArt.ART_MODE_SELECTIVE
+    CleanMethod.CLEAN_AUTOMATIC_TRUE -> StarArt.ART_MODE_AUTO_SELECTIVE
+    else -> StarArt.ART_MODE_AUTOMATIC
+}
+
 @Composable
 private fun RemovalPrompt(app: AppViewModel, onOpenSpeedModal: () -> Unit) {
     var selective by remember { mutableStateOf(false) }
@@ -229,17 +241,25 @@ private fun RemovalPrompt(app: AppViewModel, onOpenSpeedModal: () -> Unit) {
         Row(Modifier.fillMaxWidth()) { BackButton { app.startupGoBack(StartupStep.REMOVAL) } }
         Title(localized("ui.startup_mode_title"))
         HorizontalDivider(color = StarColors.cellDefault)
-        ModeChoice(localized("ui.startup_mode_automatic"), localized("ui.startup_mode_automatic_desc"), !selective, "startup.removal.automatic") { selective = false }
+        ModeChoice(cleanupTile(CleanMethod.CLEAN_AUTOMATIC), localized("ui.startup_mode_automatic"), localized("ui.startup_mode_automatic_desc"), !selective, "startup.removal.automatic") { selective = false }
         if (!selective) {
-            Column(Modifier.padding(start = 34.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                ToggleRow(localized("ui.startup_auto_selective_toggle"), autoSelective, "startup.removal.autoselective") { autoSelective = it }
-                Body(localized("ui.startup_auto_selective_desc"))
+            Row(Modifier.padding(start = 34.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                ArtImage(cleanupTile(CleanMethod.CLEAN_AUTOMATIC_TRUE), fitting = CLEANUP_AUTO_SELECTIVE_TILE)
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    ToggleRow(localized("ui.startup_auto_selective_toggle"), autoSelective, "startup.removal.autoselective") { autoSelective = it }
+                    Body(localized("ui.startup_auto_selective_desc"))
+                }
             }
         }
-        ModeChoice(localized("ui.startup_mode_selective"), localized("ui.startup_mode_selective_desc"), selective, "startup.removal.selective") { selective = true }
+        ModeChoice(cleanupTile(CleanMethod.CLEAN_SELECTIVE), localized("ui.startup_mode_selective"), localized("ui.startup_mode_selective_desc"), selective, "startup.removal.selective") { selective = true }
         HorizontalDivider(color = StarColors.cellDefault)
-        ToggleRow(localized("ui.startup_ground_alignment_toggle"), groundAlignment, "startup.removal.groundalignment") { groundAlignment = it }
-        Body(localized("ui.startup_ground_alignment_desc"))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ArtImage(CLEANUP_GROUND_ALIGNMENT_ART, fitting = CLEANUP_GROUND_ALIGNMENT_TILE)
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                ToggleRow(localized("ui.startup_ground_alignment_toggle"), groundAlignment, "startup.removal.groundalignment") { groundAlignment = it }
+                Body(localized("ui.startup_ground_alignment_desc"))
+            }
+        }
         HorizontalDivider(color = StarColors.cellDefault)
         KeypointDivisorSummaryRow(app, onOpenSpeedModal)
         HorizontalDivider(color = StarColors.cellDefault)
@@ -461,12 +481,13 @@ private fun ToggleRow(label: String, value: Boolean, tag: String, onChange: (Boo
 }
 
 @Composable
-private fun ModeChoice(title: String, description: String, selected: Boolean, tag: String, onSelect: () -> Unit) {
+private fun ModeChoice(art: StarArt, title: String, description: String, selected: Boolean, tag: String, onSelect: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().selectable(selected = selected, role = Role.RadioButton, onClick = onSelect).testTag(tag).padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         RadioButton(selected = selected, onClick = null)
+        ArtImage(art, fitting = CLEANUP_MODE_TILE)
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, color = StarColors.textPrimary, fontSize = 17.sp)
             Body(description)

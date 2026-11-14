@@ -354,8 +354,25 @@ struct SelectHorizonView: View {
     }
 }
 
+/// The tiles on the cleanup sheet, shared by the views and their tests.
+enum CleanupTiles {
+    static let modeSize: CGFloat = 64
+    static let autoSelectiveSize: CGFloat = 40
+    static let groundAlignmentSize: CGFloat = 48
+    static let groundAlignment: StarArt = .groundAlignment
+
+    /// The tile for a clean method's row (automatic with auto-selective is the switch's tile).
+    static func tile(for method: CleanMethod) -> StarArt {
+        switch method {
+        case .selective: return .modeSelective
+        case .automatic(let autoSelective): return autoSelective ? .modeAutoSelective : .modeAutomatic
+        }
+    }
+}
+
 /// One of the two top-level processing modes: a radio-style row with a short description beneath it.
 private struct ModeChoice: View {
+    let art: StarArt
     let title: String
     let description: String
     let selected: Bool
@@ -368,6 +385,7 @@ private struct ModeChoice: View {
                 Image(systemName: selected ? "largecircle.fill.circle" : "circle")
                   .font(.title2)
                   .foregroundColor(.white)
+                ArtImage(art, fitting: CleanupTiles.modeSize)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                       .font(.title)
@@ -430,12 +448,15 @@ struct RemovalView: View {
             Space(height: 10)
             Divider()
 
-            ModeChoice(title: localized("ui.startup_mode_automatic"),
+            ModeChoice(art: CleanupTiles.tile(for: .automatic(false)),
+                       title: localized("ui.startup_mode_automatic"),
                        description: localized("ui.startup_mode_automatic_desc"),
                        selected: !selectiveMode,
                        identifier: "startup.removal.automatic") { selectiveMode = false }
             if !selectiveMode {
-                VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .center, spacing: 10) {
+                  ArtImage(CleanupTiles.tile(for: .automatic(true)), fitting: CleanupTiles.autoSelectiveSize)
+                  VStack(alignment: .leading, spacing: 4) {
                     Toggle(localized("ui.startup_auto_selective_toggle"), isOn: $autoSelective)
                       .accessibilityIdentifier("startup.removal.autoselective")
                       .font(.title3)
@@ -445,16 +466,20 @@ struct RemovalView: View {
                       .foregroundColor(.white)
                       .opacity(0.8)
                       .fixedSize(horizontal: false, vertical: true)
+                  }
                 }
                   .padding(.leading, 34)
             }
-            ModeChoice(title: localized("ui.startup_mode_selective"),
+            ModeChoice(art: CleanupTiles.tile(for: .selective),
+                       title: localized("ui.startup_mode_selective"),
                        description: localized("ui.startup_mode_selective_desc"),
                        selected: selectiveMode,
                        identifier: "startup.removal.selective") { selectiveMode = true }
 
             Divider()
-            VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: 10) {
+              ArtImage(CleanupTiles.groundAlignment, fitting: CleanupTiles.groundAlignmentSize)
+              VStack(alignment: .leading, spacing: 4) {
                 Toggle(localized("ui.startup_ground_alignment_toggle"), isOn: $groundAlignment)
                   .accessibilityIdentifier("startup.removal.groundalignment")
                   .font(.title3)
@@ -464,6 +489,7 @@ struct RemovalView: View {
                   .foregroundColor(.white)
                   .opacity(0.8)
                   .fixedSize(horizontal: false, vertical: true)
+              }
             }
               .frame(maxWidth: .infinity, alignment: .leading)
 

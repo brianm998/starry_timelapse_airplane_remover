@@ -4204,6 +4204,30 @@ final class SharedConstantsTests: XCTestCase {
             ("startup.selecthorizon.no", "art_horizon_auto", "No", ""), ("startup.selecthorizon.yes", "art_horizon_brush", "Yes", "")])
     }
 
+    /// Cleanup sheet tiles: Automatic and Selective rows at 64 pt.
+    func testCleanupModeRowTiles() throws {
+        XCTAssertEqual(CleanupTiles.modeSize, 64)
+        for (method, name) in [(CleanMethod.automatic(false), "art_mode_automatic"), (.selective, "art_mode_selective")] {
+            let art = CleanupTiles.tile(for: method)
+            XCTAssertEqual(art.rawValue, name)
+            XCTAssertNotNil(NSImage(named: name), "\(name) is not in the asset catalog")
+            let size = ArtImage(art, fitting: CleanupTiles.modeSize).displaySize
+            XCTAssertEqual(max(size.width, size.height), 64)
+        }
+    }
+
+    /// Cleanup sheet: the auto-selective switch at 40 pt, ground alignment at 48 pt.
+    func testAutoSelectiveTile() throws {
+        let art = CleanupTiles.tile(for: .automatic(true))
+        XCTAssertEqual(art.rawValue, "art_mode_auto_selective")
+        XCTAssertNotNil(NSImage(named: art.rawValue))
+        let size = ArtImage(art, fitting: CleanupTiles.autoSelectiveSize).displaySize
+        XCTAssertEqual(max(size.width, size.height), 40)
+        XCTAssertEqual(CleanupTiles.groundAlignment.rawValue, "art_ground_alignment")
+        let g = ArtImage(CleanupTiles.groundAlignment, fitting: CleanupTiles.groundAlignmentSize).displaySize
+        XCTAssertEqual(max(g.width, g.height), 48)
+    }
+
     /// Art A4: every StarArt slot is an imageset in the app's asset catalog and loads at its display size or larger.
     func testEveryStarArtSlotLoads() throws {
         XCTAssertEqual(StarArt.allCases.count, 62)
