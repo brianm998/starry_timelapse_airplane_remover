@@ -1,3 +1,4 @@
+import Metal
 import XCTest
 import StarCpp
 @testable import StarCppBridge
@@ -105,6 +106,12 @@ final class WGPUOpsTests: XCTestCase {
                                          -0.009, 0.9997, -21.7,
                                          2.6e-7, -1.9e-7, 1]
 
+    /// On a discrete GPU (this Mac's AMD) the Metal kernels are not exact: wgpu agrees with the CPU
+    /// reference there while 0.4-1.4% of samples differ from Metal (#352; cf. the discrete-GPU GPUOps
+    /// findings of #293). So Metal is no reference on such a GPU, and the comparison is made with the
+    /// CPU path at the CPU limits instead. On unified-memory GPUs the tight Metal limits stand.
+    private var metalIsExact: Bool { MTLCreateSystemDefaultDevice()?.hasUnifiedMemory == true }
+
     private func checkWarp(bits: Int, channels: Int, width: Int, height: Int,
                            maxMismatchFraction: Double) throws {
         let src = frame(width: width, height: height, channels: channels, bits: bits, seed: 1)
@@ -183,11 +190,12 @@ final class WGPUOpsTests: XCTestCase {
         for (bits, channels) in [(16, 3), (8, 3), (16, 1)] {
             let src = frame(width: 1500, height: 900, channels: channels, bits: bits, seed: 2)
             let h = MatWrapper(homographyValues: perspective)
-            let metal = try XCTUnwrap(ImageAligner.debugWarp(src, homography: h, useGPU: true))
+            let exact = metalIsExact
+            let metal = try XCTUnwrap(ImageAligner.debugWarp(src, homography: h, useGPU: exact))
             let gpu = zeros(like: src)
             XCTAssertTrue(perspective.withUnsafeBufferPointer { wgpu_ops_warp(src.ref, $0.baseAddress, gpu.ref) })
             let r = try compare(gpu, metal)
-            XCTAssertLessThan(Double(r.differing) / Double(r.total), 0.003,
+            XCTAssertLessThan(Double(r.differing) / Double(r.total), exact ? 0.003 : 0.01,
                               "\(bits)-bit x\(channels): \(r.differing) of \(r.total) samples differ from Metal")
         }
     }
@@ -299,12 +307,14 @@ final class WGPUOpsTests: XCTestCase {
         for bits in [16, 8] {
             let f = fixture(bits: bits)
             for includeAll in [false, true] {
-                let metal = try XCTUnwrap(ImageAligner.alignAndMedianMerge(
+                let exact = metalIsExact
+                let metal = exact ? try XCTUnwrap(ImageAligner.alignAndMedianMerge(
                   baseImage: f.base, baseFrameIndex: 0, neighbors: f.infos, homography: f.homography,
                   outlierThreshold: 1.2, includeAll: includeAll, useGPU: true)).merged
+                                  : try cpuMerge(f, includeAll: includeAll)
                 let gpu = try wgpuMerge(f, includeAll: includeAll)
                 let r = try compare(gpu, metal)
-                XCTAssertLessThan(Double(r.differing) / Double(r.total), 0.0005,
+                XCTAssertLessThan(Double(r.differing) / Double(r.total), exact ? 0.0005 : 0.03,
                                   "\(bits)-bit includeAll=\(includeAll): \(r.differing) of \(r.total) samples differ from Metal")
             }
         }
