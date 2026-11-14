@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.components.modalScrim
 import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.domain.WorkingLocation
+import com.star.desktop.ui.components.ScaledArtImage
+import com.star.desktop.ui.components.StarArt
 import com.star.desktop.i18n.localized
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.ui.theme.StarShapes
@@ -67,8 +69,13 @@ fun SequenceLocationDialog(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(localized("ui.sequence_location_title"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-            Text(File(sequenceDir).name, color = StarColors.textPrimary, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                ScaledArtImage(StarArt.ART_IMPORT, 96.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(localized("ui.sequence_location_title"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                    Text(File(sequenceDir).name, color = StarColors.textPrimary, fontSize = 13.sp)
+                }
+            }
             WorkingLocationSection(sequenceDir, outputDir, { outputDir = it }, inputBytes = inputBytes, freeSpace = freeSpace)
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
                 OutlinedButton(onClick = onCancel) { Text(localized("ui.cancel")) }

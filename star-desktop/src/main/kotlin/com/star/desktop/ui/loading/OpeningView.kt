@@ -15,11 +15,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.LoadingProgress
 import com.star.desktop.i18n.localized
+import com.star.desktop.ui.components.ScaledArtImage
+import com.star.desktop.ui.components.StarArt
 import com.star.desktop.ui.theme.StarColors
+
+/** The import robot's height inside a progress ring: 60% of the ring's inner diameter, at most 120 dp (0 when there is no inner room). */
+internal fun loadingRingArtSize(outerDiameter: Dp, stroke: Dp): Dp {
+    val inner = outerDiameter - stroke * 2
+    return if (inner.value <= 0f) 0.dp else minOf(inner * 0.6f, 120.dp)
+}
 
 /**
  * The screen shown while a source opens (macOS `ImageSequenceLoadingView`): what is being opened, a ring that fills as the video's frames are
@@ -37,9 +46,12 @@ fun OpeningView(progress: LoadingProgress, onCancel: () -> Unit, modifier: Modif
             Text(progress.title, color = StarColors.textPrimary, fontSize = 22.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
             val fraction = progress.fraction
             if (fraction != null) {
-                CircularProgressIndicator(
-                    progress = { fraction }, modifier = Modifier.size(160.dp), color = StarColors.accent, trackColor = StarColors.cellDefault, strokeWidth = 10.dp,
-                )
+                Box(Modifier.size(160.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(
+                        progress = { fraction }, modifier = Modifier.size(160.dp), color = StarColors.accent, trackColor = StarColors.cellDefault, strokeWidth = 10.dp,
+                    )
+                    ScaledArtImage(StarArt.ART_IMPORT, loadingRingArtSize(160.dp, 10.dp))
+                }
             } else {
                 CircularProgressIndicator(modifier = Modifier.size(64.dp), color = StarColors.accent)
             }
