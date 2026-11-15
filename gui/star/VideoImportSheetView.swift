@@ -56,11 +56,11 @@ struct VideoImportSheetView: View {
             }
 
             Picker(localized("ui.video_frame_format"), selection: $kind) {
-                Text(localized("ui.frame_format_tiff16")).tag(FrameDecodeFormat.Kind.tiff16)
+                HStack(spacing: 8) { ArtImage(FrameDecodeFormat.Kind.tiff16.art); Text(localized("ui.frame_format_tiff16")) }.tag(FrameDecodeFormat.Kind.tiff16)
                   .accessibilityIdentifier("videoimport.format.tiff16")
-                Text(localized("ui.frame_format_tiff8")).tag(FrameDecodeFormat.Kind.tiff8)
+                HStack(spacing: 8) { ArtImage(FrameDecodeFormat.Kind.tiff8.art); Text(localized("ui.frame_format_tiff8")) }.tag(FrameDecodeFormat.Kind.tiff8)
                   .accessibilityIdentifier("videoimport.format.tiff8")
-                Text(localized("ui.frame_format_jpeg")).tag(FrameDecodeFormat.Kind.jpeg)
+                HStack(spacing: 8) { ArtImage(FrameDecodeFormat.Kind.jpeg.art); Text(localized("ui.frame_format_jpeg")) }.tag(FrameDecodeFormat.Kind.jpeg)
                   .accessibilityIdentifier("videoimport.format.jpeg")
             }
               .pickerStyle(.radioGroup)
@@ -309,5 +309,16 @@ struct SequenceLocationSheetView: View {
               inputBytes = await Task.detached { DiskSpaceCheck.sequenceInputBytes(inDirectory: path) }.value
           }
           .starDialogStyle()
+    }
+}
+
+extension FrameDecodeFormat.Kind {
+    /// The tile shown beside the format's label on Import Video.
+    var art: StarArt {
+        switch self {
+        case .tiff16: return .formatTiff16
+        case .tiff8: return .formatTiff8
+        case .jpeg: return .formatJpeg
+        }
     }
 }
