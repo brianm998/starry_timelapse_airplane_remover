@@ -1260,5 +1260,11 @@
   "ui.mode_desc_dirty": "Star fonctionnera en mode non nettoyé, l'inverse du nettoyage. Chaque pixel devient l'original moins l'image de référence alignée : les étoiles fixes et le sol fixe passent au noir, et seul ce qui a bougé, comme les avions, les satellites et les météores, garde sa couleur. La référence est l'alignement des étoiles dans le ciel et l'alignement du sol au sol ; sans détection d'horizon, c'est l'alignement des étoiles sur toute l'image. Aucune valeur aberrante n'est détectée, il n'y a donc rien à examiner image par image.",
   "ui.frame_mode_desc_dirty": "Ne garde que ce qui a bougé dans cette image, dans le ciel comme au sol (l'original moins la référence alignée). Il n'y a rien à examiner sur cette image.",
   "ui.this_frame_uses_dirty": "Cette image utilise le mode non nettoyé",
-  "view_mode.dirtyProcessed": "non nettoyé"
+  "view_mode.dirtyProcessed": "non nettoyé",
+  "ui.info_about_name": "Star est le Starry Timelapse Airplane Remover (suppresseur d'avions pour timelapses étoilés).",
+  "ui.info_about_purpose": "Il nettoie les timelapses du ciel nocturne : il traite les traînées que les avions et les satellites laissent dans le ciel comme du bruit, et les supprime.",
+  "ui.info_about_license": "Star est un logiciel libre sous licence GPL v3 : libre d'utilisation, avec un code source ouvert à tous. Le code source se trouve ici :",
+  "ui.info_about_what_it_does": "Star prend la séquence d'images d'un timelapse, la traite et écrit une nouvelle séquence d'images dans laquelle les traînées du ciel sont masquées. Il peut ouvrir directement un fichier vidéo ou un dossier d'images.",
+  "ui.info_about_video_formats": "À l'ouverture d'une vidéo, Star la découpe d'abord en une image par trame, dans le format de votre choix : TIFF 16 bits (par défaut et de meilleure qualité), TIFF 8 bits ou JPEG avec un réglage de qualité (80 % par défaut). La boîte de dialogue estime l'espace disque nécessaire à chaque choix.",
+  "ui.info_about_image_formats": "Les séquences d'images peuvent être des images TIFF, JPEG ou PNG. Les images traitées sont écrites dans le même format que celles dont elles proviennent : une séquence JPEG ressort en JPEG, et une séquence TIFF 8 bits en TIFF 8 bits."
 }

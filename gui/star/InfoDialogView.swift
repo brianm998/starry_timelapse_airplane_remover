@@ -48,9 +48,21 @@ struct InfoDialogView: View {
                                     if viewModel.currentInfoType == .howTo {
                                         WorkflowStrip()
                                     }
-                                    Text(viewModel.currentInfoType.infoText)
-                                      .font(.title)
-                                      .foregroundColor(.white)
+                                    if viewModel.currentInfoType == .about {
+                                        ForEach(Array(InfoType.aboutKeys.enumerated()), id: \.offset) { _, key in
+                                            Text(localized(key))
+                                              .font(.title)
+                                              .foregroundColor(.white)
+                                            if key == InfoType.aboutLicenseKey {
+                                                Link(STAR_SOURCE_URL, destination: URL(string: STAR_SOURCE_URL)!)
+                                                  .font(.title)
+                                            }
+                                        }
+                                    } else {
+                                        Text(viewModel.currentInfoType.infoText)
+                                          .font(.title)
+                                          .foregroundColor(.white)
+                                    }
                                 }
                             }
                         }
@@ -79,10 +91,24 @@ struct InfoDialogView: View {
     }
 }
 
+/// Where the source code lives (the repository is public).
+let STAR_SOURCE_URL = "https://github.com/brianm998/starry_timelapse_airplane_remover"
+
 public enum InfoType: CaseIterable {
     case about
     case howTo
     case detailed
+
+    /// The About tab's paragraphs, in order; the source link goes after `aboutLicenseKey`.
+    static let aboutKeys = [
+        "ui.info_about_name",
+        "ui.info_about_purpose",
+        "ui.info_about_license",
+        "ui.info_about_what_it_does",
+        "ui.info_about_video_formats",
+        "ui.info_about_image_formats",
+    ]
+    static let aboutLicenseKey = "ui.info_about_license"
 
     var shortName: String {
         switch self {
@@ -98,21 +124,7 @@ public enum InfoType: CaseIterable {
     var infoText: String {
         switch self {
         case .about:
-            return """
-              Star is the Starry Timelapse Airplane Remover.
-
-              This is software designed to post process timelapse image sequences from timelapses, with the intent of treating visual signals from airplanes and satellites as noise that should be removed.
-
-              It is free software, both free to use and free to see and use the source code, under the GPL v3 license.
-
-              LINK to source code here
-
-              At a high level, Star takes as input an image sequence from a timelapse video.
-              It does a bunch of processing on this, and then outputs a processed image sequence which has modifications made to it to hide streaks in the sky.
-              Star can open a video file directly, or an image sequence which is separated by folder.
-              When opening a video, Star first splits it into one image per frame, and you choose the format of those images: 16 bit TIFF (the default, and the best quality), 8 bit TIFF, or JPEG with a quality setting (80% by default). The dialog estimates how much disk space each choice will need.
-              Image sequences can be TIFF, JPEG or PNG images. Processed images are written in the same format as the images they came from, so a JPEG sequence comes out as JPEGs, and an 8 bit TIFF sequence as 8 bit TIFFs.
-              """
+            return InfoType.aboutKeys.map { localized($0) }.joined(separator: "\n\n")
         case .howTo:
             return """
               To get started with Star, you need to first have an image sequence containing images from the night sky.

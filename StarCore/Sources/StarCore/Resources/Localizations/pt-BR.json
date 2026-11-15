@@ -1260,5 +1260,11 @@
   "ui.mode_desc_dirty": "O star vai rodar no modo sem limpeza, o oposto de limpar. Cada pixel passa a ser o original menos o quadro de referência alinhado, então as estrelas fixas e o solo parado ficam pretos e só o que se moveu, como aviões, satélites e meteoros, mantém sua cor. A referência é o alinhamento das estrelas no céu e o alinhamento do solo no solo; sem a detecção de horizonte, é o alinhamento das estrelas em todo o quadro. Nenhum valor atípico é detectado, então não há nada para revisar em cada quadro.",
   "ui.frame_mode_desc_dirty": "Mantém só o que se moveu neste quadro, tanto no céu quanto no solo (o original menos a referência alinhada). Não há nada para revisar neste quadro.",
   "ui.this_frame_uses_dirty": "Este quadro usa o modo sem limpeza",
-  "view_mode.dirtyProcessed": "sem limpeza"
+  "view_mode.dirtyProcessed": "sem limpeza",
+  "ui.info_about_name": "Star é o Starry Timelapse Airplane Remover (removedor de aviões de timelapses estrelados).",
+  "ui.info_about_purpose": "Ele limpa timelapses do céu noturno: trata os rastros que aviões e satélites deixam no céu como ruído e os remove.",
+  "ui.info_about_license": "Star é software livre sob a licença GPL v3: livre para usar, com o código-fonte aberto a todos. O código-fonte está aqui:",
+  "ui.info_about_what_it_does": "O Star pega a sequência de imagens de um timelapse, a processa e grava uma nova sequência de imagens em que os rastros no céu ficam escondidos. Ele pode abrir diretamente um arquivo de vídeo ou uma pasta de imagens.",
+  "ui.info_about_video_formats": "Ao abrir um vídeo, o Star primeiro o divide em uma imagem por quadro, no formato que você escolher: TIFF de 16 bits (o padrão e o de melhor qualidade), TIFF de 8 bits ou JPEG com um ajuste de qualidade (80% por padrão). A caixa de diálogo estima quanto espaço em disco cada escolha exige.",
+  "ui.info_about_image_formats": "As sequências de imagens podem ser TIFF, JPEG ou PNG. As imagens processadas são gravadas no mesmo formato das imagens de origem: uma sequência JPEG sai em JPEG e uma sequência TIFF de 8 bits em TIFF de 8 bits."
 }

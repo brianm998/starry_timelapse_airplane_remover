@@ -39,22 +39,19 @@ import androidx.compose.ui.unit.sp
 import com.star.desktop.ui.theme.StarColors
 import com.star.desktop.i18n.localized
 
-// The text of each tab, as the macOS dialog has it (gui/star/InfoDialogView.swift, `InfoType.infoText`), word for word. Only the placeholder line
-// that app has for a link to the source code is left out. It is English there too: these are long documents that have not been put in the
-// catalogue, and a paraphrase here would say different things to the two clients' users.
-private val ABOUT_TEXT = """
-Star is the Starry Timelapse Airplane Remover.
+/** Where the source code lives (the repository is public); macOS `STAR_SOURCE_URL`. */
+const val STAR_SOURCE_URL = "https://github.com/brianm998/starry_timelapse_airplane_remover"
 
-This is software designed to post process timelapse image sequences from timelapses, with the intent of treating visual signals from airplanes and satellites as noise that should be removed.
-
-It is free software, both free to use and free to see and use the source code, under the GPL v3 license.
-
-At a high level, Star takes as input an image sequence from a timelapse video.
-It does a bunch of processing on this, and then outputs a processed image sequence which has modifications made to it to hide streaks in the sky.
-Star can open a video file directly, or an image sequence which is separated by folder.
-When opening a video, Star first splits it into one image per frame, and you choose the format of those images: 16 bit TIFF (the default, and the best quality), 8 bit TIFF, or JPEG with a quality setting (80% by default). The dialog estimates how much disk space each choice will need.
-Image sequences can be TIFF, JPEG or PNG images. Processed images are written in the same format as the images they came from, so a JPEG sequence comes out as JPEGs, and an 8 bit TIFF sequence as 8 bit TIFFs.
-""".trimIndent()
+/** The About tab's paragraphs, in order (macOS `InfoType.aboutKeys`); the source link goes after [ABOUT_LICENSE_KEY]. */
+val ABOUT_KEYS = listOf(
+    "ui.info_about_name",
+    "ui.info_about_purpose",
+    "ui.info_about_license",
+    "ui.info_about_what_it_does",
+    "ui.info_about_video_formats",
+    "ui.info_about_image_formats",
+)
+const val ABOUT_LICENSE_KEY = "ui.info_about_license"
 
 private val HOW_TO_TEXT = """
 To get started with Star, you need to first have an image sequence containing images from the night sky.
@@ -146,7 +143,7 @@ Star is still a work in progress.
 
 /** Tabs in the Info dialog (macOS `InfoType`): each has its name in the catalogue and its text. */
 enum class InfoType(val labelKey: String, val infoText: String) {
-    ABOUT("ui.about", ABOUT_TEXT),
+    ABOUT("ui.about", ""),
     HOW_TO("ui.how_to", HOW_TO_TEXT),
     DETAILED("ui.detailed", DETAILED_TEXT),
 }
@@ -210,7 +207,23 @@ fun InfoDialog(selected: InfoType, onSelect: (InfoType) -> Unit, onClose: () -> 
                         }
                     }
                     if (selected == InfoType.HOW_TO) WorkflowStrip()
-                    Text(selected.infoText, color = StarColors.white, fontSize = 13.sp)
+                    if (selected == InfoType.ABOUT) {
+                        val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+                        for (key in ABOUT_KEYS) {
+                            Text(localized(key), color = StarColors.white, fontSize = 13.sp)
+                            if (key == ABOUT_LICENSE_KEY) {
+                                Text(
+                                    STAR_SOURCE_URL,
+                                    color = StarColors.accent,
+                                    fontSize = 13.sp,
+                                    textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
+                                    modifier = Modifier.clickable { uriHandler.openUri(STAR_SOURCE_URL) },
+                                )
+                            }
+                        }
+                    } else {
+                        Text(selected.infoText, color = StarColors.white, fontSize = 13.sp)
+                    }
                 }
             }
             Button(onClick = onClose, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {

@@ -1260,5 +1260,11 @@
   "ui.mode_desc_dirty": "Star poběží v nevyčištěném režimu, opaku čištění. Každý pixel se stane originálem minus zarovnaný referenční snímek, takže nehybné hvězdy a nehybná země zčernají a barvu si zachová jen to, co se pohnulo, například letadla, družice a meteory. Reference je zarovnání hvězd na obloze a zarovnání země na zemi; bez detekce horizontu je to zarovnání hvězd na celém snímku. Nedetekují se žádné odlehlé hodnoty, takže u jednotlivých snímků není co kontrolovat.",
   "ui.frame_mode_desc_dirty": "Ponechává jen to, co se pohnulo v tomto snímku, na obloze i na zemi (originál mínus zarovnaná reference). V tomto snímku není co kontrolovat.",
   "ui.this_frame_uses_dirty": "Tento snímek používá nevyčištěný režim",
-  "view_mode.dirtyProcessed": "nevyčištěný"
+  "view_mode.dirtyProcessed": "nevyčištěný",
+  "ui.info_about_name": "Star je Starry Timelapse Airplane Remover (odstraňovač letadel z hvězdných timelapsů).",
+  "ui.info_about_purpose": "Čistí timelapsy noční oblohy: pruhy, které letadla a satelity zanechávají na obloze, považuje za šum a odstraňuje je.",
+  "ui.info_about_license": "Star je svobodný software pod licencí GPL v3: lze ho zdarma používat a jeho zdrojový kód je otevřený všem. Zdrojový kód najdete zde:",
+  "ui.info_about_what_it_does": "Star vezme sekvenci snímků timelapsu, zpracuje ji a zapíše novou sekvenci snímků, ve které jsou pruhy na obloze skryté. Může přímo otevřít videosoubor nebo složku s obrázky.",
+  "ui.info_about_video_formats": "Při otevření videa ho Star nejprve rozdělí na jeden obrázek na políčko, ve formátu, který si zvolíte: 16bitový TIFF (výchozí a nejlepší kvalita), 8bitový TIFF nebo JPEG s nastavením kvality (výchozí 80 %). Dialog odhaduje, kolik místa na disku každá volba potřebuje.",
+  "ui.info_about_image_formats": "Sekvence obrázků mohou být ve formátu TIFF, JPEG nebo PNG. Zpracované obrázky se zapisují ve stejném formátu jako původní: ze sekvence JPEG vznikne sekvence JPEG a z 8bitových TIFF 8bitové TIFF."
 }
