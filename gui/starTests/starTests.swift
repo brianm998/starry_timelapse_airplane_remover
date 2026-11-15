@@ -4742,11 +4742,11 @@ final class StartScreenTests: XCTestCase {
         try String(contentsOf: Self.root.appendingPathComponent("gui/star/FinderStyleDropZone.swift"), encoding: .utf8)
     }
 
-    /// The drop zone is the reference for the desktop's: this key, a document icon and a dashed border that turns accent while a drag is over it.
+    /// The drop zone is the reference for the desktop's: this key, the drop art and a dashed border that turns accent while a drag is over it.
     func testTheDropZoneSaysItsKey() throws {
         let source = try zoneSource()
         XCTAssertTrue(source.contains("localized(\"ui.drop_a_video_an_image_sequence_or_an\")"))
-        XCTAssertTrue(source.contains("doc.on.doc"))
+        XCTAssertTrue(source.contains("ArtImage(.drop)"))
         XCTAssertTrue(source.contains("dash: [5]"))
         XCTAssertTrue(source.contains("isTargeted ? Color.accentColor"))
     }
