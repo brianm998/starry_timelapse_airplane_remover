@@ -63,7 +63,7 @@ class PreRenderPromptFlowTest {
     }
 
     @Test fun theViewModelAndDialogsUseIt() {
-        fun main(rel: String) = listOf(File("src/main/kotlin/com/star/desktop/$rel"), File("star-desktop/src/main/kotlin/com/star/desktop/$rel")).first { it.isFile }.readText().replace("\r\n", "\n")
+        fun main(rel: String) = listOf(File("src/main/kotlin/com/star/desktop/$rel"), File("star-desktop/src/main/kotlin/com/star/desktop/$rel")).first { it.isFile }.readText()
         val vm = main("ui/app/AppViewModel.kt")
         assertTrue("preRenderFlow.confirm(settings)" in vm)
         assertTrue("openRenderVideo(autoStart = true, settings = settings)" in vm, "the settings reach the automatic render")

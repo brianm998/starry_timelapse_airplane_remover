@@ -20,7 +20,7 @@ class ProcessingHeadlineVectorsTest {
     @AfterTest fun systemLanguage() = Strings.setOverride(null)
 
     private val doc: JsonObject = JsonParser.parseString(
-        listOf(File("../gherkin/ui/vectors/processingHeadline.json"), File("gherkin/ui/vectors/processingHeadline.json")).first { it.isFile }.readText().replace("\r\n", "\n"),
+        listOf(File("../gherkin/ui/vectors/processingHeadline.json"), File("gherkin/ui/vectors/processingHeadline.json")).first { it.isFile }.readText(),
     ).asJsonObject
 
     private fun rows(array: com.google.gson.JsonArray): List<StepRow> = array.map { it.asJsonObject }.map {

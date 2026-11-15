@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 /** The waiting robot is drawn exactly when the Alignment window shows empty-state lines, and the trouble and waiting art is in its views. */
 class AlignmentEmptyStateArtTest {
-    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
+    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
     private fun ui(path: String) = read("star-desktop/src/main/kotlin/com/star/desktop/ui/$path")
 
     @Test fun emptyStateArt() {

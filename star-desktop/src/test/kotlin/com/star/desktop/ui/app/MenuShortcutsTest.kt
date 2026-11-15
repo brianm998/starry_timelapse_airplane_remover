@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
  * this reads the menu code and the key handler, as `MenuInEveryWindowTest` reads `Main.kt`.
  */
 class MenuShortcutsTest {
-    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
+    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
     private val menu = read("star-desktop/src/main/kotlin/com/star/desktop/ui/app/StarMenuBar.kt")
     private val keys = read("star-desktop/src/main/kotlin/com/star/desktop/ui/app/KeyHandling.kt")
 

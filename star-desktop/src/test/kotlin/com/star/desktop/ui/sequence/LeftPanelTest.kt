@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
  * "Render All Frames" is a run over the sequence with the question about rendering the video, as the gui's, and not a separate pass.
  */
 class LeftPanelTest {
-    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
+    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
     private val panel = read("star-desktop/src/main/kotlin/com/star/desktop/ui/sequence/LeftPanel.kt")
     private val menu = read("star-desktop/src/main/kotlin/com/star/desktop/ui/app/StarMenuBar.kt")
 

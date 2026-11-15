@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 class SettingsTitleTest {
     @AfterTest fun reset() = Strings.setOverride(null)
 
-    private fun find(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
+    private fun find(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
 
     @Test fun theGuiAndTheDesktopReadTheSameKey() {
         val gui = find("gui/star/ProcessingSettingsView.swift")

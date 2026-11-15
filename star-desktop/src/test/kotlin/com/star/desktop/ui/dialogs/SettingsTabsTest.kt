@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
 class SettingsTabsTest {
     @AfterTest fun reset() = Strings.setOverride(null)
 
-    private fun find(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
+    private fun find(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
 
     private val dialog = find("star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingSettingsDialog.kt")
     private val rule = JsonParser.parseString(find("gherkin/ui/vectors/constants.json")).asJsonObject.getAsJsonObject("settingsTabs")

@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 class PainterHoverTipsTest {
     @AfterTest fun reset() = Strings.setOverride(null)
 
-    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
+    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
 
     private val source get() = read("star-desktop/src/main/kotlin/com/star/desktop/ui/sequence/edit/HorizonPainterView.kt")
 

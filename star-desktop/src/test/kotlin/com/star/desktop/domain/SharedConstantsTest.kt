@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
  */
 class SharedConstantsTest {
     private val doc: JsonObject = JsonParser.parseString(
-        listOf(File("../gherkin/ui/vectors/constants.json"), File("gherkin/ui/vectors/constants.json")).first { it.isFile }.readText().replace("\r\n", "\n"),
+        listOf(File("../gherkin/ui/vectors/constants.json"), File("gherkin/ui/vectors/constants.json")).first { it.isFile }.readText(),
     ).asJsonObject
 
     @Test fun theDiskSpaceRatioIsStarCores() {
@@ -60,7 +60,7 @@ class SharedConstantsTest {
             assertEquals(auto.getAsJsonObject(name)["description"].asString, CleanMethodTexts.autoPreservationDescriptionKey(yes), name)
         }
         val dialog = listOf(File("src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingSettingsDialog.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingSettingsDialog.kt"))
-            .first { it.isFile }.readText().replace("\r\n", "\n")
+            .first { it.isFile }.readText()
         assertTrue("tip = { localized(CleanMethodTexts.tipKey(it)) }" in dialog)
         assertTrue("tip = { localized(CleanMethodTexts.autoPreservationTipKey(it)) }" in dialog)
         assertTrue("CleanMethodTexts.descriptionKey(it)" in dialog)
@@ -70,7 +70,7 @@ class SharedConstantsTest {
     /** S9: a byte count reads the same here as in the daemon's warnings (StarCore's `humanReadableBytes`). */
     @Test fun byteCountsAreFormattedAsStarCoreDoes() {
         val file = listOf(File("../gherkin/ui/vectors/byteFormat.json"), File("gherkin/ui/vectors/byteFormat.json")).first { it.isFile }
-        val cases = JsonParser.parseString(file.readText().replace("\r\n", "\n")).asJsonObject.getAsJsonArray("cases")
+        val cases = JsonParser.parseString(file.readText()).asJsonObject.getAsJsonArray("cases")
         assertTrue(cases.size() > 10)
         for (element in cases) {
             val c = element.asJsonObject

@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
  * same cases): a config.json resumes, a video imports, anything else opens as a sequence folder.
  */
 class RecentOpenKindTest {
-    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
+    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
 
     @Test fun theKindsAreTheVectors() {
         val cases = JsonParser.parseString(read("gherkin/ui/vectors/recentOpenKinds.json")).asJsonObject.getAsJsonArray("cases").map { it.asJsonObject }

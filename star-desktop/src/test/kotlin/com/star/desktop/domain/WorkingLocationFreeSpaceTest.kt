@@ -33,7 +33,7 @@ class WorkingLocationFreeSpaceTest {
     }
 
     @Test fun theDialogsAskTheDaemon() {
-        fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
+        fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
         val app = read("star-desktop/src/main/kotlin/com/star/desktop/ui/app/StarApp.kt")
         assertEquals(2, Regex("freeSpace = \\{ vm\\.sessions\\.freeSpace\\(it\\) \\}").findAll(app).count(), "the video import and the sequence location dialogs")
         assertTrue("freeBytesAsTheDaemonCountsThem(effective, freeSpace)" in read("star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/WorkingLocationSection.kt"))

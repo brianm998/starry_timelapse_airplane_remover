@@ -118,7 +118,7 @@ class NoHardCodedStringsTest {
     @Test fun noScreenWritesItsWordsInCode() {
         val problems = ArrayList<String>()
         for (file in uiDir().walkTopDown().filter { it.isFile && it.extension == "kt" }) {
-            val lines = withoutLogCalls(withoutComments(file.readText().replace("\r\n", "\n"))).split('\n')
+            val lines = withoutLogCalls(withoutComments(file.readText())).split('\n')
             val source = lines.joinToString("\n")
             val flaggedAt = HashSet<Pair<Int, String>>()
             fun lineOf(offset: Int) = source.substring(0, offset).count { it == '\n' } + 1

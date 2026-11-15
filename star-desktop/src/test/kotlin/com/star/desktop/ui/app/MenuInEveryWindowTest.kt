@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
  */
 class MenuInEveryWindowTest {
     @Test fun everyWindowHasTheMenu() {
-        val source = listOf(File("src/main/kotlin/com/star/desktop/Main.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/Main.kt")).first { it.isFile }.readText().replace("\r\n", "\n")
+        val source = listOf(File("src/main/kotlin/com/star/desktop/Main.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/Main.kt")).first { it.isFile }.readText()
         val windows = Regex("""(?m)^\s*Window\(""").findAll(source).count()
         assertTrue(windows >= 5, "the main window and the four others")
         assertEquals(windows, Regex("""StarMenuBar\(vm\)""").findAll(source).count(), "a window without the menu bar: its shortcuts do nothing")
@@ -20,7 +20,7 @@ class MenuInEveryWindowTest {
 
     /** The gui's window titles (`StarApp.swift`): `ui.star_outlier_info_window` and `ui.star_alignment_info`, not the headings the windows hold inside. */
     @Test fun secondaryWindowTitlesAreTheGuis() {
-        val source = listOf(File("src/main/kotlin/com/star/desktop/Main.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/Main.kt")).first { it.isFile }.readText().replace("\r\n", "\n")
+        val source = listOf(File("src/main/kotlin/com/star/desktop/Main.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/Main.kt")).first { it.isFile }.readText()
         val titles = Regex("""title = localized\("([^"]+)"""").findAll(source).map { it.groupValues[1] }.toList()
         assertTrue("ui.star_outlier_info_window" in titles, "window titles: $titles")
         assertTrue("ui.star_alignment_info" in titles, "window titles: $titles")

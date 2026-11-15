@@ -9,7 +9,7 @@ class AlignmentFieldOrderTest {
     @Test fun theRowsAreInTheGuisOrder() {
         // the gui's rows, by the catalogue key the desktop labels the same setting with
         val gui = File("../gui/star/ProcessingSettingsView.swift").takeIf { it.isFile } ?: File("gui/star/ProcessingSettingsView.swift")
-        val source = gui.readText().replace("\r\n", "\n")
+        val source = gui.readText()
         val tab = source.substringAfter("private var alignmentTab: some View").substringBefore("private var horizonTab")
         val guiOrder = Regex("self\\.([A-Za-z]+View)").findAll(tab).map { it.groupValues[1] }.toList()
         val byGuiView = mapOf(

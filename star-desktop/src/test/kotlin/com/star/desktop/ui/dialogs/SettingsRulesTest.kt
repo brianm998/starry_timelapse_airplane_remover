@@ -102,7 +102,7 @@ class SettingsRulesTest {
     }
 
     private val constants = com.google.gson.JsonParser.parseString(
-        listOf(java.io.File("../gherkin/ui/vectors/constants.json"), java.io.File("gherkin/ui/vectors/constants.json")).first { it.isFile }.readText().replace("\r\n", "\n"),
+        listOf(java.io.File("../gherkin/ui/vectors/constants.json"), java.io.File("gherkin/ui/vectors/constants.json")).first { it.isFile }.readText(),
     ).asJsonObject.getAsJsonObject("cleanMethod")
 
     private fun choiceNamed(name: String) = when (name) {

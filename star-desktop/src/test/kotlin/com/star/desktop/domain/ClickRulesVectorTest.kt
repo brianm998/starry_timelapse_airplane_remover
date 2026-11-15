@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  */
 class ClickRulesVectorTest {
     private val doc = JsonParser.parseString(
-        listOf(File("../gherkin/ui/vectors/clickRules.json"), File("gherkin/ui/vectors/clickRules.json")).first { it.isFile }.readText().replace("\r\n", "\n"),
+        listOf(File("../gherkin/ui/vectors/clickRules.json"), File("gherkin/ui/vectors/clickRules.json")).first { it.isFile }.readText(),
     ).asJsonObject
 
     private fun reason(name: String) = when (name) {

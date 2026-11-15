@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
  * `MainWindowCloseTest`), so the wiring is read from the sources; the footer's order is pinned on `ReopenVerdict.footer` in `ReopenVerdictTest`.
  */
 class SequenceProgressDialogTest {
-    private fun source(path: String) = listOf(File("src/main/kotlin/com/star/desktop/$path"), File("star-desktop/src/main/kotlin/com/star/desktop/$path")).first { it.isFile }.readText().replace("\r\n", "\n")
+    private fun source(path: String) = listOf(File("src/main/kotlin/com/star/desktop/$path"), File("star-desktop/src/main/kotlin/com/star/desktop/$path")).first { it.isFile }.readText()
 
     @Test fun settingsClosesThePanelEntersEditModeAndOpensTheSettings() {
         val body = source("ui/app/AppViewModel.kt").substringAfter("fun openSettingsForOpenedSequence() {").substringBefore("}")

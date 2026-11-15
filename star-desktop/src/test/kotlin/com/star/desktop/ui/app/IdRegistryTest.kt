@@ -14,7 +14,7 @@ import kotlin.test.assertEquals
 class IdRegistryTest {
     private fun repoDir(relative: String): File = listOf(File("../$relative"), File(relative)).first { it.exists() }
 
-    private val registry: JsonObject = JsonParser.parseString(repoDir("gherkin/ui/ids.json").readText().replace("\r\n", "\n")).asJsonObject
+    private val registry: JsonObject = JsonParser.parseString(repoDir("gherkin/ui/ids.json").readText()).asJsonObject
     private val ids: List<String> = registry.getAsJsonArray("ids").map { it.asString }
     private val gaps = registry.getAsJsonObject("knownGaps")
     private val desktopGaps: Set<String> = gaps.getAsJsonObject("desktop").keySet()
@@ -30,7 +30,7 @@ class IdRegistryTest {
     private val found: Set<String> = run {
         val pattern = Regex("\"((?:${namespaces.sorted().joinToString("|")})\\.(?:[a-z0-9_.]|\\$\\{[^}]*})*)\"")
         repoDir("star-desktop/src/main").walkTopDown().filter { it.isFile && it.extension == "kt" }
-            .flatMap { pattern.findAll(it.readText().replace("\r\n", "\n")).map { m -> m.groupValues[1].replace(Regex("""\$\{[^}]*}"""), "*") } }
+            .flatMap { pattern.findAll(it.readText()).map { m -> m.groupValues[1].replace(Regex("""\$\{[^}]*}"""), "*") } }
             .toSet()
     }
 

@@ -28,7 +28,7 @@ class OperationsRunningTest {
 
     @Test fun theEditModeStatusReadsIt() {
         val source = listOf(File("src/main/kotlin/com/star/desktop/ui/sequence/ProcessingStatus.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/sequence/ProcessingStatus.kt"))
-            .first { it.isFile }.readText().replace("\r\n", "\n")
+            .first { it.isFile }.readText()
         assertTrue("localized(\"ui.n_frames_processing\", operationsRunning(report))" in source)
     }
 }

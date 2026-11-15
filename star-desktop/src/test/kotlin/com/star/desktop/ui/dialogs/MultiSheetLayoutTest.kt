@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
  * coloured pills, and ask for the count in a separate "Number of frames" field.
  */
 class MultiSheetLayoutTest {
-    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
+    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
 
     private val vector = JsonParser.parseString(read("gherkin/ui/vectors/multiSheets.json")).asJsonObject
     private val source = read("star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/MultiFrameSheets.kt")

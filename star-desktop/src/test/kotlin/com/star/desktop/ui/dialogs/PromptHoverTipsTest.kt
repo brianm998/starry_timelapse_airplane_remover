@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 class PromptHoverTipsTest {
     @AfterTest fun reset() = Strings.setOverride(null)
 
-    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
+    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
 
     @Test fun thePromptButtonsAndWaitPanelHaveTheGuisTips() {
         val prompts = read("star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/RenderPromptDialogs.kt")

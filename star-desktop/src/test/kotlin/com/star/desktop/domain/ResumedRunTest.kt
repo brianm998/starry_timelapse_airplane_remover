@@ -24,7 +24,7 @@ class ResumedRunTest {
 
     @Test fun theViewModelAsksBothOfThem() {
         val source = listOf(File("src/main/kotlin/com/star/desktop/ui/app/AppViewModel.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/app/AppViewModel.kt"))
-            .first { it.isFile }.readText().replace("\r\n", "\n")
+            .first { it.isFile }.readText()
         val resume = source.substringAfter("private fun resumeProcessing()").substringBefore("\n    }\n")
         assertTrue("ResumedRun.asksAboutRenderingAtTheEnd(prefs.skipRenderPromptAfterProcessing)" in resume, "the resume clears the question again")
         assertEquals(2, Regex("ResumedRun\\.showsProgressPanel\\(").findAll(source).count(), "the open that carries on, and the engine restart that does")
