@@ -320,9 +320,9 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                             // The gui's order: what the footage is, then how it is cleaned, then whether the clouds get their own merge.
                             SettingGroup(
                                 localized("ui.scene_type").removeSuffix(":"), info = info, infoId = "scene",
-                                help = choicesHelp(
-                                    localized("scene_type.sky_horizon") to localized("ui.sky_horizon_desc"),
-                                    localized("scene_type.sky_only") to localized("ui.sky_only_desc"),
+                                choices = listOf(
+                                    HelpChoice(localized("scene_type.sky_horizon"), localized("ui.sky_horizon_desc"), sceneArt(true)),
+                                    HelpChoice(localized("scene_type.sky_only"), localized("ui.sky_only_desc"), sceneArt(false)),
                                 ),
                             ) {
                                 Segmented(
@@ -334,9 +334,9 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                             }
                             SettingGroup(
                                 localized("ui.camera_motion").removeSuffix(":"), info = info, infoId = "camera",
-                                help = choicesHelp(
-                                    localized("camera_motion.fixed") to localized("ui.camera_fixed_desc"),
-                                    localized("camera_motion.moving") to localized("ui.camera_moving_desc"),
+                                choices = listOf(
+                                    HelpChoice(localized("camera_motion.fixed"), localized("ui.camera_fixed_desc"), cameraArt(false)),
+                                    HelpChoice(localized("camera_motion.moving"), localized("ui.camera_moving_desc"), cameraArt(true)),
                                 ),
                             ) {
                                 Segmented(
@@ -348,9 +348,9 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                             }
                             SettingGroup(
                                 localized("ui.clean_method"), info = info, infoId = "clean",
-                                help = choicesHelp(
-                                    *HighLevelClean.values().map { localized(CleanMethodTexts.titleKey(it)) to localized(CleanMethodTexts.descriptionKey(it)) }.toTypedArray(),
-                                ),
+                                choices = HighLevelClean.values().map {
+                                    HelpChoice(localized(CleanMethodTexts.titleKey(it)), localized(CleanMethodTexts.descriptionKey(it)), cleanArt(it))
+                                },
                             ) {
                                 Segmented(
                                     options = HighLevelClean.values().map { it to localized(CleanMethodTexts.titleKey(it)) },
@@ -368,9 +368,9 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                             SettingGroup(
                                 localized("ui.selective_auto_clean").removeSuffix(":"), enabled = asksAutoPreservation,
                                 info = info, infoId = "autoselective",
-                                help = choicesHelp(
-                                    localized("ui.yes") to localized(CleanMethodTexts.autoPreservationDescriptionKey(true)),
-                                    localized("ui.no") to localized(CleanMethodTexts.autoPreservationDescriptionKey(false)),
+                                choices = listOf(
+                                    HelpChoice(localized("ui.yes"), localized(CleanMethodTexts.autoPreservationDescriptionKey(true)), autoPreservationArt(true)),
+                                    HelpChoice(localized("ui.no"), localized(CleanMethodTexts.autoPreservationDescriptionKey(false)), autoPreservationArt(false)),
                                 ),
                             ) {
                                 Segmented(
@@ -537,11 +537,13 @@ private fun SettingGroup(
     info: SnapshotStateMap<String, Boolean>? = null,
     infoId: String? = null,
     help: String? = null,
+    choices: List<HelpChoice>? = null,
     content: @Composable () -> Unit,
 ) {
+    val helpText = if (choices != null) choicesHelp(choices) else help
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (info != null && infoId != null && help != null) {
-            InfoRow(infoId, info, help) { Text(title, color = if (enabled) StarColors.textSecondary else StarColors.textDisabled, fontSize = 12.sp) }
+        if (info != null && infoId != null && helpText != null) {
+            InfoRow(infoId, info, helpText, helpContent = choices?.let { { ChoicesHelp(it) } }) { Text(title, color = if (enabled) StarColors.textSecondary else StarColors.textDisabled, fontSize = 12.sp) }
         } else {
             Text(title, color = if (enabled) StarColors.textSecondary else StarColors.textDisabled, fontSize = 12.sp)
         }
@@ -553,7 +555,30 @@ private fun SettingGroup(
 /** The catalogue key of the sheet's header, the one the gui's `ProcessingSettingsView` reads. */
 internal const val SETTINGS_TITLE_KEY = "ui.choose_from_the_following_options_to_let"
 
-private fun choicesHelp(vararg choices: Pair<String, String>): String = choices.joinToString("\n\n") { (name, meaning) -> "$name\n$meaning" }
+/** One choice of a picker as its help tells it: [name], the [art] picture between name and meaning when it has one, then [meaning]. */
+private data class HelpChoice(val name: String, val meaning: String, val art: StarArt? = null)
+
+private fun choicesHelp(choices: List<HelpChoice>): String = choices.joinToString("\n\n") { "${it.name}\n${it.meaning}" }
+
+/** The open help of a picker: each choice's name, its picture if it has one, then its meaning, in the help's colours and sizes. */
+@Composable
+private fun ChoicesHelp(choices: List<HelpChoice>) {
+    Column(Modifier.padding(start = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        choices.forEach { c ->
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(c.name, color = StarColors.textSecondary, fontSize = 11.sp)
+                if (c.art != null) ArtImage(c.art, Modifier.padding(vertical = 2.dp))
+                Text(c.meaning, color = StarColors.textSecondary, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+internal fun sceneArt(horizon: Boolean): StarArt = if (horizon) StarArt.ART_SKY_AND_GROUND else StarArt.ART_SKY_ONLY
+
+internal fun cameraArt(moving: Boolean): StarArt = if (moving) StarArt.ART_CAMERA_MOVING else StarArt.ART_CAMERA_STATIC
+
+internal fun autoPreservationArt(yes: Boolean): StarArt? = if (yes) StarArt.ART_MODE_AUTO_SELECTIVE else null
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -601,7 +626,7 @@ private fun InfoButton(open: Boolean, onClick: () -> Unit) {
  * sheet's Show Info and Hide Info can open and close every one at once, the ones in folded groups too.
  */
 @Composable
-private fun InfoRow(id: String, open: SnapshotStateMap<String, Boolean>, help: String?, art: StarArt? = null, content: @Composable () -> Unit) {
+private fun InfoRow(id: String, open: SnapshotStateMap<String, Boolean>, help: String?, art: StarArt? = null, helpContent: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { content() }
@@ -609,7 +634,8 @@ private fun InfoRow(id: String, open: SnapshotStateMap<String, Boolean>, help: S
         }
         if (help != null && open[id] == true) {
             if (art != null) ArtImage(art, Modifier.padding(start = 4.dp, bottom = 4.dp))
-            Text(help, color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
+            if (helpContent != null) helpContent()
+            else Text(help, color = StarColors.textSecondary, fontSize = 11.sp, modifier = Modifier.padding(start = 4.dp, bottom = 4.dp))
         }
     }
 }
@@ -679,6 +705,7 @@ internal val FIELD_ART: Map<String, StarArt> = mapOf(
     "Ground horizon extension" to StarArt.ART_SETTING_HORIZON_EXTENSION,
     "Sky horizon extension" to StarArt.ART_SETTING_HORIZON_EXTENSION,
     "Keypoint detection divisor" to StarArt.ART_SETTING_KEYPOINT_SIZE,
+    "Allow earth alignment" to StarArt.ART_GROUND_ALIGNMENT,
 )
 
 /** What explains each field: the long-form text macOS shows under a row's (i), for those that have one, and what its two choices mean for a yes/no setting. */
