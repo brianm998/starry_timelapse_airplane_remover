@@ -19,19 +19,6 @@ import StarCpp
 /// StarCpp/Package.swift), STAR_WGPU is not set, or the machine has no usable adapter.
 final class WGPUOpsTests: XCTestCase {
 
-    /// The Metal comparisons need a Metal backend. With STAR_USE_GPU_FOR_MERGE=0 (required on the owner's
-    /// Mac) `useGPU: true` is overridden and the "Metal" side is silently the CPU's. Returns whether
-    /// that happened; a test that cannot meaningfully compare with the CPU skips via `requireRealMetal`.
-    private func metalComparisonIsCPU() throws -> Bool {
-        try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
-        return GPUCapability.mergeForcedOff()
-    }
-
-    private func requireRealMetal() throws {
-        try XCTSkipIf(try metalComparisonIsCPU(),
-                      "STAR_USE_GPU_FOR_MERGE=0 forces the merge onto the CPU, so there is no Metal result to compare with")
-    }
-
     override func setUpWithError() throws {
         // No setenv here (it is not in scope on Windows): wgpu.yml sets STAR_WGPU, and a local run does too.
         try XCTSkipUnless(wgpu_ops_compiled_in(), "built without wgpu-native (wgpu/fetch.sh)")
@@ -191,9 +178,11 @@ final class WGPUOpsTests: XCTestCase {
     /// comment). Measured on noisy frames: 0.13% of 16-bit samples, 0.01% of 8-bit ones. OpenCV's own CPU
     /// warp is off Metal by more than that, so this is the sharper of the two comparisons.
     func testWarpMatchesTheMetalKernelClosely() throws {
-        // Forced onto the CPU the reference is OpenCV's warp, which is further from wgpu (measured ~0.6%
-        // of 16-bit samples) than Metal is, so that run uses a looser bound; the Metal bound is unchanged.
-        let bound = try metalComparisonIsCPU() ? 0.01 : 0.003
+        try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
+        // With STAR_USE_GPU_FOR_MERGE=0 `useGPU: true` is overridden and the reference is OpenCV's CPU warp,
+        // which is further from wgpu than Metal is. Measured then: 0.59-0.61% of 16-bit samples, 0.055% of
+        // 8-bit ones. Those runs get bounds sized to that, per bit depth; the Metal bound stays 0.003.
+        let forcedCPU = GPUCapability.mergeForcedOff()
         GPUOps.registerIfAvailable()
         for (bits, channels) in [(16, 3), (8, 3), (16, 1)] {
             let src = frame(width: 1500, height: 900, channels: channels, bits: bits, seed: 2)
@@ -202,6 +191,7 @@ final class WGPUOpsTests: XCTestCase {
             let gpu = zeros(like: src)
             XCTAssertTrue(perspective.withUnsafeBufferPointer { wgpu_ops_warp(src.ref, $0.baseAddress, gpu.ref) })
             let r = try compare(gpu, metal)
+            let bound = forcedCPU ? (bits == 16 ? 0.008 : 0.002) : 0.003
             XCTAssertLessThan(Double(r.differing) / Double(r.total), bound,
                               "\(bits)-bit x\(channels): \(r.differing) of \(r.total) samples differ from Metal")
         }
@@ -309,7 +299,7 @@ final class WGPUOpsTests: XCTestCase {
     /// Measured: 50-88 of 921,600 samples (under 0.01%), a merge picks one value so a flipped warp step
     /// shows up far less than in the warp itself.
     func testAlignedMergeMatchesTheMetalKernelClosely() throws {
-        try requireRealMetal()
+        try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
         GPUOps.registerIfAvailable()
         for bits in [16, 8] {
             let f = fixture(bits: bits)
@@ -373,8 +363,7 @@ final class WGPUOpsTests: XCTestCase {
     /// Metal's median kernel is the same selection in float; where Metal exists they should agree to the
     /// last sample or very nearly.
     func testMedianMergeMatchesTheMetalKernelClosely() throws {
-        // The CPU median is the same selection (0 samples differ), so the bound holds either way.
-        _ = try metalComparisonIsCPU()
+        try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
         GPUOps.registerIfAvailable()
         for bits in [16, 8] {
             let sources = (0..<9).map { frame(width: 301, height: 203, channels: 3, bits: bits, seed: $0 + 10) }
