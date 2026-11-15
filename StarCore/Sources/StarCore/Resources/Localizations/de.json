@@ -1266,5 +1266,15 @@
   "ui.info_about_license": "Star ist freie Software unter der GPL-v3-Lizenz: kostenlos nutzbar, und der Quellcode steht allen offen. Den Quellcode finden Sie hier:",
   "ui.info_about_what_it_does": "Star nimmt die Bildsequenz eines Zeitraffers, verarbeitet sie und schreibt eine neue Bildsequenz, in der die Streifen am Himmel verborgen sind. Es kann direkt eine Videodatei öffnen oder einen Ordner mit Bildern.",
   "ui.info_about_video_formats": "Beim Öffnen eines Videos zerlegt Star es zuerst in ein Bild pro Frame, im Format Ihrer Wahl: 16-Bit-TIFF (die Voreinstellung und die beste Qualität), 8-Bit-TIFF oder JPEG mit einer Qualitätseinstellung (standardmäßig 80 %). Der Dialog schätzt, wie viel Speicherplatz jede Wahl braucht.",
-  "ui.info_about_image_formats": "Bildsequenzen können aus TIFF-, JPEG- oder PNG-Bildern bestehen. Verarbeitete Bilder werden im selben Format geschrieben wie die Bilder, aus denen sie stammen: Aus einer JPEG-Sequenz werden also JPEGs, aus einer 8-Bit-TIFF-Sequenz 8-Bit-TIFFs."
+  "ui.info_about_image_formats": "Bildsequenzen können aus TIFF-, JPEG- oder PNG-Bildern bestehen. Verarbeitete Bilder werden im selben Format geschrieben wie die Bilder, aus denen sie stammen: Aus einer JPEG-Sequenz werden also JPEGs, aus einer 8-Bit-TIFF-Sequenz 8-Bit-TIFFs.",
+  "ui.info_how_to_import_title": "Öffne dein Filmmaterial",
+  "ui.info_how_to_import_body": "Klicke auf {0}, um ein Zeitraffer-Video zu öffnen, oder auf {1}, um einen Ordner mit dessen Bildern zu öffnen. Beides kannst du auch auf den Startbildschirm ziehen. Ein Video wird zuerst in ein Bild pro Einzelbild zerlegt, im Format deiner Wahl.",
+  "ui.info_how_to_questions_title": "Beantworte ein paar Fragen",
+  "ui.info_how_to_questions_body": "Star fragt, ob das Material einen Horizont enthält, ob sich die Kamera bewegt hat und wie das Video bereinigt werden soll. Gibt es einen Horizont, kannst du ihn selbst mit dem Pinsel nachzeichnen oder Star finden lassen. Jede Antwort kannst du später unter {0} ändern.",
+  "ui.info_how_to_process_title": "Verarbeite die Bilder",
+  "ui.info_how_to_process_body": "Klicke auf {0}. Star richtet jedes Bild an seinen Nachbarbildern aus und ersetzt die Streifen, die Flugzeuge und Satelliten hinterlassen. Lange oder große Sequenzen dauern eine Weile: Das Verarbeitungsfenster zeigt den Fortschritt, und du kannst dir die Bilder ansehen, sobald sie fertig sind.",
+  "ui.info_how_to_review_title": "Prüfe das Ergebnis",
+  "ui.info_how_to_review_body": "Spiele die verarbeiteten Bilder ab oder scrolle durch sie. Im selektiven Modus markiert Star, was es in jedem Bild gefunden hat, und mit den Bearbeitungswerkzeugen rechts kannst du jeden Streifen von Hand entfernen oder behalten.",
+  "ui.info_how_to_render_title": "Rendere das Video",
+  "ui.info_how_to_render_body": "Klicke auf {0}, um aus den verarbeiteten Bildern ein Video zu erzeugen. Die Bilder selbst bleiben in einem Ordner neben deiner Originalsequenz erhalten, zusammen mit einer Konfigurationsdatei, die du später mit {1} wieder öffnen kannst."
 }

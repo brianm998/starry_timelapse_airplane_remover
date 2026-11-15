@@ -1266,5 +1266,15 @@
   "ui.info_about_license": "Star is free software under the GPL v3 license: free to use, with its source code open to everyone. The source code is here:",
   "ui.info_about_what_it_does": "Star takes the image sequence of a timelapse, processes it, and writes a new image sequence in which the streaks in the sky are hidden. It can open a video file directly, or a folder of images.",
   "ui.info_about_video_formats": "When it opens a video, Star first splits it into one image per frame, in the format you choose: 16-bit TIFF (the default, and the best quality), 8-bit TIFF, or JPEG with a quality setting (80% by default). The dialog estimates how much disk space each choice needs.",
-  "ui.info_about_image_formats": "Image sequences can be TIFF, JPEG or PNG images. Processed images are written in the same format as the images they came from, so a JPEG sequence comes out as JPEGs, and an 8-bit TIFF sequence as 8-bit TIFFs."
+  "ui.info_about_image_formats": "Image sequences can be TIFF, JPEG or PNG images. Processed images are written in the same format as the images they came from, so a JPEG sequence comes out as JPEGs, and an 8-bit TIFF sequence as 8-bit TIFFs.",
+  "ui.info_how_to_import_title": "Open your footage",
+  "ui.info_how_to_import_body": "Click {0} to open a timelapse video, or {1} to open a folder of its frames. You can also drop either one onto the start screen. A video is first split into one image per frame, in the format you choose.",
+  "ui.info_how_to_questions_title": "Answer a few questions",
+  "ui.info_how_to_questions_body": "Star asks whether the footage includes a horizon, whether the camera moved, and how to clean up the video. If there is a horizon, you can brush along it yourself or let Star find it. You can change any answer later in {0}.",
+  "ui.info_how_to_process_title": "Process the frames",
+  "ui.info_how_to_process_body": "Click {0}. Star lines each frame up with its neighbors and replaces the streaks that airplanes and satellites leave behind. Long or large sequences take a while: the processing window shows how far along it is, and you can look through the frames as they finish.",
+  "ui.info_how_to_review_title": "Check the result",
+  "ui.info_how_to_review_body": "Play or scrub through the processed frames. In selective mode Star marks what it found in each frame, and the editing tools on the right let you remove or keep each streak by hand.",
+  "ui.info_how_to_render_title": "Render the video",
+  "ui.info_how_to_render_body": "Click {0} to make a video from the processed frames. The frames themselves are kept in a folder beside your original sequence, with a config file that {1} opens again later."
 }

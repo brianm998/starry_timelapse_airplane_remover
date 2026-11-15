@@ -1266,5 +1266,15 @@
   "ui.info_about_license": "Star to wolne oprogramowanie na licencji GPL v3: można go swobodnie używać, a jego kod źródłowy jest otwarty dla wszystkich. Kod źródłowy znajduje się tutaj:",
   "ui.info_about_what_it_does": "Star bierze sekwencję obrazów filmu poklatkowego, przetwarza ją i zapisuje nową sekwencję obrazów, w której smugi na niebie są ukryte. Może otworzyć bezpośrednio plik wideo lub folder z obrazami.",
   "ui.info_about_video_formats": "Otwierając wideo, Star najpierw dzieli je na jeden obraz na klatkę, w wybranym przez Ciebie formacie: 16-bitowy TIFF (domyślny i najlepszej jakości), 8-bitowy TIFF lub JPEG z ustawieniem jakości (domyślnie 80%). Okno szacuje, ile miejsca na dysku potrzebuje każdy wybór.",
-  "ui.info_about_image_formats": "Sekwencje obrazów mogą składać się z obrazów TIFF, JPEG lub PNG. Przetworzone obrazy są zapisywane w tym samym formacie co obrazy źródłowe: sekwencja JPEG daje JPEG-i, a sekwencja 8-bitowych TIFF-ów daje 8-bitowe TIFF-y."
+  "ui.info_about_image_formats": "Sekwencje obrazów mogą składać się z obrazów TIFF, JPEG lub PNG. Przetworzone obrazy są zapisywane w tym samym formacie co obrazy źródłowe: sekwencja JPEG daje JPEG-i, a sekwencja 8-bitowych TIFF-ów daje 8-bitowe TIFF-y.",
+  "ui.info_how_to_import_title": "Otwórz swoje nagranie",
+  "ui.info_how_to_import_body": "Kliknij {0}, aby otworzyć film poklatkowy, lub {1}, aby otworzyć folder z jego klatkami. Każde z nich możesz też upuścić na ekran startowy. Film jest najpierw dzielony na jeden obraz na klatkę, w wybranym przez ciebie formacie.",
+  "ui.info_how_to_questions_title": "Odpowiedz na kilka pytań",
+  "ui.info_how_to_questions_body": "Star pyta, czy nagranie zawiera horyzont, czy kamera się poruszała i jak oczyścić film. Jeśli jest horyzont, możesz sam przeciągnąć po nim pędzlem albo pozwolić Star go znaleźć. Każdą odpowiedź możesz później zmienić w {0}.",
+  "ui.info_how_to_process_title": "Przetwórz klatki",
+  "ui.info_how_to_process_body": "Kliknij {0}. Star wyrównuje każdą klatkę względem sąsiednich klatek i zastępuje smugi zostawiane przez samoloty i satelity. Długie lub duże sekwencje trochę trwają: okno przetwarzania pokazuje postęp, a gotowe klatki możesz przeglądać na bieżąco.",
+  "ui.info_how_to_review_title": "Sprawdź wynik",
+  "ui.info_how_to_review_body": "Odtwarzaj przetworzone klatki lub przewijaj je suwakiem. W trybie selektywnym Star zaznacza, co znalazł w każdej klatce, a narzędzia edycji po prawej pozwalają ręcznie usunąć lub zachować każdą smugę.",
+  "ui.info_how_to_render_title": "Wyrenderuj film",
+  "ui.info_how_to_render_body": "Kliknij {0}, aby utworzyć film z przetworzonych klatek. Same klatki są zachowywane w folderze obok oryginalnej sekwencji, razem z plikiem konfiguracji, który {1} otwiera ponownie później."
 }
