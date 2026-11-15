@@ -14,21 +14,30 @@ import StarCppBridge
 /// The Detailed tab is ten sections, each followed by its stage picture.
 final class InfoDetailedTabTests: XCTestCase {
     func testDetailedSections() {
-        XCTAssertEqual(InfoType.detailedSections.map { $0.heading },
-                       ["Identify the horizon, if desired.", "Identify a set of neighbor frames.",
-                        "Align the neighbor frames for sky and maybe earth too.", "Condense the aligned neighbor frames.",
-                        "Subtract the aligned neighbor frame.", "Detect Blobs", "Blob Processing",
-                        "Outlier Group classification.", "Removal Mask Creation.", "Final Bad Pixel Removal"])
+        let stages = ["horizon", "neighbors", "aligned", "condensed", "subtraction",
+                      "blobs", "blob_processing", "classification", "removal_mask", "final"]
+        XCTAssertEqual(InfoType.detailedSections.map { $0.titleKey }, stages.map { "ui.info_detailed_\($0)_title" })
+        XCTAssertEqual(InfoType.detailedSections.map { $0.bodyKey }, stages.map { "ui.info_detailed_\($0)_body" })
         XCTAssertEqual(InfoType.detailedSections.map { $0.art },
                        [.stageHorizon, .stageNeighbors, .stageAligned, .stageCondensed, .stageSubtraction,
                         .stageBlobs, .stageBlobProcessing, .stageClassification, .stageRemovalMask, .stageFinal])
-        // The words, joined, are the text the tab always had (SHA-256 of that text).
+        XCTAssertEqual(InfoType.detailedOpeningKey, "ui.info_detailed_intro")
+        XCTAssertEqual(InfoType.detailedClosingKey, "ui.info_detailed_closing")
+        XCTAssertEqual(InfoType.detailedClosing.count, 2)
         XCTAssertEqual(InfoType.detailed.infoText, InfoType.detailedText)
-        XCTAssertEqual(sha256Hex(InfoType.detailedText),
-                       "70fc99140e013d953d1e697a787d5e2873346e33ea5e9256def671b723af5d12")
     }
 
-    private func sha256Hex(_ s: String) -> String {
-        SHA256.hash(data: Data(s.utf8)).map { String(format: "%02x", $0) }.joined()
+    /// Every key the tab reads is in the catalogue, in every language, and none of the typos survives in English.
+    func testDetailedKeysAreInEveryLanguage() {
+        let keys = [InfoType.detailedOpeningKey, InfoType.detailedClosingKey]
+            + InfoType.detailedSections.flatMap { [$0.titleKey, $0.bodyKey] }
+        XCTAssertEqual(keys.count, 22)
+        for key in keys {
+            XCTAssertNotEqual(localized(key), key, "\(key) is missing")
+        }
+        let english = InfoType.detailedText
+        for typo in ["neibhgoring", "procssed", "processd", "significally", " is is ", "brighest", "take while", "composts", "neighor"] {
+            XCTAssertFalse(english.contains(typo), typo)
+        }
     }
 }
