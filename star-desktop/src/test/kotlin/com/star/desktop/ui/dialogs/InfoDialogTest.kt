@@ -10,9 +10,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** SHA-256 of the Detailed text as it was before it was split into sections. */
-private const val ORIGINAL_DETAILED_SHA = "70fc99140e013d953d1e697a787d5e2873346e33ea5e9256def671b723af5d12"
-
 /** The Info dialog's tabs and what they say (macOS `InfoType`). */
 class InfoDialogTest {
     @BeforeTest fun english() = Strings.setOverride("en")
@@ -33,35 +30,51 @@ class InfoDialogTest {
         }
     }
 
-    /** The detailed tab was a paraphrase that left out what each step shows in edit mode; it is the macOS text now. */
+    /** The detailed tab keeps what each step shows in edit mode (the macOS text), with its typos corrected. */
     @Test fun theDetailedTextIsTheMacOSTextWithItsEditModeNotes() {
         val text = InfoType.DETAILED.infoText
         assertTrue(text.startsWith("Star processes each frame of a sequence in this manner:"))
-        assertTrue("You can see the star and earth aligned images for each frame and how well is is aligned in edit mode." in text)
+        assertTrue("You can see the star and earth aligned images for each frame and how well it is aligned in edit mode." in text)
         assertTrue("You can see the subtraction image for each frame in edit mode." in text)
         assertTrue("You can see the initial blobs for each frame in edit mode." in text)
         assertTrue("You can see how the many different blob processing steps work for each frame in edit mode." in text)
         assertTrue(text.trimEnd().endsWith("Star is still a work in progress."))
         assertTrue(" - better pixel replacement close to the horizon" in text, "the list under the horizon step")
+        assertTrue("SIFT (Scale Invariant Feature Transform) in the sky and AKAZE on the ground" in text)
+        for (typo in listOf("neibhgoring", "procssed", "processd", "significally", " is is ", "brighest", "take while", "composts", "neighor")) {
+            assertFalse(typo in text, typo)
+        }
     }
 
     @Test fun detailedSections() {
-        assertEquals(
-            listOf("Identify the horizon, if desired.", "Identify a set of neighbor frames.",
-                   "Align the neighbor frames for sky and maybe earth too.", "Condense the aligned neighbor frames.",
-                   "Subtract the aligned neighbor frame.", "Detect Blobs", "Blob Processing",
-                   "Outlier Group classification.", "Removal Mask Creation.", "Final Bad Pixel Removal"),
-            DETAILED_SECTIONS.map { it.heading },
-        )
+        val stages = listOf("horizon", "neighbors", "aligned", "condensed", "subtraction",
+                            "blobs", "blob_processing", "classification", "removal_mask", "final")
+        assertEquals(stages.map { "ui.info_detailed_${it}_title" }, DETAILED_SECTIONS.map { it.titleKey })
+        assertEquals(stages.map { "ui.info_detailed_${it}_body" }, DETAILED_SECTIONS.map { it.bodyKey })
         assertEquals(
             listOf(StarArt.ART_STAGE_HORIZON, StarArt.ART_STAGE_NEIGHBORS, StarArt.ART_STAGE_ALIGNED, StarArt.ART_STAGE_CONDENSED,
                    StarArt.ART_STAGE_SUBTRACTION, StarArt.ART_STAGE_BLOBS, StarArt.ART_STAGE_BLOB_PROCESSING,
                    StarArt.ART_STAGE_CLASSIFICATION, StarArt.ART_STAGE_REMOVAL_MASK, StarArt.ART_STAGE_FINAL),
             DETAILED_SECTIONS.map { it.art },
         )
-        // The words, joined, are the text the tab always had.
-        assertEquals(InfoType.DETAILED.infoText, DETAILED_TEXT)
-        assertEquals(ORIGINAL_DETAILED_SHA, java.security.MessageDigest.getInstance("SHA-256").digest(DETAILED_TEXT.toByteArray()).joinToString("") { "%02x".format(it) })
+        assertEquals("ui.info_detailed_intro", DETAILED_OPENING_KEY)
+        assertEquals("ui.info_detailed_closing", DETAILED_CLOSING_KEY)
+        assertEquals(2, detailedClosing().size)
+        assertEquals(InfoType.DETAILED.infoText, detailedText())
+    }
+
+    @Test fun detailedKeysAreInEveryLanguage() {
+        val keys = listOf(DETAILED_OPENING_KEY, DETAILED_CLOSING_KEY) + DETAILED_SECTIONS.flatMap { listOf(it.titleKey, it.bodyKey) }
+        assertEquals(22, keys.size)
+        val english = keys.map { localized(it) }
+        for (code in Strings.languages.map { it.code }.filter { it != "en" }) {
+            Strings.setOverride(code)
+            try {
+                keys.forEachIndexed { i, key -> assertFalse(localized(key) == english[i], "$code: $key is English") }
+            } finally {
+                Strings.setOverride("en")
+            }
+        }
     }
 
     @Test fun aboutFromCatalogue() {
