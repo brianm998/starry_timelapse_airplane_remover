@@ -2675,6 +2675,14 @@ final class SequenceProgressTests: XCTestCase {
         XCTAssertEqual(SequenceProgressPanel.progressArt(for: partial), .review)
     }
 
+    /// Import Video A3: each frame format has its own tile.
+    func testEveryFrameFormatHasItsTile() {
+        XCTAssertEqual(FrameDecodeFormat.Kind.tiff16.art, .formatTiff16)
+        XCTAssertEqual(FrameDecodeFormat.Kind.tiff8.art, .formatTiff8)
+        XCTAssertEqual(FrameDecodeFormat.Kind.jpeg.art, .formatJpeg)
+        XCTAssertEqual(Set(FrameDecodeFormat.Kind.allCases.map { $0.art }).count, FrameDecodeFormat.Kind.allCases.count)
+    }
+
     /// Render robots A4 (and the fitting size arithmetic): rendering, success and failure each have their robot.
     func testRenderStateArt() {
         XCTAssertEqual(RenderVideoSheetView.renderArt(for: .rendering), .rendering)
@@ -4193,6 +4201,21 @@ final class SharedConstantsTests: XCTestCase {
         XCTAssertEqual(HighLevelCleanMethod.selective.changeModeArt, .changeModeSelective)
         XCTAssertEqual(HighLevelCleanMethod.dirty.changeModeArt, .changeModeDirty)
         XCTAssertEqual(ArtImage(HighLevelCleanMethod.dirty.changeModeArt).displaySize, CGSize(width: 40, height: 40))
+    }
+
+    /// Art: each Welcome button shows its 48 pt tile; the greeter steps aside in small windows; the banner keeps the robot and dog.
+    func testWelcomeButtonTiles() {
+        XCTAssertEqual(InitialView.OpenKind.video.tileArt, .tileLoadVideo)
+        XCTAssertEqual(InitialView.OpenKind.sequence.tileArt, .tileLoadSequence)
+        XCTAssertEqual(InitialView.OpenKind.config.tileArt, .tileLoadConfig)
+        for art in [StarArt.tileLoadVideo, .tileLoadSequence, .tileLoadConfig, .tileLearn] {
+            XCTAssertEqual(ArtImage(art).displaySize, CGSize(width: 48, height: 48))
+        }
+        XCTAssertFalse(WelcomeArt.greeterShown(window: CGSize(width: 700, height: 500)))
+        XCTAssertFalse(WelcomeArt.greeterShown(window: CGSize(width: 1280, height: 500)))
+        XCTAssertTrue(WelcomeArt.greeterShown(window: CGSize(width: 1280, height: 800)))
+        XCTAssertTrue(WelcomeArt.bannerTop <= 0.35 && WelcomeArt.bannerBottom >= 0.92)
+        XCTAssertEqual(WelcomeArt.bannerHeight, 294)
     }
 
     private func assertPictures(_ rows: [StartupPictureChoice], _ expected: [(String, String, String, String)],

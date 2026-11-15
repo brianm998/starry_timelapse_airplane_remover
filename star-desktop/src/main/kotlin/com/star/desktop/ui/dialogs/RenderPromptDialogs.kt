@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -108,6 +109,41 @@ fun PreRenderOptionsDialog(app: AppViewModel) {
     }
 }
 
+/**
+ * The frame on screen as it was and as star left it, with an arrow between (macOS `beforeAndAfter`). Each picture is at
+ * most 240 x 160 dp, aspect fit; the row is left out unless both pictures exist.
+ */
+@Composable
+private fun BeforeAndAfter(app: AppViewModel) {
+    val index = app.currentFrameIndex
+    val pictures by produceState<Pair<androidx.compose.ui.graphics.ImageBitmap, androidx.compose.ui.graphics.ImageBitmap>?>(null, index) {
+        val before = app.framePicture(index, com.star.proto.FrameViewMode.VIEW_ORIGINAL)
+        val after = app.framePicture(index, com.star.proto.FrameViewMode.VIEW_PROCESSED)
+        value = if (before != null && after != null) before to after else null
+    }
+    val p = pictures ?: return
+    @Composable
+    fun picture(bitmap: androidx.compose.ui.graphics.ImageBitmap, modifier: Modifier) =
+        androidx.compose.foundation.Image(
+            bitmap = bitmap,
+            contentDescription = null,
+            modifier = modifier.widthIn(max = 240.dp).heightIn(max = 160.dp),
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+        )
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+        picture(p.first, Modifier.weight(1f))
+        val arrowColor = StarColors.textSecondary
+        androidx.compose.foundation.Canvas(Modifier.size(16.dp)) {
+            val y = size.height / 2
+            val stroke = 2.dp.toPx()
+            drawLine(arrowColor, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), stroke)
+            drawLine(arrowColor, androidx.compose.ui.geometry.Offset(size.width, y), androidx.compose.ui.geometry.Offset(size.width * 0.6f, y - size.height * 0.3f), stroke)
+            drawLine(arrowColor, androidx.compose.ui.geometry.Offset(size.width, y), androidx.compose.ui.geometry.Offset(size.width * 0.6f, y + size.height * 0.3f), stroke)
+        }
+        picture(p.second, Modifier.weight(1f))
+    }
+}
+
 /** Post-processing prompt (macOS `PostProcessingRenderPromptView`): render now / preview / cancel. Return is "Yes". */
 @Composable
 fun PostProcessingRenderPrompt(app: AppViewModel) {
@@ -116,6 +152,7 @@ fun PostProcessingRenderPrompt(app: AppViewModel) {
             ArtImage(StarArt.ART_DONE)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(localized("ui.processing_complete"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+                BeforeAndAfter(app)
                 Text(localized("ui.render_video_now"), color = StarColors.textSecondary, fontSize = 15.sp)
             }
         }

@@ -2,11 +2,12 @@ package com.star.desktop.ui.initial
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -37,6 +38,11 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.awtTransferable
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.Dp
+import com.star.desktop.ui.components.ArtImage
+import com.star.desktop.ui.components.StarArt
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -62,9 +68,17 @@ import com.star.desktop.i18n.localized
 fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
     val recent by vm.recentFiles.collectAsState()
 
-    Box(modifier.fillMaxSize().background(StarColors.appBackground)) {
+    BoxWithConstraints(modifier.fillMaxSize().background(StarColors.appBackground)) {
+        val showGreeter = WelcomeArt.greeterShown(maxWidth, maxHeight)
+        // The night-sky still, cropped (never stretched); the intro video covers it when it plays, and draws nothing when it is missing.
+        Image(
+            painter = painterResource(StarArt.ART_WELCOME_BACKGROUND.resourcePath),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
         IntroVideoBackground()
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().padding(end = if (showGreeter) WelcomeArt.greeterInset else 0.dp), contentAlignment = Alignment.Center) {
             // The whole window, as the gui's VStack is: the header, then a drop zone that takes the room there is, then the Load buttons.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -73,10 +87,11 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
             ) {
                 // The gui's heading: its own version at once (this build's until the engine says its own), subtitle and buttons at largeTitle.
                 val engineStatus by vm.engineStatus.collectAsState()
+                ArtImage(StarArt.ART_WORDMARK)
                 Text(localized("ui.welcome_to_star", headingVersion(engineStatus)), color = Color.White, style = StarType.largeTitle)
                 Text(localized("ui.the_starry_timelapse_airplane_remover"), color = Color.White, style = StarType.largeTitle)
                 HoverTip(localized("ui.tell_me_how_to_us_this_software")) {
-                    OutlinedButton(onClick = vm::openInfoDialog) { Text(localized("ui.learn_about_star"), style = StarType.largeTitle) }
+                    OutlinedButton(onClick = vm::openInfoDialog) { TiledLabel(StarArt.ART_TILE_LEARN, localized("ui.learn_about_star")) }
                 }
 
                 // The gui's Spacer / FinderStyleDropZone / Spacer, its zone capped at 1200x800 and at least 280x150 inside 16dp of padding.
@@ -91,13 +106,13 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
                 // The gui's labels, order and hover texts (S8): Load Video, Load Image Sequence, Load Config.
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     HoverTip(localized("ui.load_a_video_to_process_make_sure_lots_of")) {
-                        OutlinedButton(onClick = { open(vm, OpenKind.VIDEO) }) { Text(localized("ui.load_video"), style = StarType.largeTitle) }
+                        OutlinedButton(onClick = { open(vm, OpenKind.VIDEO) }) { TiledLabel(tileArt(OpenKind.VIDEO), localized("ui.load_video")) }
                     }
                     HoverTip(localized("ui.load_an_image_sequence_yet_to_be_processed")) {
-                        OutlinedButton(onClick = { open(vm, OpenKind.SEQUENCE) }) { Text(localized("ui.load_image_sequence"), style = StarType.largeTitle) }
+                        OutlinedButton(onClick = { open(vm, OpenKind.SEQUENCE) }) { TiledLabel(tileArt(OpenKind.SEQUENCE), localized("ui.load_image_sequence")) }
                     }
                     HoverTip(localized("ui.load_a_json_config_file_from_a_previous_run")) {
-                        OutlinedButton(onClick = { open(vm, OpenKind.CONFIG) }) { Text(localized("ui.load_config"), style = StarType.largeTitle) }
+                        OutlinedButton(onClick = { open(vm, OpenKind.CONFIG) }) { TiledLabel(tileArt(OpenKind.CONFIG), localized("ui.load_config")) }
                     }
                 }
 
@@ -113,6 +128,9 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
                     )
                 }
             }
+        }
+        if (showGreeter) {
+            ArtImage(StarArt.ART_GREETER, Modifier.align(Alignment.BottomEnd).padding(WelcomeArt.greeterMargin))
         }
     }
 }
@@ -160,20 +178,9 @@ private fun DropZone(vm: AppViewModel, onOpenSequence: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            DropZoneIcon()
+            ArtImage(StarArt.ART_DROP)
             Text(localized("ui.drop_a_video_an_image_sequence_or_an"), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
-    }
-}
-
-/** The gui's `doc.on.doc` at 32pt: one document outline behind another, drawn rather than shipped as a resource. */
-@Composable
-private fun DropZoneIcon() {
-    Canvas(Modifier.size(32.dp)) {
-        val stroke = Stroke(1.6.dp.toPx())
-        val radius = CornerRadius(3.dp.toPx())
-        drawRoundRect(Color.White, topLeft = Offset(3.dp.toPx(), 2.dp.toPx()), size = Size(15.dp.toPx(), 19.dp.toPx()), cornerRadius = radius, style = stroke)
-        drawRoundRect(Color.White, topLeft = Offset(12.dp.toPx(), 9.dp.toPx()), size = Size(17.dp.toPx(), 21.dp.toPx()), cornerRadius = radius, style = stroke)
     }
 }
 
@@ -253,3 +260,35 @@ private fun openPath(vm: AppViewModel, path: String) {
 }
 
 private fun Modifier.heightInCapped(): Modifier = this.then(Modifier.height(220.dp))
+
+/** The tile and the word of a Welcome button, side by side. */
+@Composable
+private fun TiledLabel(tile: StarArt, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ArtImage(tile)
+        Text(text, style = StarType.largeTitle)
+    }
+}
+
+/** The 48 dp tile beside the button that opens this kind (Learn about Star uses ART_TILE_LEARN). */
+fun tileArt(kind: OpenKind): StarArt = when (kind) {
+    OpenKind.VIDEO -> StarArt.ART_TILE_LOAD_VIDEO
+    OpenKind.SEQUENCE -> StarArt.ART_TILE_LOAD_SEQUENCE
+    OpenKind.CONFIG -> StarArt.ART_TILE_LOAD_CONFIG
+}
+
+/** Where the Welcome screen's pictures go; the gui's `WelcomeArt` enum has the same numbers. */
+object WelcomeArt {
+    val greeterMinWidth: Dp = 900.dp
+    val greeterMinHeight: Dp = 600.dp
+    val greeterMargin: Dp = 16.dp
+    /** The room kept clear at the right for the greeter, so nothing in the content column reaches it. */
+    val greeterInset: Dp = StarArt.ART_GREETER.width.dp + greeterMargin * 2
+    /** The part of art_robot_and_dog the Information dialog's banner shows, as fractions of its height. */
+    const val BANNER_TOP = 0.30
+    const val BANNER_BOTTOM = 0.95
+    val bannerWidth: Dp = 680.dp
+    val bannerHeight: Dp = Math.round(StarArt.ART_ROBOT_AND_DOG.height * (BANNER_BOTTOM - BANNER_TOP)).toInt().dp
+
+    fun greeterShown(width: Dp, height: Dp): Boolean = width >= greeterMinWidth && height >= greeterMinHeight
+}

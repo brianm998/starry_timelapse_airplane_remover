@@ -19,12 +19,31 @@ struct InitialView: View {
                 SplitRevealVideoView(/*leftURL: url1, */rightURL: url2)
                   .background(.black)
             } else {
+                // No intro video: the night-sky still, cropped (never stretched) to fill the window.
                 Color.black
                   .frame(maxWidth: .infinity, maxHeight: .infinity)
+                  .overlay {
+                      Image(StarArt.welcomeBackground.rawValue)
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFill()
+                        .accessibilityHidden(true)
+                  }
+                  .clipped()
             }
 
             GeometryReader { geo in
-                self.mainView
+                let showGreeter = WelcomeArt.greeterShown(window: geo.size)
+                ZStack(alignment: .bottomTrailing) {
+                    self.mainView
+                      .padding(.trailing, showGreeter ? WelcomeArt.greeterInset : 0)
+                      .frame(width: geo.size.width, height: geo.size.height)
+                    if showGreeter {
+                        ArtImage(.greeter)
+                          .padding(WelcomeArt.greeterMargin)
+                          .allowsHitTesting(false)
+                    }
+                }
                   .frame(width: geo.size.width, height: geo.size.height)
             }
         }
@@ -53,6 +72,8 @@ struct InitialView: View {
         @Bindable var viewModel = viewModel
         return VStack {
             Space(height: 40)
+            ArtImage(.wordmark)
+            Space(height: 20)
             Text(localized("ui.welcome_to_star", Config.latestVersion))
               .font(.largeTitle)
               .foregroundColor(.white)
@@ -65,7 +86,10 @@ struct InitialView: View {
             Button() {
                 viewModel.showInfoDialog = true
             } label: {
-                Text(localized("ui.learn_about_star")).font(.largeTitle)
+                HStack {
+                    ArtImage(.tileLearn)
+                    Text(localized("ui.learn_about_star")).font(.largeTitle)
+                }
             }
               .buttonStyle(ShrinkingButton(.clear))
               .help(localized("ui.tell_me_how_to_us_this_software")) 
@@ -82,18 +106,27 @@ struct InitialView: View {
 
                 Spacer()
                 Button(action: self.loadVideoToProcess) {
-                    Text(localized("ui.load_video")).font(.largeTitle)
+                    HStack {
+                        ArtImage(OpenKind.video.tileArt)
+                        Text(localized("ui.load_video")).font(.largeTitle)
+                    }
                 }.buttonStyle(ShrinkingButton(.clear))
                   .help(localized("ui.load_a_video_to_process_make_sure_lots_of"))
                 
                 Spacer()
                 Button(action: self.loadImageSequence) {
-                    Text(localized("ui.load_image_sequence")).font(.largeTitle)
+                    HStack {
+                        ArtImage(OpenKind.sequence.tileArt)
+                        Text(localized("ui.load_image_sequence")).font(.largeTitle)
+                    }
                 }.buttonStyle(ShrinkingButton(.clear))
                   .help(localized("ui.load_an_image_sequence_yet_to_be_processed"))
                 Spacer()
                 Button(action: self.loadConfig) {
-                    Text(localized("ui.load_config")).font(.largeTitle)
+                    HStack {
+                        ArtImage(OpenKind.config.tileArt)
+                        Text(localized("ui.load_config")).font(.largeTitle)
+                    }
                 }.buttonStyle(ShrinkingButton(.clear))
                   .help(localized("ui.load_a_json_config_file_from_a_previous_run"))
                 Spacer()
@@ -826,3 +859,34 @@ private struct VideoLayerRepresentable: NSViewRepresentable {
 
 
 
+
+extension InitialView.OpenKind {
+    /// The 48 pt tile shown beside the button that opens this kind (Learn about Star uses `.tileLearn`).
+    var tileArt: StarArt {
+        switch self {
+        case .video: return .tileLoadVideo
+        case .sequence: return .tileLoadSequence
+        case .config: return .tileLoadConfig
+        }
+    }
+}
+
+/// Where the Welcome screen's pictures go; the desktop's `WelcomeArt` object has the same numbers.
+enum WelcomeArt {
+    /// The window is at least this big before the greeter stands in the lower right.
+    static let greeterMinWidth: CGFloat = 900
+    static let greeterMinHeight: CGFloat = 600
+    static let greeterMargin: CGFloat = 16
+    /// The room kept clear at the right for the greeter, so nothing in the content column reaches it.
+    static var greeterInset: CGFloat { StarArt.greeter.size.width + 2 * greeterMargin }
+    /// The part of art_robot_and_dog the Information dialog's banner shows, as fractions of its height.
+    static let bannerTop: CGFloat = 0.30
+    static let bannerBottom: CGFloat = 0.95
+    static let bannerWidth: CGFloat = 680
+
+    static func greeterShown(window: CGSize) -> Bool {
+        window.width >= greeterMinWidth && window.height >= greeterMinHeight
+    }
+
+    static var bannerHeight: CGFloat { (StarArt.robotAndDog.size.height * (bannerBottom - bannerTop)).rounded() }
+}

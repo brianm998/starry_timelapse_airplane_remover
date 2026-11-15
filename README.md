@@ -1,6 +1,8 @@
 
 # Starry Timelapse Airplane Remover (Star)
 
+![Star, the robot on a rock with a laptop under a calm night sky](docs/readme-hero.jpg)
+
 Star removes airplane and satellite trails from night-sky timelapse videos. It takes a sequence of still images, automatically detects and paints out bright transient streaks, and writes back a cleaned sequence ready to render into video.
 
 ## Example comparisons
@@ -90,11 +92,9 @@ Star ships as two applications built on the same core processing library:
 
 ## Getting started
 
-Download the latest release from the GitHub releases page:
+Go to the [download page](https://brianm998.github.io/starry_timelapse_airplane_remover/). It detects your platform and gives you the right installer. (All versions are also on the [GitHub releases page](https://github.com/brianm998/starry_timelapse_airplane_remover/releases).)
 
-https://github.com/brianm998/starry_timelapse_airplane_remover/releases
-
-Packages available (named `star_cli_*` for the command-line tool, `star_app_*` for the macOS GUI and `Star-Desktop*` for the cross-platform desktop client):
+Available:
 
 - **macOS:** `Star.app` (the native GUI) and the `star` command-line tool.
 - **Windows and Linux:** Star Desktop (the graphical client) and the `star` command-line tool.
