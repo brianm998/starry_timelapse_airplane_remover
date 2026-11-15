@@ -35,6 +35,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.star.desktop.ui.components.ArtImage
 import com.star.desktop.ui.components.modalScrim
 import com.star.desktop.ui.components.defaultAction
 import com.star.desktop.domain.FrameFormatChoice
@@ -101,6 +102,7 @@ fun VideoImportDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     RadioButton(selected = format == choice, onClick = { format = choice })
+                    ArtImage(formatArt(choice), Modifier.padding(end = 8.dp))
                     Text(localized(choice.labelKey), color = StarColors.textPrimary, fontSize = 13.sp)
                 }
             }
@@ -171,4 +173,11 @@ fun VideoImportDialog(
             }
         }
     }
+}
+
+/** The tile shown beside a frame format's label (macOS `FrameDecodeFormat.Kind.art`). */
+internal fun formatArt(choice: FrameFormatChoice): StarArt = when (choice) {
+    FrameFormatChoice.TIFF16 -> StarArt.ART_FORMAT_TIFF16
+    FrameFormatChoice.TIFF8 -> StarArt.ART_FORMAT_TIFF8
+    FrameFormatChoice.JPEG -> StarArt.ART_FORMAT_JPEG
 }
