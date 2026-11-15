@@ -2,12 +2,16 @@ package com.star.desktop.ui.dialogs
 
 import com.star.desktop.i18n.Strings
 import com.star.desktop.i18n.localized
+import com.star.desktop.ui.components.StarArt
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+
+/** SHA-256 of the Detailed text as it was before it was split into sections. */
+private const val ORIGINAL_DETAILED_SHA = "70fc99140e013d953d1e697a787d5e2873346e33ea5e9256def671b723af5d12"
 
 /** The Info dialog's tabs and what they say (macOS `InfoType`). */
 class InfoDialogTest {
@@ -39,6 +43,25 @@ class InfoDialogTest {
         assertTrue("You can see how the many different blob processing steps work for each frame in edit mode." in text)
         assertTrue(text.trimEnd().endsWith("Star is still a work in progress."))
         assertTrue(" - better pixel replacement close to the horizon" in text, "the list under the horizon step")
+    }
+
+    @Test fun detailedSections() {
+        assertEquals(
+            listOf("Identify the horizon, if desired.", "Identify a set of neighbor frames.",
+                   "Align the neighbor frames for sky and maybe earth too.", "Condense the aligned neighbor frames.",
+                   "Subtract the aligned neighbor frame.", "Detect Blobs", "Blob Processing",
+                   "Outlier Group classification.", "Removal Mask Creation.", "Final Bad Pixel Removal"),
+            DETAILED_SECTIONS.map { it.heading },
+        )
+        assertEquals(
+            listOf(StarArt.ART_STAGE_HORIZON, StarArt.ART_STAGE_NEIGHBORS, StarArt.ART_STAGE_ALIGNED, StarArt.ART_STAGE_CONDENSED,
+                   StarArt.ART_STAGE_SUBTRACTION, StarArt.ART_STAGE_BLOBS, StarArt.ART_STAGE_BLOB_PROCESSING,
+                   StarArt.ART_STAGE_CLASSIFICATION, StarArt.ART_STAGE_REMOVAL_MASK, StarArt.ART_STAGE_FINAL),
+            DETAILED_SECTIONS.map { it.art },
+        )
+        // The words, joined, are the text the tab always had.
+        assertEquals(InfoType.DETAILED.infoText, DETAILED_TEXT)
+        assertEquals(ORIGINAL_DETAILED_SHA, java.security.MessageDigest.getInstance("SHA-256").digest(DETAILED_TEXT.toByteArray()).joinToString("") { "%02x".format(it) })
     }
 
     @Test fun aboutFromCatalogue() {

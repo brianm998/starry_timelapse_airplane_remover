@@ -72,70 +72,89 @@ val HOW_TO_STEPS: List<HowToStep> = listOf(
         listOf("ui.render_video", "ui.load_config")),
 )
 
-private val DETAILED_TEXT = """
-Star processes each frame of a sequence in this manner:
+/** One section of the Detailed tab (macOS `DetailedSection`): a heading, the words under it and the stage picture that follows them. */
+data class DetailedSection(val heading: String, val blankAfterHeading: Boolean, val body: String, val art: StarArt) {
+    /** The section's words as one string, heading first. */
+    val text: String get() = heading + (if (blankAfterHeading) "\n\n" else "\n") + body
+}
 
-Identify the horizon, if desired.
+/** The Detailed tab's opening line, before the first section (macOS `InfoType.detailedOpening`). */
+const val DETAILED_OPENING = "Star processes each frame of a sequence in this manner:"
 
+/** The Detailed tab's ten sections, in order (macOS `InfoType.detailedSections`). */
+val DETAILED_SECTIONS: List<DetailedSection> = listOf(
+    DetailedSection("Identify the horizon, if desired.", true, """
 The first step is to maybe identify the horizon.  This step is optional, as sometimes overnight timelapses don't have a horizon for some or all of the video.  It also is faster to ignore the horizon, as less processing is done later.
 However, knowing the horizon can help in a number of ways:
  - better pixel replacement close to the horizon
  - better pixel replacement below the horizon
  - less noise below the horizon due to earth alignment 
-
-Identify a set of neighbor frames.
-
+""".trimIndent(),
+        StarArt.ART_STAGE_HORIZON),
+    DetailedSection("Identify a set of neighbor frames.", true, """
 It is configurable how many neighbors are best to use, the default is 8.  Using less can still work, but risks being unable to remove bad pixels in some really noisy situations.
-
-Align the neighbor frames for sky and maybe earth too.
-
+""".trimIndent(),
+        StarArt.ART_STAGE_NEIGHBORS),
+    DetailedSection("Align the neighbor frames for sky and maybe earth too.", true, """
 Star uses opencv2 for its SIFT (Scale Invariant Feature Transform) logic to align neibhgoring frames with each frame being processed.
 If horizon detection is enabled, the calculated horizon mask for the frame being procssed is used to only identify keypoints in either the sky or the ground.  Without horizon detection, the whole image is scanned for keypoints, which almost always ends up aligning the sky.
 If the alignment fails to properly align the frames, Star will fall back to simply using the un-aligned neighbor frames.  This does work, but results in more noise during processing, and the overwritten data is going to be slightly off.
-
-Condense the aligned neighbor frames.
-
+""".trimIndent(),
+        StarArt.ART_STAGE_ALIGNED),
+    DetailedSection("Condense the aligned neighbor frames.", true, """
 After aligning some set of neighbor frames for the frame being procssed, star will then condense this set of frames into a single frame for the sky, and also the earth, if horizon detection is enabled.
 Each pixel is selected from neighboring frames using statistical analysis to remove pixels that are significally brighter than others in the same x,y location in other frames.
 You can see the star and earth aligned images for each frame and how well is is aligned in edit mode.
-
-Subtract the aligned neighbor frame.
-
+""".trimIndent(),
+        StarArt.ART_STAGE_CONDENSED),
+    DetailedSection("Subtract the aligned neighbor frame.", true, """
 Next, Star will subtract the aligned neighbor frame from the frame being processed.
 This results in a new grayscale image which indicates where, and by how much, the original frame was brighter than the neighbor frame.
 If horizon detection is enabled, the calculated horizon mask for the frame being processd will be used.  This way, the earth alignment image is used as well as the sky alignment image.
 You can see the subtraction image for each frame in edit mode.
 While a lot of other things will show up in the subtraction image, you will see any airplanes or satellites as lines, ideally without any stars or static lights on the ground.
-
-Detect Blobs
+""".trimIndent(),
+        StarArt.ART_STAGE_SUBTRACTION),
+    DetailedSection("Detect Blobs", false, """
 Next Star detects what are called Blobs of brighter pixels, using an algorithm that sorts all of the pixels in an image by brightness, and then processing them in order of brighest first, stopping on dimmer pixels.
 Each bright pixel is then looked at, and any neighbors that aren't too dark are added to the 'Blob'
 You can see the initial blobs for each frame in edit mode.
-
-Blob Processing
+""".trimIndent(),
+        StarArt.ART_STAGE_BLOBS),
+    DetailedSection("Blob Processing", false, """
 After initial Blob detection, a lot of processing is done to make the signal cleaner.
 Numerous rounds of line detection and removal based upon different criteria end up giving a final set of blobs.
 You can see how the many different blob processing steps work for each frame in edit mode.
-
-Outlier Group classification.
+""".trimIndent(),
+        StarArt.ART_STAGE_BLOB_PROCESSING),
+    DetailedSection("Outlier Group classification.", false, """
 After Blob processing is complete, the Blobs are promoted into Outlier Groups.
 Both Blobs and Outlier Groups contain a list of pixels in the frame being processed that may contain 'noise' that should be removed.
 Outlier Groups add a layer of classification features on top of Blobs, which are used to tell which ones are really noise that should be removed.
 These classification features can be as simple as number of pixels, or more complex, involving neighboring frames and other neighboring outlier groups in the same frame.
 To classify the outlier groups, Star uses a decision tree based upon validated sequences.
 To validate a sequence means processing it through Star and then manually playing the video and correcting bad classifications by hand on each frame.  This can take while.
-
-Removal Mask Creation.
+""".trimIndent(),
+        StarArt.ART_STAGE_CLASSIFICATION),
+    DetailedSection("Removal Mask Creation.", false, """
 After classifying all of the Outlier Groups for a frame, we now know which pixels are considered noise and which ones are ok to keep.
 With this data, Star then creates a removal mask, similar to a layer mask in Photoshop or the GIMP.  This mask is used to remove any noisy pixels with data from the aligned neighbor frame.
-
-Final Bad Pixel Removal
+""".trimIndent(),
+        StarArt.ART_STAGE_REMOVAL_MASK),
+    DetailedSection("Final Bad Pixel Removal", false, """
 At this final step, Star simply composts the frame being processed with the aligned neighor frame, using the removal mask as a layer mask, to only overwrite a small number of pixels in the frame we are processing.
+""".trimIndent(),
+        StarArt.ART_STAGE_FINAL),
+)
 
-After Star has finished processing your image sequence, you can then watch a video of the sequence at preview resolution.  This can be helpful to allow you to make any corrections.
+/** The paragraphs after the last section (macOS `InfoType.detailedClosing`). */
+val DETAILED_CLOSING: List<String> = listOf(
+    "After Star has finished processing your image sequence, you can then watch a video of the sequence at preview resolution.  This can be helpful to allow you to make any corrections.",
+    "Star is still a work in progress.",
+)
 
-Star is still a work in progress.
-""".trimIndent()
+/** The Detailed tab as one string: the opening, the sections and the closing. */
+val DETAILED_TEXT: String = (listOf(DETAILED_OPENING) + DETAILED_SECTIONS.map { it.text } + DETAILED_CLOSING).joinToString("\n\n")
 
 /** Tabs in the Info dialog (macOS `InfoType`): each has its name in the catalogue and its text. */
 enum class InfoType(val labelKey: String, val infoText: String) {
@@ -220,6 +239,14 @@ fun InfoDialog(selected: InfoType, onSelect: (InfoType) -> Unit, onClose: () -> 
                                 )
                             }
                         }
+                    } else if (selected == InfoType.DETAILED) {
+                        Text(DETAILED_OPENING, color = StarColors.white, fontSize = 13.sp)
+                        for (section in DETAILED_SECTIONS) {
+                            Text(section.heading, color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+                            Text(section.body, color = StarColors.white, fontSize = 13.sp)
+                            com.star.desktop.ui.components.ArtImage(section.art)
+                        }
+                        for (paragraph in DETAILED_CLOSING) Text(paragraph, color = StarColors.white, fontSize = 13.sp)
                     } else if (selected != InfoType.HOW_TO) {
                         Text(selected.infoText, color = StarColors.white, fontSize = 13.sp)
                     }
