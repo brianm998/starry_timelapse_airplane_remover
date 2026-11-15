@@ -695,6 +695,7 @@ struct StepsInfoContent: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(localized("ui.steps_info_title"))
               .font(.title2)
+            WorkflowStrip()
             Text(info.intro)
               .fixedSize(horizontal: false, vertical: true)
             Text(info.subtitle)
@@ -739,7 +740,7 @@ struct StepsInfoOverlay: View {
               .contentShape(Rectangle())
               .onTapGesture(perform: close)
             StepsInfoContent(info: info, close: close)
-              .frame(width: 540)
+              .frame(width: 560)
               .frame(maxHeight: 640)
               .background(Color(white: 0.22))
               .environment(\.colorScheme, .dark)
