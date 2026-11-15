@@ -1179,6 +1179,34 @@ async def test_fix_answer_splits_batch(rig: Rig) -> None:
     assert not [i for i in rig.gh.issues.values() if "pipe:proposed" in {lab["name"] for lab in i["labels"]}]
 
 
+async def test_split_halves_survive_a_pick_that_races_the_abandon(rig: Rig) -> None:
+    """The driver gives a red batch up on a worker thread: its tickets go `ready`, then the batch ends. A `_pick` that reads the ready
+    list while the batch is still active, and the active batches after it ended, must not drop the halves (it once did, and the
+    next pick then batched both tickets together)."""
+    t = await red_batch(rig)
+    rig.db.put("train_groups", json.dumps([[1], [2]]))
+    real = rig.db.tickets
+
+    def racing(states: Any = None) -> Any:
+        out = real(states)
+        if states == ("ready",) and batch_state(rig, 1) == "asking":
+            out = real(states)  # the snapshot: nothing ready yet
+            for n in (1, 2):
+                rig.engine._to_state(n, "ready")  # pyright: ignore[reportPrivateUsage]
+            rig.db.batch_update(1, state="failed", ended=rig.engine.clock(), note="CI red")
+        return out
+
+    rig.db.tickets = racing  # type: ignore[method-assign]
+    try:
+        picked = t._pick()  # pyright: ignore[reportPrivateUsage]
+    finally:
+        rig.db.tickets = real  # type: ignore[method-assign]
+    assert json.loads(rig.db.get("train_groups") or "[]") in ([[1], [2]], [[2]]) and picked in ([], [1])
+    rig.now += 10_000
+    assert t._pick() == [1]  # pyright: ignore[reportPrivateUsage]
+    assert t._pick() == [2]  # pyright: ignore[reportPrivateUsage]
+
+
 async def test_an_unrecognised_answer_is_a_fix(rig: Rig) -> None:
     t = await red_batch(rig)
     reply(rig, 1, "hmm, let me think")

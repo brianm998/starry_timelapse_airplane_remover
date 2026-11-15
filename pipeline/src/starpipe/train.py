@@ -273,11 +273,14 @@ class Train:
         """The tickets for the next batch. With another batch in flight, only those sharing no file with any of its members:
         `paths` (from `_paths_of`, computed off the event loop) says which files each ticket changes."""
         eng = self.eng
+        # `flying` is read before `ready`: a batch's driver gives its tickets up on a worker thread (the tickets go `ready`, then the
+        # batch ends), so the other order can see the batch still active at `ready` and already over at `flying`, find no ready
+        # member in a split half, and drop the half
+        flying = [n for b in eng.db.active_batches() for n in eng.db.batch_members(int(b["id"]))]
         # a ticket whose catch-up is still running stays out: landing it would delete the worktree the catch-up is working in
         ready = [t for t in eng.db.tickets(("ready",))
                  if eng.db.batch_of(t.number) is None and t.number not in self._beside and t.number not in self._fixing]
         ids = [t.number for t in ready]
-        flying = [n for b in eng.db.active_batches() for n in eng.db.batch_members(int(b["id"]))]
         if flying and paths is None:
             paths = self._paths_of([*flying, *ids])
         taken = [paths.get(n) for n in flying] if paths is not None else []
