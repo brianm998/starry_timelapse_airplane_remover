@@ -179,7 +179,6 @@ final class WGPUOpsTests: XCTestCase {
     /// warp is off Metal by more than that, so this is the sharper of the two comparisons.
     func testWarpMatchesTheMetalKernelClosely() throws {
         try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
-        try XCTSkipIf(GPUCapability.mergeForcedOff(), "STAR_USE_GPU_FOR_MERGE forces the CPU merge, so there is no Metal result to compare with")
         GPUOps.registerIfAvailable()
         for (bits, channels) in [(16, 3), (8, 3), (16, 1)] {
             let src = frame(width: 1500, height: 900, channels: channels, bits: bits, seed: 2)
