@@ -15,25 +15,9 @@ import kotlin.test.assertTrue
  * Keys, ids, file names and the like are not prose and pass. A literal that has to stay (a brand, a technical id) goes in [ALLOWED] with the reason.
  */
 class NoHardCodedStringsTest {
-    /** Why the Detailed tab's words stay in code: that tab has only ever been English prose (not in the catalogue), pinned word for word by InfoDialogTest. */
-    private val DETAILED_WHY = "the Detailed tab's English text, in code since before it was split into sections (InfoDialogTest pins it)"
-
     /** "file:literal" → why it may stay. */
     private val ALLOWED: Map<String, String> = mapOf(
         "ProcessingSettingsDialog.kt:GPU" to "the acronym, the stand-in for a device name the engine did not give",
-        "InfoDialog.kt:Star processes each frame of a sequence in this manner:" to DETAILED_WHY,
-        "InfoDialog.kt:Identify the horizon, if desired." to DETAILED_WHY,
-        "InfoDialog.kt:Identify a set of neighbor frames." to DETAILED_WHY,
-        "InfoDialog.kt:Align the neighbor frames for sky and maybe earth too." to DETAILED_WHY,
-        "InfoDialog.kt:Condense the aligned neighbor frames." to DETAILED_WHY,
-        "InfoDialog.kt:Subtract the aligned neighbor frame." to DETAILED_WHY,
-        "InfoDialog.kt:Detect Blobs" to DETAILED_WHY,
-        "InfoDialog.kt:Blob Processing" to DETAILED_WHY,
-        "InfoDialog.kt:Outlier Group classification." to DETAILED_WHY,
-        "InfoDialog.kt:Removal Mask Creation." to DETAILED_WHY,
-        "InfoDialog.kt:Final Bad Pixel Removal" to DETAILED_WHY,
-        "InfoDialog.kt:After Star has finished processing your image sequence, you can then watch a video of the sequence at preview resolution.  This can be helpful to allow you to make any corrections." to DETAILED_WHY,
-        "InfoDialog.kt:Star is still a work in progress." to DETAILED_WHY,
     )
 
     /** Lines of ProcessingSettingsDialog.kt whose literals are field ids (the key of the edit maps, never drawn): what the row says is its labelKey. */
