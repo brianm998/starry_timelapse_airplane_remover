@@ -51,7 +51,7 @@ class StartScreenTest {
     @Test fun theDropZoneSaysWhatTheGuisSays() {
         val source = read("star-desktop/src/main/kotlin/com/star/desktop/ui/initial/InitialView.kt")
         for (needle in listOf(
-            "localized(\"ui.drop_a_video_an_image_sequence_or_an\")", "ArtImage(StarArt.ART_DROP)", "dashPathEffect", "if (isHovering) StarColors.accent else Color.White",
+            "localized(\"ui.drop_a_video_an_image_sequence_or_an\")", "dropZoneArt(isHovering)", "dashPathEffect", "if (isHovering) StarColors.accent else Color.White",
             "HoverTip(localized(\"ui.load_an_image_sequence_yet_to_be_processed\")) {\n                            DropZone(", ".clickable(onClick = onOpenSequence)",
             "testTag(\"startup.dropzone\")",
         )) assertTrue(needle in source, "InitialView.kt lacks: $needle")
