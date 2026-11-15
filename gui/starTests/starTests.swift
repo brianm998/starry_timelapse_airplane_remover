@@ -5884,6 +5884,13 @@ final class VideoAspectRatioTests: XCTestCase {
     }
 }
 
+final class DropZoneArtTests: XCTestCase {
+    func testDropZoneArt() {
+        XCTAssertEqual(FinderStyleDropZone.art(isTargeted: true), .dropHover)
+        XCTAssertEqual(FinderStyleDropZone.art(isTargeted: false), .drop)
+    }
+}
+
 final class LoadingRingArtTests: XCTestCase {
     func testLoadingRingArtSize() {
         // The mac ring at its 500 pt frame: stroke 80, so outer 580 and inner 420; 60% is 252, capped at 120.
