@@ -291,11 +291,11 @@ uses = { exclusive = 1 }
 
 # STAR_WGPU=1: the wgpu tests skip without it, and wgpu-native (wgpu/fetch.sh) is linked into
 # worktrees by link-artifacts.sh. Measured 2026-11-14: 20 tests, 2 benchmarks skipped (STAR_WGPU_BENCH),
-# 18 run; the two Metal comparisons are quarantined, so 16 count.
+# 18 run. The two Metal comparisons hold to the CPU bounds when the CPU merge is forced (#352).
 [suite.test-StarCpp-wgpu]
 command = "env STAR_USE_GPU_FOR_MERGE=0 STAR_WGPU=1 swift test --package-path StarCpp --filter StarCppWGPUTests 2>&1"
 parser = "xctest"
-min_tests = 16
+min_tests = 18
 level = "t1"
 uses = { test-suite = 1 }
 

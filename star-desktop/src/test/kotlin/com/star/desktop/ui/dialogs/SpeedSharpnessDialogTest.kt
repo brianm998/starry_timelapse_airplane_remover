@@ -24,6 +24,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+// The dialog scrolls vertically; the default 1024x768 test window cuts off its buttons once the text is a little taller (Windows' fonts are),
+// so give it room instead of depending on the platform's font metrics.
+private const val TALL_WIDTH = 1024
+private const val TALL_HEIGHT = 2000
+
 @OptIn(ExperimentalTestApi::class)
 class SpeedSharpnessDialogTest {
     @BeforeTest fun english() = Strings.setOverride("en")
@@ -34,7 +39,7 @@ class SpeedSharpnessDialogTest {
         .setImagePixels(42_400_000).setThresholdPixels(12_900_000).setFullResolutionConcurrency(10).setFrameConcurrency(36)
         .setPhysicalMemoryBytes(128L * 1024 * 1024 * 1024).build()
 
-    @Test fun speedSharpnessModalOpensAndCloses() = runDesktopComposeUiTest {
+    @Test fun speedSharpnessModalOpensAndCloses() = runDesktopComposeUiTest(TALL_WIDTH, TALL_HEIGHT) {
         var open by mutableStateOf(true)
         var updated: Double? = null
         setContent {
@@ -55,7 +60,7 @@ class SpeedSharpnessDialogTest {
         onNodeWithTag("startup.speed.update").assertDoesNotExist()
     }
 
-    @Test fun cancelIsLeftOfUpdateAndBothClose() = runDesktopComposeUiTest {
+    @Test fun cancelIsLeftOfUpdateAndBothClose() = runDesktopComposeUiTest(TALL_WIDTH, TALL_HEIGHT) {
         var open by mutableStateOf(true)
         var cancelled = 0
         var updated = mutableListOf<Double>()
@@ -85,7 +90,7 @@ class SpeedSharpnessDialogTest {
     }
 
     /** The cleanup dialog's row button says Change; the sheet it opens still confirms with Update. */
-    @Test fun rowButtonSaysChangeSheetConfirmSaysUpdate() = runDesktopComposeUiTest {
+    @Test fun rowButtonSaysChangeSheetConfirmSaysUpdate() = runDesktopComposeUiTest(TALL_WIDTH, TALL_HEIGHT) {
         var open by mutableStateOf(false)
         setContent {
             KeypointDivisorSummaryRow(1.5) { open = true }

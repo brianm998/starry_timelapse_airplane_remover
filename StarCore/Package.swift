@@ -29,6 +29,10 @@ let package = Package(
         .target(
             name: "StarCoreC",
             path: "Sources/StarCoreC",
+            cSettings: [
+              // MSVC's "secure CRT" nag about _open in crash_handler.c; not a bug.
+              .define("_CRT_SECURE_NO_WARNINGS", .when(platforms: [.windows])),
+            ],
             linkerSettings: [
               // star_process_footprint's _WIN32 branch calls GetProcessMemoryInfo, which
               // lives in psapi. Windows CI has not reached the link step yet — it was
@@ -59,6 +63,8 @@ let package = Package(
               .product(name: "StarCppBridge", package: "StarCpp"),
               .product(name: "logging", package: "logging"),
             ],
+            // PROBLEMS is the owner's plain-text notes; SwiftPM warns about it as unhandled.
+            exclude: ["PROBLEMS"],
             resources: [
               // Pre-compiled CoreML tile classifier.
               // Re-generate with:

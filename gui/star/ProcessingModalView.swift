@@ -65,6 +65,16 @@ struct ProcessingModalView: View {
         )
     }
 
+    /// The newest finished frame's processed picture, at the preview size (processing writes
+    /// previews; a thumbnail of a processed frame may not exist).  nil while none is complete.
+    private var newestFrameURL: URL? {
+        guard let index = viewModel.newestCompleteFrameIndex,
+              index < viewModel.frames.count,
+              let frame = viewModel.frames[index].frame
+        else { return nil }
+        return frame.imageAccessor.urlForImage(frameIndex: index, ofType: .final, atSize: .preview)
+    }
+
     var body: some View {
         let steps = self.steps
         // Feed the rates before anything asks them for an estimate.
@@ -75,6 +85,7 @@ struct ProcessingModalView: View {
         ProcessingModalPanel(
           framesComplete: viewModel.count(for: .complete),
           frameCount: viewModel.frames.count,
+          newestFrameURL: newestFrameURL,
           steps: steps,
           extraction: viewModel.extractionProgress,
           statusText: viewModel.processingStatusText ?? viewModel.waitingForFramesText,
@@ -146,6 +157,9 @@ struct ProcessingModalView: View {
 struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: View {
     let framesComplete: Int
     let frameCount: Int
+
+    /// The newest finished frame's picture, shown at the heading's trailing end; nil shows nothing.
+    var newestFrameURL: URL? = nil
     let steps: [ProcessingStepProgress]
 
     /// How far extracting the video's frames has got; nil when the frames did not come from a video being extracted,
@@ -337,6 +351,9 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
                 }
             }
             Spacer()
+            if let newestFrameURL {
+                ProcessingFrameThumbnail(url: newestFrameURL)
+            }
             concurrencyContent()
         }
           .padding(20)
@@ -695,6 +712,7 @@ struct StepsInfoContent: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(localized("ui.steps_info_title"))
               .font(.title2)
+            WorkflowStrip()
             Text(info.intro)
               .fixedSize(horizontal: false, vertical: true)
             Text(info.subtitle)
@@ -739,7 +757,7 @@ struct StepsInfoOverlay: View {
               .contentShape(Rectangle())
               .onTapGesture(perform: close)
             StepsInfoContent(info: info, close: close)
-              .frame(width: 540)
+              .frame(width: 560)
               .frame(maxHeight: 640)
               .background(Color(white: 0.22))
               .environment(\.colorScheme, .dark)
@@ -807,5 +825,45 @@ struct ProcessingRobotView: View {
             }
         }
         .frame(width: ProcessingRobot.box, height: ProcessingRobot.box, alignment: .topLeading)
+    }
+}
+
+
+/// The newest finished frame, 96 x 64, aspect fit with 4 pt corners.  A new frame replaces
+/// the picture at most every `minimumSwap` seconds, so a run finishing frames quickly does
+/// not flicker.
+struct ProcessingFrameThumbnail: View {
+    static let minimumSwap: TimeInterval = 2
+
+    let url: URL
+    @State private var shown: URL?
+    @State private var lastSwap = Date.distantPast
+
+    var body: some View {
+        Group {
+            if let shown {
+                AsyncImage(url: shown) { image in
+                    image.resizable().aspectRatio(contentMode: .fit)
+                } placeholder: {
+                    Color.clear
+                }
+            } else {
+                Color.clear
+            }
+        }
+          .frame(width: 96, height: 64)
+          .clipShape(RoundedRectangle(cornerRadius: 4))
+          .accessibilityIdentifier("processing.thumbnail")
+          .task(id: url) {
+              if shown != nil {
+                  let wait = Self.minimumSwap - Date().timeIntervalSince(lastSwap)
+                  if wait > 0 {
+                      try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                      if Task.isCancelled { return }
+                  }
+              }
+              shown = url
+              lastSwap = Date()
+          }
     }
 }

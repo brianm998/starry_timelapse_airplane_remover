@@ -37,12 +37,12 @@ final class HorizonEdgeGeometryTests: FrameHarnessTestCase {
                                                 medianGroundBrightness: 0.1)]
         // every column expects a horizon 10,000 rows down
         let far = [Int?](repeating: 10_000, count: 40)
-        _ = await processor.referenceStatsBrightnessRefinedHorizonMask(
+        _ = processor.referenceStatsBrightnessRefinedHorizonMask(
             detected: detected, original: original, stats: stats,
             expectedYPerColumn: far, searchRadius: 10)
         // and far above
         let above = [Int?](repeating: -10_000, count: 40)
-        _ = await processor.referenceStatsBrightnessRefinedHorizonMask(
+        _ = processor.referenceStatsBrightnessRefinedHorizonMask(
             detected: detected, original: original, stats: stats,
             expectedYPerColumn: above, searchRadius: 10)
     }

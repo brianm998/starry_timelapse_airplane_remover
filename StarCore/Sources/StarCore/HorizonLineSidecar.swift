@@ -135,7 +135,7 @@ enum HorizonLineSidecar {
     private static func load<T: FixedWidthInteger>(_ type: T.Type, from data: Data,
                                                    at offset: Int) -> T {
         var value: T = 0
-        withUnsafeMutableBytes(of: &value) { buffer in
+        _ = withUnsafeMutableBytes(of: &value) { buffer in
             data.copyBytes(to: buffer, from: (data.startIndex + offset)..<(data.startIndex + offset + MemoryLayout<T>.size))
         }
         return T(littleEndian: value)

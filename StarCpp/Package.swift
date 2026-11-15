@@ -258,6 +258,8 @@ let wgpuLinkerSettings: [LinkerSetting] = []
 // is the compile line Xcode logs for ImageAligner.cpp.  Release only: a debug build stays -O0.
 let optimizationCXXSettings: [CXXSetting] = [
     .unsafeFlags(["-O2"], .when(configuration: .release)),
+    // MSVC's "secure CRT" nags about fopen, _open and getenv; they are not bugs.
+    .define("_CRT_SECURE_NO_WARNINGS", .when(platforms: [.windows])),
 ]
 
 // Each piece is declared and typed on its own: one big array literal with a closure in it was more than

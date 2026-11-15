@@ -405,7 +405,7 @@ final class VideoFrameSourceTests: XCTestCase {
         let video = try h264("clash", frames: 24)
         let folder = VideoFrameSource.outputFolder(forVideoAt: video)
         try FileManager.default.createDirectory(atPath: folder, withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: "\(folder)/image_0001.tiff", contents: Data([1, 2, 3]))
+        XCTAssertTrue(FileManager.default.createFile(atPath: "\(folder)/image_0001.tiff", contents: Data([1, 2, 3])))
         do { _ = try await VideoFrameSource.make(videoPath: video); XCTFail("should refuse") } catch {}
         XCTAssertEqual(FileManager.default.contents(atPath: "\(folder)/image_0001.tiff"), Data([1, 2, 3]))
     }

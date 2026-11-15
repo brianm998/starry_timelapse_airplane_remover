@@ -176,6 +176,17 @@ public final class ImageSequenceViewModel {
     // bumped on Stop so in-flight processAll closures know to ignore their final state write
     private var processingGeneration = 0
 
+    /// The highest-numbered frame index among `indexes`; nil when there are none.
+    nonisolated static func newest(of indexes: some Sequence<Int>) -> Int? {
+        indexes.max()
+    }
+
+    /// The newest finished frame: the highest-numbered frame whose state is complete.
+    /// nil while no frame is complete.
+    var newestCompleteFrameIndex: Int? {
+        Self.newest(of: (frameStateMap[.complete] ?? []).map(\.frameIndex))
+    }
+
     // the number of frames that are the given processing state
     func count(for state: FrameProcessingState) -> Int {
         self.frameStateMap[state]?.count ?? 0

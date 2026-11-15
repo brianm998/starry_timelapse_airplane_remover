@@ -57,7 +57,7 @@ enum FrameHandlers {
             switch req.size {
             case .original:
                 ref = await PreviewFiles.fullSizeRef(for: frame, mode: starViewMode,
-                                                     directory: "\(await session.scratchSessionDir)/fullres")
+                                                     directory: "\(session.scratchSessionDir)/fullres")
             case .thumbnail:
                 ref = await PreviewFiles.ref(for: frame, mode: starViewMode, size: .thumbnail)
             default:
@@ -122,7 +122,7 @@ enum FrameHandlers {
                 await transport.sendError(id: id, message: "outlier groups not yet loaded for frame \(req.frameIndex)"); return
             }
 
-            let scratchDir = await session.scratchSessionDir
+            let scratchDir = session.scratchSessionDir
             let labelsDir = "\(scratchDir)/labels"
             try FileManager.default.createDirectory(atPath: labelsDir, withIntermediateDirectories: true)
             let labelPath = "\(labelsDir)/frame_\(req.frameIndex)_label.png"
@@ -207,7 +207,7 @@ enum FrameHandlers {
                 await transport.sendError(id: id, message: "outlier groups not yet loaded for frame \(req.frameIndex)"); return
             }
 
-            let scratchDir = await session.scratchSessionDir
+            let scratchDir = session.scratchSessionDir
             let trashDir = "\(scratchDir)/trash"
             try FileManager.default.createDirectory(atPath: trashDir, withIntermediateDirectories: true)
             let path = "\(trashDir)/frame_\(req.frameIndex)_trash.png"

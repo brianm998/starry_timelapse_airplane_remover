@@ -34,7 +34,7 @@ public enum ImageAligner {
                                          loadConcurrency: Int = 1,
                                          useGPU: Bool = true,
                                          rows: Range<Int>? = nil) -> MatWrapper? {
-        let cStrs = filenames.map { strdup($0) }
+        let cStrs = filenames.map { cStringCopy($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
         let r = ptrs.withUnsafeMutableBufferPointer { buf in
@@ -139,8 +139,8 @@ public enum ImageAligner {
                                           imageHeight: Int32,
                                           handler: @escaping (Int32, AlignmentType, ObjCAlignmentStep, Int32) -> Void) -> HomographyResult? {
         let cNeighbors = neighbors.map { n in
-            AlignmentNeighborData(filename: strdup(n.filename),
-                                   maskFilename: n.maskFilename.flatMap { strdup($0) },
+            AlignmentNeighborData(filename: cStringCopy(n.filename),
+                                   maskFilename: n.maskFilename.flatMap { cStringCopy($0) },
                                    keypoints: n.keypoints?.ref,
                                    frameIndex: n.frameIndex)
         }
@@ -233,8 +233,8 @@ public enum ImageAligner {
       -> (merged: MatWrapper, warpCount: Int)?
     {
         let cNeighbors = neighbors.map { n in
-            AlignmentNeighborData(filename: strdup(n.filename),
-                                   maskFilename: n.maskFilename.flatMap { strdup($0) },
+            AlignmentNeighborData(filename: cStringCopy(n.filename),
+                                   maskFilename: n.maskFilename.flatMap { cStringCopy($0) },
                                    keypoints: n.keypoints?.ref,
                                    frameIndex: n.frameIndex)
         }
@@ -281,7 +281,7 @@ public enum ImageAligner {
     /// Accumulate horizon masks from files using a producer/consumer pipeline and
     /// return a binary mask via majority vote (>50 % non-zero → white).
     public static func accumulateHorizonMasks(filenames: [String]) -> MatWrapper? {
-        let cStrs = filenames.map { strdup($0) }
+        let cStrs = filenames.map { cStringCopy($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
         let r = ptrs.withUnsafeMutableBufferPointer { buf in
@@ -306,7 +306,7 @@ public enum ImageAligner {
                                            filenames: [String]) -> (total: MatWrapper?, loaded: [Bool])
     {
         guard !filenames.isEmpty else { return (accum, []) }
-        let cStrs = filenames.map { strdup($0) }
+        let cStrs = filenames.map { cStringCopy($0) }
         defer { cStrs.forEach { free($0) } }
         var ptrs = cStrs.map { UnsafePointer($0) as UnsafePointer<CChar>? }
         var loadedFlags = [UInt8](repeating: 0, count: filenames.count)
@@ -472,4 +472,13 @@ public struct AlignmentResult: Sendable {
         self.failedMat = failedMat
         self.horizonMask = horizonMask
     }
+}
+
+/// `strdup`, which MSVC's headers deprecate under that name in favour of `_strdup`.
+private func cStringCopy(_ s: String) -> UnsafeMutablePointer<CChar>? {
+    #if os(Windows)
+    return _strdup(s)
+    #else
+    return strdup(s)
+    #endif
 }

@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.star.desktop.ui.dialogs.WorkflowStrip
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.ProcessingStepsInfo
 import com.star.desktop.i18n.localized
@@ -45,7 +46,7 @@ fun StepsInfoOverlay(info: ProcessingStepsInfo, onClose: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)).clickable(onClick = onClose), contentAlignment = Alignment.Center) {
         Column(
             Modifier
-                .widthIn(max = 540.dp)
+                .widthIn(max = 600.dp)
                 .padding(20.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(StarColors.prefsCard)
@@ -54,6 +55,7 @@ fun StepsInfoOverlay(info: ProcessingStepsInfo, onClose: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(localized("ui.steps_info_title"), color = StarColors.white, fontSize = 18.sp)
+            WorkflowStrip()
             Text(info.intro, color = StarColors.textPrimary, fontSize = 12.sp)
             Text(info.subtitle, color = StarColors.textPrimary, fontSize = 12.sp)
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {

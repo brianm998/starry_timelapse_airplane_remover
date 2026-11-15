@@ -17,7 +17,7 @@ final class FrameRaceTests: FrameHarnessTestCase {
     func testConcurrentCleanMethodChangesAllLand() async throws {
         let h = try await FrameHarness.make(frameCount: 8, named: "overrides")
         harness = h
-        nonisolated(unsafe) let frames = h.frames
+        let frames = h.frames
 
         for _ in 0..<5 {
             await withTaskGroup(of: Void.self) { group in

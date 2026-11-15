@@ -194,6 +194,21 @@ fun InfoDialog(selected: InfoType, onSelect: (InfoType) -> Unit, onClose: () -> 
                     Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
+                    if (selected == InfoType.ABOUT) com.star.desktop.ui.components.ArtImage(StarArt.ART_WORDMARK)
+                    if (selected == InfoType.ABOUT) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            com.star.desktop.ui.components.ArtImage(StarArt.ART_REAL_BEFORE)
+                            val colour = StarColors.white.copy(alpha = 0.6f)
+                            androidx.compose.foundation.Canvas(Modifier.size(16.dp)) {
+                                val y = size.height / 2
+                                val stroke = 1.5.dp.toPx()
+                                drawLine(colour, androidx.compose.ui.geometry.Offset(1.dp.toPx(), y), androidx.compose.ui.geometry.Offset(size.width - 1.dp.toPx(), y), stroke)
+                                drawLine(colour, androidx.compose.ui.geometry.Offset(size.width - 5.dp.toPx(), y - 4.dp.toPx()), androidx.compose.ui.geometry.Offset(size.width - 1.dp.toPx(), y), stroke)
+                                drawLine(colour, androidx.compose.ui.geometry.Offset(size.width - 5.dp.toPx(), y + 4.dp.toPx()), androidx.compose.ui.geometry.Offset(size.width - 1.dp.toPx(), y), stroke)
+                            }
+                            com.star.desktop.ui.components.ArtImage(StarArt.ART_REAL_AFTER)
+                        }
+                    }
                     if (selected == InfoType.HOW_TO) WorkflowStrip()
                     Text(selected.infoText, color = StarColors.white, fontSize = 13.sp)
                 }
