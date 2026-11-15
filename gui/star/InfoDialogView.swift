@@ -39,6 +39,11 @@ struct InfoDialogView: View {
                                 VStack(alignment: .leading, spacing: 16) {
                                     if viewModel.currentInfoType == .about {
                                         ArtImage(.wordmark)
+                                        HStack(spacing: 8) {
+                                            ArtImage(.realBefore)
+                                            Image(systemName: "arrow.right").foregroundColor(.secondary)
+                                            ArtImage(.realAfter)
+                                        }
                                     }
                                     if viewModel.currentInfoType == .howTo {
                                         WorkflowStrip()

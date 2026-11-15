@@ -23,7 +23,7 @@ final class HorizonAccumulatorTests: XCTestCase {
     func testConcurrentAccumulationEqualsSequentialAccumulation() async throws {
         let horizons: [(Int) -> Int] = [{ _ in 6 }, { _ in 8 }, { _ in 10 }, { x in 5 + x % 7 }, { _ in 14 }]
         let masks = horizons.map { mask($0) }
-        nonisolated(unsafe) let shared = masks
+        let shared = masks
 
         let sequential = HorizonAccumulator(frameCount: 5)
         for (i, m) in masks.enumerated() { await sequential.accumulate(image: m, frameIndex: i) }

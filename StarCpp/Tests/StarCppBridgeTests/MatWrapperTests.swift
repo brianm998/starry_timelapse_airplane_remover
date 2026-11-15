@@ -40,7 +40,7 @@ final class MatWrapperTests: XCTestCase {
 
     /// Every pixel set to `value`, so a load can tell which of several concurrent writers'
     /// content actually landed on disk.
-    private func makeUniformEightBitGray(width: Int, height: Int, value: UInt8) -> MatWrapper {
+    private static func makeUniformEightBitGray(width: Int, height: Int, value: UInt8) -> MatWrapper {
         let count = width * height
         let data = UnsafeMutablePointer<UInt8>.allocate(capacity: count)
         for i in 0..<count { data[i] = value }
@@ -521,7 +521,7 @@ final class MatWrapperTests: XCTestCase {
         let writerCount = 12
 
         DispatchQueue.concurrentPerform(iterations: writerCount) { i in
-            let image = self.makeUniformEightBitGray(width: width, height: height,
+            let image = Self.makeUniformEightBitGray(width: width, height: height,
                                                       value: UInt8(i))
             _ = image.write(to: path)
         }
@@ -554,7 +554,7 @@ final class MatWrapperTests: XCTestCase {
         let writerCount = 12
 
         DispatchQueue.concurrentPerform(iterations: writerCount) { i in
-            let image = self.makeUniformEightBitGray(width: width, height: height,
+            let image = Self.makeUniformEightBitGray(width: width, height: height,
                                                       value: UInt8(i * 20))
             image.saveJpeg(quality: 90, filename: path)
         }

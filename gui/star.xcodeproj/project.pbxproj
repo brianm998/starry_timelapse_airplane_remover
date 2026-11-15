@@ -161,6 +161,7 @@
 		D3F00D032F00000100A00003 /* StarGherkinKernel in Frameworks */ = {isa = PBXBuildFile; productRef = D3F00D022F00000100A00002 /* StarGherkinKernel */; };
 		D386FA41298B617400878B56 /* ScratchLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA40298B617400878B56 /* ScratchLocation.swift */; };
 		D386FA43298B617400878B56 /* ScratchLocationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D386FA42298B617400878B56 /* ScratchLocationTests.swift */; };
+		A8C1D0E1ADFDF1188C0C9301 /* NewestCompleteFrameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C1D0E1ADFDF1188C0C9301 /* NewestCompleteFrameTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -349,6 +350,7 @@
 		D386FA40298B617400878B56 /* ScratchLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScratchLocation.swift; sourceTree = "<group>"; };
 		D386FA42298B617400878B56 /* ScratchLocationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScratchLocationTests.swift; sourceTree = "<group>"; };
 		D386FA44298B617400878B56 /* starUITests.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = starUITests.entitlements; sourceTree = "<group>"; };
+		A7C1D0E1ADFDF1188C0C9301 /* NewestCompleteFrameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewestCompleteFrameTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -550,6 +552,7 @@
 				A7E49CB413479A001B6AF952 /* HorizonRefinementWaitsTests.swift */,
 				A721633A730B8B4DB544AD8C /* IdRegistryTests.swift */,
 				A7B8E512ADFDF1188C0C9307 /* LoadingRingArtTests.swift */,
+				A7C1D0E1ADFDF1188C0C9301 /* NewestCompleteFrameTests.swift */,
 				A7D4F9B0BCF0817FB7A87E28 /* MenuBarStatusTests.swift */,
 				A706C2601DDC2A576633B3AF /* MultiSheetLayoutTests.swift */,
 				A71333772778FE35A59A5804 /* NoHardCodedStringsTests.swift */,
@@ -880,6 +883,7 @@
 				A8E49CB413479A001B6AF952 /* HorizonRefinementWaitsTests.swift in Sources */,
 				A821633A730B8B4DB544AD8C /* IdRegistryTests.swift in Sources */,
 				A8B8E512ADFDF1188C0C9307 /* LoadingRingArtTests.swift in Sources */,
+				A8C1D0E1ADFDF1188C0C9301 /* NewestCompleteFrameTests.swift in Sources */,
 				A8D4F9B0BCF0817FB7A87E28 /* MenuBarStatusTests.swift in Sources */,
 				A806C2601DDC2A576633B3AF /* MultiSheetLayoutTests.swift in Sources */,
 				A81333772778FE35A59A5804 /* NoHardCodedStringsTests.swift in Sources */,

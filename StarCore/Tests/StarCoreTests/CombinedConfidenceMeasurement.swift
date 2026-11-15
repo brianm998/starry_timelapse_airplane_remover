@@ -122,7 +122,7 @@ final class CombinedConfidenceMeasurement: XCTestCase {
             if let otsu = await CombinedHorizonDetector.runOtsu(scaled: scaled, image: image) {
                 methods.append(("otsu", otsu))
             }
-            if let dp = await CombinedHorizonDetector.runDP(scaled: scaled, image: image,
+            if let dp = CombinedHorizonDetector.runDP(scaled: scaled, image: image,
                                                             params: params) {
                 methods.append(("dp", dp))
             }

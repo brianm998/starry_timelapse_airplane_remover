@@ -50,6 +50,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.star.desktop.domain.FrameStateCounts
+import com.star.desktop.domain.newestComplete
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import kotlinx.coroutines.delay
 import com.star.desktop.domain.ProcessingHeadline
 import com.star.desktop.domain.ProcessingStepsInfo
 import com.star.desktop.domain.StepRateTracker
@@ -161,6 +168,7 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
                     if (overall != null) Text(overall, color = StarColors.white, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, modifier = Modifier.testTag("processing.overall"))
                     if (headline != null) Text(headline, color = StarColors.white.copy(alpha = 0.85f), fontSize = 12.sp, modifier = Modifier.testTag("processing.headline"))
                 }
+                FrameStateCounts.newestComplete(frameStates)?.let { ProcessingFrameThumbnail(svm, it) }
                 ResourceProfileControl(app, com.star.desktop.domain.ResourceStatus.text(report))
             }
             HorizontalDivider(color = StarColors.cellDefault)
@@ -475,4 +483,31 @@ internal fun rememberGearAngle(): () -> Float {
         infiniteRepeatable(tween(ProcessingRobotGeometry.MILLIS_PER_TURN, easing = LinearEasing), RepeatMode.Restart),
     )
     return { angle }
+}
+
+
+/** The least time, in milliseconds, a picture stays in the heading's thumbnail before a newer frame replaces it. */
+const val PROCESSING_THUMBNAIL_MIN_SWAP_MS = 2000L
+
+/** The newest finished frame's processed image, 96 x 64, aspect fit with 4 dp corners; swapped for a newer frame at most every two seconds. */
+@Composable
+private fun ProcessingFrameThumbnail(svm: SequenceViewModel, index: Int) {
+    var shownIndex by remember { mutableStateOf<Int?>(null) }
+    var lastSwap by remember { mutableStateOf(0L) }
+    LaunchedEffect(index) {
+        if (shownIndex != null) {
+            val wait = PROCESSING_THUMBNAIL_MIN_SWAP_MS - (System.currentTimeMillis() - lastSwap)
+            if (wait > 0) delay(wait)
+        }
+        shownIndex = index
+        lastSwap = System.currentTimeMillis()
+    }
+    val shown = shownIndex
+    // Keeps the last picture while the next one loads.
+    val bitmap by produceState<ImageBitmap?>(null, shown) {
+        if (shown != null) value = svm.loadThumb(shown, com.star.proto.FrameViewMode.VIEW_PROCESSED) ?: value
+    }
+    Box(Modifier.size(96.dp, 64.dp).clip(RoundedCornerShape(4.dp)).testTag("processing.thumbnail")) {
+        bitmap?.let { Image(it, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize()) }
+    }
 }

@@ -943,7 +943,7 @@ extension DetectionType: @retroactive ExpressibleByArgument { }
 
 extension FrameDecodeFormat: @retroactive ExpressibleByArgument { }
 
-extension FrameDecodeFormat.TIFFCompression: ExpressibleByArgument {
+extension FrameDecodeFormat.TIFFCompression: @retroactive ExpressibleByArgument {
     public init?(argument: String) {
         guard let value = FrameDecodeFormat.tiffCompression(argument: argument) else { return nil }
         self = value
@@ -966,7 +966,7 @@ extension StarCli {
     }
 }
 
-extension CleanMethod: ExpressibleByArgument {
+extension CleanMethod: @retroactive ExpressibleByArgument {
     public init?(argument: String) {
         let lowercased = argument.lowercased()
 
