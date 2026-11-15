@@ -364,7 +364,10 @@ parser = "junit"
 results_file = "star-desktop/build/test-results/test-all.xml"
 min_tests = 1 # UNMEASURED
 level = "t1"
-uses = { exclusive = 1 }
+# One test-suite slot, not the whole machine (2026-11-14): the tests run with java.awt.headless=true,
+# the Compose UI tests render offscreen, and no test asserts a time budget (only 30-120 s deadlines).
+# As `exclusive` it drained the machine for every desktop change.
+uses = { test-suite = 1 }
 
 [suite.test-pipeline]
 command = "cd pipeline && STAR_USE_GPU_FOR_MERGE=0 uv run pytest -v 2>&1"
