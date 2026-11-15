@@ -4755,7 +4755,7 @@ final class StartScreenTests: XCTestCase {
     func testTheDropZoneSaysItsKey() throws {
         let source = try zoneSource()
         XCTAssertTrue(source.contains("localized(\"ui.drop_a_video_an_image_sequence_or_an\")"))
-        XCTAssertTrue(source.contains("ArtImage(.drop)"))
+        XCTAssertTrue(source.contains("ArtImage(FinderStyleDropZone.art(isTargeted: isTargeted))"))
         XCTAssertTrue(source.contains("dash: [5]"))
         XCTAssertTrue(source.contains("isTargeted ? Color.accentColor"))
     }
@@ -5921,6 +5921,13 @@ final class VideoAspectRatioTests: XCTestCase {
     }
 }
 
+final class DropZoneArtTests: XCTestCase {
+    func testDropZoneArt() {
+        XCTAssertEqual(FinderStyleDropZone.art(isTargeted: true), .dropHover)
+        XCTAssertEqual(FinderStyleDropZone.art(isTargeted: false), .drop)
+    }
+}
+
 final class LoadingRingArtTests: XCTestCase {
     func testLoadingRingArtSize() {
         // The mac ring at its 500 pt frame: stroke 80, so outer 580 and inner 420; 60% is 252, capped at 120.
@@ -5932,5 +5939,15 @@ final class LoadingRingArtTests: XCTestCase {
         // No inner room, no robot.
         XCTAssertEqual(loadingRingArtSize(outerDiameter: 160, stroke: 80), 0)
         XCTAssertEqual(loadingRingArtSize(outerDiameter: 100, stroke: 80), 0)
+    }
+}
+
+
+/// The How To tab's strip lists the six workflow steps in order.
+final class WorkflowStripTests: XCTestCase {
+    func testWorkflowStripOrder() {
+        XCTAssertEqual(workflowStripSteps.map(\.rawValue),
+                       ["art_step_import", "art_step_horizon", "art_step_align",
+                        "art_step_merge", "art_step_review", "art_step_render"])
     }
 }
