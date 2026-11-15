@@ -1266,5 +1266,15 @@
   "ui.info_about_license": "Star je svobodný software pod licencí GPL v3: lze ho zdarma používat a jeho zdrojový kód je otevřený všem. Zdrojový kód najdete zde:",
   "ui.info_about_what_it_does": "Star vezme sekvenci snímků timelapsu, zpracuje ji a zapíše novou sekvenci snímků, ve které jsou pruhy na obloze skryté. Může přímo otevřít videosoubor nebo složku s obrázky.",
   "ui.info_about_video_formats": "Při otevření videa ho Star nejprve rozdělí na jeden obrázek na políčko, ve formátu, který si zvolíte: 16bitový TIFF (výchozí a nejlepší kvalita), 8bitový TIFF nebo JPEG s nastavením kvality (výchozí 80 %). Dialog odhaduje, kolik místa na disku každá volba potřebuje.",
-  "ui.info_about_image_formats": "Sekvence obrázků mohou být ve formátu TIFF, JPEG nebo PNG. Zpracované obrázky se zapisují ve stejném formátu jako původní: ze sekvence JPEG vznikne sekvence JPEG a z 8bitových TIFF 8bitové TIFF."
+  "ui.info_about_image_formats": "Sekvence obrázků mohou být ve formátu TIFF, JPEG nebo PNG. Zpracované obrázky se zapisují ve stejném formátu jako původní: ze sekvence JPEG vznikne sekvence JPEG a z 8bitových TIFF 8bitové TIFF.",
+  "ui.info_how_to_import_title": "Otevřete své záběry",
+  "ui.info_how_to_import_body": "Kliknutím na {0} otevřete timelapse video, nebo na {1} otevřete složku s jeho snímky. Obojí můžete také přetáhnout na úvodní obrazovku. Video se nejprve rozdělí na jeden obrázek na snímek ve formátu, který zvolíte.",
+  "ui.info_how_to_questions_title": "Odpovězte na pár otázek",
+  "ui.info_how_to_questions_body": "Star se zeptá, zda záběry obsahují horizont, zda se kamera pohybovala a jak má video vyčistit. Pokud je horizont přítomen, můžete jej sami obtáhnout štětcem, nebo ho nechat najít Star. Kteroukoli odpověď můžete později změnit v {0}.",
+  "ui.info_how_to_process_title": "Zpracujte snímky",
+  "ui.info_how_to_process_body": "Klikněte na {0}. Star zarovná každý snímek se sousedními snímky a nahradí stopy, které po sobě zanechávají letadla a satelity. Dlouhé nebo velké sekvence chvíli trvají: okno zpracování ukazuje, jak daleko je, a hotové snímky si můžete procházet.",
+  "ui.info_how_to_review_title": "Zkontrolujte výsledek",
+  "ui.info_how_to_review_body": "Přehrávejte zpracované snímky nebo jimi procházejte posuvníkem. Ve výběrovém režimu Star v každém snímku označí, co našel, a editační nástroje vpravo vám umožní každou stopu ručně odstranit nebo ponechat.",
+  "ui.info_how_to_render_title": "Vykreslete video",
+  "ui.info_how_to_render_body": "Kliknutím na {0} vytvoříte video ze zpracovaných snímků. Samotné snímky se uloží do složky vedle původní sekvence spolu s konfiguračním souborem, který {1} později znovu otevře."
 }

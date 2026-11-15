@@ -74,6 +74,9 @@ enum StarArt: String, CaseIterable {
     case paintRobot = "art_paint_robot"
     case realBefore = "art_real_before"
     case realAfter = "art_real_after"
+    case howtoImport = "art_howto_import"
+    case howtoQuestions = "art_howto_questions"
+    case howtoProcess = "art_howto_process"
 
     enum Kind { case cutout, tile, scene }
 
@@ -150,6 +153,9 @@ enum StarArt: String, CaseIterable {
         case .paintRobot: return .cutout
         case .realBefore: return .scene
         case .realAfter: return .scene
+        case .howtoImport: return .cutout
+        case .howtoQuestions: return .cutout
+        case .howtoProcess: return .cutout
         }
     }
 
@@ -227,6 +233,9 @@ enum StarArt: String, CaseIterable {
         case .paintRobot: return CGSize(width: 96, height: 90)
         case .realBefore: return CGSize(width: 248, height: 140)
         case .realAfter: return CGSize(width: 248, height: 140)
+        case .howtoImport: return CGSize(width: 89, height: 96)
+        case .howtoQuestions: return CGSize(width: 73, height: 96)
+        case .howtoProcess: return CGSize(width: 96, height: 96)
         }
     }
 }

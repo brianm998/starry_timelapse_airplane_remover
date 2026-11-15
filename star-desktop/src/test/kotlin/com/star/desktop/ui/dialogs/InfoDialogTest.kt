@@ -60,8 +60,32 @@ class InfoDialogTest {
         }
     }
 
-    @Test fun theHowToTextIsThereToo() {
-        assertTrue(InfoType.HOW_TO.infoText.startsWith("To get started with Star"))
-        assertTrue(InfoType.HOW_TO.infoText.trimEnd().endsWith("The config can be loaded by dropping it onto Star's initial screen."))
+    @Test fun howToSteps() {
+        assertEquals(
+            listOf("art_howto_import", "art_howto_questions", "art_howto_process", "art_review", "art_rendering"),
+            HOW_TO_STEPS.map { it.art.slot },
+        )
+        val names = listOf("import", "questions", "process", "review", "render")
+        assertEquals(names.map { "ui.info_how_to_${it}_title" }, HOW_TO_STEPS.map { it.titleKey })
+        assertEquals(names.map { "ui.info_how_to_${it}_body" }, HOW_TO_STEPS.map { it.bodyKey })
+        assertEquals(
+            listOf(listOf("ui.load_video", "ui.load_image_sequence"), listOf("ui.processing_settings"),
+                   listOf("ui.start_processing"), emptyList(), listOf("ui.render_video", "ui.load_config")),
+            HOW_TO_STEPS.map { it.placeholderKeys },
+        )
+        for (code in listOf("en", "de")) {
+            Strings.setOverride(code)
+            try {
+                for (step in HOW_TO_STEPS) {
+                    val raw = localized(step.bodyKey)
+                    assertEquals(step.placeholderKeys.size, (0..4).count { "{$it}" in raw }, "$code ${step.bodyKey}")
+                    assertFalse("{" in step.body, "$code ${step.bodyKey}")
+                }
+            } finally {
+                Strings.setOverride("en")
+            }
+        }
+        assertEquals("Open your footage", HOW_TO_STEPS[0].heading)
+        assertTrue(HOW_TO_STEPS[0].body.startsWith("Click Load Video to open"))
     }
 }

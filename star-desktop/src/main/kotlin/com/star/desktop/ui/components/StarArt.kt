@@ -82,7 +82,10 @@ enum class StarArt(val slot: String, val file: String, val kind: ArtKind, val wi
     ART_SETTING_KEYPOINT_SIZE("art_setting_keypoint_size", "art_setting_keypoint_size.jpg", ArtKind.SCENE, 210, 140),
     ART_PAINT_ROBOT("art_paint_robot", "art_paint_robot.png", ArtKind.CUTOUT, 96, 90),
     ART_REAL_BEFORE("art_real_before", "art_real_before.jpg", ArtKind.SCENE, 248, 140),
-    ART_REAL_AFTER("art_real_after", "art_real_after.jpg", ArtKind.SCENE, 248, 140);
+    ART_REAL_AFTER("art_real_after", "art_real_after.jpg", ArtKind.SCENE, 248, 140),
+    ART_HOWTO_IMPORT("art_howto_import", "art_howto_import.png", ArtKind.CUTOUT, 89, 96),
+    ART_HOWTO_QUESTIONS("art_howto_questions", "art_howto_questions.png", ArtKind.CUTOUT, 73, 96),
+    ART_HOWTO_PROCESS("art_howto_process", "art_howto_process.png", ArtKind.CUTOUT, 96, 96);
 
     val resourcePath: String get() = "art/$file"
 }

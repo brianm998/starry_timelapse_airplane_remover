@@ -531,6 +531,27 @@
    "kind": "scene",
    "width": 248,
    "height": 140
+  },
+  {
+   "name": "art_howto_import",
+   "source": "IM-1",
+   "kind": "cutout",
+   "width": 96,
+   "height": 96
+  },
+  {
+   "name": "art_howto_questions",
+   "source": "ST-9",
+   "kind": "cutout",
+   "width": 96,
+   "height": 96
+  },
+  {
+   "name": "art_howto_process",
+   "source": "PR-1",
+   "kind": "cutout",
+   "width": 96,
+   "height": 96
   }
  ]
 }

@@ -53,28 +53,24 @@ val ABOUT_KEYS = listOf(
 )
 const val ABOUT_LICENSE_KEY = "ui.info_about_license"
 
-private val HOW_TO_TEXT = """
-To get started with Star, you need to first have an image sequence containing images from the night sky.
+/** One step of the How To tab (macOS `HowToStep`): its robot, its heading and paragraph keys, and the keys of the button labels that fill `{0}`, `{1}`. */
+data class HowToStep(val art: StarArt, val titleKey: String, val bodyKey: String, val placeholderKeys: List<String>) {
+    val heading: String get() = localized(titleKey)
+    val body: String get() = localized(bodyKey, *placeholderKeys.map { localized(it) }.toTypedArray())
+}
 
-The fastest way to get started is to drop this folder into Star's starting screen, and then Star will load the sequence and let you view the sequence or start processing.
-
-After first loading a new image sequence, Star will first generate previews for the original images.  After preview generation, the original video can be played or scrubbed.
-
-Before telling Start to start processing your image sequence, it can be helpful to desribe an area at the bottom to ignore.  Unless you video has no ground in it at all, it is helpful to go into edit mode, and turn on the 'Show Ignore Bar' switch on the right panel.
-You can then drag up the orange arrows you see at the bottom of the screen to expose the are of the video to not process.   This can speed Star up.
-If you video is stationary, you can use a single frame to determine the cutoff for the ground.
-If your video was taking on moving tripod head, then it's best to scrub through the video to find the lowest place that the sky shows up, and use that frame for the cutoff.
-
-Next, you can tell Star to start processing your image sequence.
-Be aware that this can take some time.  The Star interface remains active when processing, and you can look at each individual frame if you want to see what happens to it as it gets processed.
-
-After processing, you will have a folder sitting alongside your original image sequence which contains the processed images.
-These can then be renedred into the video format of your choice in the same workflow you usually use.
-
-You will also have a json config file written out for your sequence, which can be reloaded at a later time to process the same sequence more.
-
-The config can be loaded by dropping it onto Star's initial screen.
-""".trimIndent()
+/** The How To tab's five steps, in order (macOS `InfoType.howToSteps`). */
+val HOW_TO_STEPS: List<HowToStep> = listOf(
+    HowToStep(StarArt.ART_HOWTO_IMPORT, "ui.info_how_to_import_title", "ui.info_how_to_import_body",
+        listOf("ui.load_video", "ui.load_image_sequence")),
+    HowToStep(StarArt.ART_HOWTO_QUESTIONS, "ui.info_how_to_questions_title", "ui.info_how_to_questions_body",
+        listOf("ui.processing_settings")),
+    HowToStep(StarArt.ART_HOWTO_PROCESS, "ui.info_how_to_process_title", "ui.info_how_to_process_body",
+        listOf("ui.start_processing")),
+    HowToStep(StarArt.ART_REVIEW, "ui.info_how_to_review_title", "ui.info_how_to_review_body", emptyList()),
+    HowToStep(StarArt.ART_RENDERING, "ui.info_how_to_render_title", "ui.info_how_to_render_body",
+        listOf("ui.render_video", "ui.load_config")),
+)
 
 private val DETAILED_TEXT = """
 Star processes each frame of a sequence in this manner:
@@ -144,7 +140,7 @@ Star is still a work in progress.
 /** Tabs in the Info dialog (macOS `InfoType`): each has its name in the catalogue and its text. */
 enum class InfoType(val labelKey: String, val infoText: String) {
     ABOUT("ui.about", ""),
-    HOW_TO("ui.how_to", HOW_TO_TEXT),
+    HOW_TO("ui.how_to", ""),
     DETAILED("ui.detailed", DETAILED_TEXT),
 }
 
@@ -206,7 +202,10 @@ fun InfoDialog(selected: InfoType, onSelect: (InfoType) -> Unit, onClose: () -> 
                             com.star.desktop.ui.components.ArtImage(StarArt.ART_REAL_AFTER)
                         }
                     }
-                    if (selected == InfoType.HOW_TO) WorkflowStrip()
+                    if (selected == InfoType.HOW_TO) {
+                        WorkflowStrip()
+                        for (step in HOW_TO_STEPS) HowToStepRow(step)
+                    }
                     if (selected == InfoType.ABOUT) {
                         val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
                         for (key in ABOUT_KEYS) {
@@ -221,7 +220,7 @@ fun InfoDialog(selected: InfoType, onSelect: (InfoType) -> Unit, onClose: () -> 
                                 )
                             }
                         }
-                    } else {
+                    } else if (selected != InfoType.HOW_TO) {
                         Text(selected.infoText, color = StarColors.white, fontSize = 13.sp)
                     }
                 }
@@ -261,6 +260,18 @@ internal fun WorkflowStrip() {
                 }
             }
             com.star.desktop.ui.components.ArtImage(step)
+        }
+    }
+}
+
+/** A step: its robot beside a bold heading and the paragraph (macOS `HowToStepRow`). */
+@Composable
+internal fun HowToStepRow(step: HowToStep) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+        com.star.desktop.ui.components.ArtImage(step.art)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(step.heading, color = StarColors.white, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text(step.body, color = StarColors.white, fontSize = 13.sp)
         }
     }
 }

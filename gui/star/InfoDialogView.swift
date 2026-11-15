@@ -47,6 +47,9 @@ struct InfoDialogView: View {
                                     }
                                     if viewModel.currentInfoType == .howTo {
                                         WorkflowStrip()
+                                        ForEach(Array(InfoType.howToSteps.enumerated()), id: \.offset) { _, step in
+                                            HowToStepRow(step: step)
+                                        }
                                     }
                                     if viewModel.currentInfoType == .about {
                                         ForEach(Array(InfoType.aboutKeys.enumerated()), id: \.offset) { _, key in
@@ -58,7 +61,7 @@ struct InfoDialogView: View {
                                                   .font(.title)
                                             }
                                         }
-                                    } else {
+                                    } else if viewModel.currentInfoType != .howTo {
                                         Text(viewModel.currentInfoType.infoText)
                                           .font(.title)
                                           .foregroundColor(.white)
@@ -110,12 +113,37 @@ public enum InfoType: CaseIterable {
     ]
     static let aboutLicenseKey = "ui.info_about_license"
 
+    /// The How To tab's five steps, in order.
+    static let howToSteps: [HowToStep] = [
+        HowToStep(art: .howtoImport, titleKey: "ui.info_how_to_import_title", bodyKey: "ui.info_how_to_import_body",
+                  placeholderKeys: ["ui.load_video", "ui.load_image_sequence"]),
+        HowToStep(art: .howtoQuestions, titleKey: "ui.info_how_to_questions_title", bodyKey: "ui.info_how_to_questions_body",
+                  placeholderKeys: ["ui.processing_settings"]),
+        HowToStep(art: .howtoProcess, titleKey: "ui.info_how_to_process_title", bodyKey: "ui.info_how_to_process_body",
+                  placeholderKeys: ["ui.start_processing"]),
+        HowToStep(art: .review, titleKey: "ui.info_how_to_review_title", bodyKey: "ui.info_how_to_review_body",
+                  placeholderKeys: []),
+        HowToStep(art: .rendering, titleKey: "ui.info_how_to_render_title", bodyKey: "ui.info_how_to_render_body",
+                  placeholderKeys: ["ui.render_video", "ui.load_config"]),
+    ]
+
     var shortName: String {
         switch self {
         case .about:
             return localized("ui.about")
         case .howTo:
             return localized("ui.how_to")
+        case .detailed:
+            return localized("ui.detailed")
+        }
+    }
+
+    var infoText: String {
+        switch self {
+        case .about:
+            return InfoType.aboutKeys.map { localized($0) }.joined(separator: "\n\n")
+        case .howTo:
+            return InfoType.howToSteps.map { "\($0.heading)\n\($0.body)" }.joined(separator: "\n\n")
         case .detailed:
             return localized("ui.detailed")
         }
@@ -213,6 +241,37 @@ public enum InfoType: CaseIterable {
 
               Star is still a work in progress.
               """
+        }
+    }
+}
+
+/// One step of the How To tab: its robot, its heading and paragraph keys, and the keys of the button
+/// labels that fill the paragraph's `{0}`, `{1}`.
+struct HowToStep {
+    let art: StarArt
+    let titleKey: String
+    let bodyKey: String
+    let placeholderKeys: [String]
+
+    var heading: String { localized(titleKey) }
+    var body: String { StarLocalization.shared.string(forKey: bodyKey, placeholderKeys.map { localized($0) }) }
+}
+
+struct HowToStepRow: View {
+    let step: HowToStep
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ArtImage(step.art)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(step.heading)
+                  .font(.title)
+                  .bold()
+                  .foregroundColor(.white)
+                Text(step.body)
+                  .font(.title3)
+                  .foregroundColor(.white)
+            }
         }
     }
 }
