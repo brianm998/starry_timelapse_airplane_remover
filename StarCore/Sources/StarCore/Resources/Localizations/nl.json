@@ -1260,5 +1260,11 @@
   "ui.mode_desc_dirty": "Star draait in de modus onopgeschoond, het tegenovergestelde van opschonen. Elke pixel wordt het origineel min het uitgelijnde referentiebeeld, dus stilstaande sterren en stilstaande grond worden zwart en alleen wat bewoog, zoals vliegtuigen, satellieten en meteoren, houdt zijn kleur. De referentie is de steruitlijning in de lucht en de aarduitlijning op de grond; zonder horizondetectie is het de steruitlijning over het hele beeld. Er worden geen uitschieters gedetecteerd, dus er valt per beeld niets te beoordelen.",
   "ui.frame_mode_desc_dirty": "Houdt alleen over wat er in dit beeld bewoog, in de lucht en op de grond (het origineel min de uitgelijnde referentie). Er valt op dit beeld niets te beoordelen.",
   "ui.this_frame_uses_dirty": "Dit beeld gebruikt de modus onopgeschoond",
-  "view_mode.dirtyProcessed": "onopgeschoond"
+  "view_mode.dirtyProcessed": "onopgeschoond",
+  "ui.info_about_name": "Star is de Starry Timelapse Airplane Remover (vliegtuigverwijderaar voor sterrentimelapses).",
+  "ui.info_about_purpose": "Het ruimt timelapses van de nachtelijke hemel op: de strepen die vliegtuigen en satellieten aan de hemel achterlaten behandelt het als ruis en verwijdert ze.",
+  "ui.info_about_license": "Star is vrije software onder de GPL v3-licentie: gratis te gebruiken, met een broncode die voor iedereen open is. De broncode vind je hier:",
+  "ui.info_about_what_it_does": "Star neemt de beeldreeks van een timelapse, verwerkt die en schrijft een nieuwe beeldreeks waarin de strepen aan de hemel zijn verborgen. Het kan direct een videobestand openen, of een map met afbeeldingen.",
+  "ui.info_about_video_formats": "Wanneer Star een video opent, splitst het die eerst in één afbeelding per frame, in het formaat dat je kiest: 16-bits TIFF (de standaard en de beste kwaliteit), 8-bits TIFF, of JPEG met een kwaliteitsinstelling (standaard 80%). Het dialoogvenster schat hoeveel schijfruimte elke keuze nodig heeft.",
+  "ui.info_about_image_formats": "Beeldreeksen kunnen TIFF-, JPEG- of PNG-afbeeldingen zijn. Verwerkte afbeeldingen worden in hetzelfde formaat geschreven als de afbeeldingen waaruit ze komen: een JPEG-reeks komt dus uit als JPEG's, en een 8-bits TIFF-reeks als 8-bits TIFF's."
 }

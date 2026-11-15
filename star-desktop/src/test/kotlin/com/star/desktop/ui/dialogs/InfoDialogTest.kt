@@ -41,12 +41,23 @@ class InfoDialogTest {
         assertTrue(" - better pixel replacement close to the horizon" in text, "the list under the horizon step")
     }
 
-    @Test fun theAboutTextKeepsItsParagraphsAndDropsThePlaceholderLink() {
-        val text = InfoType.ABOUT.infoText
-        assertTrue(text.startsWith("Star is the Starry Timelapse Airplane Remover."))
-        assertFalse("LINK to source code here" in text)
-        assertTrue("GPL v3 license." in text)
-        assertTrue("\n\nAt a high level, Star takes as input" in text, "no gap where the placeholder was")
+    @Test fun aboutFromCatalogue() {
+        assertEquals(
+            listOf("ui.info_about_name", "ui.info_about_purpose", "ui.info_about_license",
+                   "ui.info_about_what_it_does", "ui.info_about_video_formats", "ui.info_about_image_formats"),
+            ABOUT_KEYS,
+        )
+        assertEquals("https://github.com/brianm998/starry_timelapse_airplane_remover", STAR_SOURCE_URL)
+        assertTrue(localized(ABOUT_KEYS[0]).startsWith("Star is the Starry Timelapse Airplane Remover."))
+        val english = ABOUT_KEYS.map { localized(it) }
+        for (code in Strings.languages.map { it.code }.filter { it != "en" }) {
+            Strings.setOverride(code)
+            try {
+                ABOUT_KEYS.forEachIndexed { i, key -> assertFalse(localized(key) == english[i], "$code: $key is English") }
+            } finally {
+                Strings.setOverride("en")
+            }
+        }
     }
 
     @Test fun theHowToTextIsThereToo() {

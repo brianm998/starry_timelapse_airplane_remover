@@ -1260,5 +1260,11 @@
   "ui.mode_desc_dirty": "Star se ejecutará en el modo sin limpiar, lo contrario de limpiar. Cada píxel pasa a ser el original menos el fotograma de referencia alineado, de modo que las estrellas fijas y la tierra fija quedan en negro y solo lo que se movió, como aviones, satélites y meteoros, conserva su color. La referencia es la alineación de estrellas en el cielo y la alineación de la tierra en el suelo; sin detección del horizonte es la alineación de estrellas en todo el fotograma. No se detectan valores atípicos, así que no hay nada que revisar en cada fotograma.",
   "ui.frame_mode_desc_dirty": "Conserva solo lo que se movió en este fotograma, tanto en el cielo como en la tierra (el original menos la referencia alineada). No hay nada que revisar en este fotograma.",
   "ui.this_frame_uses_dirty": "Este fotograma usa el modo sin limpiar",
-  "view_mode.dirtyProcessed": "sin limpiar"
+  "view_mode.dirtyProcessed": "sin limpiar",
+  "ui.info_about_name": "Star es el Starry Timelapse Airplane Remover (eliminador de aviones de timelapses estrellados).",
+  "ui.info_about_purpose": "Limpia los timelapses del cielo nocturno: trata las estelas que dejan los aviones y los satélites en el cielo como ruido y las elimina.",
+  "ui.info_about_license": "Star es software libre con licencia GPL v3: gratuito y con el código fuente abierto a todos. El código fuente está aquí:",
+  "ui.info_about_what_it_does": "Star toma la secuencia de imágenes de un timelapse, la procesa y escribe una nueva secuencia de imágenes en la que las estelas del cielo quedan ocultas. Puede abrir directamente un archivo de vídeo o una carpeta de imágenes.",
+  "ui.info_about_video_formats": "Al abrir un vídeo, Star primero lo divide en una imagen por fotograma, en el formato que elijas: TIFF de 16 bits (el predeterminado y el de mejor calidad), TIFF de 8 bits o JPEG con un ajuste de calidad (80 % por defecto). El diálogo estima cuánto espacio en disco necesita cada opción.",
+  "ui.info_about_image_formats": "Las secuencias de imágenes pueden ser TIFF, JPEG o PNG. Las imágenes procesadas se escriben en el mismo formato que las originales: una secuencia JPEG sale en JPEG y una secuencia TIFF de 8 bits en TIFF de 8 bits."
 }

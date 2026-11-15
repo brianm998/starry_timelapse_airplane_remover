@@ -1260,5 +1260,11 @@
   "ui.mode_desc_dirty": "Star uruchomi się w trybie nieoczyszczonym, przeciwnym do czyszczenia. Każdy piksel staje się oryginałem minus wyrównana klatka odniesienia, więc nieruchome gwiazdy i nieruchoma ziemia stają się czarne, a kolor zachowuje tylko to, co się poruszyło, na przykład samoloty, satelity i meteory. Odniesieniem jest wyrównanie gwiazd na niebie i wyrównanie ziemi na ziemi; bez wykrywania horyzontu jest to wyrównanie gwiazd na całej klatce. Nie wykrywa się wartości odstających, więc w poszczególnych klatkach nie ma nic do przejrzenia.",
   "ui.frame_mode_desc_dirty": "Zachowuje tylko to, co się poruszyło w tej klatce, zarówno na niebie, jak i na ziemi (oryginał minus wyrównane odniesienie). Nie ma tu nic do przejrzenia.",
   "ui.this_frame_uses_dirty": "Ta klatka używa trybu nieoczyszczonego",
-  "view_mode.dirtyProcessed": "nieoczyszczony"
+  "view_mode.dirtyProcessed": "nieoczyszczony",
+  "ui.info_about_name": "Star to Starry Timelapse Airplane Remover (usuwacz samolotów z poklatkowych filmów o gwiazdach).",
+  "ui.info_about_purpose": "Oczyszcza poklatkowe filmy z nocnego nieba: smugi, które samoloty i satelity zostawiają na niebie, traktuje jak szum i usuwa je.",
+  "ui.info_about_license": "Star to wolne oprogramowanie na licencji GPL v3: można go swobodnie używać, a jego kod źródłowy jest otwarty dla wszystkich. Kod źródłowy znajduje się tutaj:",
+  "ui.info_about_what_it_does": "Star bierze sekwencję obrazów filmu poklatkowego, przetwarza ją i zapisuje nową sekwencję obrazów, w której smugi na niebie są ukryte. Może otworzyć bezpośrednio plik wideo lub folder z obrazami.",
+  "ui.info_about_video_formats": "Otwierając wideo, Star najpierw dzieli je na jeden obraz na klatkę, w wybranym przez Ciebie formacie: 16-bitowy TIFF (domyślny i najlepszej jakości), 8-bitowy TIFF lub JPEG z ustawieniem jakości (domyślnie 80%). Okno szacuje, ile miejsca na dysku potrzebuje każdy wybór.",
+  "ui.info_about_image_formats": "Sekwencje obrazów mogą składać się z obrazów TIFF, JPEG lub PNG. Przetworzone obrazy są zapisywane w tym samym formacie co obrazy źródłowe: sekwencja JPEG daje JPEG-i, a sekwencja 8-bitowych TIFF-ów daje 8-bitowe TIFF-y."
 }
