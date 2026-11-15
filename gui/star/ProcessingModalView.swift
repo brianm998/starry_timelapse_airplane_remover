@@ -306,10 +306,7 @@ struct ProcessingModalPanel<AlignmentContent: View, ConcurrencyContent: View>: V
 
     private var header: some View {
         HStack(spacing: 12) {
-            ProgressView()
-              .colorScheme(.dark)
-              .scaleEffect(0.7)
-              .frame(width: 20, height: 20)
+            ProcessingRobotView()
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(localized("ui.processing_frames"))
@@ -749,5 +746,66 @@ struct StepsInfoOverlay: View {
               .cornerRadius(14)
               .shadow(radius: 24)
         }
+    }
+}
+
+
+/// Which picture the Processing heading shows: the robot with its gear turning, or (Reduce Motion) the still robot.
+enum ProcessingArt: Equatable {
+    case still
+    case animated
+}
+
+/// Where the big gear sits in the 56 pt box and how fast it turns. Measured from art_process (PR-1) after lining
+/// it up with art_process_body (PR-5a): both masters share one scale and top-left corner, so the body is drawn at
+/// the box's top-left corner at its own size, and the gear's hub and diameter are fractions of the box.
+/// The desktop's `ProcessingRobot` holds the same numbers.
+enum ProcessingRobot {
+    static let box: CGFloat = 56
+    static let hubX: CGFloat = 0.698
+    static let hubY: CGFloat = 0.677
+    /// The gear's diameter in points (0.514 of the box, rounded as ArtImage rounds a fitted size).
+    static let gearSize: CGFloat = 29
+    static let secondsPerTurn: Double = 4
+}
+
+/// Reduce Motion shows the still robot; otherwise the gear turns.
+func processingArt(reduceMotion: Bool) -> ProcessingArt {
+    reduceMotion ? .still : .animated
+}
+
+/// The Processing heading's robot in a fixed 56 pt box. Its animation state is local, so a turn redraws
+/// only this view and not the rows below. The gear turns while the window is up (appear to disappear).
+struct ProcessingRobotView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var spin = false
+
+    var body: some View {
+        Group {
+            switch processingArt(reduceMotion: reduceMotion) {
+            case .still:
+                ArtImage(.process)
+            case .animated:
+                let box = ProcessingRobot.box
+                let d = ProcessingRobot.gearSize
+                ZStack(alignment: .topLeading) {
+                    ArtImage(.processBody)
+                    ArtImage(.processGear, fitting: d)
+                      .frame(width: d, height: d)
+                      .rotationEffect(.degrees(spin ? 360 : 0))
+                      .offset(x: box * ProcessingRobot.hubX - d / 2,
+                              y: box * ProcessingRobot.hubY - d / 2)
+                }
+                .onAppear {
+                    withAnimation(.linear(duration: ProcessingRobot.secondsPerTurn).repeatForever(autoreverses: false)) {
+                        spin = true
+                    }
+                }
+                .onDisappear {
+                    withAnimation(nil) { spin = false }
+                }
+            }
+        }
+        .frame(width: ProcessingRobot.box, height: ProcessingRobot.box, alignment: .topLeading)
     }
 }

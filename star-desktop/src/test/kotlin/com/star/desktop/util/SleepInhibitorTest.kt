@@ -35,7 +35,9 @@ class SleepInhibitorTest {
     }
 
     /** A process that stays until stopped, standing in for the real command so that nothing on the machine is touched. */
-    private fun fakeProcess(): Process = ProcessBuilder("sleep", "30").start()
+    private fun fakeProcess(): Process = 
+        (if (System.getProperty("os.name").startsWith("Windows")) ProcessBuilder("ping", "-n", "30", "127.0.0.1")
+         else ProcessBuilder("sleep", "30")).start()
 
     @Test fun acquiringStartsOneCommandAndReleasingStopsIt() {
         val started = ArrayList<Process>()
