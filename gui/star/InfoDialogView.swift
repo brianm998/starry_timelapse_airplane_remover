@@ -47,6 +47,9 @@ struct InfoDialogView: View {
                                     }
                                     if viewModel.currentInfoType == .howTo {
                                         WorkflowStrip()
+                                        ForEach(Array(InfoType.howToSteps.enumerated()), id: \.offset) { _, step in
+                                            HowToStepRow(step: step)
+                                        }
                                     }
                                     if viewModel.currentInfoType == .about {
                                         ForEach(Array(InfoType.aboutKeys.enumerated()), id: \.offset) { _, key in
@@ -58,7 +61,7 @@ struct InfoDialogView: View {
                                                   .font(.title)
                                             }
                                         }
-                                    } else {
+                                    } else if viewModel.currentInfoType != .howTo {
                                         Text(viewModel.currentInfoType.infoText)
                                           .font(.title)
                                           .foregroundColor(.white)
@@ -110,6 +113,20 @@ public enum InfoType: CaseIterable {
     ]
     static let aboutLicenseKey = "ui.info_about_license"
 
+    /// The How To tab's five steps, in order.
+    static let howToSteps: [HowToStep] = [
+        HowToStep(art: .howtoImport, titleKey: "ui.info_how_to_import_title", bodyKey: "ui.info_how_to_import_body",
+                  placeholderKeys: ["ui.load_video", "ui.load_image_sequence"]),
+        HowToStep(art: .howtoQuestions, titleKey: "ui.info_how_to_questions_title", bodyKey: "ui.info_how_to_questions_body",
+                  placeholderKeys: ["ui.processing_settings"]),
+        HowToStep(art: .howtoProcess, titleKey: "ui.info_how_to_process_title", bodyKey: "ui.info_how_to_process_body",
+                  placeholderKeys: ["ui.start_processing"]),
+        HowToStep(art: .review, titleKey: "ui.info_how_to_review_title", bodyKey: "ui.info_how_to_review_body",
+                  placeholderKeys: []),
+        HowToStep(art: .rendering, titleKey: "ui.info_how_to_render_title", bodyKey: "ui.info_how_to_render_body",
+                  placeholderKeys: ["ui.render_video", "ui.load_config"]),
+    ]
+
     var shortName: String {
         switch self {
         case .about:
@@ -126,28 +143,7 @@ public enum InfoType: CaseIterable {
         case .about:
             return InfoType.aboutKeys.map { localized($0) }.joined(separator: "\n\n")
         case .howTo:
-            return """
-              To get started with Star, you need to first have an image sequence containing images from the night sky.
-
-              The fastest way to get started is to drop this folder into Star's starting screen, and then Star will load the sequence and let you view the sequence or start processing.
-
-              After first loading a new image sequence, Star will first generate previews for the original images.  After preview generation, the original video can be played or scrubbed.
-              
-              Before telling Start to start processing your image sequence, it can be helpful to desribe an area at the bottom to ignore.  Unless you video has no ground in it at all, it is helpful to go into edit mode, and turn on the 'Show Ignore Bar' switch on the right panel.
-              You can then drag up the orange arrows you see at the bottom of the screen to expose the are of the video to not process.   This can speed Star up.
-              If you video is stationary, you can use a single frame to determine the cutoff for the ground.
-              If your video was taking on moving tripod head, then it's best to scrub through the video to find the lowest place that the sky shows up, and use that frame for the cutoff.
-
-              Next, you can tell Star to start processing your image sequence.
-              Be aware that this can take some time.  The Star interface remains active when processing, and you can look at each individual frame if you want to see what happens to it as it gets processed.
-
-              After processing, you will have a folder sitting alongside your original image sequence which contains the processed images.
-              These can then be renedred into the video format of your choice in the same workflow you usually use.
-
-              You will also have a json config file written out for your sequence, which can be reloaded at a later time to process the same sequence more.
-
-              The config can be loaded by dropping it onto Star's initial screen.
-              """
+            return InfoType.howToSteps.map { "\($0.heading)\n\($0.body)" }.joined(separator: "\n\n")
         case .detailed:
             return """
               Star processes each frame of a sequence in this manner:
@@ -213,6 +209,37 @@ public enum InfoType: CaseIterable {
 
               Star is still a work in progress.
               """
+        }
+    }
+}
+
+/// One step of the How To tab: its robot, its heading and paragraph keys, and the keys of the button
+/// labels that fill the paragraph's `{0}`, `{1}`.
+struct HowToStep {
+    let art: StarArt
+    let titleKey: String
+    let bodyKey: String
+    let placeholderKeys: [String]
+
+    var heading: String { localized(titleKey) }
+    var body: String { StarLocalization.shared.string(forKey: bodyKey, placeholderKeys.map { localized($0) }) }
+}
+
+struct HowToStepRow: View {
+    let step: HowToStep
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            ArtImage(step.art)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(step.heading)
+                  .font(.title)
+                  .bold()
+                  .foregroundColor(.white)
+                Text(step.body)
+                  .font(.title3)
+                  .foregroundColor(.white)
+            }
         }
     }
 }
