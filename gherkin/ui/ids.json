@@ -51,6 +51,7 @@
     "processing.modal",
     "processing.overall",
     "processing.progress",
+    "processing.thumbnail",
     "prompt.options.confirm",
     "prompt.post.cancel",
     "prompt.pre.no",
