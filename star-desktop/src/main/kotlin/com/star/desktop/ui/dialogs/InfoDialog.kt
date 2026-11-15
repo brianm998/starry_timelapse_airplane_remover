@@ -194,6 +194,7 @@ fun InfoDialog(selected: InfoType, onSelect: (InfoType) -> Unit, onClose: () -> 
                     Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
+                    if (selected == InfoType.ABOUT) com.star.desktop.ui.components.ArtImage(StarArt.ART_WORDMARK)
                     if (selected == InfoType.HOW_TO) WorkflowStrip()
                     Text(selected.infoText, color = StarColors.white, fontSize = 13.sp)
                 }
