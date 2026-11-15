@@ -77,6 +77,16 @@ enum StarArt: String, CaseIterable {
     case howtoImport = "art_howto_import"
     case howtoQuestions = "art_howto_questions"
     case howtoProcess = "art_howto_process"
+    case stageHorizon = "art_stage_horizon"
+    case stageNeighbors = "art_stage_neighbors"
+    case stageAligned = "art_stage_aligned"
+    case stageCondensed = "art_stage_condensed"
+    case stageSubtraction = "art_stage_subtraction"
+    case stageBlobs = "art_stage_blobs"
+    case stageBlobProcessing = "art_stage_blob_processing"
+    case stageClassification = "art_stage_classification"
+    case stageRemovalMask = "art_stage_removal_mask"
+    case stageFinal = "art_stage_final"
 
     enum Kind { case cutout, tile, scene }
 
@@ -156,6 +166,16 @@ enum StarArt: String, CaseIterable {
         case .howtoImport: return .cutout
         case .howtoQuestions: return .cutout
         case .howtoProcess: return .cutout
+        case .stageHorizon: return .scene
+        case .stageNeighbors: return .scene
+        case .stageAligned: return .scene
+        case .stageCondensed: return .scene
+        case .stageSubtraction: return .scene
+        case .stageBlobs: return .scene
+        case .stageBlobProcessing: return .scene
+        case .stageClassification: return .scene
+        case .stageRemovalMask: return .scene
+        case .stageFinal: return .scene
         }
     }
 
@@ -236,6 +256,16 @@ enum StarArt: String, CaseIterable {
         case .howtoImport: return CGSize(width: 89, height: 96)
         case .howtoQuestions: return CGSize(width: 73, height: 96)
         case .howtoProcess: return CGSize(width: 96, height: 96)
+        case .stageHorizon: return CGSize(width: 480, height: 200)
+        case .stageNeighbors: return CGSize(width: 480, height: 200)
+        case .stageAligned: return CGSize(width: 480, height: 200)
+        case .stageCondensed: return CGSize(width: 480, height: 200)
+        case .stageSubtraction: return CGSize(width: 480, height: 200)
+        case .stageBlobs: return CGSize(width: 480, height: 200)
+        case .stageBlobProcessing: return CGSize(width: 480, height: 200)
+        case .stageClassification: return CGSize(width: 480, height: 200)
+        case .stageRemovalMask: return CGSize(width: 480, height: 200)
+        case .stageFinal: return CGSize(width: 480, height: 200)
         }
     }
 }

@@ -1,0 +1,18 @@
+{
+  "images": [
+    {
+      "filename": "art_stage_blob_processing1x.jpg",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "art_stage_blob_processing2x.jpg",
+      "idiom": "universal",
+      "scale": "2x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}
