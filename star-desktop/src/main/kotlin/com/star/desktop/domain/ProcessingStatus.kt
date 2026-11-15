@@ -82,4 +82,10 @@ class FrameStateCounts(states: Map<Int, FrameProcessingState>, private val frame
         val total = frameCount.coerceAtLeast(1).toFloat()
         return Triple(complete / total, working / total, unprocessed / total)
     }
+
+    companion object
 }
+
+/** The newest finished frame: the highest-numbered frame whose state is complete; null when none is. */
+fun FrameStateCounts.Companion.newestComplete(states: Map<Int, FrameProcessingState>): Int? =
+    states.filterValues { it == FrameProcessingState.FPS_COMPLETE }.keys.maxOrNull()
