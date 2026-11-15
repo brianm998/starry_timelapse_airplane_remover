@@ -1260,5 +1260,11 @@
   "ui.mode_desc_dirty": "Star akan berjalan dalam mode tanpa pembersihan, kebalikan dari pembersihan. Setiap piksel menjadi aslinya dikurangi bingkai referensi yang disejajarkan, sehingga bintang dan daratan yang diam menjadi hitam dan hanya yang bergerak, seperti pesawat, satelit, dan meteor, yang mempertahankan warnanya. Referensinya adalah penyejajaran bintang di langit dan penyejajaran daratan di daratan; tanpa deteksi cakrawala, referensinya adalah penyejajaran bintang di seluruh bingkai. Tidak ada pencilan yang dideteksi, jadi tidak ada yang perlu ditinjau per bingkai.",
   "ui.frame_mode_desc_dirty": "Hanya menyimpan yang bergerak pada bingkai ini, baik di langit maupun di daratan (aslinya dikurangi referensi yang disejajarkan). Tidak ada yang perlu ditinjau pada bingkai ini.",
   "ui.this_frame_uses_dirty": "Bingkai ini memakai mode tanpa pembersihan",
-  "view_mode.dirtyProcessed": "tanpa pembersihan"
+  "view_mode.dirtyProcessed": "tanpa pembersihan",
+  "ui.info_about_name": "Star adalah Starry Timelapse Airplane Remover (penghapus pesawat untuk timelapse berbintang).",
+  "ui.info_about_purpose": "Star membersihkan timelapse langit malam: garis-garis yang ditinggalkan pesawat dan satelit di langit dianggap sebagai derau dan dihapus.",
+  "ui.info_about_license": "Star adalah perangkat lunak bebas berlisensi GPL v3: bebas digunakan, dengan kode sumber yang terbuka untuk semua orang. Kode sumbernya ada di sini:",
+  "ui.info_about_what_it_does": "Star mengambil urutan gambar dari sebuah timelapse, memprosesnya, lalu menulis urutan gambar baru yang garis-garis di langitnya disembunyikan. Star dapat membuka langsung berkas video atau folder berisi gambar.",
+  "ui.info_about_video_formats": "Saat membuka video, Star lebih dulu memecahnya menjadi satu gambar per frame, dalam format pilihan Anda: TIFF 16-bit (bawaan dan kualitas terbaik), TIFF 8-bit, atau JPEG dengan pengaturan kualitas (80% secara bawaan). Dialog memperkirakan berapa ruang disk yang dibutuhkan setiap pilihan.",
+  "ui.info_about_image_formats": "Urutan gambar dapat berupa gambar TIFF, JPEG, atau PNG. Gambar yang telah diproses ditulis dalam format yang sama dengan gambar asalnya: urutan JPEG menghasilkan JPEG, dan urutan TIFF 8-bit menghasilkan TIFF 8-bit."
 }

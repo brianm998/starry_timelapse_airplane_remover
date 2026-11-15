@@ -1260,5 +1260,11 @@
   "ui.mode_desc_dirty": "Star läuft im Modus „Ungereinigt“, dem Gegenteil des Reinigens. Jedes Pixel wird zum Original minus dem ausgerichteten Referenzbild: ruhende Sterne und ruhender Boden werden schwarz, und nur was sich bewegt hat, etwa Flugzeuge, Satelliten und Meteore, behält seine Farbe. Die Referenz ist am Himmel die Sternausrichtung und am Boden die Erdausrichtung; ohne Horizonterkennung ist es die Sternausrichtung über das ganze Bild. Es werden keine Ausreißer erkannt, daher gibt es pro Bild nichts zu prüfen.",
   "ui.frame_mode_desc_dirty": "Behält nur, was sich in diesem Bild bewegt hat, am Himmel wie am Boden (das Original minus der ausgerichteten Referenz). Bei diesem Bild gibt es nichts zu prüfen.",
   "ui.this_frame_uses_dirty": "Dieses Bild verwendet den Modus „Ungereinigt“",
-  "view_mode.dirtyProcessed": "ungereinigt"
+  "view_mode.dirtyProcessed": "ungereinigt",
+  "ui.info_about_name": "Star ist der Starry Timelapse Airplane Remover.",
+  "ui.info_about_purpose": "Star räumt Nachthimmel-Zeitraffer auf: Die Streifen, die Flugzeuge und Satelliten am Himmel hinterlassen, behandelt es als Rauschen und entfernt sie.",
+  "ui.info_about_license": "Star ist freie Software unter der GPL-v3-Lizenz: kostenlos nutzbar, und der Quellcode steht allen offen. Den Quellcode finden Sie hier:",
+  "ui.info_about_what_it_does": "Star nimmt die Bildsequenz eines Zeitraffers, verarbeitet sie und schreibt eine neue Bildsequenz, in der die Streifen am Himmel verborgen sind. Es kann direkt eine Videodatei öffnen oder einen Ordner mit Bildern.",
+  "ui.info_about_video_formats": "Beim Öffnen eines Videos zerlegt Star es zuerst in ein Bild pro Frame, im Format Ihrer Wahl: 16-Bit-TIFF (die Voreinstellung und die beste Qualität), 8-Bit-TIFF oder JPEG mit einer Qualitätseinstellung (standardmäßig 80 %). Der Dialog schätzt, wie viel Speicherplatz jede Wahl braucht.",
+  "ui.info_about_image_formats": "Bildsequenzen können aus TIFF-, JPEG- oder PNG-Bildern bestehen. Verarbeitete Bilder werden im selben Format geschrieben wie die Bilder, aus denen sie stammen: Aus einer JPEG-Sequenz werden also JPEGs, aus einer 8-Bit-TIFF-Sequenz 8-Bit-TIFFs."
 }

@@ -1260,5 +1260,11 @@
   "ui.mode_desc_dirty": "star 将以未清理模式运行，这与清理相反。每个像素变为原图减去对齐后的参考帧，因此静止的星星和静止的地面变为黑色，只有移动过的内容（如飞机、卫星和流星）保留颜色。参考帧在天空中是星空对齐，在地面上是地面对齐；未开启地平线检测时，整帧都使用星空对齐。不检测离群值，因此每一帧都没有需要查看的内容。",
   "ui.frame_mode_desc_dirty": "只保留此帧中移动过的内容，天空和地面皆然（原图减去对齐后的参考）。此帧没有需要查看的内容。",
   "ui.this_frame_uses_dirty": "此帧使用未清理模式",
-  "view_mode.dirtyProcessed": "未清理"
+  "view_mode.dirtyProcessed": "未清理",
+  "ui.info_about_name": "Star 是 Starry Timelapse Airplane Remover（星空延时摄影飞机去除工具）。",
+  "ui.info_about_purpose": "它用来清理夜空延时摄影：飞机和卫星在天空中留下的轨迹被视为噪点，并将其去除。",
+  "ui.info_about_license": "Star 是遵循 GPL v3 许可证的自由软件：可免费使用，源代码向所有人开放。源代码在这里：",
+  "ui.info_about_what_it_does": "Star 读取延时摄影的图像序列并进行处理，然后写出一个新的图像序列，其中天空中的轨迹已被隐藏。它可以直接打开视频文件或图像文件夹。",
+  "ui.info_about_video_formats": "打开视频时，Star 会先把它按每帧一张图像拆分，格式由你选择：16 位 TIFF（默认，画质最佳）、8 位 TIFF，或带质量设置的 JPEG（默认 80%）。对话框会估算每种选择所需的磁盘空间。",
+  "ui.info_about_image_formats": "图像序列可以是 TIFF、JPEG 或 PNG 图像。处理后的图像以与原图相同的格式写出，因此 JPEG 序列输出 JPEG，8 位 TIFF 序列输出 8 位 TIFF。"
 }
