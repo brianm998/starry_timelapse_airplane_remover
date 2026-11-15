@@ -186,6 +186,10 @@ final class WGPUOpsTests: XCTestCase {
     /// warp is off Metal by more than that, so this is the sharper of the two comparisons.
     func testWarpMatchesTheMetalKernelClosely() throws {
         try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
+        // With STAR_USE_GPU_FOR_MERGE=0 `useGPU: true` is overridden and the reference is OpenCV's CPU warp,
+        // which is further from wgpu than Metal is. Measured then: 0.59-0.61% of 16-bit samples, 0.055% of
+        // 8-bit ones. Those runs get bounds sized to that, per bit depth; the Metal bound stays 0.003.
+        let forcedCPU = GPUCapability.mergeForcedOff()
         GPUOps.registerIfAvailable()
         for (bits, channels) in [(16, 3), (8, 3), (16, 1)] {
             let src = frame(width: 1500, height: 900, channels: channels, bits: bits, seed: 2)
@@ -195,7 +199,9 @@ final class WGPUOpsTests: XCTestCase {
             let gpu = zeros(like: src)
             XCTAssertTrue(perspective.withUnsafeBufferPointer { wgpu_ops_warp(src.ref, $0.baseAddress, gpu.ref) })
             let r = try compare(gpu, metal)
-            XCTAssertLessThan(Double(r.differing) / Double(r.total), exact ? 0.003 : 0.01,
+            // The reference is OpenCV's CPU warp when the GPU is forced off or Metal is not exact here.
+            let bound = (forcedCPU || !exact) ? (bits == 16 ? 0.008 : 0.002) : 0.003
+            XCTAssertLessThan(Double(r.differing) / Double(r.total), bound,
                               "\(bits)-bit x\(channels): \(r.differing) of \(r.total) samples differ from Metal")
         }
     }
