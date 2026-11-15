@@ -174,21 +174,42 @@ final class WGPUOpsTests: XCTestCase {
         try checkWarp(bits: 16, channels: 1, width: 1237, height: 771, maxMismatchFraction: 0.01)
     }
 
+    /// What a "match the Metal kernel" test can compare with here. `ImageAligner` honours
+    /// `STAR_USE_GPU_FOR_MERGE=0` for every caller (`GPUCapability.effectiveUseGPU`), so with it set a
+    /// `useGPU: true` call runs the CPU path, and this machine must not run the Metal merge anyway. Then the
+    /// reference is the CPU, held to the bound the CPU comparisons above use; otherwise it is Metal, held
+    /// to the Metal bound. Before, a forced-off run compared wgpu with the CPU at the Metal bound and failed.
+    private struct Reference {
+        let useGPU: Bool
+        let name: String
+        let maxFraction: Double
+        init(metalBound: Double, cpuBound: Double) {
+            useGPU = !GPUCapability.mergeForcedOff()
+            name = useGPU ? "Metal" : "the CPU (STAR_USE_GPU_FOR_MERGE forces it)"
+            maxFraction = useGPU ? metalBound : cpuBound
+        }
+    }
+
     /// The Metal warp is the same quantisation in MSL, exact where this is a hair off (see the class
     /// comment). Measured on noisy frames: 0.13% of 16-bit samples, 0.01% of 8-bit ones. OpenCV's own CPU
-    /// warp is off Metal by more than that, so this is the sharper of the two comparisons.
+    /// warp is off Metal by more than that, so this is the sharper of the two comparisons. Where the CPU
+    /// merge is forced, the reference is OpenCV's warp at the `checkWarp` bound (see `Reference`).
     func testWarpMatchesTheMetalKernelClosely() throws {
         try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
         GPUOps.registerIfAvailable()
+        let reference = Reference(metalBound: 0.003, cpuBound: 0.01)
         for (bits, channels) in [(16, 3), (8, 3), (16, 1)] {
             let src = frame(width: 1500, height: 900, channels: channels, bits: bits, seed: 2)
             let h = MatWrapper(homographyValues: perspective)
-            let metal = try XCTUnwrap(ImageAligner.debugWarp(src, homography: h, useGPU: true))
+            let expected = try XCTUnwrap(ImageAligner.debugWarp(src, homography: h, useGPU: reference.useGPU))
             let gpu = zeros(like: src)
             XCTAssertTrue(perspective.withUnsafeBufferPointer { wgpu_ops_warp(src.ref, $0.baseAddress, gpu.ref) })
-            let r = try compare(gpu, metal)
-            XCTAssertLessThan(Double(r.differing) / Double(r.total), 0.003,
-                              "\(bits)-bit x\(channels): \(r.differing) of \(r.total) samples differ from Metal")
+            let r = try compare(gpu, expected)
+            let fraction = Double(r.differing) / Double(r.total)
+            print("wgpu warp \(bits)-bit x\(channels) vs \(reference.name): \(r.differing) of \(r.total) differ "
+                  + "(\(fraction * 100)%), max delta \(r.maxDelta)")
+            XCTAssertLessThan(fraction, reference.maxFraction,
+                              "\(bits)-bit x\(channels): \(r.differing) of \(r.total) samples differ from \(reference.name)")
         }
     }
 
@@ -291,22 +312,27 @@ final class WGPUOpsTests: XCTestCase {
         }
     }
 
-    /// Measured: 50-88 of 921,600 samples (under 0.01%), a merge picks one value so a flipped warp step
-    /// shows up far less than in the warp itself.
+    /// Measured against Metal: 50-88 of 921,600 samples (under 0.01%), a merge picks one value so a
+    /// flipped warp step shows up far less than in the warp itself. Where the CPU merge is forced
+    /// (`STAR_USE_GPU_FOR_MERGE=0`, every run on the owner's Mac), the same `alignAndMedianMerge` entry
+    /// point runs on the CPU and is held to the CPU merge bound instead (see `Reference`).
     func testAlignedMergeMatchesTheMetalKernelClosely() throws {
         try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
-        try XCTSkipIf(GPUCapability.mergeForcedOff(), "STAR_USE_GPU_FOR_MERGE forces the CPU merge, so there is no Metal result to compare with")
         GPUOps.registerIfAvailable()
+        let reference = Reference(metalBound: 0.0005, cpuBound: 0.03)
         for bits in [16, 8] {
             let f = fixture(bits: bits)
             for includeAll in [false, true] {
-                let metal = try XCTUnwrap(ImageAligner.alignAndMedianMerge(
+                let expected = try XCTUnwrap(ImageAligner.alignAndMedianMerge(
                   baseImage: f.base, baseFrameIndex: 0, neighbors: f.infos, homography: f.homography,
-                  outlierThreshold: 1.2, includeAll: includeAll, useGPU: true)).merged
+                  outlierThreshold: 1.2, includeAll: includeAll, useGPU: reference.useGPU)).merged
                 let gpu = try wgpuMerge(f, includeAll: includeAll)
-                let r = try compare(gpu, metal)
-                XCTAssertLessThan(Double(r.differing) / Double(r.total), 0.0005,
-                                  "\(bits)-bit includeAll=\(includeAll): \(r.differing) of \(r.total) samples differ from Metal")
+                let r = try compare(gpu, expected)
+                let fraction = Double(r.differing) / Double(r.total)
+                print("wgpu aligned merge \(bits)-bit includeAll=\(includeAll) vs \(reference.name): "
+                      + "\(r.differing) of \(r.total) differ (\(fraction * 100)%), max delta \(r.maxDelta)")
+                XCTAssertLessThan(fraction, reference.maxFraction,
+                                  "\(bits)-bit includeAll=\(includeAll): \(r.differing) of \(r.total) samples differ from \(reference.name)")
             }
         }
     }
@@ -360,7 +386,6 @@ final class WGPUOpsTests: XCTestCase {
     /// last sample or very nearly.
     func testMedianMergeMatchesTheMetalKernelClosely() throws {
         try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
-        try XCTSkipIf(GPUCapability.mergeForcedOff(), "STAR_USE_GPU_FOR_MERGE forces the CPU merge, so there is no Metal result to compare with")
         GPUOps.registerIfAvailable()
         for bits in [16, 8] {
             let sources = (0..<9).map { frame(width: 301, height: 203, channels: 3, bits: bits, seed: $0 + 10) }
