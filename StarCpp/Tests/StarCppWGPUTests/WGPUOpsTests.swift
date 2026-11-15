@@ -193,12 +193,15 @@ final class WGPUOpsTests: XCTestCase {
     /// The Metal warp is the same quantisation in MSL, exact where this is a hair off (see the class
     /// comment). Measured on noisy frames: 0.13% of 16-bit samples, 0.01% of 8-bit ones. OpenCV's own CPU
     /// warp is off Metal by more than that, so this is the sharper of the two comparisons. Where the CPU
-    /// merge is forced, the reference is OpenCV's warp at the `checkWarp` bound (see `Reference`).
+    /// merge is forced, the reference is OpenCV's warp (see `Reference`) at bounds sized to it.
     func testWarpMatchesTheMetalKernelClosely() throws {
         try XCTSkipUnless(GPUCapability.hasFullAcceleration(), "no Metal backend to compare with")
+        // With STAR_USE_GPU_FOR_MERGE=0 the reference is OpenCV's CPU warp, which is further from wgpu than
+        // Metal is. Measured then: 0.59-0.61% of 16-bit samples, 0.055% of 8-bit ones. Those runs get bounds
+        // sized to that, per bit depth; the Metal bound stays 0.003.
         GPUOps.registerIfAvailable()
-        let reference = Reference(metalBound: 0.003, cpuBound: 0.01)
         for (bits, channels) in [(16, 3), (8, 3), (16, 1)] {
+            let reference = Reference(metalBound: 0.003, cpuBound: bits == 16 ? 0.008 : 0.002)
             let src = frame(width: 1500, height: 900, channels: channels, bits: bits, seed: 2)
             let h = MatWrapper(homographyValues: perspective)
             let expected = try XCTUnwrap(ImageAligner.debugWarp(src, homography: h, useGPU: reference.useGPU))

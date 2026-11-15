@@ -9,7 +9,8 @@ CPU result, which the test then held to the Metal bound (0.05% / 0.3%): wgpu aga
 Decision: the two tests pick their reference through a `Reference` helper. With the merge not forced
 off, the reference is Metal at the original Metal bounds (unchanged). With it forced off, the reference
 is the CPU, asked for explicitly (`useGPU: false`), at the bound the suite's own CPU comparisons use
-(3% for the merge, as `testAlignedMergeAgreesWithTheCPUMerge`; 1% for the warp, as `checkWarp`). The
+(3% for the merge, as `testAlignedMergeAgreesWithTheCPUMerge`; for the warp, the per-bit-depth bounds
+develop landed meanwhile, 0.8% at 16-bit and 0.2% at 8-bit). The
 tests run and pass here rather than skip, and each prints which reference it used and its numbers.
 
 Rejected: skipping under the override (a skip is not a pass and dropped the suite below `min_tests`);
