@@ -11,7 +11,17 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import com.star.desktop.ui.components.ArtImage
+import com.star.desktop.ui.components.StarArt
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
@@ -22,7 +32,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -139,10 +148,10 @@ fun ProcessingModal(app: AppViewModel, svm: SequenceViewModel) {
                 .clip(StarShapes.card)
                 .background(StarColors.prefsCard),
         ) {
-            // The header: a spinner, what the run is doing (the status line while there is one, else how many frames are done), and the
+            // The header: the robot with its turning gear, what the run is doing (the status line while there is one, else how many frames are done), and the
             // control for how much of the machine it may use, which takes effect on the run as it goes.
             Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                CircularProgressIndicator(Modifier.size(20.dp), color = StarColors.white, strokeWidth = 2.dp)
+                ProcessingRobot()
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(localized("ui.processing_frames"), color = StarColors.white, fontSize = 18.sp)
                     Text(
@@ -423,4 +432,47 @@ private fun AlignmentCharts(svm: SequenceViewModel) {
             Text(localized("ui.waiting_for_alignment_data"), color = StarColors.textSecondary, fontSize = 13.sp)
         }
     }
+}
+
+/** Where the big gear sits in the 56 dp box and how fast it turns; the gui's `ProcessingRobot` holds the same numbers. */
+internal object ProcessingRobotGeometry {
+    const val BOX = 56
+    const val HUB_X = 0.698f
+    const val HUB_Y = 0.677f
+    /** The gear's diameter in dp (0.514 of the box, rounded as a fitted art size is). */
+    const val GEAR_SIZE = 29
+    const val MILLIS_PER_TURN = 4000
+
+    /** The gear's angle in degrees [millis] after the window opened: one linear turn per [MILLIS_PER_TURN]. */
+    fun gearAngle(millis: Long): Float = (millis % MILLIS_PER_TURN) * 360f / MILLIS_PER_TURN
+}
+
+/**
+ * The Processing heading's robot in a fixed 56 dp box: the body, and the big gear turning once every 4 s around its hub
+ * as it sits in art_process. Compose Desktop cannot read a Reduce Motion setting, so the gear always turns (the gui shows
+ * the still robot under Reduce Motion). The angle is read only inside graphicsLayer, so a turn redraws this box alone.
+ * The transition lives in the composition, so it stops when the window closes.
+ */
+@Composable
+internal fun ProcessingRobot(angle: () -> Float = rememberGearAngle()) {
+    val g = ProcessingRobotGeometry
+    Box(Modifier.size(g.BOX.dp)) {
+        ArtImage(StarArt.ART_PROCESS_BODY)
+        ArtImage(
+            StarArt.ART_PROCESS_GEAR, fitting = g.GEAR_SIZE,
+            modifier = Modifier
+                .offset((g.BOX * g.HUB_X - g.GEAR_SIZE / 2f).dp, (g.BOX * g.HUB_Y - g.GEAR_SIZE / 2f).dp)
+                .graphicsLayer { rotationZ = angle() },
+        )
+    }
+}
+
+@Composable
+internal fun rememberGearAngle(): () -> Float {
+    val turn = rememberInfiniteTransition()
+    val angle by turn.animateFloat(
+        0f, 360f,
+        infiniteRepeatable(tween(ProcessingRobotGeometry.MILLIS_PER_TURN, easing = LinearEasing), RepeatMode.Restart),
+    )
+    return { angle }
 }
