@@ -24,14 +24,20 @@ struct ScaledArtImage: View {
     }
 }
 
-struct CircularProgressView: View {
+/// A progress ring with a VStack centred in it: the import robot on top, `content` (the caption) below, with `spacing` between them so they never touch.
+struct CircularProgressView<Content: View>: View {
+
+    /// Gap between the robot and the caption beneath it.
+    static var artSpacing: CGFloat { 20 }
 
     @Binding private var progress: Double
+    private let content: Content
 
-    init(progress: Binding<Double>) {
+    init(progress: Binding<Double>, @ViewBuilder content: () -> Content) {
         _progress = progress
+        self.content = content()
     }
-    
+
     var body: some View {
         ZStack {
             Circle()
@@ -54,12 +60,21 @@ struct CircularProgressView: View {
             GeometryReader { geo in
                 let side = min(geo.size.width, geo.size.height)
                 let h = loadingRingArtSize(outerDiameter: side + 80, stroke: 80)
-                if h > 0 {
-                    ScaledArtImage(.import, height: h)
-                        .frame(width: geo.size.width, height: geo.size.height)
+                VStack(spacing: Self.artSpacing) {
+                    if h > 0 {
+                        ScaledArtImage(.import, height: h)
+                    }
+                    content
                 }
+                  .multilineTextAlignment(.center)
+                  .frame(width: geo.size.width, height: geo.size.height)
             }
         }
     }
 }
 
+extension CircularProgressView where Content == EmptyView {
+    init(progress: Binding<Double>) {
+        self.init(progress: progress) { EmptyView() }
+    }
+}
