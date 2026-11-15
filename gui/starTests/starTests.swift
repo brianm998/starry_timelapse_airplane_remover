@@ -2675,6 +2675,14 @@ final class SequenceProgressTests: XCTestCase {
         XCTAssertEqual(SequenceProgressPanel.progressArt(for: partial), .review)
     }
 
+    /// Import Video A3: each frame format has its own tile.
+    func testEveryFrameFormatHasItsTile() {
+        XCTAssertEqual(FrameDecodeFormat.Kind.tiff16.art, .formatTiff16)
+        XCTAssertEqual(FrameDecodeFormat.Kind.tiff8.art, .formatTiff8)
+        XCTAssertEqual(FrameDecodeFormat.Kind.jpeg.art, .formatJpeg)
+        XCTAssertEqual(Set(FrameDecodeFormat.Kind.allCases.map { $0.art }).count, FrameDecodeFormat.Kind.allCases.count)
+    }
+
     /// Render robots A4 (and the fitting size arithmetic): rendering, success and failure each have their robot.
     func testRenderStateArt() {
         XCTAssertEqual(RenderVideoSheetView.renderArt(for: .rendering), .rendering)
