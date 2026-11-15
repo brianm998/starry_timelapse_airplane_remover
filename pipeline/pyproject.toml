@@ -41,4 +41,5 @@ src = ["src", "tests"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+faulthandler_timeout = 120  # dump every thread's stack when a test blocks, so a hang is diagnosable
 asyncio_default_fixture_loop_scope = "function"
