@@ -7,6 +7,11 @@ struct FinderStyleDropZone: View {
     /// A click on the zone, which the desktop client's zone has too: it opens the image sequence chooser.
     var onTap: () -> Void = {}
 
+    /// The picture in the zone: the catching robot while a file is dragged over it, the drop target otherwise.
+    static func art(isTargeted: Bool) -> StarArt {
+        isTargeted ? .dropHover : .drop
+    }
+
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
@@ -21,7 +26,9 @@ struct FinderStyleDropZone: View {
                 .animation(.easeInOut(duration: 0.15), value: isTargeted)
 
             VStack(spacing: 6) {
-                ArtImage(.drop)
+                // Both pictures sit in the same 96 pt box, so the zone keeps its size when one replaces the other.
+                ArtImage(FinderStyleDropZone.art(isTargeted: isTargeted))
+                    .frame(width: 96, height: 96)
                 Text(localized("ui.drop_a_video_an_image_sequence_or_an"))
                   .foregroundColor(.white)
                     .font(.headline)
