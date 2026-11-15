@@ -51,16 +51,16 @@ jobs:
       run:
         working-directory: star-desktop
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/develop' }}
           cache-cleanup: on-success
@@ -129,7 +129,7 @@ jobs:
     needs: [ffmpeg-linux, opencv-linux]
     if: github.event_name != 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install apt prerequisites
         run: |
@@ -146,13 +146,13 @@ jobs:
 
       # OpenCV comes from opencv.yml (the opencv-linux job), as in cli.yml's `linux` job.
       - name: Download OpenCV
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: opencv-linux
           path: opencv
 
       - name: Cache StarDecisionTrees
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             StarDecisionTrees/lib/release/linux
@@ -170,20 +170,20 @@ jobs:
         run: swift build -c release -Xswiftc -static-stdlib
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
       # Read-only: build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per job filled it).
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           cache-read-only: true
           cache-cleanup: on-success
 
       - name: Download source-built ffmpeg/ffprobe
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: ffmpeg-linux-x64
           path: ffmpeg-bin
@@ -198,7 +198,7 @@ jobs:
           packaging/name-installers.sh build/compose/binaries/main/deb
 
       - name: Upload .deb artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: star-desktop-linux-deb
           path: star-desktop/build/compose/binaries/main/deb/*.deb
@@ -217,7 +217,7 @@ jobs:
       run:
         shell: bash  # Git Bash; matches cli.yml's `windows` job
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Swift
         uses: compnerd/gha-setup-swift@main
@@ -310,13 +310,13 @@ jobs:
 
       # OpenCV comes from opencv.yml (the opencv-windows job), as in cli.yml's `windows` job.
       - name: Download OpenCV
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: opencv-windows
           path: opencv
 
       - name: Cache StarDecisionTrees
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             StarDecisionTrees/lib/release/windows
@@ -334,20 +334,20 @@ jobs:
         run: swift build -c release
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
       # Read-only: build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per job filled it).
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           cache-read-only: true
           cache-cleanup: on-success
 
       - name: Download source-built ffmpeg/ffprobe
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: ffmpeg-windows-x64
           path: ffmpeg-bin
@@ -389,7 +389,7 @@ jobs:
           done
 
       - name: Upload .exe artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: star-desktop-windows-exe
           path: star-desktop/build/compose/binaries/main/exe/*.exe
@@ -399,7 +399,7 @@ jobs:
       - name: Pack the app image for the end-to-end test
         run: tar -C star-desktop/build/compose/binaries/main/app -cf star-desktop-app.tar .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: app-image-windows
           path: star-desktop-app.tar
@@ -426,11 +426,11 @@ jobs:
     needs: ffmpeg-macos
     if: github.event_name != 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Universal (arm64 + x86_64) ffmpeg/ffprobe from the ffmpeg job: they must run on Apple
       # Silicon without Rosetta.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: ffmpeg-macos-universal
           path: ffmpeg-bin
@@ -452,14 +452,14 @@ jobs:
         run: brew install eigen
 
       - name: Set up JDK 21 (Temurin — bundles jpackage; non-Homebrew vendor)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
       # Read-only: build-test is the single Gradle cache writer (the repo's 10 GB Actions cache limit; one entry per SHA per job filled it).
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           cache-read-only: true
           cache-cleanup: on-success
@@ -473,7 +473,7 @@ jobs:
       # universal OpenCV / StarDecisionTrees builds are shared instead of rebuilt.
       # (GitHub retired macos-14 on 2026-11-02 and cancels its jobs before they get a runner.)
       - name: Cache OpenCV
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             opencv/lib/macos
@@ -481,7 +481,7 @@ jobs:
           key: opencv-release-macos15-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             StarDecisionTrees/lib/release/macos
@@ -587,7 +587,7 @@ jobs:
           hdiutil detach "$MNT"
 
       - name: Upload notarized .dmg
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: star-desktop-macos-dmg
           path: star-desktop/build/compose/binaries/main/dmg/*.dmg
@@ -603,7 +603,7 @@ jobs:
           ./gradlew createDistributable -Pffmpegdir="$PWD/../ffmpeg-bin" --no-daemon --stacktrace
           tar -C build/compose/binaries/main/app -cf ../star-desktop-app.tar .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: app-image-macos
           path: star-desktop-app.tar
@@ -636,13 +636,13 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           sparse-checkout: |
             star-desktop/packaging
             cli/packaging
             test_data/test_a7sii_10
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: app-image-windows
       - name: Unpack the app image
@@ -668,7 +668,7 @@ jobs:
         run: bash star-desktop/packaging/self-test.sh e2e-app e2e-work
       - name: Keep the report and engine log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: e2e-windows-report
           path: |
@@ -682,14 +682,14 @@ jobs:
     runs-on: ubuntu-24.04
     needs: linux-package
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           sparse-checkout: |
             star-desktop/packaging
             test_data/test_a7sii_10
       # The real installer, installed the way a user installs it — so what runs is exactly what ships
       # (file modes, install paths and declared dependencies included).
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: star-desktop-linux-deb
           path: deb
@@ -706,7 +706,7 @@ jobs:
         run: bash star-desktop/packaging/self-test.sh /opt/star e2e-work
       - name: Keep the report and engine log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: e2e-linux-report
           path: |
@@ -724,12 +724,12 @@ jobs:
     runs-on: macos-15
     needs: macos-signed
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           sparse-checkout: |
             star-desktop/packaging
             test_data/test_a7sii_10
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: app-image-macos
       # No Rosetta here, on purpose: a fresh Apple Silicon Mac has none, and an x86_64-only
@@ -742,7 +742,7 @@ jobs:
         run: bash star-desktop/packaging/self-test.sh e2e-app e2e-work
       - name: Keep the report and engine log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: e2e-macos-report
           path: |
@@ -771,7 +771,7 @@ jobs:
         id: ver
         run: echo "version=${GITHUB_REF_NAME#release/}" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: star-desktop-*   # the installers only (app images are app-image-*)
           path: release-artifacts/
@@ -805,7 +805,7 @@ jobs:
           done
           exit ${missing:-0}
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name:               ${{ github.ref_name }}
           name:                   "Star ${{ steps.ver.outputs.version }}"

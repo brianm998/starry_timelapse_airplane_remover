@@ -60,7 +60,7 @@ jobs:
     outputs:
       macos: ${{ steps.decide.outputs.macos }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 2
 
@@ -114,7 +114,7 @@ jobs:
     if: needs.tested.outputs.tested != 'true'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install apt prerequisites
         run: |
@@ -130,13 +130,13 @@ jobs:
           swift-version: '6.0'
 
       - name: Download OpenCV
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: opencv-linux
           path: opencv
 
       - name: Cache StarDecisionTrees
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             StarDecisionTrees/lib/release/linux
@@ -158,7 +158,7 @@ jobs:
           echo "Smoke test passed: $ACTUAL/19 output files"
 
       - name: Upload .deb artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: star-linux-deb
           path: cli/.build/*.deb
@@ -193,7 +193,7 @@ jobs:
       && contains(fromJSON('["success","skipped"]'), needs.linux.result) }}
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Select latest Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -212,13 +212,13 @@ jobs:
         run: brew install eigen
 
       - name: Download OpenCV
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: opencv-macos
           path: opencv
 
       - name: Cache StarDecisionTrees
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             StarDecisionTrees/lib/release/macos
@@ -258,7 +258,7 @@ jobs:
           echo "Smoke test passed: $ACTUAL/19 output files"
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: star-macos
           path: cli/.build/release/star
@@ -283,7 +283,7 @@ jobs:
             "$VERSION" "cli/.build/star_cli_${VERSION}_unsigned.pkg"
 
       - name: Upload unsigned .pkg
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: star-cli-macos-pkg-unsigned
           path: cli/.build/star_cli_*_unsigned.pkg
@@ -328,7 +328,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/release/') || github.event_name == 'workflow_dispatch'
     needs: [macos, ffmpeg]  # don't burn notary quota if the smoke build already failed
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Select latest Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -345,7 +345,7 @@ jobs:
 
       # Share caches with the unsigned macos smoke job — same keys.
       - name: Cache OpenCV
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             opencv/lib/macos
@@ -353,7 +353,7 @@ jobs:
           key: opencv-release-macos15-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             StarDecisionTrees/lib/release/macos
@@ -480,7 +480,7 @@ jobs:
           ls -lh gui/videos
 
       - name: Fetch the universal ffmpeg/ffprobe the GUI bundles
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: ffmpeg-macos-universal
           path: external_binaries/bin
@@ -511,7 +511,7 @@ jobs:
         run: bash release.sh
 
       - name: Upload signed CLI .pkg
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: star-cli-macos-pkg
           path: cli/.build/star_cli_*.pkg
@@ -519,7 +519,7 @@ jobs:
           include-hidden-files: true
 
       - name: Upload signed GUI .pkg
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: star-gui-macos-pkg
           path: gui/.build/star_app_*.pkg
@@ -579,7 +579,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Select latest Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -596,7 +596,7 @@ jobs:
 
       # Same keys as the unsigned macos smoke job and macos-signed-release.
       - name: Cache OpenCV
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             opencv/lib/macos
@@ -604,7 +604,7 @@ jobs:
           key: opencv-release-macos15-${{ steps.opencv-key.outputs.key }}
 
       - name: Cache StarDecisionTrees
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             StarDecisionTrees/lib/release/macos
@@ -697,7 +697,7 @@ jobs:
           ls -lh gui/videos
 
       - name: Fetch the universal ffmpeg/ffprobe the GUI bundles
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: ffmpeg-macos-universal
           path: external_binaries/bin
@@ -743,7 +743,7 @@ jobs:
       run:
         shell: bash  # Git Bash; release_windows.sh requires it
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Swift
         uses: compnerd/gha-setup-swift@main
@@ -924,13 +924,13 @@ jobs:
           }
 
       - name: Download OpenCV
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: opencv-windows
           path: opencv
 
       - name: Cache StarDecisionTrees
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             StarDecisionTrees/lib/release/windows
@@ -966,7 +966,7 @@ jobs:
           echo "Smoke test passed: $ACTUAL/19 output files"
 
       - name: Upload .zip artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: star-windows-zip
           path: cli/.build/*.zip
@@ -975,7 +975,7 @@ jobs:
           include-hidden-files: true
 
       - name: Upload NSIS installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: star-windows-setup
           path: cli/.build/*_setup.exe
@@ -999,13 +999,13 @@ jobs:
     runs-on: ubuntu-24.04
     needs: linux
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           sparse-checkout: |
             cli/packaging
             test_data/test_a7sii_10
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: star-linux-deb
           path: e2e-pkg
@@ -1034,13 +1034,13 @@ jobs:
     runs-on: macos-15
     needs: macos
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           sparse-checkout: |
             cli/packaging
             test_data/test_a7sii_10
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: star-cli-macos-pkg-unsigned
           path: e2e-pkg
@@ -1068,7 +1068,7 @@ jobs:
 
       - name: Upload crash reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: star-macos-e2e-crash-reports
           path: crash-reports
@@ -1081,13 +1081,13 @@ jobs:
     runs-on: macos-15
     needs: macos-signed-release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           sparse-checkout: |
             cli/packaging
             test_data/test_a7sii_10
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: star-cli-macos-pkg
           path: e2e-pkg
@@ -1113,18 +1113,18 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           sparse-checkout: |
             cli/packaging
             test_data/test_a7sii_10
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: star-windows-zip
           path: e2e-zip
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: star-windows-setup
           path: e2e-setup
@@ -1196,27 +1196,27 @@ jobs:
           VERSION="${GITHUB_REF_NAME#release/}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: star-linux-deb
           path: release-artifacts/
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: star-cli-macos-pkg
           path: release-artifacts/
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: star-gui-macos-pkg
           path: release-artifacts/
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: star-windows-zip
           path: release-artifacts/
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: star-windows-setup
           path: release-artifacts/
@@ -1224,7 +1224,7 @@ jobs:
       - name: List release artifacts
         run: find release-artifacts -type f | sort
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name:               ${{ github.ref_name }}
           name:                   "Star ${{ steps.ver.outputs.version }}"

@@ -36,7 +36,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: OpenCV cache key
         id: key
@@ -46,7 +46,7 @@ jobs:
       # tier 1: the Actions cache (this ref, the base branch, or what an earlier run of this ref saved)
       - name: Cache OpenCV
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             opencv/lib/linux
@@ -110,7 +110,7 @@ jobs:
           cp -R opencv/lib/linux opencv-artifact/lib/linux
           cp -R opencv/include opencv-artifact/include
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: opencv-linux
           path: opencv-artifact
@@ -129,7 +129,7 @@ jobs:
     outputs:
       hit: ${{ steps.release.outputs.hit }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: OpenCV cache key
         id: key
@@ -158,7 +158,7 @@ jobs:
           cp -R opencv/lib/macos opencv-artifact/lib/macos
           cp -R opencv/include opencv-artifact/include
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: steps.release.outputs.hit == 'true'
         with:
           name: opencv-macos
@@ -176,7 +176,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: OpenCV cache key
         id: key
@@ -186,7 +186,7 @@ jobs:
       # tier 1: the Actions cache (this ref, the base branch, or what an earlier run of this ref saved)
       - name: Cache OpenCV
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             opencv/lib/macos
@@ -254,7 +254,7 @@ jobs:
           cp -R opencv/lib/macos opencv-artifact/lib/macos
           cp -R opencv/include opencv-artifact/include
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: opencv-macos
           path: opencv-artifact
@@ -273,7 +273,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: OpenCV cache key
         id: key
@@ -283,7 +283,7 @@ jobs:
       # tier 1: the Actions cache (this ref, the base branch, or what an earlier run of this ref saved)
       - name: Cache OpenCV
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             opencv/lib/windows
@@ -447,7 +447,7 @@ jobs:
           cp -R opencv/lib/windows opencv-artifact/lib/windows
           cp -R opencv/include opencv-artifact/include
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: opencv-windows
           path: opencv-artifact

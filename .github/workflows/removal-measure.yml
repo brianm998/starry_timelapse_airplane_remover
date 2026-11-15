@@ -34,10 +34,10 @@ jobs:
     needs: opencv-linux
     timeout-minutes: 300
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Cache test data
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .test-data
           key: testdata-removal-${{ hashFiles('test_data/datasets.json') }}
@@ -59,13 +59,13 @@ jobs:
           swift-version: '6.0'
 
       - name: Download OpenCV
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: opencv-linux
           path: opencv
 
       - name: Cache StarDecisionTrees
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             StarDecisionTrees/lib/release/linux
@@ -98,7 +98,7 @@ jobs:
 
       - name: Upload reports, crops and logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: removal-measurements-linux
           path: |
@@ -112,10 +112,10 @@ jobs:
     needs: opencv-macos
     timeout-minutes: 300
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Cache test data
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .test-data
           key: testdata-removal-${{ hashFiles('test_data/datasets.json') }}
@@ -136,13 +136,13 @@ jobs:
         run: brew install eigen
 
       - name: Download OpenCV
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: opencv-macos
           path: opencv
 
       - name: Cache StarDecisionTrees
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             StarDecisionTrees/lib/release/macos
@@ -175,7 +175,7 @@ jobs:
 
       - name: Upload reports, crops and logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: removal-measurements-macos
           path: |

@@ -27,7 +27,7 @@ runs:
 
     - name: Restore the output validator
       id: restore
-      uses: actions/cache/restore@v4
+      uses: actions/cache/restore@v5
       with:
         path: |
           removal_tools/.build/release/star-output-verify
@@ -41,7 +41,7 @@ runs:
 
     - name: Save the output validator
       if: steps.restore.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@v5
       with:
         path: |
           removal_tools/.build/release/star-output-verify
