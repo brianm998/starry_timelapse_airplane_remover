@@ -37,6 +37,9 @@ struct InfoDialogView: View {
 
                             ScrollView {
                                 VStack(alignment: .leading, spacing: 16) {
+                                    if viewModel.currentInfoType == .about {
+                                        ArtImage(.wordmark)
+                                    }
                                     if viewModel.currentInfoType == .howTo {
                                         WorkflowStrip()
                                     }
