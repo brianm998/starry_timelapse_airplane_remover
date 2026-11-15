@@ -1,6 +1,6 @@
 # This document describes the algorithm used by Star to remove airplanes and satellites from image sequences
 
-Written as of Star 0.10.4
+Written as of Star 0.12.6 (first written for 0.10.4)
 
 ## High Level
 
@@ -8,6 +8,8 @@ Star offers two different and complementary methods to remove unwanted signals f
 
  - Auto Clean
  - Selective Clean
+
+A third method, Dirty, does the opposite of cleaning (see the end of this document).
 
 Auto Clean can be used by itself, or in addition to selective clean in one of two ways:
 
@@ -19,6 +21,8 @@ A video can have any processing method applied to any frame, but the presence of
 ### Auto Clean
 
 Auto Clean is used by all processing modes, but in potentially different ways.
+
+Auto Clean on its own does not look for individual airplanes or satellites at all.  There is no blob detection and no classification: every pixel comes from the merged neighbor frames, so anything that moved is gone.  The blob detection and machine learning described under Selective Clean are only used by Selective Clean and Selective Auto Clean.
 
 The goal of auto clean is to automatically remove all moving artificial lights from the video.  This can include both sky and earth, airplanes and cars.
 
@@ -32,11 +36,15 @@ If using either of the selective modes, then the output image will include some 
 
 First, if a video contains both sky and earth, Star needs to detect the horizon.  This is necessary for both proper alignment of the sky and maybe the earth.  It is also necessary when outputting an auto cleaned frame.
 
-To detect the horizons Star uses a combination of Otsu classification, connected component filtering, and Canny edge detection.
+To detect a horizon Star runs three methods (Otsu thresholding, a dynamic-programming edge path, and a SIOX-style band segmentation), median-combines their answers, and refines the result with a Random Walker segmentation.
 
-As of Star 0.10.4, horizon detection works best on darker horizons.  If the moon is up, or there is snow on the horizon, or lots of clouds, then horizon detection will not work as well.
+For a static tripod the horizon is found once for the whole video, not per frame.  Star takes a per-pixel median of 48 frames spread across the sequence.  Stars, clouds, aurora and noise all move, and the landscape does not, so the median is a clean picture of the landscape under a starless sky, and the horizon is found on that.
 
-In those cases, selective clean may work better, as it doesn't depend as much on good horizon detection.
+For a moving tripod the horizon is detected on every frame, and once the earth has been aligned every frame's horizon is reconciled with its neighbors' along the earth alignment.  A stretch where detection goes wrong, such as a dark cloud bank sitting on the ridge, is outvoted by the frames before and after it, and the line is smoothed over time so it does not flicker.
+
+Where detection still gets it wrong, such as moonlit snow read as sky, a horizon can be painted by hand on one or more frames.  On a static video one painted horizon is used for every frame; on a moving video painted frames anchor the reconciled horizons around them.
+
+Horizon detection still has the hardest time with bright horizons: the moon up, snow on the ground, or lots of low cloud.  In those cases selective clean may work better, as it doesn't depend as much on good horizon detection.
 
 #### Star Alignment
 
@@ -46,7 +54,7 @@ At the core, some number of neighboring frames are aligned with each frame being
 
 The default setting of 8 neighbor frames (four on each side) seems to work pretty good.
 
-First the frame being processed has keypoints identified in it using SIFT (Scale Invariant Feature Transform) in opencv.  A layer mask that disregards the earth and areas that are not close to bright stars is used to make sure we're aligning with the movement of the stars and not clouds or the earth.
+First the frame being processed has keypoints identified in it using AKAZE and SIFT (Scale Invariant Feature Transform) in opencv.  A layer mask that disregards the earth and areas that are not close to bright stars is used to make sure we're aligning with the movement of the stars and not clouds or the earth.
 
 Then each neighboring frame has keypoints identified, and then matched with the keypoints of the using a number of different feature matching methods in opencv.
 
@@ -133,7 +141,7 @@ It then:
 3. apply some heuristics to filter out a lot of the groups from step #2
 4. use grouping and line detection to combine lines of dots
 5. throw out a lot of smaller groups
-6. classify groups left after step #7 using machine learning to decide which ones to derive layer masks from
+6. classify groups left after step #5 using machine learning to decide which ones to derive layer masks from
 7. create a layer mask for this frame using the classified groups from step #6
 8. use the layer mask from step #7 and the aligned neighbor frames to generate the output image for this frame
 
@@ -147,12 +155,14 @@ However, this requires more attention to each frame, and can be time consuming.
 
 Selective Auto Clean is basically Selective clean but flipped so that the base image being output is the Auto Clean image, instead of the original image being processed.
 
+Here the classification is used the other way around: the groups it decides are worth keeping are copied back from the original frame onto the auto clean image.
+
 This allows users to get rid of all bad signals except for a very few desired ones.
 
-One use case for this is meteors.  As of Star v0.10.4 there is no classification into meteor/airplane/satellite/other, just a binary good/bad.
+One use case for this is meteors.  As of Star 0.12.6 there is still no classification into meteor/airplane/satellite/other, just a binary good/bad, so check the frames.
 
 A future feature would be to widen the ability to classify into more categories.
 
+### Dirty
 
-
-
+Dirty is the opposite of cleaning.  Each pixel of the output is the original frame minus the auto clean image, so stars and ground that stayed still go black and only what moved (airplanes, satellites, meteors, car lights) keeps its color.  It uses the star aligned image in the sky and the earth aligned image on the ground, like auto clean.  There is no blob detection, so there is nothing to review per frame.  It is useful for seeing exactly what auto clean takes out.
