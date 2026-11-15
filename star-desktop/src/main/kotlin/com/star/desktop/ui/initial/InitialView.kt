@@ -1,5 +1,7 @@
 package com.star.desktop.ui.initial
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -135,6 +137,9 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
     }
 }
 
+/** The picture in the drop zone: the catching robot while a file is dragged over it, the drop target otherwise. */
+internal fun dropZoneArt(hovering: Boolean): StarArt = if (hovering) StarArt.ART_DROP_HOVER else StarArt.ART_DROP
+
 @OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 @Composable
 private fun DropZone(vm: AppViewModel, onOpenSequence: () -> Unit) {
@@ -178,7 +183,10 @@ private fun DropZone(vm: AppViewModel, onOpenSequence: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            ArtImage(StarArt.ART_DROP)
+            // Both pictures sit in the same 96 dp box, so the zone keeps its size when one replaces the other.
+            Crossfade(targetState = dropZoneArt(isHovering), animationSpec = tween(150), label = "dropZoneArt") { art ->
+                Box(Modifier.size(96.dp), contentAlignment = Alignment.Center) { ArtImage(art) }
+            }
             Text(localized("ui.drop_a_video_an_image_sequence_or_an"), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
     }
