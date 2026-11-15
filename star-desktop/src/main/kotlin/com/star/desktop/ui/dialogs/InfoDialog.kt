@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -189,12 +190,13 @@ fun InfoDialog(selected: InfoType, onSelect: (InfoType) -> Unit, onClose: () -> 
                     onSelect = onSelect,
                     modifier = Modifier.width(infoPickerWidth()),
                 )
-                Text(
-                    selected.infoText,
-                    color = StarColors.white,
-                    fontSize = 13.sp,
-                    modifier = Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
-                )
+                Column(
+                    Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    if (selected == InfoType.HOW_TO) WorkflowStrip()
+                    Text(selected.infoText, color = StarColors.white, fontSize = 13.sp)
+                }
             }
             Button(onClick = onClose, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
                 Text(localized("ui.close"))
@@ -208,3 +210,29 @@ fun InfoDialog(selected: InfoType, onSelect: (InfoType) -> Unit, onClose: () -> 
 @Composable
 internal fun infoPickerWidth(): androidx.compose.ui.unit.Dp =
     maxOf(120.dp, com.star.desktop.ui.components.widestWord(InfoType.entries.map { localized(it.labelKey) }, 13.sp) + 20.dp)
+
+/** The six workflow steps the How To tab's strip shows, in order (macOS `workflowStripSteps`). */
+internal val WORKFLOW_STRIP_STEPS: List<StarArt> = listOf(
+    StarArt.ART_STEP_IMPORT, StarArt.ART_STEP_HORIZON, StarArt.ART_STEP_ALIGN,
+    StarArt.ART_STEP_MERGE, StarArt.ART_STEP_REVIEW, StarArt.ART_STEP_RENDER,
+)
+
+/** A row of the six step tiles joined by small arrows drawn on a Canvas: 6 x 64 + 5 x 16 + 10 x 4 = 504dp. */
+@Composable
+internal fun WorkflowStrip() {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        WORKFLOW_STRIP_STEPS.forEachIndexed { index, step ->
+            if (index > 0) {
+                val colour = StarColors.white.copy(alpha = 0.6f)
+                androidx.compose.foundation.Canvas(Modifier.size(16.dp)) {
+                    val y = size.height / 2
+                    val stroke = 1.5.dp.toPx()
+                    drawLine(colour, androidx.compose.ui.geometry.Offset(1.dp.toPx(), y), androidx.compose.ui.geometry.Offset(size.width - 1.dp.toPx(), y), stroke)
+                    drawLine(colour, androidx.compose.ui.geometry.Offset(size.width - 5.dp.toPx(), y - 4.dp.toPx()), androidx.compose.ui.geometry.Offset(size.width - 1.dp.toPx(), y), stroke)
+                    drawLine(colour, androidx.compose.ui.geometry.Offset(size.width - 5.dp.toPx(), y + 4.dp.toPx()), androidx.compose.ui.geometry.Offset(size.width - 1.dp.toPx(), y), stroke)
+                }
+            }
+            com.star.desktop.ui.components.ArtImage(step)
+        }
+    }
+}
