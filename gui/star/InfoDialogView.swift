@@ -145,38 +145,6 @@ public enum InfoType: CaseIterable {
         case .howTo:
             return InfoType.howToSteps.map { "\($0.heading)\n\($0.body)" }.joined(separator: "\n\n")
         case .detailed:
-            return localized("ui.detailed")
-        }
-    }
-
-    var infoText: String {
-        switch self {
-        case .about:
-            return InfoType.aboutKeys.map { localized($0) }.joined(separator: "\n\n")
-        case .howTo:
-            return """
-              To get started with Star, you need to first have an image sequence containing images from the night sky.
-
-              The fastest way to get started is to drop this folder into Star's starting screen, and then Star will load the sequence and let you view the sequence or start processing.
-
-              After first loading a new image sequence, Star will first generate previews for the original images.  After preview generation, the original video can be played or scrubbed.
-              
-              Before telling Start to start processing your image sequence, it can be helpful to desribe an area at the bottom to ignore.  Unless you video has no ground in it at all, it is helpful to go into edit mode, and turn on the 'Show Ignore Bar' switch on the right panel.
-              You can then drag up the orange arrows you see at the bottom of the screen to expose the are of the video to not process.   This can speed Star up.
-              If you video is stationary, you can use a single frame to determine the cutoff for the ground.
-              If your video was taking on moving tripod head, then it's best to scrub through the video to find the lowest place that the sky shows up, and use that frame for the cutoff.
-
-              Next, you can tell Star to start processing your image sequence.
-              Be aware that this can take some time.  The Star interface remains active when processing, and you can look at each individual frame if you want to see what happens to it as it gets processed.
-
-              After processing, you will have a folder sitting alongside your original image sequence which contains the processed images.
-              These can then be renedred into the video format of your choice in the same workflow you usually use.
-
-              You will also have a json config file written out for your sequence, which can be reloaded at a later time to process the same sequence more.
-
-              The config can be loaded by dropping it onto Star's initial screen.
-              """
-        case .detailed:
             return """
               Star processes each frame of a sequence in this manner:
 
