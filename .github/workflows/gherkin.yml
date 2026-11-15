@@ -52,8 +52,8 @@ name: Gherkin
 # (jobs opencv-linux/-macos/-windows below), the artifact opencv-<os> downloaded into opencv/.
 
 # A push to develop does NOT start it any more: the full matrix takes 3-4 h and a newer push cancelled the older run, so on a busy day
-# none finished. The starpipe daemon dispatches ONE full run a night (23:00 local, pipeline/src/starpipe/gherkin_nightly.py) when
-# a file this workflow's own `paths` list names changed since the last green full run. See gherkin/README.md, "When the full matrix runs".
+# none finished. gherkin-nightly.yml (a GitHub schedule, 07:00 UTC) dispatches ONE full run a night when
+# a file gherkin-smoke.yml's `paths` list names changed since the last green full run (.github/scripts/gherkin_nightly_decide.py). See gherkin/README.md, "When the full matrix runs".
 on:
   push:
     branches: [main]

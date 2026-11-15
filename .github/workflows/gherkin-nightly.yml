@@ -1,0 +1,54 @@
+name: Gherkin nightly
+
+# Dispatches ONE full Gherkin run (gherkin.yml, run name `Gherkin: full`) a night on develop, when the rules in
+# .github/scripts/gherkin_nightly_decide.py say it is worth it (a file under gherkin-smoke.yml's `paths` changed since the last green
+# full run, none in flight, tip not already tested). Replaces the starpipe daemon's nightly. MASON's CI watch files its reds.
+# Scheduled workflows run from the default branch (develop). By hand:
+#   gh workflow run gherkin-nightly.yml --ref develop -f force=true
+
+on:
+  schedule:
+    - cron: '0 7 * * *'   # 07:00 UTC, about 23:00 Pacific
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Dispatch even when nothing relevant changed (not when a full run is in flight or the tip was already tested)'
+        type: boolean
+        default: false
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: gherkin-nightly
+
+jobs:
+  decide:
+    name: Decide and dispatch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: develop
+          fetch-depth: 0
+      - name: Decide
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force && '--force' || '' }}
+        run: |
+          # shellcheck disable=SC2086
+          python3 .github/scripts/gherkin_nightly_decide.py --repo "$GITHUB_REPOSITORY" $FORCE | tee decision.txt
+          {
+            echo "### Gherkin nightly: $(sed -n 1p decision.txt)"
+            sed -n 2p decision.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "action=$(sed -n 1p decision.txt)" >> "$GITHUB_OUTPUT"
+      - name: Dispatch the full matrix
+        if: steps.decide.outputs.action == 'dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # no `features` input: the run is named `Gherkin: full`
+        run: gh workflow run gherkin.yml --ref develop
