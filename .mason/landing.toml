@@ -10,7 +10,9 @@
 #
 # direct-ci dispatches ONE workflow with no inputs. starpipe also dispatched macos-gate.yml and, per
 # ticket, gherkin.yml with a `features` input. How those two are covered is an owner decision
-# (docs/decisions/0119, decisions 1 and 2); nothing in this file covers them yet.
+# (docs/decisions/0119, decisions 1 and 2); nothing in this file covers them. The full Gherkin matrix is covered
+# nightly, after landing, by .github/workflows/gherkin-nightly.yml (a GitHub schedule); per-task feature runs before
+# landing are still not wired.
 mode = "direct-ci"
 base = "develop"
 window = "20m"

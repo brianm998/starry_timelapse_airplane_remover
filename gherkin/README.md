@@ -156,17 +156,18 @@ directory in place would pick up the last run's state.
 The full matrix takes 3-4 hours, mostly waiting for GitHub's few macOS runners, so it does **not** run on every push to the base
 branch (a newer push used to cancel the older run, and on a busy day none finished). It runs:
 
-* **Nightly, 23:00 this Mac's local time**, dispatched by the starpipe daemon (`pipeline/src/starpipe/gherkin_nightly.py`,
-  `gherkin_nightly_enabled` / `gherkin_nightly_start` in the pipeline config), at most once a day. It dispatches a full run only when a
-  file matching `.github/workflows/gherkin-smoke.yml`'s `on.pull_request.paths` list (the PR workflow; `gherkin.yml` has no PR trigger) changed since the last green full run, or when
-  there has never been a green full run. It skips, and records why, when nothing relevant changed, when a full run is already queued or
-  running, or when the last full run (green or red) already tested the current tip. `starpipe status` shows the last decision.
+* **Nightly, 07:00 UTC (about 23:00 Pacific)**, dispatched by the `gherkin-nightly.yml` schedule
+  (`.github/scripts/gherkin_nightly_decide.py`, which ports the rules the starpipe daemon used), at most once a day. It dispatches a
+  full run only when a file matching `.github/workflows/gherkin-smoke.yml`'s `on.pull_request.paths` list (the PR workflow;
+  `gherkin.yml` has no PR trigger) changed since the last green full run, or when there has never been a green full run. It skips,
+  and records why in the job summary, when nothing relevant changed, when a full run is already queued or running, or when the last
+  full run (green or red) already tested the current tip. A red run is filed as a task by MASON's CI watch (`[watch.ci]`).
 * On a **push to `main`** (releases) and on **`workflow_dispatch`**. A pull request runs the smoke subset instead (below).
 
 Run by hand, on the base branch:
 
 ```bash
-starpipe gherkin run [--force]                 # the nightly's decision now; --force skips the change gate
+gh workflow run gherkin-nightly.yml --ref develop -f force=true   # the nightly's decision now; force skips the change gate
 gh workflow run gherkin.yml --ref develop      # a full run
 gh workflow run gherkin.yml --ref develop -f features=autoHorizonJpeg,selectiveHorizonTiff16   # a subset
 ```

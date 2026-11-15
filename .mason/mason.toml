@@ -103,12 +103,13 @@ on_red = "develop"
 # The base branch's own CI (docs/decisions/0149 in brianm998/mason): MASON files the
 # ticket when a workflow goes red on develop, and a red `pr-gate` freezes landing until it is green again.
 # starpipe's watch_develop no longer files tickets (it keeps its baseline and stop_line for its own train).
-# Gherkin's baseline is kept but never filed: its nightly owns those tickets. The agreement rule (2 runs),
+# Gherkin is watched like the rest: its nightly now comes from .github/workflows/gherkin-nightly.yml (a GitHub schedule),
+# and MASON files its reds through the long-red rule (about 3h after a red run ends). The agreement rule (2 runs),
 # the long-red threshold (3h) and the cap (2 open, then proposed) are MASON's defaults, left unset.
 [watch.ci]
 enabled = true
 gate = "pr-gate"
-exclude = ["Gherkin"]
+exclude = []
 
 # Machine classes (masond's own, the ones starpipe's heavy jobs queue in too). `compile`: builds run side
 # by side. `test-suite`: one test suite at a time beside builds. `exclusive`: the whole machine (star runs, the display-owning gui
