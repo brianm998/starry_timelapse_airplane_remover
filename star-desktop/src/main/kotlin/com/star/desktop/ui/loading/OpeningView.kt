@@ -24,6 +24,9 @@ import com.star.desktop.ui.components.ScaledArtImage
 import com.star.desktop.ui.components.StarArt
 import com.star.desktop.ui.theme.StarColors
 
+private val LOADING_RING_SIZE = 260.dp
+private val LOADING_RING_STROKE = 14.dp
+
 /** The import robot's height inside a progress ring: 60% of the ring's inner diameter, at most 120 dp (0 when there is no inner room). */
 internal fun loadingRingArtSize(outerDiameter: Dp, stroke: Dp): Dp {
     val inner = outerDiameter - stroke * 2
@@ -46,18 +49,28 @@ fun OpeningView(progress: LoadingProgress, onCancel: () -> Unit, modifier: Modif
             Text(progress.title, color = StarColors.textPrimary, fontSize = 22.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
             val fraction = progress.fraction
             if (fraction != null) {
-                Box(Modifier.size(160.dp), contentAlignment = Alignment.Center) {
+                // The robot and the caption are one column centred in the ring, the robot on top and the caption below, with a gap so they never touch.
+                // When a stage is done the next has not reported yet: say so in green, with the spinner that says more is coming.
+                Box(Modifier.size(LOADING_RING_SIZE), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(
-                        progress = { fraction }, modifier = Modifier.size(160.dp), color = StarColors.accent, trackColor = StarColors.cellDefault, strokeWidth = 10.dp,
+                        progress = { fraction }, modifier = Modifier.size(LOADING_RING_SIZE), color = StarColors.accent, trackColor = StarColors.cellDefault,
+                        strokeWidth = LOADING_RING_STROKE,
                     )
-                    ScaledArtImage(StarArt.ART_IMPORT, loadingRingArtSize(160.dp, 10.dp))
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterVertically),
+                        modifier = Modifier.size(LOADING_RING_SIZE - LOADING_RING_STROKE * 2),
+                    ) {
+                        ScaledArtImage(StarArt.ART_IMPORT, loadingRingArtSize(LOADING_RING_SIZE, LOADING_RING_STROKE))
+                        Text(progress.caption, color = if (progress.isComplete) StarColors.green else StarColors.textPrimary, fontSize = 15.sp, textAlign = TextAlign.Center)
+                        if (progress.isComplete) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = StarColors.textSecondary, strokeWidth = 2.dp)
+                    }
                 }
             } else {
                 CircularProgressIndicator(modifier = Modifier.size(64.dp), color = StarColors.accent)
+                Text(progress.caption, color = if (progress.isComplete) StarColors.green else StarColors.textPrimary, fontSize = 15.sp)
+                if (progress.isComplete) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = StarColors.textSecondary, strokeWidth = 2.dp)
             }
-            // When a stage is done the next has not reported yet: say so in green, with the spinner that says more is coming.
-            Text(progress.caption, color = if (progress.isComplete) StarColors.green else StarColors.textPrimary, fontSize = 15.sp)
-            if (progress.isComplete) CircularProgressIndicator(modifier = Modifier.size(24.dp), color = StarColors.textSecondary, strokeWidth = 2.dp)
             OutlinedButton(onClick = onCancel, modifier = Modifier.testTag("loading.cancel")) { Text(localized("ui.cancel"), fontSize = 16.sp) }
         }
     }
