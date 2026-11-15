@@ -339,9 +339,9 @@ async def test_schedule_once_claims_one_ticket_and_runs_it(rig: Rig) -> None:
     rig.engine.sync_issues()
     rig.agent.on("explore", explore_ok)
     rig.agent.on("develop", lambda r: StageOutcome("no-result"))
-    d = Daemon(rig.engine, Config(), token="tok")
+    d = Daemon(rig.engine, Config(remote="origin"), token="tok")
     d.schedule_once()
-    await asyncio.gather(*d.tasks.values())
+    await asyncio.wait_for(asyncio.gather(*d.tasks.values()), 60)  # a blocked call fails with a stack, never hangs the suite
     assert rig.db.stages(7)[0]["stage"] == "explore"
 
 
