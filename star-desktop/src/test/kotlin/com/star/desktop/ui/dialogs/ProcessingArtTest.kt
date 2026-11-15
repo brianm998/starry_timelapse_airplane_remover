@@ -46,12 +46,12 @@ class ProcessingArtTest {
     @Test
     fun geometryMatchesTheGuiAndSpinnerIsGone() {
         assertEquals(56, ProcessingRobotGeometry.BOX)
-        val src = File("src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingModal.kt").readText()
+        val src = File("src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingModal.kt").readText().replace("\r\n", "\n")
         assertTrue(src.contains("testTag(\"processing.modal\")"))
         assertFalse(src.contains("CircularProgressIndicator("))
         val gui = File("../gui/star/ProcessingModalView.swift")
         if (gui.exists()) {
-            val swift = gui.readText()
+            val swift = gui.readText().replace("\r\n", "\n")
             assertTrue(swift.contains("static let hubX: CGFloat = ${ProcessingRobotGeometry.HUB_X}"))
             assertTrue(swift.contains("static let hubY: CGFloat = ${ProcessingRobotGeometry.HUB_Y}"))
             assertTrue(swift.contains("static let gearSize: CGFloat = ${ProcessingRobotGeometry.GEAR_SIZE}"))

@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
  */
 class StepRateVectorTest {
     private val doc: JsonObject = JsonParser.parseString(
-        listOf(File("../gherkin/ui/vectors/stepRates.json"), File("gherkin/ui/vectors/stepRates.json")).first { it.isFile }.readText(),
+        listOf(File("../gherkin/ui/vectors/stepRates.json"), File("gherkin/ui/vectors/stepRates.json")).first { it.isFile }.readText().replace("\r\n", "\n"),
     ).asJsonObject
 
     private fun row(o: JsonObject) = StepRow(o["type"].asString, o["queued"].asInt, o["running"].asInt, o["done"].asInt, o["alreadyDone"].asInt)

@@ -87,7 +87,7 @@ class RenderQuestionTest {
 
     @Test fun theViewModelUsesItAndAsksAgainAfterASettingsRestart() {
         val source = listOf(File("src/main/kotlin/com/star/desktop/ui/app/AppViewModel.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/app/AppViewModel.kt"))
-            .first { it.isFile }.readText()
+            .first { it.isFile }.readText().replace("\r\n", "\n")
         assertFalse("autoRenderAfterProcessing" in source || "awaitingProcessingPrompt" in source, "the two flags are RenderQuestion's now")
         assertTrue("renderQuestion.done(currentSequence?.runsStarted ?: 0)" in source)
         assertTrue("renderQuestion.arm(forRun = (currentSequence?.runsStarted ?: 0) + 1" in source)

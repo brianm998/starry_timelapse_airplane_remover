@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 
 /** The settings sheet's tab titles: black on the selected pill, white on the grey track otherwise (the gui's `SettingsTabTitleColorTests`). */
 class SettingsTabColoursTest {
-    private fun find(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
+    private fun find(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
 
     @Test fun testSettingsTabsUseBlackWhenSelectedAndWhiteWhenNot() {
         assertEquals(Color.White, SETTINGS_TAB_UNSELECTED_TEXT)

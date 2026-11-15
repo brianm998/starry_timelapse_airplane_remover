@@ -110,7 +110,7 @@ class VideoChoiceTest {
 
     @Test fun theDialogStartsFromTheConfigAlone() {
         val dialog = listOf(File("src/main/kotlin/com/star/desktop/ui/dialogs/RenderVideoDialog.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/RenderVideoDialog.kt"))
-            .first { it.isFile }.readText()
+            .first { it.isFile }.readText().replace("\r\n", "\n")
         assertTrue("storedVideoSettings(info)" in dialog)
         assertFalse("rememberedVideoSettings" in dialog || "startingVideoSettings" in dialog, "the layering is gone")
     }

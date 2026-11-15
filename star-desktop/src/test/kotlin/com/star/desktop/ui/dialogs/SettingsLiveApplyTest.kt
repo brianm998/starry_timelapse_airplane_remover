@@ -105,7 +105,7 @@ class SettingsLiveApplyTest {
     // ---- P5 and P8: what the sheet looks like, from its source
 
     private val dialog = listOf(File("src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingSettingsDialog.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingSettingsDialog.kt"))
-        .first { it.isFile }.readText()
+        .first { it.isFile }.readText().replace("\r\n", "\n")
 
     @Test fun theSheetHasDismissAndNotCancelAndSave() {
         assertTrue("localized(\"ui.dismiss\")" in dialog)

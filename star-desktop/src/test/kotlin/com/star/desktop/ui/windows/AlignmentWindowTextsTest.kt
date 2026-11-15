@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
 class AlignmentWindowTextsTest {
     @AfterTest fun reset() = Strings.setOverride(null)
 
-    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
+    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
 
     private val vector = JsonParser.parseString(read("gherkin/ui/vectors/alignmentWindow.json")).asJsonObject
     private val labels = vector.getAsJsonObject("chartLabels")

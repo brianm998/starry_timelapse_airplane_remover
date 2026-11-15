@@ -37,8 +37,8 @@ class ResourceStatusTest {
     }
 
     @Test fun theModalAndThePanelShowIt() {
-        val modal = listOf(File("src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingModal.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingModal.kt")).first { it.isFile }.readText()
-        val panel = listOf(File("src/main/kotlin/com/star/desktop/ui/sequence/RightPanel.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/sequence/RightPanel.kt")).first { it.isFile }.readText()
+        val modal = listOf(File("src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingModal.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/dialogs/ProcessingModal.kt")).first { it.isFile }.readText().replace("\r\n", "\n")
+        val panel = listOf(File("src/main/kotlin/com/star/desktop/ui/sequence/RightPanel.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/ui/sequence/RightPanel.kt")).first { it.isFile }.readText().replace("\r\n", "\n")
         assertTrue("ResourceProfileControl(app, com.star.desktop.domain.ResourceStatus.text(report))" in modal)
         assertTrue("ResourceProfileControl(app, com.star.desktop.domain.ResourceStatus.text(stepReport), stacked = true)" in panel)
     }

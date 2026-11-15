@@ -13,7 +13,7 @@ import kotlin.test.assertEquals
  */
 class OutlierColumnsTest {
     private val doc: JsonObject = JsonParser.parseString(
-        listOf(File("../gherkin/ui/vectors/outlierColumns.json"), File("gherkin/ui/vectors/outlierColumns.json")).first { it.isFile }.readText(),
+        listOf(File("../gherkin/ui/vectors/outlierColumns.json"), File("gherkin/ui/vectors/outlierColumns.json")).first { it.isFile }.readText().replace("\r\n", "\n"),
     ).asJsonObject
 
     @Test fun theColumnsAlwaysShownAreTheVectors() {

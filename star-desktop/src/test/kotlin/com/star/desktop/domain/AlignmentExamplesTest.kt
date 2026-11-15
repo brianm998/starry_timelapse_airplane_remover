@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 
 /** The example charts' data is `gherkin/ui/vectors/alignmentExamples.json` (the gui's `testAlignmentExamplesMatchVectors` checks the same file). */
 class AlignmentExamplesTest {
-    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText()
+    private fun read(path: String) = listOf(File(path), File("../$path")).first { it.isFile }.readText().replace("\r\n", "\n")
 
     @Test fun matchesVectors() {
         val doc = JsonParser.parseString(read("gherkin/ui/vectors/alignmentExamples.json")).asJsonObject

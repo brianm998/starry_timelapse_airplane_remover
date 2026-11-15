@@ -18,9 +18,9 @@ class CommandTableTest {
     private fun repoFile(relative: String): File =
         listOf(File("../$relative"), File(relative)).first { it.isFile }
 
-    private val table: JsonObject = JsonParser.parseString(repoFile("gherkin/ui/commands.json").readText()).asJsonObject
-    private val menu: String = repoFile("star-desktop/src/main/kotlin/com/star/desktop/ui/app/StarMenuBar.kt").readText()
-    private val english: JsonObject = JsonParser.parseString(repoFile("StarCore/Sources/StarCore/Resources/Localizations/en.json").readText()).asJsonObject
+    private val table: JsonObject = JsonParser.parseString(repoFile("gherkin/ui/commands.json").readText().replace("\r\n", "\n")).asJsonObject
+    private val menu: String = repoFile("star-desktop/src/main/kotlin/com/star/desktop/ui/app/StarMenuBar.kt").readText().replace("\r\n", "\n")
+    private val english: JsonObject = JsonParser.parseString(repoFile("StarCore/Sources/StarCore/Resources/Localizations/en.json").readText().replace("\r\n", "\n")).asJsonObject
 
     private val gaps: Set<String> = table.getAsJsonObject("knownGaps").getAsJsonObject("desktop").keySet()
 

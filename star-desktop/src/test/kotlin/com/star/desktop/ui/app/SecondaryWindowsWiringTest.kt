@@ -11,7 +11,7 @@ import kotlin.test.assertTrue
  */
 class SecondaryWindowsWiringTest {
     private val source: String =
-        listOf(File("src/main/kotlin/com/star/desktop/Main.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/Main.kt")).first { it.isFile }.readText()
+        listOf(File("src/main/kotlin/com/star/desktop/Main.kt"), File("star-desktop/src/main/kotlin/com/star/desktop/Main.kt")).first { it.isFile }.readText().replace("\r\n", "\n")
 
     @Test fun eachSecondaryWindowIsShownForItsFlagAndClosesIt() {
         for ((flag, close) in listOf(

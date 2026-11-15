@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
  * for windows (§6.3) and `AppViewModel` cannot be built in a test, so the wiring is read from the sources.
  */
 class MainWindowCloseTest {
-    private fun source(path: String) = listOf(File("src/main/kotlin/com/star/desktop/$path"), File("star-desktop/src/main/kotlin/com/star/desktop/$path")).first { it.isFile }.readText()
+    private fun source(path: String) = listOf(File("src/main/kotlin/com/star/desktop/$path"), File("star-desktop/src/main/kotlin/com/star/desktop/$path")).first { it.isFile }.readText().replace("\r\n", "\n")
 
     @Test fun aMacKeepsRunningAndTheOthersQuit() {
         assertEquals(MainWindowClose.UNLOAD_AND_HIDE, MainWindowClose.forSystem("Mac OS X"))
