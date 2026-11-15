@@ -260,13 +260,14 @@ async def test_the_hold_ends_when_the_session_errors_or_is_cancelled(rig: Rig, f
     assert fake_mason.read_text().count("released") == 2
 
 
-async def test_a_landing_stage_goes_before_new_work(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+async def _landing_scenario(rig: Rig, monkeypatch: pytest.MonkeyPatch, gates: list[Gate]) -> None:
     for n in (1, 2, 3):
         rig.gh.add_issue(n, f"t{n}", labels=("pipeline", "p2"))
     rig.engine.sync_issues()
     t2, t3 = rig.db.ticket(2), rig.db.ticket(3)
     assert t2 and t3
     gate = gated(rig, monkeypatch, 0)
+    gates.append(gate)
     rig.engine.landing_waiting.add(99)  # a landing stage already waits: new work holds back until it has gone
     new_work = asyncio.create_task(rig.engine._hold_session(t3, "develop", 1, "sonnet"))  # pyright: ignore[reportPrivateUsage]
     await until(lambda: rig.db.get("llm_wait:3") == "a landing stage is waiting for a session", 30)
@@ -279,8 +280,10 @@ async def test_a_landing_stage_goes_before_new_work(rig: Rig, monkeypatch: pytes
     await until(lambda: landing.done() or new_work.done(), 30)
     assert landing.done() and not new_work.done() and gate.started == ["starpipe #2 conflict"]
     stage_id, hold = landing.result()
-    await asyncio.sleep(0.05)
-    assert not new_work.done()
+    # new work now asks the gate too (the landing stage has gone from holding): wait until its hold is requested, polling a
+    # gate with no free unit, and only then check it has not been granted
+    await until(lambda: gate.requested == ["starpipe #2 conflict", "starpipe #3 develop"], 30)
+    assert not new_work.done() and gate.started == ["starpipe #2 conflict"]
     hold.release()
     rig.db.end_stage(stage_id, "accepted", 0.0, "")
     gate.grant_one_more()
@@ -288,6 +291,28 @@ async def test_a_landing_stage_goes_before_new_work(rig: Rig, monkeypatch: pytes
     _, hold3 = new_work.result()
     assert gate.started == ["starpipe #2 conflict", "starpipe #3 develop"]
     hold3.release()
+
+
+async def test_a_landing_stage_goes_before_new_work(rig: Rig, monkeypatch: pytest.MonkeyPatch) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    # each waiting hold parks a thread polling the gate: give the loop room so a small CI runner cannot starve it
+    pool = ThreadPoolExecutor(16)
+    asyncio.get_running_loop().set_default_executor(pool)
+    gates: list[Gate] = []
+    try:
+        await _landing_scenario(rig, monkeypatch, gates)
+    except (AssertionError, TimeoutError) as e:
+        g = gates[0] if gates else None
+        raise AssertionError(
+            f"{type(e).__name__}: {e}; landing_waiting={sorted(rig.engine.landing_waiting)} holding={rig.engine.holding!r} "
+            f"llm_waiting={rig.engine.llm_waiting!r} requested={g.requested if g else None} "
+            f"started={g.started if g else None} released={g.released if g else None}") from e
+    finally:
+        for t in asyncio.all_tasks():
+            if t is not asyncio.current_task():
+                t.cancel()
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 async def until(condition: Any, timeout: float = 10.0) -> None:
