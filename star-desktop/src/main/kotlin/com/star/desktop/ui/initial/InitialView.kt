@@ -2,7 +2,6 @@ package com.star.desktop.ui.initial
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Arrangement
@@ -179,20 +178,9 @@ private fun DropZone(vm: AppViewModel, onOpenSequence: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            DropZoneIcon()
+            ArtImage(StarArt.ART_DROP)
             Text(localized("ui.drop_a_video_an_image_sequence_or_an"), color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         }
-    }
-}
-
-/** The gui's `doc.on.doc` at 32pt: one document outline behind another, drawn rather than shipped as a resource. */
-@Composable
-private fun DropZoneIcon() {
-    Canvas(Modifier.size(32.dp)) {
-        val stroke = Stroke(1.6.dp.toPx())
-        val radius = CornerRadius(3.dp.toPx())
-        drawRoundRect(Color.White, topLeft = Offset(3.dp.toPx(), 2.dp.toPx()), size = Size(15.dp.toPx(), 19.dp.toPx()), cornerRadius = radius, style = stroke)
-        drawRoundRect(Color.White, topLeft = Offset(12.dp.toPx(), 9.dp.toPx()), size = Size(17.dp.toPx(), 21.dp.toPx()), cornerRadius = radius, style = stroke)
     }
 }
 
