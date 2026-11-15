@@ -86,6 +86,7 @@ struct PictureChoiceButton: View {
         }
           .buttonStyle(PlainButtonStyle())
           .focusable()
+          .focusEffectDisabled()
           .focused($focused)
           .onHover { hovering = $0 }
           .fixedSize(horizontal: true, vertical: true)
