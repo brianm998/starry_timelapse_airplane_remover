@@ -280,9 +280,10 @@ async def _landing_scenario(rig: Rig, monkeypatch: pytest.MonkeyPatch, gates: li
     await until(lambda: landing.done() or new_work.done(), 30)
     assert landing.done() and not new_work.done() and gate.started == ["starpipe #2 conflict"]
     stage_id, hold = landing.result()
-    for _ in range(20):  # let new work have every chance to wrongly take a unit
-        await asyncio.sleep(0)
-    assert not new_work.done()
+    # new work now asks the gate too (the landing stage has gone from holding): wait until its hold is requested, polling a
+    # gate with no free unit, and only then check it has not been granted
+    await until(lambda: gate.requested == ["starpipe #2 conflict", "starpipe #3 develop"], 30)
+    assert not new_work.done() and gate.started == ["starpipe #2 conflict"]
     hold.release()
     rig.db.end_stage(stage_id, "accepted", 0.0, "")
     gate.grant_one_more()
@@ -314,7 +315,7 @@ async def test_a_landing_stage_goes_before_new_work(rig: Rig, monkeypatch: pytes
         pool.shutdown(wait=False, cancel_futures=True)
 
 
-async def until(condition: Any, timeout: float = 120.0) -> None:
+async def until(condition: Any, timeout: float = 10.0) -> None:
     deadline = time.monotonic() + timeout
     while not condition():
         assert time.monotonic() < deadline, "timed out"
