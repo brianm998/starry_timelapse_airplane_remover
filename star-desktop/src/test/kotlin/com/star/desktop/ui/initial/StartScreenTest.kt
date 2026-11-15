@@ -47,7 +47,7 @@ class StartScreenTest {
         assertNotEquals(english, localized(key), "$key is English in German")
     }
 
-    /** The zone says what the gui's does (its key, the drop-zone art, a dashed border that goes accent under a drag) and is clickable, with a hover text. */
+    /** The zone says what the gui's does (its key, the drop art, a dashed border that goes accent under a drag) and is clickable, with a hover text. */
     @Test fun theDropZoneSaysWhatTheGuisSays() {
         val source = read("star-desktop/src/main/kotlin/com/star/desktop/ui/initial/InitialView.kt")
         for (needle in listOf(
