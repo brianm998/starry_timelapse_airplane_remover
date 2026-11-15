@@ -1260,5 +1260,21 @@
   "ui.mode_desc_dirty": "Star sẽ chạy ở chế độ chưa làm sạch, ngược với làm sạch. Mỗi điểm ảnh trở thành ảnh gốc trừ đi khung tham chiếu đã căn chỉnh, nên các ngôi sao đứng yên và mặt đất đứng yên chuyển thành màu đen và chỉ những gì đã di chuyển, như máy bay, vệ tinh và sao băng, mới giữ màu. Tham chiếu là phép căn chỉnh theo sao trên bầu trời và phép căn chỉnh theo mặt đất trên mặt đất; khi không phát hiện đường chân trời, đó là phép căn chỉnh theo sao trên toàn khung. Không phát hiện giá trị ngoại lai nào, nên không có gì để xem lại ở từng khung.",
   "ui.frame_mode_desc_dirty": "Chỉ giữ lại những gì đã di chuyển trong khung này, cả trên bầu trời lẫn trên mặt đất (ảnh gốc trừ đi tham chiếu đã căn chỉnh). Khung này không có gì để xem lại.",
   "ui.this_frame_uses_dirty": "Khung này dùng chế độ chưa làm sạch",
-  "view_mode.dirtyProcessed": "chưa làm sạch"
+  "view_mode.dirtyProcessed": "chưa làm sạch",
+  "ui.info_about_name": "Star là Starry Timelapse Airplane Remover (trình xóa máy bay cho timelapse bầu trời sao).",
+  "ui.info_about_purpose": "Nó làm sạch các timelapse bầu trời đêm: những vệt mà máy bay và vệ tinh để lại trên bầu trời được coi là nhiễu và bị loại bỏ.",
+  "ui.info_about_license": "Star là phần mềm tự do theo giấy phép GPL v3: được dùng miễn phí, với mã nguồn mở cho mọi người. Mã nguồn ở đây:",
+  "ui.info_about_what_it_does": "Star lấy chuỗi ảnh của một timelapse, xử lý nó và ghi ra một chuỗi ảnh mới trong đó các vệt trên bầu trời được che đi. Star có thể mở trực tiếp một tệp video hoặc một thư mục ảnh.",
+  "ui.info_about_video_formats": "Khi mở một video, Star trước tiên tách nó thành mỗi khung hình một ảnh, theo định dạng bạn chọn: TIFF 16 bit (mặc định và chất lượng tốt nhất), TIFF 8 bit, hoặc JPEG với mức chất lượng tùy chỉnh (mặc định 80%). Hộp thoại ước tính mỗi lựa chọn cần bao nhiêu dung lượng đĩa.",
+  "ui.info_about_image_formats": "Chuỗi ảnh có thể là ảnh TIFF, JPEG hoặc PNG. Ảnh đã xử lý được ghi theo cùng định dạng với ảnh gốc: chuỗi JPEG cho ra JPEG, còn chuỗi TIFF 8 bit cho ra TIFF 8 bit.",
+  "ui.info_how_to_import_title": "Mở cảnh quay của bạn",
+  "ui.info_how_to_import_body": "Nhấp {0} để mở video timelapse, hoặc {1} để mở thư mục chứa các khung của video đó. Bạn cũng có thể thả một trong hai vào màn hình bắt đầu. Video trước tiên được tách thành một ảnh cho mỗi khung, theo định dạng bạn chọn.",
+  "ui.info_how_to_questions_title": "Trả lời vài câu hỏi",
+  "ui.info_how_to_questions_body": "Star hỏi cảnh quay có đường chân trời hay không, máy ảnh có di chuyển không và cách làm sạch video. Nếu có đường chân trời, bạn có thể tự quét cọ dọc theo nó hoặc để Star tìm giúp. Bạn có thể đổi bất kỳ câu trả lời nào sau này trong {0}.",
+  "ui.info_how_to_process_title": "Xử lý các khung",
+  "ui.info_how_to_process_body": "Nhấp {0}. Star căn chỉnh từng khung với các khung lân cận và thay thế những vệt do máy bay và vệ tinh để lại. Chuỗi dài hoặc lớn sẽ mất một lúc: cửa sổ xử lý cho biết tiến độ, và bạn có thể xem các khung ngay khi chúng hoàn tất.",
+  "ui.info_how_to_review_title": "Kiểm tra kết quả",
+  "ui.info_how_to_review_body": "Phát hoặc kéo qua các khung đã xử lý. Ở chế độ chọn lọc, Star đánh dấu những gì nó tìm thấy trong mỗi khung, và các công cụ chỉnh sửa bên phải cho phép bạn tự tay xóa hoặc giữ từng vệt.",
+  "ui.info_how_to_render_title": "Kết xuất video",
+  "ui.info_how_to_render_body": "Nhấp {0} để tạo video từ các khung đã xử lý. Bản thân các khung được giữ trong một thư mục cạnh chuỗi gốc của bạn, cùng với một tệp cấu hình mà {1} sẽ mở lại sau này."
 }

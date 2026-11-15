@@ -1260,5 +1260,21 @@
   "ui.mode_desc_dirty": "Star akan berjalan dalam mode tanpa pembersihan, kebalikan dari pembersihan. Setiap piksel menjadi aslinya dikurangi bingkai referensi yang disejajarkan, sehingga bintang dan daratan yang diam menjadi hitam dan hanya yang bergerak, seperti pesawat, satelit, dan meteor, yang mempertahankan warnanya. Referensinya adalah penyejajaran bintang di langit dan penyejajaran daratan di daratan; tanpa deteksi cakrawala, referensinya adalah penyejajaran bintang di seluruh bingkai. Tidak ada pencilan yang dideteksi, jadi tidak ada yang perlu ditinjau per bingkai.",
   "ui.frame_mode_desc_dirty": "Hanya menyimpan yang bergerak pada bingkai ini, baik di langit maupun di daratan (aslinya dikurangi referensi yang disejajarkan). Tidak ada yang perlu ditinjau pada bingkai ini.",
   "ui.this_frame_uses_dirty": "Bingkai ini memakai mode tanpa pembersihan",
-  "view_mode.dirtyProcessed": "tanpa pembersihan"
+  "view_mode.dirtyProcessed": "tanpa pembersihan",
+  "ui.info_about_name": "Star adalah Starry Timelapse Airplane Remover (penghapus pesawat untuk timelapse berbintang).",
+  "ui.info_about_purpose": "Star membersihkan timelapse langit malam: garis-garis yang ditinggalkan pesawat dan satelit di langit dianggap sebagai derau dan dihapus.",
+  "ui.info_about_license": "Star adalah perangkat lunak bebas berlisensi GPL v3: bebas digunakan, dengan kode sumber yang terbuka untuk semua orang. Kode sumbernya ada di sini:",
+  "ui.info_about_what_it_does": "Star mengambil urutan gambar dari sebuah timelapse, memprosesnya, lalu menulis urutan gambar baru yang garis-garis di langitnya disembunyikan. Star dapat membuka langsung berkas video atau folder berisi gambar.",
+  "ui.info_about_video_formats": "Saat membuka video, Star lebih dulu memecahnya menjadi satu gambar per frame, dalam format pilihan Anda: TIFF 16-bit (bawaan dan kualitas terbaik), TIFF 8-bit, atau JPEG dengan pengaturan kualitas (80% secara bawaan). Dialog memperkirakan berapa ruang disk yang dibutuhkan setiap pilihan.",
+  "ui.info_about_image_formats": "Urutan gambar dapat berupa gambar TIFF, JPEG, atau PNG. Gambar yang telah diproses ditulis dalam format yang sama dengan gambar asalnya: urutan JPEG menghasilkan JPEG, dan urutan TIFF 8-bit menghasilkan TIFF 8-bit.",
+  "ui.info_how_to_import_title": "Buka rekaman Anda",
+  "ui.info_how_to_import_body": "Klik {0} untuk membuka video timelapse, atau {1} untuk membuka folder berisi bingkainya. Anda juga bisa menjatuhkan salah satunya ke layar awal. Video lebih dulu dipecah menjadi satu gambar per bingkai, dalam format yang Anda pilih.",
+  "ui.info_how_to_questions_title": "Jawab beberapa pertanyaan",
+  "ui.info_how_to_questions_body": "Star menanyakan apakah rekaman memuat horizon, apakah kamera bergerak, dan bagaimana video dibersihkan. Jika ada horizon, Anda bisa menyapukan kuas di sepanjangnya sendiri atau membiarkan Star menemukannya. Anda bisa mengubah jawaban apa pun nanti di {0}.",
+  "ui.info_how_to_process_title": "Proses bingkainya",
+  "ui.info_how_to_process_body": "Klik {0}. Star menyelaraskan setiap bingkai dengan bingkai tetangganya dan mengganti goresan yang ditinggalkan pesawat dan satelit. Urutan yang panjang atau besar butuh waktu: jendela pemrosesan menunjukkan kemajuannya, dan Anda bisa melihat bingkai satu per satu begitu selesai.",
+  "ui.info_how_to_review_title": "Periksa hasilnya",
+  "ui.info_how_to_review_body": "Putar atau geser melalui bingkai yang sudah diproses. Dalam mode selektif, Star menandai apa yang ditemukannya di setiap bingkai, dan alat penyuntingan di sebelah kanan memungkinkan Anda menghapus atau mempertahankan setiap goresan secara manual.",
+  "ui.info_how_to_render_title": "Render videonya",
+  "ui.info_how_to_render_body": "Klik {0} untuk membuat video dari bingkai yang sudah diproses. Bingkai itu sendiri disimpan di folder di samping urutan asli Anda, bersama berkas konfigurasi yang dibuka kembali oleh {1} nanti."
 }

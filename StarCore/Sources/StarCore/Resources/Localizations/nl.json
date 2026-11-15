@@ -1260,5 +1260,21 @@
   "ui.mode_desc_dirty": "Star draait in de modus onopgeschoond, het tegenovergestelde van opschonen. Elke pixel wordt het origineel min het uitgelijnde referentiebeeld, dus stilstaande sterren en stilstaande grond worden zwart en alleen wat bewoog, zoals vliegtuigen, satellieten en meteoren, houdt zijn kleur. De referentie is de steruitlijning in de lucht en de aarduitlijning op de grond; zonder horizondetectie is het de steruitlijning over het hele beeld. Er worden geen uitschieters gedetecteerd, dus er valt per beeld niets te beoordelen.",
   "ui.frame_mode_desc_dirty": "Houdt alleen over wat er in dit beeld bewoog, in de lucht en op de grond (het origineel min de uitgelijnde referentie). Er valt op dit beeld niets te beoordelen.",
   "ui.this_frame_uses_dirty": "Dit beeld gebruikt de modus onopgeschoond",
-  "view_mode.dirtyProcessed": "onopgeschoond"
+  "view_mode.dirtyProcessed": "onopgeschoond",
+  "ui.info_about_name": "Star is de Starry Timelapse Airplane Remover (vliegtuigverwijderaar voor sterrentimelapses).",
+  "ui.info_about_purpose": "Het ruimt timelapses van de nachtelijke hemel op: de strepen die vliegtuigen en satellieten aan de hemel achterlaten behandelt het als ruis en verwijdert ze.",
+  "ui.info_about_license": "Star is vrije software onder de GPL v3-licentie: gratis te gebruiken, met een broncode die voor iedereen open is. De broncode vind je hier:",
+  "ui.info_about_what_it_does": "Star neemt de beeldreeks van een timelapse, verwerkt die en schrijft een nieuwe beeldreeks waarin de strepen aan de hemel zijn verborgen. Het kan direct een videobestand openen, of een map met afbeeldingen.",
+  "ui.info_about_video_formats": "Wanneer Star een video opent, splitst het die eerst in één afbeelding per frame, in het formaat dat je kiest: 16-bits TIFF (de standaard en de beste kwaliteit), 8-bits TIFF, of JPEG met een kwaliteitsinstelling (standaard 80%). Het dialoogvenster schat hoeveel schijfruimte elke keuze nodig heeft.",
+  "ui.info_about_image_formats": "Beeldreeksen kunnen TIFF-, JPEG- of PNG-afbeeldingen zijn. Verwerkte afbeeldingen worden in hetzelfde formaat geschreven als de afbeeldingen waaruit ze komen: een JPEG-reeks komt dus uit als JPEG's, en een 8-bits TIFF-reeks als 8-bits TIFF's.",
+  "ui.info_how_to_import_title": "Open je beeldmateriaal",
+  "ui.info_how_to_import_body": "Klik op {0} om een timelapse-video te openen, of op {1} om een map met de beelden ervan te openen. Je kunt beide ook op het startscherm neerzetten. Een video wordt eerst opgesplitst in één afbeelding per beeld, in het formaat dat je kiest.",
+  "ui.info_how_to_questions_title": "Beantwoord een paar vragen",
+  "ui.info_how_to_questions_body": "Star vraagt of het materiaal een horizon bevat, of de camera bewogen heeft en hoe de video moet worden opgeschoond. Als er een horizon is, kun je er zelf met de penseel langs strijken of Star hem laten vinden. Je kunt elk antwoord later wijzigen in {0}.",
+  "ui.info_how_to_process_title": "Verwerk de beelden",
+  "ui.info_how_to_process_body": "Klik op {0}. Star lijnt elk beeld uit met de naburige beelden en vervangt de strepen die vliegtuigen en satellieten achterlaten. Lange of grote reeksen duren even: het verwerkingsvenster toont de voortgang en je kunt door de beelden bladeren zodra ze klaar zijn.",
+  "ui.info_how_to_review_title": "Controleer het resultaat",
+  "ui.info_how_to_review_body": "Speel de verwerkte beelden af of scrub erdoorheen. In de selectieve modus markeert Star wat het in elk beeld gevonden heeft, en met de bewerkingsgereedschappen rechts verwijder of behoud je elke streep met de hand.",
+  "ui.info_how_to_render_title": "Render de video",
+  "ui.info_how_to_render_body": "Klik op {0} om van de verwerkte beelden een video te maken. De beelden zelf blijven bewaard in een map naast je oorspronkelijke reeks, met een configuratiebestand dat {1} later weer opent."
 }

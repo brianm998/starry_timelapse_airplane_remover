@@ -82,7 +82,20 @@ enum class StarArt(val slot: String, val file: String, val kind: ArtKind, val wi
     ART_SETTING_KEYPOINT_SIZE("art_setting_keypoint_size", "art_setting_keypoint_size.jpg", ArtKind.SCENE, 210, 140),
     ART_PAINT_ROBOT("art_paint_robot", "art_paint_robot.png", ArtKind.CUTOUT, 96, 90),
     ART_REAL_BEFORE("art_real_before", "art_real_before.jpg", ArtKind.SCENE, 248, 140),
-    ART_REAL_AFTER("art_real_after", "art_real_after.jpg", ArtKind.SCENE, 248, 140);
+    ART_REAL_AFTER("art_real_after", "art_real_after.jpg", ArtKind.SCENE, 248, 140),
+    ART_HOWTO_IMPORT("art_howto_import", "art_howto_import.png", ArtKind.CUTOUT, 89, 96),
+    ART_HOWTO_QUESTIONS("art_howto_questions", "art_howto_questions.png", ArtKind.CUTOUT, 73, 96),
+    ART_HOWTO_PROCESS("art_howto_process", "art_howto_process.png", ArtKind.CUTOUT, 96, 96),
+    ART_STAGE_HORIZON("art_stage_horizon", "art_stage_horizon.jpg", ArtKind.SCENE, 480, 200),
+    ART_STAGE_NEIGHBORS("art_stage_neighbors", "art_stage_neighbors.jpg", ArtKind.SCENE, 480, 200),
+    ART_STAGE_ALIGNED("art_stage_aligned", "art_stage_aligned.jpg", ArtKind.SCENE, 480, 200),
+    ART_STAGE_CONDENSED("art_stage_condensed", "art_stage_condensed.jpg", ArtKind.SCENE, 480, 200),
+    ART_STAGE_SUBTRACTION("art_stage_subtraction", "art_stage_subtraction.jpg", ArtKind.SCENE, 480, 200),
+    ART_STAGE_BLOBS("art_stage_blobs", "art_stage_blobs.jpg", ArtKind.SCENE, 480, 200),
+    ART_STAGE_BLOB_PROCESSING("art_stage_blob_processing", "art_stage_blob_processing.jpg", ArtKind.SCENE, 480, 200),
+    ART_STAGE_CLASSIFICATION("art_stage_classification", "art_stage_classification.jpg", ArtKind.SCENE, 480, 200),
+    ART_STAGE_REMOVAL_MASK("art_stage_removal_mask", "art_stage_removal_mask.jpg", ArtKind.SCENE, 480, 200),
+    ART_STAGE_FINAL("art_stage_final", "art_stage_final.jpg", ArtKind.SCENE, 480, 200);
 
     val resourcePath: String get() = "art/$file"
 }

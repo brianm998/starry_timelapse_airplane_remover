@@ -17,7 +17,7 @@ class StarArtTest {
 
     @Test
     fun everySlotLoads() {
-        assertEquals(71, StarArt.entries.size)
+        assertEquals(84, StarArt.entries.size)
         for (art in StarArt.entries) {
             val img = load(art)
             // The resource is the 2x image, or the largest the master allows (never upscaled).

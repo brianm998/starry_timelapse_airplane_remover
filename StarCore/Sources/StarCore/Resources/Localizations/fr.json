@@ -1260,5 +1260,21 @@
   "ui.mode_desc_dirty": "Star fonctionnera en mode non nettoyé, l'inverse du nettoyage. Chaque pixel devient l'original moins l'image de référence alignée : les étoiles fixes et le sol fixe passent au noir, et seul ce qui a bougé, comme les avions, les satellites et les météores, garde sa couleur. La référence est l'alignement des étoiles dans le ciel et l'alignement du sol au sol ; sans détection d'horizon, c'est l'alignement des étoiles sur toute l'image. Aucune valeur aberrante n'est détectée, il n'y a donc rien à examiner image par image.",
   "ui.frame_mode_desc_dirty": "Ne garde que ce qui a bougé dans cette image, dans le ciel comme au sol (l'original moins la référence alignée). Il n'y a rien à examiner sur cette image.",
   "ui.this_frame_uses_dirty": "Cette image utilise le mode non nettoyé",
-  "view_mode.dirtyProcessed": "non nettoyé"
+  "view_mode.dirtyProcessed": "non nettoyé",
+  "ui.info_about_name": "Star est le Starry Timelapse Airplane Remover (suppresseur d'avions pour timelapses étoilés).",
+  "ui.info_about_purpose": "Il nettoie les timelapses du ciel nocturne : il traite les traînées que les avions et les satellites laissent dans le ciel comme du bruit, et les supprime.",
+  "ui.info_about_license": "Star est un logiciel libre sous licence GPL v3 : libre d'utilisation, avec un code source ouvert à tous. Le code source se trouve ici :",
+  "ui.info_about_what_it_does": "Star prend la séquence d'images d'un timelapse, la traite et écrit une nouvelle séquence d'images dans laquelle les traînées du ciel sont masquées. Il peut ouvrir directement un fichier vidéo ou un dossier d'images.",
+  "ui.info_about_video_formats": "À l'ouverture d'une vidéo, Star la découpe d'abord en une image par trame, dans le format de votre choix : TIFF 16 bits (par défaut et de meilleure qualité), TIFF 8 bits ou JPEG avec un réglage de qualité (80 % par défaut). La boîte de dialogue estime l'espace disque nécessaire à chaque choix.",
+  "ui.info_about_image_formats": "Les séquences d'images peuvent être des images TIFF, JPEG ou PNG. Les images traitées sont écrites dans le même format que celles dont elles proviennent : une séquence JPEG ressort en JPEG, et une séquence TIFF 8 bits en TIFF 8 bits.",
+  "ui.info_how_to_import_title": "Ouvrez vos images",
+  "ui.info_how_to_import_body": "Cliquez sur {0} pour ouvrir une vidéo en timelapse, ou sur {1} pour ouvrir un dossier de ses images. Vous pouvez aussi déposer l'un ou l'autre sur l'écran de démarrage. Une vidéo est d'abord découpée en une image par image, au format de votre choix.",
+  "ui.info_how_to_questions_title": "Répondez à quelques questions",
+  "ui.info_how_to_questions_body": "Star demande si les images comportent un horizon, si la caméra a bougé et comment nettoyer la vidéo. S'il y a un horizon, vous pouvez le tracer vous-même au pinceau ou laisser Star le trouver. Vous pouvez modifier chaque réponse plus tard dans {0}.",
+  "ui.info_how_to_process_title": "Traitez les images",
+  "ui.info_how_to_process_body": "Cliquez sur {0}. Star aligne chaque image sur ses images voisines et remplace les traînées laissées par les avions et les satellites. Les séquences longues ou volumineuses prennent du temps : la fenêtre de traitement indique l'avancement, et vous pouvez parcourir les images au fur et à mesure.",
+  "ui.info_how_to_review_title": "Vérifiez le résultat",
+  "ui.info_how_to_review_body": "Lisez les images traitées ou parcourez-les avec le curseur. En mode sélectif, Star marque ce qu'il a trouvé dans chaque image, et les outils d'édition à droite vous permettent de supprimer ou de conserver chaque traînée à la main.",
+  "ui.info_how_to_render_title": "Générez la vidéo",
+  "ui.info_how_to_render_body": "Cliquez sur {0} pour créer une vidéo à partir des images traitées. Les images elles-mêmes sont conservées dans un dossier à côté de votre séquence d'origine, avec un fichier de configuration que {1} rouvre plus tard."
 }

@@ -1260,5 +1260,21 @@
   "ui.mode_desc_dirty": "Star temizlenmemiş kipte çalışacak; bu, temizlemenin tersidir. Her piksel, orijinalden hizalanmış referans karenin çıkarılmasıyla elde edilen değer olur; böylece sabit yıldızlar ve sabit zemin siyaha döner, yalnızca hareket eden şeyler, örneğin uçaklar, uydular ve meteorlar rengini korur. Referans, gökyüzünde yıldız hizalaması, zeminde zemin hizalamasıdır; ufuk algılama kapalıysa tüm karede yıldız hizalamasıdır. Aykırı değer algılanmaz, bu yüzden karelerde tek tek incelenecek bir şey yoktur.",
   "ui.frame_mode_desc_dirty": "Bu karede hem gökyüzünde hem zeminde yalnızca hareket edeni tutar (orijinal eksi hizalanmış referans). Bu karede incelenecek bir şey yoktur.",
   "ui.this_frame_uses_dirty": "Bu kare temizlenmemiş kipi kullanıyor",
-  "view_mode.dirtyProcessed": "temizlenmemiş"
+  "view_mode.dirtyProcessed": "temizlenmemiş",
+  "ui.info_about_name": "Star, Starry Timelapse Airplane Remover'dır (yıldızlı zaman atlamalı videolar için uçak silici).",
+  "ui.info_about_purpose": "Gece gökyüzü zaman atlamalı videolarını temizler: uçakların ve uyduların gökyüzünde bıraktığı çizgileri gürültü sayar ve kaldırır.",
+  "ui.info_about_license": "Star, GPL v3 lisansı altında özgür bir yazılımdır: kullanımı serbesttir ve kaynak kodu herkese açıktır. Kaynak kodu burada:",
+  "ui.info_about_what_it_does": "Star, bir zaman atlamalı videonun görüntü dizisini alır, işler ve gökyüzündeki çizgilerin gizlendiği yeni bir görüntü dizisi yazar. Doğrudan bir video dosyasını ya da görüntü içeren bir klasörü açabilir.",
+  "ui.info_about_video_formats": "Bir videoyu açarken Star önce onu her kare için bir görüntü olacak şekilde, seçtiğiniz biçimde böler: 16 bit TIFF (varsayılan ve en iyi kalite), 8 bit TIFF veya kalite ayarlı JPEG (varsayılan %80). Pencere her seçimin ne kadar disk alanı gerektirdiğini tahmin eder.",
+  "ui.info_about_image_formats": "Görüntü dizileri TIFF, JPEG veya PNG görüntülerinden oluşabilir. İşlenen görüntüler geldikleri görüntülerle aynı biçimde yazılır: JPEG dizisi JPEG olarak, 8 bit TIFF dizisi 8 bit TIFF olarak çıkar.",
+  "ui.info_how_to_import_title": "Görüntülerinizi açın",
+  "ui.info_how_to_import_body": "Bir timelapse videosunu açmak için {0}, karelerinin bulunduğu klasörü açmak için {1} düğmesine tıklayın. İkisinden birini başlangıç ekranına da bırakabilirsiniz. Video önce, seçtiğiniz biçimde, her kare için bir görüntüye ayrılır.",
+  "ui.info_how_to_questions_title": "Birkaç soruyu yanıtlayın",
+  "ui.info_how_to_questions_body": "Star, görüntülerde ufuk olup olmadığını, kameranın hareket edip etmediğini ve videonun nasıl temizleneceğini sorar. Ufuk varsa üzerinden fırçayla kendiniz geçebilir ya da Star'ın bulmasına izin verebilirsiniz. Her yanıtı daha sonra {0} içinde değiştirebilirsiniz.",
+  "ui.info_how_to_process_title": "Kareleri işleyin",
+  "ui.info_how_to_process_body": "{0} düğmesine tıklayın. Star her kareyi komşu kareleriyle hizalar ve uçakların ve uyduların bıraktığı izleri değiştirir. Uzun veya büyük dizilerin işlenmesi biraz sürer: işleme penceresi ilerlemeyi gösterir ve biten kareleri hemen inceleyebilirsiniz.",
+  "ui.info_how_to_review_title": "Sonucu kontrol edin",
+  "ui.info_how_to_review_body": "İşlenmiş kareleri oynatın veya kaydırarak gezin. Seçici modda Star her karede bulduklarını işaretler, sağdaki düzenleme araçlarıyla da her izi elle kaldırabilir veya tutabilirsiniz.",
+  "ui.info_how_to_render_title": "Videoyu oluşturun",
+  "ui.info_how_to_render_body": "İşlenmiş karelerden bir video oluşturmak için {0} düğmesine tıklayın. Kareler, özgün dizinizin yanındaki bir klasörde saklanır; yanında da {1} ile daha sonra yeniden açılabilen bir yapılandırma dosyası bulunur."
 }

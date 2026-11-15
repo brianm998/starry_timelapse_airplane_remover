@@ -531,6 +531,97 @@
    "kind": "scene",
    "width": 248,
    "height": 140
+  },
+  {
+   "name": "art_howto_import",
+   "source": "IM-1",
+   "kind": "cutout",
+   "width": 96,
+   "height": 96
+  },
+  {
+   "name": "art_howto_questions",
+   "source": "ST-9",
+   "kind": "cutout",
+   "width": 96,
+   "height": 96
+  },
+  {
+   "name": "art_howto_process",
+   "source": "PR-1",
+   "kind": "cutout",
+   "width": 96,
+   "height": 96
+  },
+  {
+   "name": "art_stage_horizon",
+   "source": "HP-3a",
+   "kind": "scene",
+   "width": 480,
+   "height": 200
+  },
+  {
+   "name": "art_stage_neighbors",
+   "source": "HP-3b",
+   "kind": "scene",
+   "width": 480,
+   "height": 200
+  },
+  {
+   "name": "art_stage_aligned",
+   "source": "HP-3c",
+   "kind": "scene",
+   "width": 480,
+   "height": 200
+  },
+  {
+   "name": "art_stage_condensed",
+   "source": "HP-3d",
+   "kind": "scene",
+   "width": 480,
+   "height": 200
+  },
+  {
+   "name": "art_stage_subtraction",
+   "source": "HP-3e",
+   "kind": "scene",
+   "width": 480,
+   "height": 200
+  },
+  {
+   "name": "art_stage_blobs",
+   "source": "HP-3f",
+   "kind": "scene",
+   "width": 480,
+   "height": 200
+  },
+  {
+   "name": "art_stage_blob_processing",
+   "source": "HP-3g",
+   "kind": "scene",
+   "width": 480,
+   "height": 200
+  },
+  {
+   "name": "art_stage_classification",
+   "source": "HP-3h",
+   "kind": "scene",
+   "width": 480,
+   "height": 200
+  },
+  {
+   "name": "art_stage_removal_mask",
+   "source": "HP-3i",
+   "kind": "scene",
+   "width": 480,
+   "height": 200
+  },
+  {
+   "name": "art_stage_final",
+   "source": "HP-3j",
+   "kind": "scene",
+   "width": 480,
+   "height": 200
   }
  ]
 }

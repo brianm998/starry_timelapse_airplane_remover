@@ -1260,5 +1260,21 @@
   "ui.mode_desc_dirty": "Star se ejecutará en el modo sin limpiar, lo contrario de limpiar. Cada píxel pasa a ser el original menos el fotograma de referencia alineado, de modo que las estrellas fijas y la tierra fija quedan en negro y solo lo que se movió, como aviones, satélites y meteoros, conserva su color. La referencia es la alineación de estrellas en el cielo y la alineación de la tierra en el suelo; sin detección del horizonte es la alineación de estrellas en todo el fotograma. No se detectan valores atípicos, así que no hay nada que revisar en cada fotograma.",
   "ui.frame_mode_desc_dirty": "Conserva solo lo que se movió en este fotograma, tanto en el cielo como en la tierra (el original menos la referencia alineada). No hay nada que revisar en este fotograma.",
   "ui.this_frame_uses_dirty": "Este fotograma usa el modo sin limpiar",
-  "view_mode.dirtyProcessed": "sin limpiar"
+  "view_mode.dirtyProcessed": "sin limpiar",
+  "ui.info_about_name": "Star es el Starry Timelapse Airplane Remover (eliminador de aviones de timelapses estrellados).",
+  "ui.info_about_purpose": "Limpia los timelapses del cielo nocturno: trata las estelas que dejan los aviones y los satélites en el cielo como ruido y las elimina.",
+  "ui.info_about_license": "Star es software libre con licencia GPL v3: gratuito y con el código fuente abierto a todos. El código fuente está aquí:",
+  "ui.info_about_what_it_does": "Star toma la secuencia de imágenes de un timelapse, la procesa y escribe una nueva secuencia de imágenes en la que las estelas del cielo quedan ocultas. Puede abrir directamente un archivo de vídeo o una carpeta de imágenes.",
+  "ui.info_about_video_formats": "Al abrir un vídeo, Star primero lo divide en una imagen por fotograma, en el formato que elijas: TIFF de 16 bits (el predeterminado y el de mejor calidad), TIFF de 8 bits o JPEG con un ajuste de calidad (80 % por defecto). El diálogo estima cuánto espacio en disco necesita cada opción.",
+  "ui.info_about_image_formats": "Las secuencias de imágenes pueden ser TIFF, JPEG o PNG. Las imágenes procesadas se escriben en el mismo formato que las originales: una secuencia JPEG sale en JPEG y una secuencia TIFF de 8 bits en TIFF de 8 bits.",
+  "ui.info_how_to_import_title": "Abre tu material",
+  "ui.info_how_to_import_body": "Haz clic en {0} para abrir un video de timelapse, o en {1} para abrir una carpeta con sus fotogramas. También puedes arrastrar cualquiera de los dos a la pantalla de inicio. Un video se divide primero en una imagen por fotograma, en el formato que elijas.",
+  "ui.info_how_to_questions_title": "Responde unas preguntas",
+  "ui.info_how_to_questions_body": "Star pregunta si el material incluye un horizonte, si la cámara se movió y cómo limpiar el video. Si hay un horizonte, puedes trazarlo tú con el pincel o dejar que Star lo encuentre. Puedes cambiar cualquier respuesta más tarde en {0}.",
+  "ui.info_how_to_process_title": "Procesa los fotogramas",
+  "ui.info_how_to_process_body": "Haz clic en {0}. Star alinea cada fotograma con los fotogramas vecinos y reemplaza las estelas que dejan los aviones y los satélites. Las secuencias largas o grandes tardan un poco: la ventana de procesamiento muestra el avance y puedes recorrer los fotogramas a medida que terminan.",
+  "ui.info_how_to_review_title": "Revisa el resultado",
+  "ui.info_how_to_review_body": "Reproduce los fotogramas procesados o recórrelos con el deslizador. En el modo selectivo, Star marca lo que encontró en cada fotograma, y las herramientas de edición de la derecha te permiten quitar o conservar cada estela a mano.",
+  "ui.info_how_to_render_title": "Renderiza el video",
+  "ui.info_how_to_render_body": "Haz clic en {0} para crear un video a partir de los fotogramas procesados. Los fotogramas se guardan en una carpeta junto a tu secuencia original, con un archivo de configuración que {1} vuelve a abrir más tarde."
 }

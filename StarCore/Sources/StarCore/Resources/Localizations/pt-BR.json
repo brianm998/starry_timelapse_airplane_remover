@@ -1260,5 +1260,21 @@
   "ui.mode_desc_dirty": "O star vai rodar no modo sem limpeza, o oposto de limpar. Cada pixel passa a ser o original menos o quadro de referência alinhado, então as estrelas fixas e o solo parado ficam pretos e só o que se moveu, como aviões, satélites e meteoros, mantém sua cor. A referência é o alinhamento das estrelas no céu e o alinhamento do solo no solo; sem a detecção de horizonte, é o alinhamento das estrelas em todo o quadro. Nenhum valor atípico é detectado, então não há nada para revisar em cada quadro.",
   "ui.frame_mode_desc_dirty": "Mantém só o que se moveu neste quadro, tanto no céu quanto no solo (o original menos a referência alinhada). Não há nada para revisar neste quadro.",
   "ui.this_frame_uses_dirty": "Este quadro usa o modo sem limpeza",
-  "view_mode.dirtyProcessed": "sem limpeza"
+  "view_mode.dirtyProcessed": "sem limpeza",
+  "ui.info_about_name": "Star é o Starry Timelapse Airplane Remover (removedor de aviões de timelapses estrelados).",
+  "ui.info_about_purpose": "Ele limpa timelapses do céu noturno: trata os rastros que aviões e satélites deixam no céu como ruído e os remove.",
+  "ui.info_about_license": "Star é software livre sob a licença GPL v3: livre para usar, com o código-fonte aberto a todos. O código-fonte está aqui:",
+  "ui.info_about_what_it_does": "O Star pega a sequência de imagens de um timelapse, a processa e grava uma nova sequência de imagens em que os rastros no céu ficam escondidos. Ele pode abrir diretamente um arquivo de vídeo ou uma pasta de imagens.",
+  "ui.info_about_video_formats": "Ao abrir um vídeo, o Star primeiro o divide em uma imagem por quadro, no formato que você escolher: TIFF de 16 bits (o padrão e o de melhor qualidade), TIFF de 8 bits ou JPEG com um ajuste de qualidade (80% por padrão). A caixa de diálogo estima quanto espaço em disco cada escolha exige.",
+  "ui.info_about_image_formats": "As sequências de imagens podem ser TIFF, JPEG ou PNG. As imagens processadas são gravadas no mesmo formato das imagens de origem: uma sequência JPEG sai em JPEG e uma sequência TIFF de 8 bits em TIFF de 8 bits.",
+  "ui.info_how_to_import_title": "Abra suas filmagens",
+  "ui.info_how_to_import_body": "Clique em {0} para abrir um vídeo de timelapse, ou em {1} para abrir uma pasta com os quadros dele. Você também pode soltar qualquer um dos dois na tela inicial. Um vídeo é primeiro dividido em uma imagem por quadro, no formato que você escolher.",
+  "ui.info_how_to_questions_title": "Responda a algumas perguntas",
+  "ui.info_how_to_questions_body": "O Star pergunta se a filmagem inclui um horizonte, se a câmera se moveu e como limpar o vídeo. Se houver um horizonte, você mesmo pode passar o pincel sobre ele ou deixar o Star encontrá-lo. Você pode mudar qualquer resposta depois em {0}.",
+  "ui.info_how_to_process_title": "Processe os quadros",
+  "ui.info_how_to_process_body": "Clique em {0}. O Star alinha cada quadro com os quadros vizinhos e substitui os rastros que aviões e satélites deixam. Sequências longas ou grandes levam um tempo: a janela de processamento mostra o andamento, e você pode percorrer os quadros conforme ficam prontos.",
+  "ui.info_how_to_review_title": "Confira o resultado",
+  "ui.info_how_to_review_body": "Reproduza os quadros processados ou percorra-os com o controle deslizante. No modo seletivo, o Star marca o que encontrou em cada quadro, e as ferramentas de edição à direita permitem remover ou manter cada rastro manualmente.",
+  "ui.info_how_to_render_title": "Renderize o vídeo",
+  "ui.info_how_to_render_body": "Clique em {0} para criar um vídeo a partir dos quadros processados. Os quadros em si ficam guardados em uma pasta ao lado da sua sequência original, com um arquivo de configuração que {1} reabre depois."
 }
