@@ -4718,7 +4718,7 @@ final class StartScreenTests: XCTestCase {
     func testTheDropZoneSaysItsKey() throws {
         let source = try zoneSource()
         XCTAssertTrue(source.contains("localized(\"ui.drop_a_video_an_image_sequence_or_an\")"))
-        XCTAssertTrue(source.contains("ArtImage(.drop)"))
+        XCTAssertTrue(source.contains("ArtImage(FinderStyleDropZone.art(isTargeted: isTargeted))"))
         XCTAssertTrue(source.contains("dash: [5]"))
         XCTAssertTrue(source.contains("isTargeted ? Color.accentColor"))
     }
