@@ -1090,20 +1090,23 @@ private final class MetalGPUBackend: @unchecked Sendable {
                             rows: Int, rowBytes: Int, managedDst: Bool) -> MergeBindings? {
         // Slots start 256-byte aligned, comfortably past any offset rule Metal has
         // for a device buffer.
-        var offsets: [Int] = []
+        var offsetList: [Int] = []
         var total = 0
         for input in inputs {
-            offsets.append(total)
+            offsetList.append(total)
             total += (input.length + 255) & ~255
         }
+        let offsets = offsetList
         guard let inputBuffer = device.makeBuffer(length: max(total, 1), options: .storageModeShared)
         else { return nil }
         let dstMode: MTLResourceOptions = managedDst ? .storageModeManaged : .storageModeShared
         guard let output = device.makeBuffer(length: rowBytes * rows, options: dstMode) else { return nil }
 
         nonisolated(unsafe) let inputBase = inputBuffer.contents()
+        nonisolated(unsafe) let sources = inputs.map { $0.pointer }
+        let lengths = inputs.map { $0.length }
         DispatchQueue.concurrentPerform(iterations: inputs.count) { i in
-            memcpy(inputBase.advanced(by: offsets[i]), inputs[i].pointer, inputs[i].length)
+            memcpy(inputBase.advanced(by: offsets[i]), sources[i], lengths[i])
         }
 
         nonisolated(unsafe) let outPointer = UnsafeMutableRawPointer(mutating: dst.pointer)
@@ -1727,7 +1730,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
         // to keep it valid — until a pool drains. This runs on worker threads that seldom
         // drain one, so without this every readback buffer outlived its build, pool or not:
         // ~430MB a sky keypoint op at 4240x2832 / 1.5, piling up op after op.
-        autoreleasepool {
+        _ = autoreleasepool {
             memcpy(UnsafeMutableRawPointer(mutating: data), readback.buffer.contents(), rowBytes * readback.height)
         }
         return ref

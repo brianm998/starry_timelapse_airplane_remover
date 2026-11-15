@@ -279,7 +279,7 @@ final class SessionCloseTests: XCTestCase {
         // Once the full-size file is there it is not built again.
         let path = try XCTUnwrap(frame.imageAccessor.nameForImage(frameIndex: 0, ofType: .starAligned, atSize: .original))
         try FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: path, contents: Data([0]))
+        XCTAssertTrue(FileManager.default.createFile(atPath: path, contents: Data([0])))
         let built = await PreviewFiles.alignedImageNeedsBuilding(for: frame, mode: .starAligned)
         XCTAssertFalse(built)
         await session.close()

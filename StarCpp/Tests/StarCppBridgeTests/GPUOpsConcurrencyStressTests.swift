@@ -375,24 +375,30 @@ final class GPUOpsConcurrencyStressTests: XCTestCase {
         }
         ImageCache.setLoader { pool[$0] }
 
-        func merge(useGPU: Bool) {
+        // The merge reads these and nothing writes them once the workers start.
+        let sharedBase = base
+        let sharedNeighbors = neighbors
+        let sharedHomography = homography
+        let neighborCount = offsets.count
+        let merge: @Sendable (Bool) -> Void = { useGPU in
             let result = ImageAligner.alignAndMedianMerge(
-              baseImage: base, baseFrameIndex: 0, neighbors: neighbors, homography: homography,
+              baseImage: sharedBase, baseFrameIndex: 0, neighbors: sharedNeighbors,
+              homography: sharedHomography,
               outlierThreshold: 1.2, includeAll: false, useGPU: useGPU)
-            XCTAssertEqual(result?.warpCount, offsets.count)
+            XCTAssertEqual(result?.warpCount, neighborCount)
         }
 
         for useGPU in [false, true] {
             let label = useGPU ? "GPU" : "CPU"
             for rep in 0..<3 {
-                let (seconds, peak) = Self.measure { merge(useGPU: useGPU) }
+                let (seconds, peak) = Self.measure { merge(useGPU) }
                 print(String(format: "STRESS aligned merge %@ alone, run %d: %.3fs, peak footprint +%.0fMB",
                              label, rep, seconds, Double(peak) / 1e6))
             }
             let concurrent = 4, total = 12
             let (seconds, peak) = Self.measure {
                 DispatchQueue.concurrentPerform(iterations: concurrent) { worker in
-                    for _ in stride(from: worker, to: total, by: concurrent) { merge(useGPU: useGPU) }
+                    for _ in stride(from: worker, to: total, by: concurrent) { merge(useGPU) }
                 }
             }
             print(String(format: "STRESS aligned merge %@, %d merges %d at a time: %.2fs (%.2fs a merge), "

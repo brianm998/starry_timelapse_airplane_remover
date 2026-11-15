@@ -310,7 +310,7 @@ enum ExportHandlers {
               : AudioPlan.none("the video has none")
 
             // The list is a file for as long as ffmpeg takes to read it.
-            let listPath = "\(await session.scratchSessionDir)/export-\(UUID().uuidString).ffconcat"
+            let listPath = "\(session.scratchSessionDir)/export-\(UUID().uuidString).ffconcat"
             try VideoExport.concatList(files: found.files, frameRate: vi.frameRate)
                 .write(toFile: listPath, atomically: true, encoding: .utf8)
             defer { try? FileManager.default.removeItem(atPath: listPath) }

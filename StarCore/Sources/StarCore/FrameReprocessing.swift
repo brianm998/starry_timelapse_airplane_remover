@@ -25,7 +25,7 @@ extension FrameAirplaneRemover {
     /// images) deleted, its neighbour counts and its stored outliers cleared.
     /// Never touches the original image or a user-painted horizon.
     public func clearProcessing(deleting type: FrameReprocessingType) async {
-        await set(state: .unprocessed)
+        set(state: .unprocessed)
 
         imageAccessor.deleteAllImages(frameIndex: frameIndex, reprocessingType: type)
 
