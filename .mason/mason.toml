@@ -356,6 +356,14 @@ parser = "xctest"
 min_tests = 1 # UNMEASURED
 level = "t1"
 uses = { exclusive = 1 }
+# In a task's test step, only the XCTest classes the change needs (MASON s386): classes holding an
+# edited line, or naming a changed file. The landing batch runs the whole target. Shared code, the
+# project, assets and strings run it whole.
+narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 .mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd {tests} test 2>&1"
+narrow_tests = "gui/starTests/*.swift"
+narrow_split = "(?m)^(?:@MainActor\\s+)?(?:final )?class (\\w+)\\s*:\\s*XCTestCase"
+narrow_each = "-only-testing:starTests/{}"
+narrow_never = ["gui/star.xcodeproj/**", "gui/Assets.xcassets/**", "gui/star/Info.plist", "gui/star/*.entitlements", "StarCore/**", "StarCpp/**", "logging/**", "i18n/**"]
 
 [suite.test-desktop]
 command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop test --rerun --no-daemon 2>&1"
@@ -368,6 +376,14 @@ level = "t1"
 # the Compose UI tests render offscreen, and no test asserts a time budget (only 30-120 s deadlines).
 # As `exclusive` it drained the machine for every desktop change.
 uses = { test-suite = 1 }
+# In a task's test step, only the test classes the change needs (MASON s386): edited test files, and
+# tests that name a changed file. The landing batch runs them all. Build files, resources, strings
+# and the proto run them all.
+narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop test {tests} --rerun --no-daemon 2>&1"
+narrow_tests = "star-desktop/src/test/kotlin/**/*Test.kt"
+narrow_root = "star-desktop/src/test/kotlin/"
+narrow_each = "--tests {}"
+narrow_never = ["star-desktop/*.kts", "star-desktop/gradle/**", "star-desktop/gradle.properties", "star-desktop/src/main/resources/**", "star-desktop/src/test/resources/**", "daemon/proto/**", "i18n/**"]
 
 [suite.test-pipeline]
 command = "cd pipeline && STAR_USE_GPU_FOR_MERGE=0 uv run pytest -v 2>&1"

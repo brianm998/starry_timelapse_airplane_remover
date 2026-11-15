@@ -517,6 +517,20 @@
    "kind": "cutout",
    "width": 96,
    "height": 96
+  },
+  {
+   "name": "art_real_before",
+   "source": "HP-1a",
+   "kind": "scene",
+   "width": 248,
+   "height": 140
+  },
+  {
+   "name": "art_real_after",
+   "source": "HP-1b",
+   "kind": "scene",
+   "width": 248,
+   "height": 140
   }
  ]
 }

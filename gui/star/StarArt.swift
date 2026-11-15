@@ -72,6 +72,8 @@ enum StarArt: String, CaseIterable {
     case settingHorizonExtension = "art_setting_horizon_extension"
     case settingKeypointSize = "art_setting_keypoint_size"
     case paintRobot = "art_paint_robot"
+    case realBefore = "art_real_before"
+    case realAfter = "art_real_after"
 
     enum Kind { case cutout, tile, scene }
 
@@ -146,6 +148,8 @@ enum StarArt: String, CaseIterable {
         case .settingHorizonExtension: return .scene
         case .settingKeypointSize: return .scene
         case .paintRobot: return .cutout
+        case .realBefore: return .scene
+        case .realAfter: return .scene
         }
     }
 
@@ -221,6 +225,8 @@ enum StarArt: String, CaseIterable {
         case .settingHorizonExtension: return CGSize(width: 210, height: 140)
         case .settingKeypointSize: return CGSize(width: 210, height: 140)
         case .paintRobot: return CGSize(width: 96, height: 90)
+        case .realBefore: return CGSize(width: 248, height: 140)
+        case .realAfter: return CGSize(width: 248, height: 140)
         }
     }
 }
