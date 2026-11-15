@@ -58,6 +58,24 @@ struct InfoDialogView: View {
                                                   .font(.title)
                                             }
                                         }
+                                    } else if viewModel.currentInfoType == .detailed {
+                                        Text(InfoType.detailedOpening)
+                                          .font(.title)
+                                          .foregroundColor(.white)
+                                        ForEach(Array(InfoType.detailedSections.enumerated()), id: \.offset) { _, section in
+                                            Text(section.heading)
+                                              .font(.headline)
+                                              .foregroundColor(.white)
+                                            Text(section.body)
+                                              .font(.title)
+                                              .foregroundColor(.white)
+                                            ArtImage(section.art)
+                                        }
+                                        ForEach(Array(InfoType.detailedClosing.enumerated()), id: \.offset) { _, paragraph in
+                                            Text(paragraph)
+                                              .font(.title)
+                                              .foregroundColor(.white)
+                                        }
                                     } else {
                                         Text(viewModel.currentInfoType.infoText)
                                           .font(.title)
@@ -94,6 +112,18 @@ struct InfoDialogView: View {
 /// Where the source code lives (the repository is public).
 let STAR_SOURCE_URL = "https://github.com/brianm998/starry_timelapse_airplane_remover"
 
+/// One section of the Detailed tab: a heading, the words under it and the stage picture that follows them.
+struct DetailedSection {
+    let heading: String
+    /// Whether a blank line separates the heading from the body (the first five sections do, the rest do not).
+    let blankAfterHeading: Bool
+    let body: String
+    let art: StarArt
+
+    /// The section's words as one string, heading first.
+    var text: String { heading + (blankAfterHeading ? "\n\n" : "\n") + body }
+}
+
 public enum InfoType: CaseIterable {
     case about
     case howTo
@@ -119,6 +149,86 @@ public enum InfoType: CaseIterable {
         case .detailed:
             return localized("ui.detailed")
         }
+    }
+
+    /// The Detailed tab's opening line, before the first section.
+    static let detailedOpening = "Star processes each frame of a sequence in this manner:"
+
+    /// The Detailed tab's ten sections, in order; each is drawn as its heading, its body and its stage picture.
+    static let detailedSections: [DetailedSection] = [
+        DetailedSection(heading: "Identify the horizon, if desired.", blankAfterHeading: true, body: """
+                The first step is to maybe identify the horizon.  This step is optional, as sometimes overnight timelapses don't have a horizon for some or all of the video.  It also is faster to ignore the horizon, as less processing is done later.
+                However, knowing the horizon can help in a number of ways:
+                 - better pixel replacement close to the horizon
+                 - better pixel replacement below the horizon
+                 - less noise below the horizon due to earth alignment 
+                """,
+                        art: .stageHorizon),
+        DetailedSection(heading: "Identify a set of neighbor frames.", blankAfterHeading: true, body: """
+                It is configurable how many neighbors are best to use, the default is 8.  Using less can still work, but risks being unable to remove bad pixels in some really noisy situations.
+                """,
+                        art: .stageNeighbors),
+        DetailedSection(heading: "Align the neighbor frames for sky and maybe earth too.", blankAfterHeading: true, body: """
+                Star uses opencv2 for its SIFT (Scale Invariant Feature Transform) logic to align neibhgoring frames with each frame being processed.
+                If horizon detection is enabled, the calculated horizon mask for the frame being procssed is used to only identify keypoints in either the sky or the ground.  Without horizon detection, the whole image is scanned for keypoints, which almost always ends up aligning the sky.
+                If the alignment fails to properly align the frames, Star will fall back to simply using the un-aligned neighbor frames.  This does work, but results in more noise during processing, and the overwritten data is going to be slightly off.
+                """,
+                        art: .stageAligned),
+        DetailedSection(heading: "Condense the aligned neighbor frames.", blankAfterHeading: true, body: """
+                After aligning some set of neighbor frames for the frame being procssed, star will then condense this set of frames into a single frame for the sky, and also the earth, if horizon detection is enabled.
+                Each pixel is selected from neighboring frames using statistical analysis to remove pixels that are significally brighter than others in the same x,y location in other frames.
+                You can see the star and earth aligned images for each frame and how well is is aligned in edit mode.
+                """,
+                        art: .stageCondensed),
+        DetailedSection(heading: "Subtract the aligned neighbor frame.", blankAfterHeading: true, body: """
+                Next, Star will subtract the aligned neighbor frame from the frame being processed.
+                This results in a new grayscale image which indicates where, and by how much, the original frame was brighter than the neighbor frame.
+                If horizon detection is enabled, the calculated horizon mask for the frame being processd will be used.  This way, the earth alignment image is used as well as the sky alignment image.
+                You can see the subtraction image for each frame in edit mode.
+                While a lot of other things will show up in the subtraction image, you will see any airplanes or satellites as lines, ideally without any stars or static lights on the ground.
+                """,
+                        art: .stageSubtraction),
+        DetailedSection(heading: "Detect Blobs", blankAfterHeading: false, body: """
+                Next Star detects what are called Blobs of brighter pixels, using an algorithm that sorts all of the pixels in an image by brightness, and then processing them in order of brighest first, stopping on dimmer pixels.
+                Each bright pixel is then looked at, and any neighbors that aren't too dark are added to the 'Blob'
+                You can see the initial blobs for each frame in edit mode.
+                """,
+                        art: .stageBlobs),
+        DetailedSection(heading: "Blob Processing", blankAfterHeading: false, body: """
+                After initial Blob detection, a lot of processing is done to make the signal cleaner.
+                Numerous rounds of line detection and removal based upon different criteria end up giving a final set of blobs.
+                You can see how the many different blob processing steps work for each frame in edit mode.
+                """,
+                        art: .stageBlobProcessing),
+        DetailedSection(heading: "Outlier Group classification.", blankAfterHeading: false, body: """
+                After Blob processing is complete, the Blobs are promoted into Outlier Groups.
+                Both Blobs and Outlier Groups contain a list of pixels in the frame being processed that may contain 'noise' that should be removed.
+                Outlier Groups add a layer of classification features on top of Blobs, which are used to tell which ones are really noise that should be removed.
+                These classification features can be as simple as number of pixels, or more complex, involving neighboring frames and other neighboring outlier groups in the same frame.
+                To classify the outlier groups, Star uses a decision tree based upon validated sequences.
+                To validate a sequence means processing it through Star and then manually playing the video and correcting bad classifications by hand on each frame.  This can take while.
+                """,
+                        art: .stageClassification),
+        DetailedSection(heading: "Removal Mask Creation.", blankAfterHeading: false, body: """
+                After classifying all of the Outlier Groups for a frame, we now know which pixels are considered noise and which ones are ok to keep.
+                With this data, Star then creates a removal mask, similar to a layer mask in Photoshop or the GIMP.  This mask is used to remove any noisy pixels with data from the aligned neighbor frame.
+                """,
+                        art: .stageRemovalMask),
+        DetailedSection(heading: "Final Bad Pixel Removal", blankAfterHeading: false, body: """
+                At this final step, Star simply composts the frame being processed with the aligned neighor frame, using the removal mask as a layer mask, to only overwrite a small number of pixels in the frame we are processing.
+                """,
+                        art: .stageFinal),
+    ]
+
+    /// The paragraphs after the last section.
+    static let detailedClosing = [
+        "After Star has finished processing your image sequence, you can then watch a video of the sequence at preview resolution.  This can be helpful to allow you to make any corrections.",
+        "Star is still a work in progress.",
+    ]
+
+    /// The Detailed tab as one string: the opening, the sections and the closing, as it was before the pictures.
+    static var detailedText: String {
+        ([detailedOpening] + detailedSections.map { $0.text } + detailedClosing).joined(separator: "\n\n")
     }
 
     var infoText: String {
@@ -149,70 +259,7 @@ public enum InfoType: CaseIterable {
               The config can be loaded by dropping it onto Star's initial screen.
               """
         case .detailed:
-            return """
-              Star processes each frame of a sequence in this manner:
-
-              Identify the horizon, if desired.
-              
-              The first step is to maybe identify the horizon.  This step is optional, as sometimes overnight timelapses don't have a horizon for some or all of the video.  It also is faster to ignore the horizon, as less processing is done later.
-              However, knowing the horizon can help in a number of ways:
-               - better pixel replacement close to the horizon
-               - better pixel replacement below the horizon
-               - less noise below the horizon due to earth alignment 
-              
-              Identify a set of neighbor frames.
-              
-              It is configurable how many neighbors are best to use, the default is 8.  Using less can still work, but risks being unable to remove bad pixels in some really noisy situations.
-
-              Align the neighbor frames for sky and maybe earth too.
-              
-              Star uses opencv2 for its SIFT (Scale Invariant Feature Transform) logic to align neibhgoring frames with each frame being processed.
-              If horizon detection is enabled, the calculated horizon mask for the frame being procssed is used to only identify keypoints in either the sky or the ground.  Without horizon detection, the whole image is scanned for keypoints, which almost always ends up aligning the sky.
-              If the alignment fails to properly align the frames, Star will fall back to simply using the un-aligned neighbor frames.  This does work, but results in more noise during processing, and the overwritten data is going to be slightly off.
-
-              Condense the aligned neighbor frames.
-              
-              After aligning some set of neighbor frames for the frame being procssed, star will then condense this set of frames into a single frame for the sky, and also the earth, if horizon detection is enabled.
-              Each pixel is selected from neighboring frames using statistical analysis to remove pixels that are significally brighter than others in the same x,y location in other frames.
-              You can see the star and earth aligned images for each frame and how well is is aligned in edit mode.
-
-              Subtract the aligned neighbor frame.
-              
-              Next, Star will subtract the aligned neighbor frame from the frame being processed.
-              This results in a new grayscale image which indicates where, and by how much, the original frame was brighter than the neighbor frame.
-              If horizon detection is enabled, the calculated horizon mask for the frame being processd will be used.  This way, the earth alignment image is used as well as the sky alignment image.
-              You can see the subtraction image for each frame in edit mode.
-              While a lot of other things will show up in the subtraction image, you will see any airplanes or satellites as lines, ideally without any stars or static lights on the ground.
-
-              Detect Blobs
-              Next Star detects what are called Blobs of brighter pixels, using an algorithm that sorts all of the pixels in an image by brightness, and then processing them in order of brighest first, stopping on dimmer pixels.
-              Each bright pixel is then looked at, and any neighbors that aren't too dark are added to the 'Blob'
-              You can see the initial blobs for each frame in edit mode.
-
-              Blob Processing
-              After initial Blob detection, a lot of processing is done to make the signal cleaner.
-              Numerous rounds of line detection and removal based upon different criteria end up giving a final set of blobs.
-              You can see how the many different blob processing steps work for each frame in edit mode.
-
-              Outlier Group classification.
-              After Blob processing is complete, the Blobs are promoted into Outlier Groups.
-              Both Blobs and Outlier Groups contain a list of pixels in the frame being processed that may contain 'noise' that should be removed.
-              Outlier Groups add a layer of classification features on top of Blobs, which are used to tell which ones are really noise that should be removed.
-              These classification features can be as simple as number of pixels, or more complex, involving neighboring frames and other neighboring outlier groups in the same frame.
-              To classify the outlier groups, Star uses a decision tree based upon validated sequences.
-              To validate a sequence means processing it through Star and then manually playing the video and correcting bad classifications by hand on each frame.  This can take while.
-
-              Removal Mask Creation.
-              After classifying all of the Outlier Groups for a frame, we now know which pixels are considered noise and which ones are ok to keep.
-              With this data, Star then creates a removal mask, similar to a layer mask in Photoshop or the GIMP.  This mask is used to remove any noisy pixels with data from the aligned neighbor frame.
-
-              Final Bad Pixel Removal
-              At this final step, Star simply composts the frame being processed with the aligned neighor frame, using the removal mask as a layer mask, to only overwrite a small number of pixels in the frame we are processing.
-
-              After Star has finished processing your image sequence, you can then watch a video of the sequence at preview resolution.  This can be helpful to allow you to make any corrections.
-
-              Star is still a work in progress.
-              """
+            return InfoType.detailedText
         }
     }
 }
