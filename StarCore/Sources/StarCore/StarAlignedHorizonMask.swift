@@ -149,7 +149,7 @@ public actor StarAlignedHorizonMaskCache {
             let computed = await NativeWork.run {
                 StarAlignedHorizonMask.compute(from: baseMask, homographies: homographies)
             }
-            await self.finished(key, computed, baseMask: baseMask, homographies: homographies)
+            self.finished(key, computed, baseMask: baseMask, homographies: homographies)
             return computed
         }
         inFlight.append((key, task))

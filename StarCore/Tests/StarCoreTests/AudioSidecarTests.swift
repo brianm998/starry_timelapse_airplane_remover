@@ -46,7 +46,7 @@ final class AudioSidecarTests: XCTestCase {
                   lock.lock(); recorded.append(arguments); lock.unlock()
                   let ok = accepts(arguments)
                   if let output = arguments.last {
-                      FileManager.default.createFile(atPath: output, contents: ok ? Data("sound".utf8) : Data())
+                      _ = FileManager.default.createFile(atPath: output, contents: ok ? Data("sound".utf8) : Data())
                   }
                   return ok
               })
@@ -145,8 +145,8 @@ final class AudioSidecarTests: XCTestCase {
 
     /// A failed ffmpeg run leaves an empty file, which is not sound.
     func testAnEmptyFileIsNotASoundFile() throws {
-        FileManager.default.createFile(atPath: "\(directory)/audio.aac", contents: Data())
-        FileManager.default.createFile(atPath: "\(directory)/audio.mka", contents: Data())
+        XCTAssertTrue(FileManager.default.createFile(atPath: "\(directory)/audio.aac", contents: Data()))
+        XCTAssertTrue(FileManager.default.createFile(atPath: "\(directory)/audio.mka", contents: Data()))
         XCTAssertNil(AudioSidecar.path(in: directory))
     }
 

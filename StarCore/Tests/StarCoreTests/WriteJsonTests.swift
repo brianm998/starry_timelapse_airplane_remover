@@ -87,7 +87,7 @@ final class WriteJsonTests: XCTestCase {
         try FileManager.default.createDirectory(atPath: tempPath,
                                                withIntermediateDirectories: true)
         let cwd = FileManager.default.currentDirectoryPath
-        defer { FileManager.default.changeCurrentDirectoryPath(cwd) }
+        defer { _ = FileManager.default.changeCurrentDirectoryPath(cwd) }
         XCTAssertTrue(FileManager.default.changeCurrentDirectoryPath(scratch))
 
         // the shape of a resume: relative path in, absolute tempOutputPath in the config

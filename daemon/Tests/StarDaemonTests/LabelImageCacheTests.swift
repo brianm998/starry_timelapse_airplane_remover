@@ -38,7 +38,7 @@ final class LabelImageCacheTests: XCTestCase {
         XCTAssertFalse(cache.isCurrent(key: "s/0", version: 5, path: path), "nothing recorded yet")
         cache.record(key: "s/0", version: 5)
         XCTAssertFalse(cache.isCurrent(key: "s/0", version: 5, path: path), "the file is not there")
-        FileManager.default.createFile(atPath: path, contents: Data([1]))
+        XCTAssertTrue(FileManager.default.createFile(atPath: path, contents: Data([1])))
         XCTAssertTrue(cache.isCurrent(key: "s/0", version: 5, path: path))
         XCTAssertFalse(cache.isCurrent(key: "s/0", version: 6, path: path), "the groups changed")
         XCTAssertFalse(cache.isCurrent(key: "s/1", version: 5, path: path), "another frame")

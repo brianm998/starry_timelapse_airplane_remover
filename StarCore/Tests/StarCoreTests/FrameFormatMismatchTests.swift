@@ -26,7 +26,7 @@ final class FrameFormatMismatchTests: FrameHarnessTestCase {
             $0.useGPUForMerge = false
             $0.cleanMethod = cleanMethod
         }
-        nonisolated(unsafe) let frames = h.frames
+        let frames = h.frames
         let builder = FrameGraphBuilder()
         await builder.set(configManager: h.configManager)
         let collected = Collected()

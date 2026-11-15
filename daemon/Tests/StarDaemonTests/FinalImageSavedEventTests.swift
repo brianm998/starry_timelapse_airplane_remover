@@ -104,7 +104,7 @@ final class FinalImageSavedEventTests: XCTestCase {
     private func plant(_ frame: FrameAirplaneRemover, _ type: FrameViewMode) throws -> String {
         let path = try XCTUnwrap(frame.imageAccessor.nameForImage(frameIndex: frame.frameIndex, ofType: type, atSize: .original))
         try FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
-        FileManager.default.createFile(atPath: path, contents: Data([1, 2, 3]))
+        XCTAssertTrue(FileManager.default.createFile(atPath: path, contents: Data([1, 2, 3])))
         return path
     }
 
