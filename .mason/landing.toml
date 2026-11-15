@@ -16,6 +16,15 @@ base = "develop"
 window = "20m"
 max_size = 0
 
+# The batch tier: suites run over the batch's union diff, picked by the [impact] map, so only a batch
+# touching star-desktop/** (or an unmapped path) pays for it. A task's test step narrows test-desktop to
+# the classes naming a changed file, so the whole-tree guard tests (NoHardCodedStringsTest, IdRegistryTest,
+# StarArtTest) never ran before landing; task #249 turned Kotlin Client red that way (run 43714730672).
+# Without this tier a batch runs no local suites at all. Task #441.
+[[tier]]
+name = "batch"
+suites = ["test-desktop"]
+
 [on_red]
 # A red CI run is rerun once (the whole run: MASON does not tell an infrastructure red from a real one).
 ladder = ["rerun-failed", "blame-by-impact", "bisect", "ask"]

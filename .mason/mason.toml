@@ -357,7 +357,8 @@ min_tests = 1 # UNMEASURED
 level = "t1"
 uses = { exclusive = 1 }
 # In a task's test step, only the XCTest classes the change needs (MASON s386): classes holding an
-# edited line, or naming a changed file. The landing batch runs the whole target. Shared code, the
+# edited line, or naming a changed file. The landing batch does NOT run the gui tests
+# locally (landing.toml's batch tier lists only test-desktop); pr-gate's macOS job covers the Swift side. Shared code, the
 # project, assets and strings run it whole.
 narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 .mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd {tests} test 2>&1"
 narrow_tests = "gui/starTests/*.swift"
@@ -377,7 +378,8 @@ level = "t1"
 # As `exclusive` it drained the machine for every desktop change.
 uses = { test-suite = 1 }
 # In a task's test step, only the test classes the change needs (MASON s386): edited test files, and
-# tests that name a changed file. The landing batch runs them all. Build files, resources, strings
+# tests that name a changed file. The landing batch runs them all, whole, because of the
+# `batch` tier in landing.toml (task #441). Build files, resources, strings
 # and the proto run them all.
 narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop test {tests} --rerun --no-daemon 2>&1"
 narrow_tests = "star-desktop/src/test/kotlin/**/*Test.kt"

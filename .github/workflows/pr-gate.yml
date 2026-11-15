@@ -7,8 +7,9 @@ name: pr-gate
 # The slow workflows (Gherkin smoke, the installers, wgpu) are not part of this gate; they block a merge only
 # when they fail on a PR where develop passes them. The full Gherkin matrix is post-merge only.
 #
-# Not in this first version: a Windows job (cli.yml's windows job needs ~190 lines of MSVC/SDK
-# pinning and is red on develop today). It joins once that is fixed.
+# Windows: only the `desktop` job (the Kotlin unit tests, which need just JDK 21 and Gradle) runs there. The
+# cli's Windows build (cli.yml's windows job needs ~190 lines of MSVC/SDK pinning and is red on develop
+# today) is not in this gate; it joins once that is fixed.
 
 on:
   pull_request:
@@ -153,6 +154,40 @@ jobs:
           uv run ruff check .
           uv run pyright
           uv run pytest -q
+
+  # ─── desktop client unit tests: the whole suite on both OSes (no OpenCV, no ffmpeg) ─────────
+  desktop:
+    name: Desktop unit tests (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.program == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: true
+          cache-cleanup: on-success
+
+      # Plugin resolution from plugins.gradle.org fails transiently ("Could not parse POM"); try once more before going red.
+      - name: Desktop unit tests
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 30
+          max_attempts: 2
+          retry_wait_seconds: 20
+          shell: bash
+          command: cd star-desktop && ./gradlew test --no-daemon --stacktrace
 
   # ─── Linux ───────────────────────────────────────────────────────────────────
   linux:
