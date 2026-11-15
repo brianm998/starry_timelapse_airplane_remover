@@ -20,7 +20,7 @@ final class FrameGraphBuilderCancelTests: FrameHarnessTestCase {
         let h = try await FrameHarness.make(frameCount: 6, named: "cancelbuild")
         harness = h
 
-        nonisolated(unsafe) let frames = h.frames
+        let frames = h.frames
 
         for attempt in 0..<8 {
             let builder = FrameGraphBuilder()

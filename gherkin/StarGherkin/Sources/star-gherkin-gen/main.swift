@@ -169,7 +169,7 @@ func run(_ exe: String, _ args: [String]) -> (status: Int32, out: Data, err: Dat
     let out = Pipe()
     // stderr goes to a file, not a pipe: reading two pipes needs threads, and a full one blocks the child.
     let errURL = FileManager.default.temporaryDirectory.appendingPathComponent("star-gherkin-gen-\(UUID().uuidString).err")
-    FileManager.default.createFile(atPath: errURL.path, contents: nil)
+    _ = FileManager.default.createFile(atPath: errURL.path, contents: nil)
     defer { try? FileManager.default.removeItem(at: errURL) }
     guard let errHandle = try? FileHandle(forWritingTo: errURL) else { return nil }
     p.standardOutput = out

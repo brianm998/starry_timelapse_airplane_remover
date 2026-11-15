@@ -22,7 +22,7 @@ final class FrameReprocessingTests: FrameHarnessTestCase {
         let dir = await h.frame.outliersDirname
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         for name in [BlobBinarySaver.outlierBinaryFilename, BlobBinarySaver.trashBinaryFilename] {
-            FileManager.default.createFile(atPath: "\(dir)/\(name)", contents: Data([0]))
+            XCTAssertTrue(FileManager.default.createFile(atPath: "\(dir)/\(name)", contents: Data([0])))
         }
         await h.frame.set(state: .complete)
     }

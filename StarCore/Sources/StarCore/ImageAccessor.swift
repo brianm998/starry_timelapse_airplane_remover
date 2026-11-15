@@ -576,7 +576,7 @@ public struct ImageAccessor: Sendable {
                                       height: UInt(smallSize.height))
                 }
                 if let downScaled {
-                    await IOWork.run(path: filename, bytes: downScaled.byteCount) {
+                    _ = await IOWork.run(path: filename, bytes: downScaled.byteCount) {
                         downScaled.saveJpeg(withQuality: 60, filename: filename)
                     }
                     imageSavedClosure?(downScaled, frameIndex, type, size)

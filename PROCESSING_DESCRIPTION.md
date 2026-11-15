@@ -17,37 +17,49 @@ one or two frames before moving on. `star` exploits exactly this redundancy.
 
 For each frame it builds a **clean reference image** by stacking several
 neighboring frames and taking a per-pixel median that throws out the brightest
-outliers. The original frame is then compared against that reference; whatever
-is far brighter than the reference is a candidate for removal. Candidates are
-clustered into **blobs**, the blobs are classified, and the airplane-shaped ones
-are painted over with pixels from the clean reference.
+outliers. This is done twice — once with the neighbors aligned on the stars,
+once aligned on the ground — and the two are joined along the horizon into an
+**auto-processed composite**. Anything that moved between frames is gone from
+it.
 
-The two top-level modes are:
+The top-level modes differ in what they do with that composite:
 
-- **Automatic** — `star` decides what to remove and writes out the cleaned
-  frames with no human in the loop. It also has a sub-option ("selective auto
-  preservation") that runs the selective pipeline a second time *in reverse*,
-  reaching back into the original frame to restore objects worth keeping
-  (meteors, bright bolides, fireworks) on top of the otherwise-cleaned output.
-- **Selective** — `star` does the full detection pipeline but does not act on
-  it. The user opens the GUI, reviews each frame, and approves or rejects the
-  decision tree's verdict on each blob. This mode is meant for cloudy nights,
-  ambiguous events, or anything where you want fine-grained control. The CLI
-  can produce the classifier output for selective mode, but the validation step
-  itself happens only in the GUI.
+- **Automatic** — the composite *is* the output. No blobs are found or
+  classified and there is nothing to review per frame; every transient,
+  meteors included, is removed. This is the default.
+- **Automatic with Selective Auto Clean** (`automatic:true`) — the composite
+  is the base, and the blob pipeline runs *in reverse*: the original frame is
+  compared against the composite, the differences are clustered into
+  **blobs** and classified, and the ones worth keeping (meteors, bright
+  bolides, fireworks) are copied back from the original.
+- **Selective** — the original frame is the base. The same blob pipeline
+  runs, and the blobs classified as airplanes or satellites are painted over
+  with pixels from the composite. The rest of the frame, clouds included, is
+  left as shot. The user can review each frame in a graphical client and flip
+  the decision tree's verdict on any blob. This mode is meant for cloudy
+  nights, ambiguous events, or anything where you want fine-grained control.
+- **Dirty** — the opposite of cleaning: the output is the original minus the
+  composite, so everything static goes black and only what moved keeps its
+  colour. No blobs.
+
+The blob pipeline (outlier subtraction, blob finding, the decision tree) is
+therefore used only by Selective and by Automatic with Selective Auto Clean.
 
 `star` adapts to two very different shooting situations:
 
-- **Static timelapse** — camera doesn't move. `star` can earth-align as well
-  as star-align, build a clean composite of the *ground* in addition to the
-  sky, and remove any transient bright thing anywhere in the frame, including
-  car headlights and low-flying objects near the horizon.
-- **Moving timelapse** — panned, tracked, or motion-controlled. The ground is
-  moving frame to frame, so `star` cannot yet build a clean median of the
-  earth half of the frame. It can only star-align the sky. As a consequence,
-  any bright transient *below the horizon line* — car headlights, low aircraft,
-  a passing flashlight — will not be cleanly subtracted away and may slip
-  through. This is the largest known limitation of `star` today.
+- **Static timelapse** — camera doesn't move. One horizon is found for the
+  whole sequence, one smoothed sky homography is applied throughout, and the
+  ground, which does not move, is median-merged without any warp. Any
+  transient bright thing anywhere in the frame is removed, including car
+  headlights and low-flying objects near the horizon.
+- **Moving timelapse** — panned, tracked, or motion-controlled. Sky and ground
+  are aligned separately, each with its own per-neighbor homography; the
+  ground is fitted as a camera rotation (§3.2), and every frame's horizon is
+  reconciled against the whole sequence along that ground alignment. Ground
+  transients are removed here too. The remaining limit is a foreground with
+  nothing to track — black or featureless ground, often from shadows clipped
+  before export — where the neighbors drop out of the ground merge and ground
+  transients pass through.
 
 ---
 
@@ -55,7 +67,7 @@ The two top-level modes are:
 
 The pipeline is built as a dependency graph of `OperationQueue` operations
 constructed in
-[`FrameGraphBuilder.build()`](StarCore/Sources/StarCore/FrameGraphBuilder.swift:119).
+[`FrameGraphBuilder.build()`](StarCore/Sources/StarCore/FrameGraphBuilder.swift).
 Each frame becomes a chain of operations, and the chains are stitched together
 where neighboring frames share work (notably horizon merging and homography
 validation). The graph is roughly:
@@ -63,16 +75,16 @@ validation). The graph is roughly:
 ```
   per frame:
     ┌────────────────────┐
-    │ Horizon Detection  │   ← detects the skyline
-    └─────────┬──────────┘
+    │ Horizon Detection  │   ← detects the skyline (moving: per
+    └─────────┬──────────┘     frame; static: once, see §3.1)
               ▼
     ┌────────────────────┐
     │ Horizon Merge      │   ← combines neighbor horizons
     └─────────┬──────────┘     into one robust estimate
               ▼
     ┌────────────────────┐
-    │ Keypoint Extract   │   ← finds matchable features
-    └─────────┬──────────┘     in sky and (if static) earth
+    │ Keypoint Extract   │   ← finds matchable features in
+    └─────────┬──────────┘     the sky and (if moving) the earth
               ▼
     ┌────────────────────┐
     │ Homography Compute │   ← warps neighbor frames into
@@ -83,12 +95,17 @@ validation). The graph is roughly:
     └─────────┬──────────┘     the homography over time
               ▼
     ┌────────────────────┐
-    │ Outlier Detection  │   ← clean-reference subtraction
-    └─────────┬──────────┘     and blob finding
+    │ Horizon Consensus  │   ← moving + earth alignment only:
+    └─────────┬──────────┘     reconciles every frame's horizon
               ▼
     ┌────────────────────┐
-    │ Final Merge        │   ← classify, replace pixels,
-    └────────────────────┘     write out the cleaned frame
+    │ Outlier Detection  │   ← selective modes only: composite
+    └─────────┬──────────┘     subtraction and blob finding
+              ▼
+    ┌────────────────────┐
+    │ Final Merge        │   ← median-merge sky and earth into the
+    └────────────────────┘     composite; selective modes classify
+                               blobs and replace pixels; write frame
 ```
 
 The orchestrator is
@@ -108,47 +125,57 @@ be moving (`--moving-camera` on the CLI):
   mask, from the per-pixel median of frames sampled across the whole sequence
   (see §3.1) — there is no per-frame horizon detection at all. Homography validation then finds the
   median homography across the whole sequence and applies it uniformly
-  ([`AlignmentValidationOp.swift:46`](StarCore/Sources/StarCore/AlignmentValidationOp.swift:46)).
-  Earth alignment is available, so the clean reference is built from
-  neighbor frames in *both* sky and ground regions.
-- **Moving**: each frame's horizon merge depends only on its local neighbors
-  ([`FrameGraphBuilder.swift:261`](StarCore/Sources/StarCore/FrameGraphBuilder.swift:261)),
+  (`validateStaticStarAlignment` in
+  [`AlignmentValidationOp.swift`](StarCore/Sources/StarCore/AlignmentValidationOp.swift)).
+  The ground needs no warp, so no earth keypoints or earth homographies are
+  computed; the ground half of the clean reference is the median of the
+  neighbors' unwarped ground.
+- **Moving**: each frame's horizon merge depends only on its local neighbors,
   and after alignment a single consensus step re-derives every frame's horizon
   from the whole sequence's detections (§3.2).
-  Homography is per-frame with no global smoothing. Earth alignment is on by
-  default here too, so the ground portion of the clean reference is built from
-  neighbor frames as well — except where the ground cannot be tracked
-  confidently, in which case that neighbor drops out and the ground falls back
-  to the original frame, subtracting to zero and letting ground-level outliers
+  Sky and earth each get per-frame homographies, validated for consistency
+  across neighbors (`validateMovingStarAlignment`,
+  `validateMovingEarthAlignment`) rather than replaced by one global one.
+  Earth alignment is on by default (`allowEarthAlignment`), so the ground
+  portion of the clean reference is built from neighbor frames as well —
+  except where the ground cannot be tracked confidently, in which case that
+  neighbor drops out, and with none left the ground falls back to the
+  original frame (a `StarWarning` says so) and ground-level transients pass
   through untouched.
 
 ### 2.2. Automatic vs Selective in Code
 
 The clean mode is a single enum
-([`CleanMethod.swift:9`](StarCore/Sources/StarCore/CleanMethod.swift:9)):
+([`CleanMethod.swift`](StarCore/Sources/StarCore/CleanMethod.swift)):
 
 ```swift
 public enum CleanMethod {
-    case automatic(Bool)   // Bool = "also run selective preservation in reverse"
+    case automatic(Bool)   // Bool = "Selective Auto Clean": restore kept blobs
     case selective
+    case dirty             // original − composite; the old dirtySky/dirtyEarth decode as this
 }
 ```
 
-Both branches run the *same* outlier-detection pipeline. The difference is
-only what happens after blobs are classified:
+`CleanMethod.usesOutliers` decides whether the blob pipeline runs at all: it
+is false for `.automatic(false)` and `.dirty`, which then have no outlier
+step in the graph and no subtraction image. In
+[`MergeOp`](StarCore/Sources/StarCore/MergeOp.swift):
 
-- `.automatic(false)`: cleaned frame is written directly.
-- `.automatic(true)`: cleaned frame is written, then the selective pipeline
-  runs in reverse to bring meteors and other "bright but worth keeping"
-  events back from the original.
-- `.selective`: detection runs and a classifier verdict is attached to every
-  blob, but no pixels are replaced until the user opens the frame in the
-  GUI and confirms. Even in `.selective` mode the GUI starts with the
-  decision tree's pre-classification — the user is reviewing the tree's
-  selections, not picking blobs from scratch.
+- `.automatic(false)`: `finishAuto(useOutliers: false)` writes the
+  auto-processed composite (`createAutoProcessedImage`) as the frame.
+- `.automatic(true)`: the decision tree classifies every blob, then
+  `finishAuto(useOutliers: true)` starts from the composite and copies the
+  blobs classified as worth keeping back from the original.
+- `.selective`: the decision tree classifies every blob, then
+  `finishSelective()` starts from the original and replaces the blobs
+  classified as airplanes with pixels from the composite. The user can then
+  flip any verdict in a graphical client and re-finish the frame; the review
+  starts from the tree's choices, not from scratch.
+- `.dirty`: `finishDirty()` writes original − composite per channel.
 
-The CLI accepts `--clean-method selective` and will produce the classification
-data, but the actual "remove these, keep those" decisions need the GUI.
+The CLI runs every mode end-to-end, selective included (it writes the
+frames with the tree's verdicts); changing individual verdicts needs a
+graphical client.
 
 ---
 
@@ -166,25 +193,26 @@ in the codebase; see e.g.
 `star` runs several methods in parallel and then ranks the results.
 
 - **Otsu thresholding + Canny edges**
-  ([`FrameAirplaneRemover.swift:2859`](StarCore/Sources/StarCore/FrameAirplaneRemover.swift:2859)).
+  ([`CombinedHorizonDetector.swift`](StarCore/Sources/StarCore/CombinedHorizonDetector.swift)).
   Otsu's method finds the histogram split between dark (ground) and bright
   (sky) pixels by maximizing inter-class variance.<sup>[Otsu 1979]</sup>
   Canny edge detection<sup>[Canny 1986]</sup> is run with several
   parameter combinations, including with and without the L2 gradient norm.
 - **Dynamic-programming horizon**
-  ([`FrameAirplaneRemover.swift:2705`](StarCore/Sources/StarCore/FrameAirplaneRemover.swift:2705)).
+  ([`CombinedHorizonDetector.swift`](StarCore/Sources/StarCore/CombinedHorizonDetector.swift)).
   The horizon is modelled as the lowest-cost path across the image, where
   per-column cost combines a Sobel-gradient term, a Canny-edge term, and a
   smoothness penalty (`smoothnessLambda`) that punishes large vertical jumps
   between adjacent columns. A grid search over the parameter space picks
   the best result, which is upscaled back to full resolution.
-- **Random-walker / SIOX-style segmentation**
-  ([`StarCpp/.../RandomWalkerHorizon.cpp`](StarCpp/Sources/StarCpp/RandomWalkerHorizon.cpp))
-  is run as one of the candidate methods and median-combined with the
-  others.
+- **SIOX-style band segmentation** is the third base method. The three
+  base results are median-combined (with outliers dropped) and the
+  combination is then refined by a **Random Walker** solver
+  ([`StarCpp/.../RandomWalkerHorizon.cpp`](StarCpp/Sources/StarCpp/RandomWalkerHorizon.cpp)),
+  trying several brush radii and keeping the best-scoring result.
 
 Each candidate horizon is scored by
-[`AdaptiveHorizonDetector`](StarCore/Sources/StarCore/AdaptiveHorizonDetector.swift:6):
+[`AdaptiveHorizonDetector`](StarCore/Sources/StarCore/AdaptiveHorizonDetector.swift):
 
 - `smoothnessScore` — penalizes high derivative variance (real horizons
   change gradually).
@@ -217,7 +245,7 @@ horizons this took the worst sequence measured from 15.6% of the frame
 height off to 0.06%. Setting `useTemporalStaticHorizon` to false in
 config.json restores the older path: every frame detected, accumulated as a
 per-pixel vote count
-([`HorizonAccumulator.swift:39`](StarCore/Sources/StarCore/HorizonAccumulator.swift:39))
+([`HorizonAccumulator.swift`](StarCore/Sources/StarCore/HorizonAccumulator.swift))
 and finalized by majority vote.
 
 ### 3.2. Frame-to-Frame Alignment
@@ -230,38 +258,53 @@ The process per neighbor pair is:
 
 1. Detect keypoints and descriptors with **AKAZE**<sup>[Alcantarilla
    2013]</sup>
-   ([`ImageAligner.cpp:447`](StarCpp/Sources/StarCpp/ImageAligner.cpp:447))
+   ([`ImageAligner.cpp`](StarCpp/Sources/StarCpp/ImageAligner.cpp))
    and **SIFT**<sup>[Lowe 2004]</sup>
-   ([`ImageAligner.cpp:451`](StarCpp/Sources/StarCpp/ImageAligner.cpp:451)),
+   ([`ImageAligner.cpp`](StarCpp/Sources/StarCpp/ImageAligner.cpp)),
    capped by `maxKeypoints`. Two detectors are used because they have
    different failure modes — AKAZE handles low-contrast sky better, SIFT is
    more robust to scale changes.
 2. Match descriptors. Brute-force `cv::BFMatcher` with `NORM_L2`
-   ([`ImageAligner.cpp:514`](StarCpp/Sources/StarCpp/ImageAligner.cpp:514))
+   ([`ImageAligner.cpp`](StarCpp/Sources/StarCpp/ImageAligner.cpp))
    for SIFT, falling back to `cv::FlannBasedMatcher`
-   ([`ImageAligner.cpp:547`](StarCpp/Sources/StarCpp/ImageAligner.cpp:547))
+   ([`ImageAligner.cpp`](StarCpp/Sources/StarCpp/ImageAligner.cpp))
    for the AKAZE pass. Lowe's ratio test filters out ambiguous matches.
 3. Compute a homography with `cv::findHomography(..., cv::RANSAC, 10)`
-   ([`ImageAligner.cpp:564`](StarCpp/Sources/StarCpp/ImageAligner.cpp:564))
+   ([`ImageAligner.cpp`](StarCpp/Sources/StarCpp/ImageAligner.cpp))
    — RANSAC<sup>[Fischler & Bolles 1981]</sup> with a 10-pixel
    reprojection threshold rejects mismatched keypoints (which matters a
    lot when your scene is mostly noise and stars).
 4. Apply the homography with `cv::warpPerspective`
-   ([`ImageAligner.cpp:620`](StarCpp/Sources/StarCpp/ImageAligner.cpp:620)).
+   ([`ImageAligner.cpp`](StarCpp/Sources/StarCpp/ImageAligner.cpp)).
 
-The keypoint extraction is done **twice** when earth alignment is possible:
-once on the sky region (using the horizon mask to reject ground keypoints,
-which would otherwise pollute the sky alignment with un-rotated foreground)
-and once on the ground region. The two homographies are stored separately;
-the final clean reference can use the sky homography above the horizon and
-the earth homography below it.
+Sky keypoints use the horizon mask to reject ground keypoints, which would
+otherwise pollute the sky alignment with un-rotated foreground. On a moving
+sequence with earth alignment on, keypoint extraction is done a **second**
+time on the ground region, and the two homographies are stored separately;
+the clean reference uses the sky homography above the horizon and the earth
+homography below it. A static sequence skips the earth pass entirely: its
+ground does not move, so it is merged unwarped.
+
+The ground of a moving sequence is not fitted as a general homography. A
+panning head turns the camera about its own centre, so the ground moves as
+`K R K⁻¹` — a 3-D rotation `R` seen through the lens intrinsics `K`. On a
+wide lens that moves the edges of the frame noticeably further than the
+middle, which a shift-and-rotate fit gets wrong and smears in the merge.
+Exported frames rarely carry the focal length, so it is estimated per frame
+from how the ground moves across the width of the frame; where the ground is
+too dark, or moves too little, to show that, the frame is aligned without
+the edge correction. Each earth homography's RANSAC consensus is checked,
+and one without enough agreement is thrown out, so an untrackable neighbor
+drops out of the ground merge instead of smearing it.
 
 `AlignmentValidationOp`
-([`AlignmentValidationOp.swift:8`](StarCore/Sources/StarCore/AlignmentValidationOp.swift:8))
+([`AlignmentValidationOp.swift`](StarCore/Sources/StarCore/AlignmentValidationOp.swift))
 then sanity-checks the result. For static sequences it computes the
-median homography across the whole sequence and rejects any frame whose
-homography deviates too far. For moving sequences it can only smooth
-locally, which is part of why moving sequences are harder.
+median homography across the whole sequence and applies it to every
+frame. For moving sequences there is no single answer to converge on, so it
+checks each frame's homographies for consistency against its neighbors' —
+sky and earth separately — and replaces the ones that disagree with a
+retargeted homography from the nearest good frame.
 
 For moving sequences the ground alignment then feeds back into the horizon
 ([`HorizonConsensus.swift`](StarCore/Sources/StarCore/HorizonConsensus.swift)).
@@ -316,7 +359,7 @@ This is the single most important step. For each frame `F`, `star`
 gathers `N` neighboring frames warped into `F`'s coordinate system and
 builds a per-pixel "what *should* this pixel look like" image via a
 **sigma-clipped median** in
-[`ImageAligner.cpp:73`](StarCpp/Sources/StarCpp/ImageAligner.cpp:73):
+[`ImageAligner.cpp`](StarCpp/Sources/StarCpp/ImageAligner.cpp):
 
 ```
 for each pixel (x,y), each channel:
@@ -337,20 +380,31 @@ would also reject them, but the sigma clip handles the case where two
 neighboring frames happen to catch the same trail (sigma-clip rejects
 both; a plain median would split them and bias the result upward).
 
-When earth alignment is available, two such stacks are built — one from
-sky-aligned warps, one from earth-aligned warps — and combined using the
-horizon mask in
-[`FrameAirplaneRemover.swift:5823`](StarCore/Sources/StarCore/FrameAirplaneRemover.swift:5823)
-via `PixelatedImage.apply()`. When earth alignment is *not* available —
-switched off, or every ground homography rejected for want of RANSAC
-consensus — the ground portion of the reference is just the original
-frame's ground, which by construction subtracts to zero, and that is
-precisely why ground transients leak through.
+With a horizon, two such stacks are built — one from sky-aligned warps, one
+from the ground (earth-aligned warps on a moving sequence, the unwarped
+neighbors on a static one) — and combined using the horizon mask via
+`PixelatedImage.apply()` in `createAutoProcessedImage`
+([`FrameAirplaneRemover.swift`](StarCore/Sources/StarCore/FrameAirplaneRemover.swift)).
+The result is the auto-processed composite: the output of Automatic mode,
+and the reference the other modes compare against. When earth alignment is
+*not* available on a moving sequence — switched off, or every ground
+homography rejected for want of RANSAC consensus — the ground portion is
+just the original frame's ground, so nothing on the ground is removed.
+
+`--cloud-aware-merge` (`cloudAwareMerge`, off by default) adds a second sky
+merge aligned to the clouds' own motion and blends it in wherever it
+explains the frame better, with the stars put back, so fast clouds keep
+their shape instead of coming out as banded repeats of their edges.
 
 ### 3.4. Outlier Subtraction
 
-The original frame minus the clean reference is computed in
-[`PixelatedImageBridge.cpp:335`](StarCpp/Sources/StarCpp/PixelatedImageBridge.cpp:335):
+§3.4–§3.6 are the blob pipeline, which runs only in Selective and in
+Automatic with Selective Auto Clean (`CleanMethod.usesOutliers`). Plain
+Automatic and Dirty never reach it.
+
+The original frame minus the composite (`loadOrCreateAlignedReference`,
+shared with the dirty method so both subtract the same thing) is computed in
+[`PixelatedImageBridge.cpp`](StarCpp/Sources/StarCpp/PixelatedImageBridge.cpp):
 
 ```cpp
 cv::subtract(originalGray, referenceGray, diff);
@@ -366,16 +420,16 @@ definition, transient bright objects.
 ### 3.5. Blob Finding
 
 The subtraction image is fed into `BlobFinder`
-([`BlobFinder.swift:19`](StarCore/Sources/StarCore/BlobFinder.swift:19)),
+([`BlobFinder.swift`](StarCore/Sources/StarCore/BlobFinder.swift)),
 which does flood-fill connected-component analysis with adaptive
 brightness thresholds (`minPixelIntensity`, `startMinContrast`,
 `endMinContrast`). Each connected region becomes a `Blob`
-([`Blob.swift:20`](StarCore/Sources/StarCore/Blob.swift:20)) holding
+([`Blob.swift`](StarCore/Sources/StarCore/Blob.swift)) holding
 its pixel set, bounding box, and per-pixel brightness deltas relative
 to the reference.
 
 The detection level — `mild`, `strong`, `stronger`, `excessive`
-([`DetectionType.swift:19`](StarCore/Sources/StarCore/DetectionType.swift:19))
+([`DetectionType.swift`](StarCore/Sources/StarCore/DetectionType.swift))
 — controls how aggressive the thresholds are. `mild` is 2-4× faster but
 will miss the dimmest trails; `excessive` finds far more candidates at
 the cost of much longer runtime and many more false positives that the
@@ -386,8 +440,8 @@ After the initial blob set is found, several refinement passes run:
 - **Linear blob extension/connection** uses the **Kernel Hough
   Transform**<sup>[Fernandes & Oliveira 2008]</sup> via the `KHTSwift`
   package
-  ([`LinearBlobConnector.swift:50`](StarCore/Sources/StarCore/LinearBlobConnector.swift:50),
-  [`HoughLineFinder.swift:119`](StarCore/Sources/StarCore/HoughLineFinder.swift:119))
+  ([`LinearBlobConnector.swift`](StarCore/Sources/StarCore/LinearBlobConnector.swift),
+  [`HoughLineFinder.swift`](StarCore/Sources/StarCore/HoughLineFinder.swift))
   to find collinear blob fragments and merge them into a single trail.
   Airplane trails are usually broken into pieces by the brightness
   threshold; KHT is what reassembles them.
@@ -399,7 +453,7 @@ After the initial blob set is found, several refinement passes run:
 ### 3.6. Decision Tree Classification
 
 Each blob is wrapped in an `OutlierGroup`
-([`OutlierGroup.swift:45`](StarCore/Sources/StarCore/OutlierGroup.swift:45))
+([`OutlierGroup.swift`](StarCore/Sources/StarCore/OutlierGroup.swift))
 and fed to a decision tree classifier
 ([`SwiftDecisionTree.swift`](StarCore/Sources/StarCore/SwiftDecisionTree.swift),
 [`OutlierGroupClassifier.swift`](StarCore/Sources/StarCore/OutlierGroupClassifier.swift)).
@@ -422,20 +476,24 @@ hand-validated training set. Generating new trees is a separate offline
 process and ships as part of `star` as compiled `.a` libraries (one
 per platform).
 
-In **automatic** mode the classifier's "this is a plane" verdict
-triggers removal directly. In **selective** mode the verdict is only a
-suggestion; the GUI shows it to the user and the user accepts or
-rejects each one.
+In **selective** mode a "this is a plane" verdict marks the blob for
+replacement with the composite; in **Automatic with Selective Auto
+Clean** a "keep this" verdict marks it for restoring from the original.
+Either way the verdicts are applied when the frame is finished, and a
+graphical client lets the user flip any of them and finish the frame
+again.
 
 ### 3.7. Pixel Replacement
 
-For blobs marked for removal, pixels are replaced by interpolating
-from the clean reference, with a soft alpha falloff at the blob's
-edge so the seam isn't visible. The mask is built in
-[`RemoveMask.swift:24`](StarCore/Sources/StarCore/RemoveMask.swift:24)
+Pixels are copied from one image onto the other — composite onto the
+original in Selective, original onto the composite in Automatic with
+Selective Auto Clean — with a soft alpha falloff at the blob's edge so
+the seam isn't visible. The mask is built in
+[`RemoveMask.swift`](StarCore/Sources/StarCore/RemoveMask.swift)
 as a circular gradient — fully opaque inside, fading linearly to
 transparent across a configurable distance — and applied in
-[`FrameAirplaneRemover.removeAirplanes()`](StarCore/Sources/StarCore/FrameAirplaneRemover.swift:4836).
+`replaceAirplanes()` / `removeAirplanes()` in
+[`FrameAirplaneRemover.swift`](StarCore/Sources/StarCore/FrameAirplaneRemover.swift).
 Near the horizon the blend is biased toward the earth-aligned
 reference (within ~60 pixels of the horizon line) so trails that
 straddle the skyline don't pull foreground colors into the sky or
@@ -444,7 +502,8 @@ vice versa.
 ### 3.8. Output
 
 Cleaned frames are written by `FrameSaveQueue` and then optionally
-muxed back into a video using the bundled `ffmpeg` via
+muxed back into a video (from a graphical client, or `star --render-video`)
+using `ffmpeg` via
 [`FFmpegCodec.swift`](StarCore/Sources/StarCore/FFmpegCodec.swift) /
 [`FFmpegMuxer.swift`](StarCore/Sources/StarCore/FFmpegMuxer.swift).
 
@@ -460,24 +519,28 @@ Located in [`cli/Sources/star/`](cli/Sources/star/). Defined as an
 
 | Flag | Purpose |
 |---|---|
-| `-c` / `--clean-method` | `automatic`, `automatic:true`, `automatic:false`, or `selective` |
-| `--moving-camera` | Disable global homography smoothing and earth alignment |
-| `--no-horizon` | Skip horizon detection entirely |
-| `-d` / `--detection-type` | `mild`, `strong`, `stronger`, `excessive` |
+| `-c` / `--clean-method` | `automatic` (default), `automatic:true`, `automatic:false`, `selective`, or `dirty` |
+| `--moving-camera` | The camera moved: per-frame horizons and homographies, earth alignment, horizon consensus |
+| `--no-horizon` | Skip horizon detection entirely (the sky alignment covers the whole frame) |
+| `-d` / `--detection-type` | Blob detection level, selective modes only: `mild`, `strong`, `stronger`, `excessive` |
+| `--cloud-aware-merge` | Keep fast clouds intact in the sky merge (§3.3) |
 | `-o` / `--output-path` | Where to write the cleaned frames |
-| `-w` / `--write-outlier-group-files` | Persist blob data for later GUI review |
-| `-W` / `--write-outlier-classification-values` | Persist classifier feature data for tree training |
+| `--render-video` / `--video-path` | Render the output frames to a video after the run |
+| `-w` / `--write-outlier-group-files` | Persist blob data for later GUI review (selective modes) |
+| `-W` / `--write-outlier-classification-values` | Persist classifier feature data for tree training (selective modes) |
 | `-L` / `--last-frame` | Stop early at frame N |
 
-The CLI can run any mode end-to-end, including selective. What it
-*cannot* do is run the human-validation step inside selective: when run
-with `--clean-method selective`, it produces the outlier files but does
-not produce a final cleaned video — the user has to open the project in
-the GUI to confirm selections and trigger the actual replacement.
+The CLI can run any mode end-to-end, including selective, where it writes
+frames with the decision tree's verdicts applied. What it *cannot* do is
+change those verdicts: to keep or remove individual blobs, open the
+project in a graphical client and re-finish the frames there.
 
-### GUI (`star.app`)
+### Graphical clients
 
-SwiftUI app in [`gui/star/`](gui/star/). It can:
+There are two, kept in step with each other: `Star.app`, a SwiftUI app
+for macOS in [`gui/star/`](gui/star/), and Star Desktop, a Kotlin/Compose
+app for Windows and Linux in [`star-desktop/`](star-desktop/) that drives
+the same core through the `stard` daemon. They can:
 
 - Drive the full pipeline, with live progress per frame.
 - Render any frame at any stage of the pipeline (original, subtraction
@@ -488,8 +551,8 @@ SwiftUI app in [`gui/star/`](gui/star/). It can:
   re-run individual stages without re-running the whole sequence.
 - Mux the result back into a video.
 
-Selective mode is only fully usable here. Automatic mode works in either
-place and behaves identically.
+Reviewing selective-mode blobs needs one of these. Automatic mode works
+anywhere and behaves identically.
 
 ---
 
@@ -497,9 +560,11 @@ place and behaves identically.
 
 **Good at:**
 
-- Static timelapses, clear skies, normal exposure times. Even
-  `--clean-method automatic --detection-type mild` gets nearly all
-  airplanes and satellites, with very few false positives.
+- Static timelapses, clear skies, normal exposure times. Plain
+  `--clean-method automatic` removes every airplane and satellite with
+  no per-frame decisions at all.
+- Moving timelapses whose foreground has visible detail: sky and ground
+  are both aligned and cleaned.
 - Long sequences (hundreds to thousands of frames). The sigma-clipped
   median gets dramatically more reliable as `N` grows.
 - Sequences with mild camera drift. The RANSAC homography handles
@@ -510,27 +575,26 @@ place and behaves identically.
 
 **Not good at:**
 
-- **Moving timelapses with anything bright below the horizon.** Without
-  earth alignment, the median below the horizon collapses to "the
-  original frame," subtraction is zero, and ground transients
-  (headlights, distant aircraft, low-flying satellites near the
-  horizon) pass through. The codebase is explicit about this in
-  [`FrameAirplaneRemover.swift:5787`](StarCore/Sources/StarCore/FrameAirplaneRemover.swift:5787):
-  if neither earth-aligned nor sky-aligned reference can be built,
-  no subtraction image can be built either.
+- **Moving timelapses with untrackable ground.** A foreground that is
+  black or featureless — often shadows clipped before export — gives
+  the earth alignment nothing to fit. Those neighbors are rejected, the
+  ground below the horizon falls back to the original frame, and ground
+  transients (headlights, low aircraft near the horizon) pass through.
+  `star` raises a warning when this happens.
 - **Fast-moving clouds.** Clouds change fast enough that a "clean
   reference" of a cloud isn't really clean — the median will smear.
-  Selective mode is recommended in this case so the user can keep the
-  cloud frames as-is.
-- **Dawn / dusk.** Rapid global brightness changes confuse the
-  subtraction step (the reference is dimmer than the original
-  everywhere, not just at airplane trails), generating many false
-  positives.
+  Try `--cloud-aware-merge`, or use selective mode so cloudy frames
+  keep their original pixels outside the removed blobs.
+- **Dawn / dusk.** Rapid global brightness changes make alignment
+  harder, and in the selective modes confuse the subtraction step (the
+  reference is dimmer than the original everywhere, not just at
+  airplane trails), generating many false positives.
 - **Very short sequences (< ~5 frames).** Too few samples for the
   sigma-clipped median to reject outliers reliably.
 - **Meteors and bolides** — these *will* be removed in pure
-  automatic mode because they look exactly like airplane trails to
-  the classifier (single-frame bright streaks). Use
+  automatic mode, which removes everything that moved; and the
+  classifier can mistake them for airplane trails (single-frame bright
+  streaks). Use
   `--clean-method automatic:true` to run the selective preservation
   pass that puts them back, or use `--clean-method selective` and
   approve them in the GUI.
@@ -562,7 +626,7 @@ place and behaves identically.
 
 ### Per-platform release scripts
 
-Both follow the same shape: build OpenCV statically, build the
+All three follow the same shape: build OpenCV statically, build the
 decision-tree library, build the CLI, then package.
 
 - [`release_darwin.sh`](release_darwin.sh): builds OpenCV → builds
@@ -572,10 +636,13 @@ decision-tree library, build the CLI, then package.
   inside the GUI directory.
 - [`release_linux.sh`](release_linux.sh): builds OpenCV → builds
   StarDecisionTrees → builds the CLI → packages as a `.deb` via
-  `dpkg-deb`. CLI only; no GUI on Linux. Requires Swift toolchain
+  `dpkg-deb`. CLI only; Star Desktop is packaged separately from
+  [`star-desktop/`](star-desktop/). Requires Swift toolchain
   from swift.org plus the system dev packages
   (`cmake make pkg-config libeigen3-dev zlib1g-dev libpng-dev
   libtiff-dev libjpeg-dev`).
+- [`release_windows.sh`](release_windows.sh): the same for Windows,
+  packaged as a `.zip` and an NSIS installer. CLI only.
 
 ### What's bundled in a release
 

@@ -149,7 +149,8 @@ final class KeypointLimiterTests: XCTestCase {
         XCTAssertEqual(limiter.waiting, 1, "second acquire should have parked")
 
         limiter.set(max: 2)
-        await parked.value
+        let granted = await parked.value
+        XCTAssertTrue(granted, "the parked waiter should be granted the slot the raised limit freed")
 
         XCTAssertEqual(limiter.inFlight, 2)
         XCTAssertEqual(limiter.waiting, 0)
@@ -217,7 +218,8 @@ final class KeypointLimiterTests: XCTestCase {
         XCTAssertEqual(limiter.waiting, 1)
 
         parked.cancel()
-        await parked.value   // must return rather than hang
+        let granted = await parked.value   // must return rather than hang
+        XCTAssertTrue(granted, "a cancelled waiter is granted a slot so its release stays balanced")
 
         XCTAssertEqual(limiter.waiting, 0)
         limiter.release()

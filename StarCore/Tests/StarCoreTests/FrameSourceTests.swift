@@ -16,7 +16,7 @@ final class FrameSourceTests: XCTestCase {
 
     func testADirectorySourceHasEveryFrameAtOnceInTheOrderImageSequenceUsed() async throws {
         for name in ["image_0002.tiff", "image_0001.tiff", "image_0003.tiff", "notes.txt"] {
-            FileManager.default.createFile(atPath: scratch.appendingPathComponent(name).path, contents: Data([0]))
+            XCTAssertTrue(FileManager.default.createFile(atPath: scratch.appendingPathComponent(name).path, contents: Data([0])))
         }
         let source = try DirectoryFrameSource(dirname: scratch.path, supportedImageFileTypes: [".tiff"])
         XCTAssertEqual(source.frameCount, 3)
@@ -36,7 +36,7 @@ final class FrameSourceTests: XCTestCase {
 
     private func touch(_ names: [String]) {
         for name in names {
-            FileManager.default.createFile(atPath: scratch.appendingPathComponent(name).path, contents: Data([0]))
+            XCTAssertTrue(FileManager.default.createFile(atPath: scratch.appendingPathComponent(name).path, contents: Data([0])))
         }
     }
 
@@ -72,7 +72,7 @@ final class FrameSourceTests: XCTestCase {
     }
 
     func testADirectorySourceWaitReturnsAtOnceAndAnOutOfRangeFrameFails() async throws {
-        FileManager.default.createFile(atPath: scratch.appendingPathComponent("image_0001.tiff").path, contents: Data([0]))
+        XCTAssertTrue(FileManager.default.createFile(atPath: scratch.appendingPathComponent("image_0001.tiff").path, contents: Data([0])))
         let source = try DirectoryFrameSource(dirname: scratch.path, supportedImageFileTypes: [".tiff"])
         try await source.waitUntilAvailable(0)
         try source.waitUntilAvailableBlocking(0)
@@ -105,7 +105,7 @@ final class FrameSourceTests: XCTestCase {
         let arrived = LockedBox<[Int]>([])
         let failed = LockedBox<[Int]>([])
         for index in [2, 8] {
-            book.addWaiter(index) { result in
+            _ = book.addWaiter(index) { result in
                 if case .success = result { arrived.withValue { $0.append(index) } } else { failed.withValue { $0.append(index) } }
             }
         }
@@ -134,10 +134,10 @@ final class FrameSourceTests: XCTestCase {
     func testAFailedBookFailsEveryWaiterAndEveryLaterOne() {
         let book = FrameAvailabilityBook(frameCount: 10)
         let failures = LockedBox(0)
-        book.addWaiter(4) { if case .failure = $0 { failures.withValue { $0 += 1 } } }
+        _ = book.addWaiter(4) { if case .failure = $0 { failures.withValue { $0 += 1 } } }
         book.failEverything("ffmpeg died")
         XCTAssertEqual(failures.get(), 1)
-        book.addWaiter(6) { if case .failure = $0 { failures.withValue { $0 += 1 } } }
+        _ = book.addWaiter(6) { if case .failure = $0 { failures.withValue { $0 += 1 } } }
         XCTAssertEqual(failures.get(), 2)
         XCTAssertEqual(book.availability(6), .failed("ffmpeg died"))
     }

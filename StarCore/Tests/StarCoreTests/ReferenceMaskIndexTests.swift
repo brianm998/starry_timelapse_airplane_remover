@@ -24,7 +24,7 @@ final class ReferenceMaskIndexTests: XCTestCase {
     func testTheDirectoryIsListedOnceAndReusedUntilItChanges() throws {
         let dir = try makeDir()
         defer { try? FileManager.default.removeItem(at: dir) }
-        FileManager.default.createFile(atPath: dir.appendingPathComponent("f2.tif").path, contents: Data([1]))
+        XCTAssertTrue(FileManager.default.createFile(atPath: dir.appendingPathComponent("f2.tif").path, contents: Data([1])))
 
         let index = ReferenceMaskIndex()
         let first = index.index(of: dir, build: build(dir, frames: 6))
@@ -35,7 +35,7 @@ final class ReferenceMaskIndexTests: XCTestCase {
 
         // painting another reference adds a file, which changes the directory
         Thread.sleep(forTimeInterval: 0.02)
-        FileManager.default.createFile(atPath: dir.appendingPathComponent("f4.tif").path, contents: Data([1]))
+        XCTAssertTrue(FileManager.default.createFile(atPath: dir.appendingPathComponent("f4.tif").path, contents: Data([1])))
         let after = index.index(of: dir, build: build(dir, frames: 6))
         XCTAssertEqual(Set(after.keys), [2, 4])
         XCTAssertEqual(index.builds, 2)
@@ -45,7 +45,7 @@ final class ReferenceMaskIndexTests: XCTestCase {
         let dir = try makeDir()
         defer { try? FileManager.default.removeItem(at: dir) }
         for i in [1, 3] {
-            FileManager.default.createFile(atPath: dir.appendingPathComponent("f\(i).tif").path, contents: Data([1]))
+            XCTAssertTrue(FileManager.default.createFile(atPath: dir.appendingPathComponent("f\(i).tif").path, contents: Data([1])))
         }
         let index = ReferenceMaskIndex()
         XCTAssertEqual(Set(index.index(of: dir, build: build(dir, frames: 5)).keys), [1, 3])

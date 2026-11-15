@@ -107,4 +107,10 @@ class ProcessingStatusTest {
         )
         assertTrue(ViewModes.shown(emptyList(), true).isEmpty())
     }
+
+    @Test fun newestComplete() {
+        assertEquals(null, FrameStateCounts.newestComplete(emptyMap()))
+        assertEquals(null, FrameStateCounts.newestComplete(mapOf(0 to FPS_STAR_KEYPOINTS, 1 to FPS_UNPROCESSED)))
+        assertEquals(5, FrameStateCounts.newestComplete(mapOf(5 to FPS_COMPLETE, 2 to FPS_COMPLETE, 9 to FPS_STAR_KEYPOINTS)))
+    }
 }

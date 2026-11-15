@@ -98,7 +98,7 @@ final class MergeCoveragePlaneTests: XCTestCase {
               : dark
         }
 
-        try withLoader(frames) {
+        withLoader(frames) {
             let merged = ImageAligner.medianMergeImage(
               dark,                                       // the base saw no car either
               withFilenames: (0..<16).map { "n\($0)" },
@@ -127,7 +127,7 @@ final class MergeCoveragePlaneTests: XCTestCase {
                                      : plain
         }
 
-        try withLoader(frames) {
+        withLoader(frames) {
             let merged = ImageAligner.medianMergeImage(
               plain,
               withFilenames: (0..<8).map { "n\($0)" },
@@ -147,7 +147,7 @@ final class MergeCoveragePlaneTests: XCTestCase {
         let black = frame(background: (0, 0, 0))
         let frames = ["n0": black, "n1": black]
 
-        try withLoader(frames) {
+        withLoader(frames) {
             let merged = ImageAligner.medianMergeImage(
               black, withFilenames: ["n0", "n1"],
               outlierThreshold: 1.2,
