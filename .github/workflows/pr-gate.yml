@@ -136,13 +136,20 @@ jobs:
           cache-read-only: true
           cache-cleanup: on-success
 
-      # Plugin resolution from plugins.gradle.org fails transiently ("Could not parse POM"); try once more before going red.
+      # Maven Central rate-limits runners (429 on protoc); setup-gradle is read-only, so keep the protoc artifact in its own small writable cache.
+      - name: Cache protoc
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches/modules-2/files-2.1/com.google.protobuf/protoc
+          key: protoc-${{ runner.os }}-${{ hashFiles('star-desktop/build.gradle.kts') }}
+
+      # Plugin resolution from plugins.gradle.org fails transiently ("Could not parse POM"); and Maven Central answers 429 when rate-limiting; retry with long waits before going red.
       - name: Proto is in sync with the daemon
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
-          max_attempts: 2
-          retry_wait_seconds: 20
+          max_attempts: 4
+          retry_wait_seconds: 60
           shell: bash
           command: cd star-desktop && ./gradlew checkProtoSync --no-daemon
 
@@ -179,13 +186,20 @@ jobs:
           cache-read-only: true
           cache-cleanup: on-success
 
-      # Plugin resolution from plugins.gradle.org fails transiently ("Could not parse POM"); try once more before going red.
+      # Maven Central rate-limits runners (429 on protoc); setup-gradle is read-only, so keep the protoc artifact in its own small writable cache.
+      - name: Cache protoc
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches/modules-2/files-2.1/com.google.protobuf/protoc
+          key: protoc-${{ runner.os }}-${{ hashFiles('star-desktop/build.gradle.kts') }}
+
+      # Plugin resolution from plugins.gradle.org fails transiently ("Could not parse POM"); and Maven Central answers 429 when rate-limiting; retry with long waits before going red.
       - name: Desktop unit tests
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 30
-          max_attempts: 2
-          retry_wait_seconds: 20
+          max_attempts: 4
+          retry_wait_seconds: 60
           shell: bash
           command: cd star-desktop && ./gradlew test --no-daemon --stacktrace
 
