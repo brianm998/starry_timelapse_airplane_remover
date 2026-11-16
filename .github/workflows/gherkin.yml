@@ -1421,6 +1421,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Shard 3 holds the 1.35 GB tiff16 dataset next to the OpenCV, Swift and trail builds; free the runner's unused toolchains first.
+      - name: Free runner disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
       # this client needs is generated (gherkin/generated/datasets-desktop.txt), never maintained by hand.
       # A @ui feature needs no dataset, and fetch.sh with no names is a usage error, not a no-op.
@@ -1594,6 +1601,7 @@ jobs:
           if [ ! -d star-desktop/build/gherkin-each ]; then
             echo "::error::gherkin/run-desktop-features.sh never started (no star-desktop/build/gherkin-each): a step before 'Run the Gherkin features in the Compose UI' failed"
           fi
+          df -h / || true
 
       - name: Upload test reports
         if: always()
