@@ -1126,7 +1126,7 @@
 					../StarDecisionTrees/lib/debug/macos/libStarDecisionTrees.a,
 				);
 				"OTHER_SWIFT_FLAGS[arch=*]" = "-l StarDecisionTrees -I ../StarDecisionTrees/include/debug/macos";
-				PRODUCT_BUNDLE_IDENTIFIER = com.star;
+				PRODUCT_BUNDLE_IDENTIFIER = com.star.debug;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
