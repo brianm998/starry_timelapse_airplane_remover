@@ -34,9 +34,9 @@ struct InitialView: View {
 
             GeometryReader { geo in
                 let showGreeter = WelcomeArt.greeterShown(window: geo.size)
-                ZStack(alignment: .bottomTrailing) {
+                ZStack(alignment: WelcomeArt.greeterAlignment) {
                     self.mainView
-                      .padding(.trailing, showGreeter ? WelcomeArt.greeterInset : 0)
+                      .padding(.leading, showGreeter ? WelcomeArt.greeterInset : 0)
                       .frame(width: geo.size.width, height: geo.size.height)
                     if showGreeter {
                         ArtImage(.greeter)
@@ -873,11 +873,13 @@ extension InitialView.OpenKind {
 
 /// Where the Welcome screen's pictures go; the desktop's `WelcomeArt` object has the same numbers.
 enum WelcomeArt {
-    /// The window is at least this big before the greeter stands in the lower right.
+    /// The window is at least this big before the greeter stands in the upper left.
     static let greeterMinWidth: CGFloat = 900
     static let greeterMinHeight: CGFloat = 600
     static let greeterMargin: CGFloat = 16
-    /// The room kept clear at the right for the greeter, so nothing in the content column reaches it.
+    /// The corner the greeter stands in; the content column leaves `greeterInset` clear on that side.
+    static let greeterAlignment: Alignment = .topLeading
+    /// The room kept clear at the left for the greeter, so nothing in the content column reaches it.
     static var greeterInset: CGFloat { StarArt.greeter.size.width + 2 * greeterMargin }
     /// The part of art_robot_and_dog the Information dialog's banner shows, as fractions of its height.
     static let bannerTop: CGFloat = 0.30
