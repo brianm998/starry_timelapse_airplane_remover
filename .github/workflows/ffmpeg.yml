@@ -23,8 +23,8 @@ jobs:
     if: contains(inputs.platforms, 'linux')
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v5
+      - uses: actions/cache@v5
         id: cache
         with:
           path: ffmpeg-out
@@ -38,7 +38,7 @@ jobs:
       - name: Build ffmpeg + ffprobe
         if: steps.cache.outputs.cache-hit != 'true'
         run: ffmpeg/build_ci.sh "$PWD/ffmpeg-out"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ffmpeg-linux
           path: ffmpeg-out/*
@@ -49,8 +49,8 @@ jobs:
     if: contains(inputs.platforms, 'windows')
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v5
+      - uses: actions/cache@v5
         id: cache
         with:
           path: ffmpeg-out
@@ -69,7 +69,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         shell: msys2 {0}
         run: ffmpeg/build_ci.sh "$(cygpath -u "$GITHUB_WORKSPACE")/ffmpeg-out"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ffmpeg-windows
           path: ffmpeg-out/*
@@ -81,8 +81,8 @@ jobs:
     # macos-15 (arm64), not macos-14: GitHub retired the macos-14 image on 2026-11-02 and cancels its jobs outright.
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/cache@v4
+      - uses: actions/checkout@v5
+      - uses: actions/cache@v5
         id: cache
         with:
           path: ffmpeg-out
@@ -94,7 +94,7 @@ jobs:
         run: |
           brew install nasm pkg-config
           ffmpeg/build_ci.sh "$PWD/ffmpeg-out"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ffmpeg-macos
           path: ffmpeg-out/*

@@ -29,7 +29,7 @@ jobs:
       # downloads and stars are still kept and the run says traffic was skipped. See the README, "Traffic".
       STATS_TOKEN: ${{ secrets.STATS_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Does the stats branch exist yet?
         id: branch
@@ -37,7 +37,7 @@ jobs:
 
       # An empty ref checks out the default branch, which the first run turns into a fresh `stats` branch below.
       - name: Check out the stats branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: stats-data
           ref: ${{ steps.branch.outputs.exists == '1' && 'stats' || '' }}
