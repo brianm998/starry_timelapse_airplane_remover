@@ -1577,7 +1577,12 @@ class DesktopFeatureRunner {
     /** Lets the held frames come out: removes the file that held them. */
     private fun releaseExtraction(t: ComposeUiTest) {
         val hold = extractionHold ?: throw RunnerError("\"I open a video of the copied sequence with its extraction held\" has not run")
-        if (!hold.delete()) throw RunnerError("could not remove $hold")
+        // On Windows a delete fails while StarCore's extraction has the file open for the instant it reads it: try again, but only for a moment.
+        val deadline = System.currentTimeMillis() + 10_000
+        while (hold.exists() && !hold.delete()) {
+            if (System.currentTimeMillis() > deadline) throw RunnerError("could not remove $hold")
+            Thread.sleep(50)
+        }
         t.waitForIdle()
     }
 

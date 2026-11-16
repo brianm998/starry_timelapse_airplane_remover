@@ -530,6 +530,24 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
         return Int(text) ?? 0
     }
 
+    /// Moves a staged frame into place.  On Windows a move fails with a sharing violation while another process (ffmpeg finishing its
+    /// rename, a virus scanner, a reader of the destination) still has either file open for an instant: try a few times before giving up.
+    static func moveWithRetry(staged: String, destination: String, attempts: Int = 40, pause: TimeInterval = 0.05) throws {
+        let fileManager = FileManager.default
+        var attempt = 1
+        while true {
+            do {
+                try fileManager.moveItem(atPath: staged, toPath: destination)
+                return
+            } catch {
+                if attempt >= attempts || !fileManager.fileExists(atPath: staged) { throw error }
+                attempt += 1
+                try? fileManager.removeItem(atPath: destination)
+                Thread.sleep(forTimeInterval: pause)
+            }
+        }
+    }
+
     /// How long a held frame waits before the hold is looked at again.
     static let holdRecheck: TimeInterval = 0.25
 
@@ -554,7 +572,7 @@ public final class VideoFrameSource: FrameSource, @unchecked Sendable {
             let destination = path(forFrame: index)
             try? fileManager.removeItem(atPath: destination)
             do {
-                try fileManager.moveItem(atPath: staged, toPath: destination)
+                try Self.moveWithRetry(staged: staged, destination: destination)
             } catch {
                 Log.e("could not move extracted frame \(index) into place: \(error)")
                 fail("could not move extracted frame \(index) into place: \(error.localizedDescription)")

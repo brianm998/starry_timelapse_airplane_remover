@@ -164,6 +164,16 @@ final class VideoFrameSourceTests: XCTestCase {
         XCTAssertEqual(files(in: source.outputFolder).count, 12, "the held frames arrive once the hold is gone, though ffmpeg had exited")
     }
 
+    func testMoveWithRetryMovesAndGivesUpOnAMissingSource() throws {
+        let dir = NSTemporaryDirectory() + "move-retry-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "x".write(toFile: dir + "/a", atomically: true, encoding: .utf8)
+        try VideoFrameSource.moveWithRetry(staged: dir + "/a", destination: dir + "/b")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dir + "/b"))
+        XCTAssertThrowsError(try VideoFrameSource.moveWithRetry(staged: dir + "/none", destination: dir + "/c", attempts: 3, pause: 0.01))
+    }
+
     func testTheNonWaitingCallIsFalseBeforeAndTrueAfter() async throws {
         let video = try h264("nonwait", frames: 200, size: "1280x720")
         let source = try await VideoFrameSource.make(videoPath: video, settings: .sweepOnly)
