@@ -73,6 +73,7 @@ for name in "$@"; do
 
   mkdir "$tmp/unpack"
   tar -xzf "$tmp/$asset" -C "$tmp/unpack" || die "$name: could not unpack $asset"
+  rm -f "$tmp/$asset"   # free the tarball's space now: only the extracted copy is kept
   [ -d "$tmp/unpack/$name" ] || die "$name: $asset has no top-level directory '$name'"
 
   rm -rf "$dest"
