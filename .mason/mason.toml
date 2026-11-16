@@ -283,7 +283,8 @@ level = "t1"
 uses = { test-suite = 1 }
 
 [suite.test-StarCpp-qos]
-# OpenCVQoSTests measures QoS-dependent worker counts: never beside other tests.
+# OpenCVQoSTests measures QoS-dependent worker counts: timing sensitivity. Any other load on the
+# cores changes the counts it observes, so it keeps the whole machine (exclusive, kept on purpose).
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path StarCpp --filter OpenCVQoSTests 2>&1"
 parser = "xctest"
 min_tests = 1 # UNMEASURED
@@ -340,6 +341,9 @@ level = "t1"
 uses = { test-suite = 1 }
 
 # The Gherkin step-coverage package: it needs the machine to itself (EXCLUSIVE_TEST_MARKERS).
+# Why exclusive (kept on purpose): memory and timing. Its scenarios run the full star pipeline on
+# image sequences, holding many GB resident (peak compressor size is the OOM signal here), and
+# beside another suite they swap and miss their deadlines.
 [suite.test-gherkin]
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path gherkin/StarGherkin 2>&1"
 parser = "xctest"
@@ -350,13 +354,16 @@ uses = { exclusive = 1 }
 # The macOS gui's unit tests only: `-only-testing:starTests`. NEVER starUITests (they drive the real
 # mouse and wake the display; those stay on CI), and never wrap this in `caffeinate -d -u`, whose
 # `-u` turns a sleeping display on. It needs no display: StarMain hosts it in a background-only app.
-# Exclusive because starpipe classes every `xcodebuild test` that way.
+# One test-suite slot, not the whole machine (#467): the only reason it was exclusive was that
+# starpipe classes every `xcodebuild test` that way. starTests is hosted in a background-only app
+# with no windows, drives no mouse or keyboard, and asserts no time budget, so it needs neither the
+# display nor the cores. The display stays untouched whatever the share.
 [suite.test-gui]
 command = "env STAR_USE_GPU_FOR_MERGE=0 .mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd -only-testing:starTests test 2>&1"
 parser = "xctest"
 min_tests = 1 # UNMEASURED
 level = "t1"
-uses = { exclusive = 1 }
+uses = { test-suite = 1 }
 # In a task's test step, only the XCTest classes the change needs (MASON s386): classes holding an
 # edited line, or naming a changed file. The landing batch does NOT run the gui tests
 # locally (landing.toml's batch tier lists only test-desktop); pr-gate's macOS job covers the Swift side. Shared code, the
