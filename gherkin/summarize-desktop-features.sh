@@ -18,6 +18,9 @@ fi
 each="$(dirname "$0")/../star-desktop/build/gherkin-each"
 bad=0
 rows=""
+if [ ! -d "$each" ]; then
+    echo "::error::gherkin/run-desktop-features.sh never started (no $each): a step before the run step failed or timed out"
+fi
 for f in "$@"; do
     if [ -f "$each/$f/PASSED" ]; then
         mark="✅ passed"
