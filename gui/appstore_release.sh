@@ -5,7 +5,7 @@ set -e
 # Build the sandboxed Mac App Store variant of the star gui and upload it to App Store Connect (TestFlight).
 # gui/release.sh is the Developer ID + notarized build and is not touched by this one.
 #
-#   ./appstore_release.sh                 archive, check entitlements, export, validate, upload
+#   ./appstore_release.sh                 archive, check entitlements, export, validate, upload (xcrun altool --upload-app)
 #   ./appstore_release.sh --export-only   the same without the upload (destination=export), then altool --validate-app
 #   ./appstore_release.sh --archive-only  stop after the archive and the entitlement checks (no installer identity needed)
 #   ./appstore_release.sh --print-build-number
@@ -25,7 +25,9 @@ set -e
 #   APPSTORE_BUILD_NUMBER   CFBundleVersion; default ${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT} in CI (see below).
 #   APPLE_API_KEY_PATH, APPLE_API_KEY_ID, APPLE_API_ISSUER_ID
 #                           an App Store Connect API key (role App Manager or Admin) for the upload and the validation.
-#                           Without it xcodebuild uses the account signed in to Xcode, and validation is skipped.
+#                           Uploading requires it. Without it xcodebuild uses the account signed in to Xcode, and
+#                           an --export-only run skips validation.
+#                           Prerequisite: an App Store Connect app record must exist for APPSTORE_BUNDLE_ID.
 
 BUILD_DIR=.build/appstore
 APP_NAME=Star
@@ -351,14 +353,13 @@ if [ "$MODE" = export ]; then
 fi
 
 # ── upload ───────────────────────────────────────────────────────────────────
-write_export_options upload
+# Upload the pkg that was just inspected, with altool: xcodebuild's destination=upload first downloads the app's record
+# from App Store Connect and stops with "Error Downloading App Information" when that fails, and says no more.
+# altool names the cause (no app record for the bundle id, a key without the right role).
+[ -n "$APPLE_API_KEY_PATH" ] || die "uploading needs an App Store Connect API key: set APPLE_API_KEY_PATH, APPLE_API_KEY_ID and APPLE_API_ISSUER_ID"
+echo "validating ${PKG}"
+xcrun altool --validate-app -f "$PKG" -t macos "${ALTOOL_AUTH[@]}"
 echo "uploading ${STAR_VERSION} (${BUILD_NUMBER}) to App Store Connect"
-xcodebuild \
-    -exportArchive \
-    -archivePath "${BUILD_DIR}/star.xcarchive" \
-    -exportOptionsPlist "${BUILD_DIR}/ExportOptions-upload.plist" \
-    -exportPath "${BUILD_DIR}/upload" \
-    "${XCODEBUILD_AUTH_ARGS[@]}" \
-    "${ALLOW_PROVISIONING[@]}"
+xcrun altool --upload-app -f "$PKG" -t macos "${ALTOOL_AUTH[@]}"
 
 echo "uploaded ${STAR_VERSION} (${BUILD_NUMBER}); it shows in App Store Connect -> TestFlight once processing is done"
