@@ -21,4 +21,10 @@ if [ -n "$dd" ]; then
   case "$dd" in /*) ;; *) dd="$PWD/$dd" ;; esac
   extra=("SYMROOT=$dd/Build/Products" "OBJROOT=$dd/Build/Intermediates.noindex")
 fi
+for a in "$@"; do
+  if [ "$a" = "test" ] && /usr/bin/pgrep -f /Applications/Star.app/Contents/MacOS/Star >/dev/null 2>&1; then
+    echo "xcodebuild-signed: note: /Applications/Star.app is running; the Debug test host is com.star.debug so it should not conflict (t485)" >&2
+    break
+  fi
+done
 exec xcodebuild "$@" ${extra[@]+"${extra[@]}"} CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=$ident" "DEVELOPMENT_TEAM=$team"
