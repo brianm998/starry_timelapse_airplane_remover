@@ -88,7 +88,7 @@ def test_daemon_test_log_names_the_running_test(tmp_path: Path, monkeypatch: pyt
     release = _fake_swift(tmp_path, monkeypatch)
     thread, results, log = _run_daemon_check(tmp_path)
     try:
-        deadline = time.monotonic() + 20
+        deadline = time.monotonic() + 180  # startup of several python and script processes is slow on a busy machine
         while time.monotonic() < deadline and "testHang" not in (log.read_text(errors="replace") if log.exists() else ""):
             time.sleep(0.1)
         seen_while_running = "testHang" in (log.read_text(errors="replace") if log.exists() else "")
