@@ -75,11 +75,11 @@ jobs:
     # The check name keeps "(macos-14)" so references to it (the pipeline's CI judge, branch rules) still match.
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Cache the built binaries
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ffmpeg/dist/macos-universal
           key: ffmpeg-macos-universal-${{ hashFiles('ffmpeg/versions.env', 'ffmpeg/build.sh', 'ffmpeg/lib/**') }}
@@ -111,7 +111,7 @@ jobs:
           arch -x86_64 x64/ffmpeg -hide_banner -version | head -n 1
           arch -x86_64 ./ffmpeg/smoke_test.sh --target macos-x64 x64
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ffmpeg-macos-universal
           path: ffmpeg/dist/macos-universal
@@ -119,7 +119,7 @@ jobs:
 
       - name: Upload build logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ffmpeg-macos-logs
           path: ffmpeg/.work/logs
@@ -143,13 +143,13 @@ jobs:
             runner: ubuntu-24.04-arm
             automatic: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: ${{ matrix.automatic || inputs.include-arm64 }}
 
       - name: Cache the built binaries
         id: cache
         if: ${{ matrix.automatic || inputs.include-arm64 }}
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ffmpeg/dist/${{ matrix.target }}
           key: ffmpeg-${{ matrix.target }}-${{ hashFiles('ffmpeg/versions.env', 'ffmpeg/build.sh', 'ffmpeg/lib/**') }}
@@ -176,7 +176,7 @@ jobs:
         if: ${{ (matrix.automatic || inputs.include-arm64) && matrix.target == 'linux-x64' }}
         run: ./ffmpeg/check_extra_encoders.sh ffmpeg/dist/${{ matrix.target }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: ${{ matrix.automatic || inputs.include-arm64 }}
         with:
           name: ffmpeg-${{ matrix.target }}
@@ -185,7 +185,7 @@ jobs:
 
       - name: Upload build logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ffmpeg-${{ matrix.target }}-logs
           path: ffmpeg/.work/logs
@@ -200,11 +200,11 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Cache the built binaries
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ffmpeg/dist/windows-x64
           key: ffmpeg-windows-x64-${{ hashFiles('ffmpeg/versions.env', 'ffmpeg/build.sh', 'ffmpeg/lib/**') }}
@@ -245,7 +245,7 @@ jobs:
         shell: bash
         run: ./ffmpeg/check_extra_encoders.sh ffmpeg/dist/windows-x64
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ffmpeg-windows-x64
           path: ffmpeg/dist/windows-x64
@@ -253,7 +253,7 @@ jobs:
 
       - name: Upload build logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ffmpeg-windows-logs
           path: ffmpeg/.work/logs
