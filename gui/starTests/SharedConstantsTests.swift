@@ -203,6 +203,8 @@ final class SharedConstantsTests: XCTestCase {
         for art in [StarArt.tileLoadVideo, .tileLoadSequence, .tileLoadConfig, .tileLearn] {
             XCTAssertEqual(ArtImage(art).displaySize, CGSize(width: 48, height: 48))
         }
+        XCTAssertEqual(WelcomeArt.greeterAlignment, .topLeading)
+        XCTAssertEqual(WelcomeArt.greeterMargin, 16)
         XCTAssertFalse(WelcomeArt.greeterShown(window: CGSize(width: 700, height: 500)))
         XCTAssertFalse(WelcomeArt.greeterShown(window: CGSize(width: 1280, height: 500)))
         XCTAssertTrue(WelcomeArt.greeterShown(window: CGSize(width: 1280, height: 800)))
