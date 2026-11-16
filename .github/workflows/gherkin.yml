@@ -1429,15 +1429,25 @@ jobs:
           FEATURES: ${{ matrix.shard.features }}
         run: |
           names=$(for f in $FEATURES; do jq -r --arg f "$f" '.[$f][]' gherkin/generated/feature-datasets-desktop.json; done | sort -u)
-          if [ -n "$names" ]; then test_data/fetch.sh $names; else echo "$FEATURES needs no test data"; fi
+          if [ -z "$names" ]; then echo "$FEATURES needs no test data"; exit 0; fi
+          # a download from the release can fail on a network blip: three tries, then the step fails for real
+          for try in 1 2 3; do
+            test_data/fetch.sh $names && exit 0
+            echo "::warning::test data fetch failed (try $try of 3)"; sleep $((try * 20))
+          done
+          exit 1
 
       - name: Install apt prerequisites
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake make git pkg-config perl dpkg-dev zip \
-            libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev \
-            libcurl4-openssl-dev gdb
+          # the mirrors time out now and then: three tries, then the step fails for real
+          for try in 1 2 3; do
+            if sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+              cmake make git pkg-config perl dpkg-dev zip \
+              libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev \
+              libcurl4-openssl-dev gdb; then exit 0; fi
+            echo "::warning::apt prerequisites failed (try $try of 3)"; sleep $((try * 20))
+          done
+          exit 1
 
       - name: Set up Swift
         uses: SwiftyLab/setup-swift@latest
@@ -1569,6 +1579,21 @@ jobs:
       - name: Prove the scenario ran (per-feature results)
         if: ${{ !cancelled() }}
         run: gherkin/summarize-desktop-features.sh ${{ matrix.shard.features }}
+
+      # A step before the run script (fetch, apt, Swift, build ...) that fails leaves no gherkin-each directory, and the log then shows only
+      # "No files were found" at the upload.  Name the step that failed (or the one a timeout cut off) from the job's own step list.
+      - name: Name the failed step
+        if: failure() || cancelled()
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" --paginate \
+            --jq ".jobs[] | select(.runner_name == \"$RUNNER_NAME\") | .steps[] | select(.conclusion == \"failure\" or .conclusion == \"cancelled\" or (.status == \"in_progress\" and .name != \"Name the failed step\")) | \"::error::step '\(.name)' \(.conclusion // .status)\"" || true
+          if [ ! -d star-desktop/build/gherkin-each ]; then
+            echo "::error::gherkin/run-desktop-features.sh never started (no star-desktop/build/gherkin-each): a step before 'Run the Gherkin features in the Compose UI' failed"
+          fi
 
       - name: Upload test reports
         if: always()
