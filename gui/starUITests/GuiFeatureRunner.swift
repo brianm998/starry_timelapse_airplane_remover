@@ -452,6 +452,11 @@ final class GuiFeatureRunner {
     private func openCopiedSequence(askingTheStartupQuestions: Bool = true) throws {
         guard let copy = sequenceCopy else { throw RunnerError("\"a fresh copy of the sequence\" has not run") }
         try launch(arguments: ["-StarUITestOpenSequence", copy.path] + (askingTheStartupQuestions ? [] : ["-StarUITestSkipStartupQuestions", "YES"]))
+        if !askingTheStartupQuestions {
+            // Without the questions the next step is a menu command; chosen while the sequence is still loading, it opened nothing
+            // (uiGalleryWindows, CI run 43912477865: the outlier window never came). Land on the sequence screen first.
+            try waitFor("the sequence screen", timeout: 120, detail: { self.app.debugDescription }) { self.element("frame.number").exists }
+        }
     }
 
     /// Clicks the control once it can be hit: a control that is there for a moment while a screen is still being put up (the startup questions
