@@ -163,10 +163,12 @@ struct KeypointDivisorStartupView: View {
               .font(.title2)
               .foregroundColor(.white)
             Space(height: 12)
-            explanation
-            Space(height: 14)
-            ArtImage(.settingKeypointSize)
-              .frame(maxWidth: .infinity)
+            // The picture sits beside the words: stacked above the presets it ran the sheet past the bottom of a 768 pt
+            // screen and put Cancel and Update out of reach (CI run 43912477865, uiStartupSpeedSharpness).
+            HStack(alignment: .top, spacing: 12) {
+                explanation
+                ArtImage(.settingKeypointSize, fitting: 80)
+            }
             Space(height: 14)
             presetRows
             Space(height: 12)

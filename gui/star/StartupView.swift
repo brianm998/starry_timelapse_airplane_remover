@@ -58,6 +58,11 @@ struct StartupPictureChoice {
 
 /// The picture-over-word button. The accessibility id sits on the Button itself, which the UI features click.
 struct PictureChoiceButton: View {
+    /// The longer side of the picture. The question sits in the middle pane between the two side panels
+    /// (about 530 pt in a 1024 pt window), so two pictures, the Back button and Advanced have to fit in a row:
+    /// at the art's own 260 pt the row overflowed and squeezed the Advanced button to zero width, unclickable.
+    static let artSide: CGFloat = 150
+
     let choice: StartupPictureChoice
     let action: () -> Void
     @State private var hovering = false
@@ -71,7 +76,7 @@ struct PictureChoiceButton: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                ArtImage(choice.art)
+                ArtImage(choice.art, fitting: PictureChoiceButton.artSide)
                 Text(localized(choice.labelKey))
                   .font(.title)
                   .foregroundColor(.white)
@@ -199,6 +204,8 @@ struct HorizonView: View {
                     }
                 }
                   .buttonStyle(PlainButtonStyle())
+                  .fixedSize()
+                  .layoutPriority(1)
                   .accessibilityIdentifier("startup.advanced")
             }
         }
@@ -266,6 +273,8 @@ struct MovingView: View {
                     }
                 }
                   .buttonStyle(PlainButtonStyle())
+                  .fixedSize()
+                  .layoutPriority(1)
                   .accessibilityIdentifier("startup.advanced")
             }
         }
@@ -627,6 +636,8 @@ struct RemovalView: View {
                     }
                 }
                   .buttonStyle(PlainButtonStyle())
+                  .fixedSize()
+                  .layoutPriority(1)
                   .accessibilityIdentifier("startup.advanced")
             }
         }
