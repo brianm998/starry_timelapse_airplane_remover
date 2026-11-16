@@ -18,6 +18,8 @@ class WelcomeArtTest {
         for (art in listOf(StarArt.ART_TILE_LOAD_VIDEO, StarArt.ART_TILE_LOAD_SEQUENCE, StarArt.ART_TILE_LOAD_CONFIG, StarArt.ART_TILE_LEARN)) {
             assertEquals(48 to 48, art.fittedSize(null))
         }
+        assertEquals(androidx.compose.ui.Alignment.TopStart, WelcomeArt.greeterAlignment)
+        assertEquals(16.dp, WelcomeArt.greeterMargin)
         assertFalse(WelcomeArt.greeterShown(700.dp, 500.dp))
         assertFalse(WelcomeArt.greeterShown(1280.dp, 500.dp))
         assertTrue(WelcomeArt.greeterShown(1280.dp, 800.dp))

@@ -80,7 +80,7 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxSize(),
         )
         IntroVideoBackground()
-        Box(Modifier.fillMaxSize().padding(end = if (showGreeter) WelcomeArt.greeterInset else 0.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().padding(start = if (showGreeter) WelcomeArt.greeterInset else 0.dp), contentAlignment = Alignment.Center) {
             // The whole window, as the gui's VStack is: the header, then a drop zone that takes the room there is, then the Load buttons.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -132,7 +132,7 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
             }
         }
         if (showGreeter) {
-            ArtImage(StarArt.ART_GREETER, Modifier.align(Alignment.BottomEnd).padding(WelcomeArt.greeterMargin))
+            ArtImage(StarArt.ART_GREETER, Modifier.align(WelcomeArt.greeterAlignment).padding(WelcomeArt.greeterMargin))
         }
     }
 }
@@ -290,7 +290,9 @@ object WelcomeArt {
     val greeterMinWidth: Dp = 900.dp
     val greeterMinHeight: Dp = 600.dp
     val greeterMargin: Dp = 16.dp
-    /** The room kept clear at the right for the greeter, so nothing in the content column reaches it. */
+    /** The corner the greeter stands in; the content column leaves [greeterInset] clear on that side. */
+    val greeterAlignment: Alignment = Alignment.TopStart
+    /** The room kept clear at the left for the greeter, so nothing in the content column reaches it. */
     val greeterInset: Dp = StarArt.ART_GREETER.width.dp + greeterMargin * 2
     /** The part of art_robot_and_dog the Information dialog's banner shows, as fractions of its height. */
     const val BANNER_TOP = 0.30
