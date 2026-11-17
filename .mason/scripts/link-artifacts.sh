@@ -19,7 +19,7 @@ links=(
 # without it builds StarCpp's wgpu backend as stubs (StarCpp/Package.swift).
 arch=$(uname -m); [ "$arch" = arm64 ] && arch=aarch64
 case "$(uname -s)" in
-  Darwin) optional=("wgpu/macos-$arch") ;;
+  Darwin) optional=("wgpu/macos-universal") ;;   # StarCpp links the universal library on every Mac
   Linux) optional=("wgpu/linux-$arch") ;;
   *) optional=() ;;
 esac
