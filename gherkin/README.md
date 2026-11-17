@@ -464,3 +464,7 @@ To add one: put the dataset (with `labels.json`) in `test_data/datasets.json`, g
 `.github/workflows/removal-measure.yml` (manual) measures every dataset x clean method on ubuntu-24.04 and macos-15 and publishes a table plus
 artifacts; `gherkin/measure-removal.sh <os> <out>` does the same locally (`MEASURE_FILTER=<substring>` runs a subset,
 `STAR_TEST_DATA` points at the dataset cache). Thresholds in `removal-thresholds.json` must come from those tables.
+
+A red mac gui feature prints its failure: `prove-xctest-features.sh` writes the feature's first XCTest failure lines (or, when no test
+started, the log's last 40 lines and crash markers) into the job log, the `::error::` annotation and the step summary, and an
+`if: failure()` step prints the xcresult summary with `xcresulttool`.

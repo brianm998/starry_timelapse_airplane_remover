@@ -1378,6 +1378,15 @@ jobs:
           FEATURES: ${{ matrix.shard.features }}
         run: gherkin/prove-xctest-features.sh gui gherkin-gui.log $FEATURES
 
+      # Readable failure for a red run: the xcresult's own summary.  Never fails the job itself.
+      - name: Print the xcresult failure summary
+        if: failure()
+        continue-on-error: true
+        run: |
+          x="$RUNNER_TEMP/gherkin-gui.xcresult"
+          xcrun xcresulttool get test-results summary --path "$x" || xcrun xcresulttool get --legacy --path "$x" --format json | head -c 20000 || true
+          exit 0
+
       # The screenshots in here are the only evidence of a GUI failure.
       - name: Upload the xcresult
         if: always()
