@@ -47,6 +47,15 @@ final class StartScreenTests: XCTestCase {
         XCTAssertNotEqual(localized(key), english, "\(key) is English in German")
     }
 
+    /// The greeter is a background layer: first in the ZStack, before the content, always drawn, no inset.
+    func testGreeterIsABackgroundLayer() throws {
+        let source = try String(contentsOf: Self.root.appendingPathComponent("gui/star/InitialView.swift"), encoding: .utf8)
+        let greeter = try XCTUnwrap(source.range(of: "ArtImage(.greeter)"))
+        let content = try XCTUnwrap(source.range(of: "self.mainView\n"))
+        XCTAssertTrue(greeter.lowerBound < content.lowerBound, "the greeter is not behind the content")
+        for gone in ["greeterShown", "greeterInset"] { XCTAssertFalse(source.contains(gone), "InitialView.swift still has \(gone)") }
+    }
+
     /// A1: the recents are a list with a row per entry, each with its own ✕ and ids, as the desktop's; no picker with one ✕ for the shown entry.
     func testRecentsAreAListWithARemovePerRow() throws {
         let source = try String(contentsOf: Self.root.appendingPathComponent("gui/star/InitialView.swift"), encoding: .utf8)

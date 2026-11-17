@@ -20,9 +20,6 @@ class WelcomeArtTest {
         }
         assertEquals(androidx.compose.ui.Alignment.TopStart, WelcomeArt.greeterAlignment)
         assertEquals(16.dp, WelcomeArt.greeterMargin)
-        assertFalse(WelcomeArt.greeterShown(700.dp, 500.dp))
-        assertFalse(WelcomeArt.greeterShown(1280.dp, 500.dp))
-        assertTrue(WelcomeArt.greeterShown(1280.dp, 800.dp))
         assertTrue(WelcomeArt.BANNER_TOP <= 0.35 && WelcomeArt.BANNER_BOTTOM >= 0.92)
         assertEquals(294.dp, WelcomeArt.bannerHeight)
     }

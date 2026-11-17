@@ -58,6 +58,17 @@ class StartScreenTest {
         assertTrue("ui.drop_an_image_sequence_folder_video_or" !in source, "the desktop's own drop zone text is still on the start screen")
     }
 
+    /** The greeter is a background layer: drawn after the video and before the content Box, always, with no inset. */
+    @Test fun theGreeterIsABackgroundLayer() {
+        val source = read("star-desktop/src/main/kotlin/com/star/desktop/ui/initial/InitialView.kt")
+        val video = source.indexOf("IntroVideoBackground()")
+        val greeter = source.indexOf("ArtImage(StarArt.ART_GREETER")
+        val content = source.indexOf("Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center)")
+        assertTrue(video in 0 until greeter && greeter < content, "the greeter is not between the video and the content")
+        assertEquals(1, Regex("ART_GREETER").findAll(source.substringBefore("object WelcomeArt")).count())
+        for (gone in listOf("greeterShown", "greeterInset", "padding(start = ")) assertTrue(gone !in source, "InitialView.kt still has $gone")
+    }
+
     @Test fun theyAreTranslated() {
         Strings.setOverride("en")
         val english = controls.flatMap { listOf(it["label"].asString, it["tip"].asString) }.associateWith { localized(it) }

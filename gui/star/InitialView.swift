@@ -33,16 +33,13 @@ struct InitialView: View {
             }
 
             GeometryReader { geo in
-                let showGreeter = WelcomeArt.greeterShown(window: geo.size)
                 ZStack(alignment: WelcomeArt.greeterAlignment) {
+                    // A background layer: above the sky and video, below all the content, taking no room from it.
+                    ArtImage(.greeter)
+                      .padding(WelcomeArt.greeterMargin)
+                      .allowsHitTesting(false)
                     self.mainView
-                      .padding(.leading, showGreeter ? WelcomeArt.greeterInset : 0)
                       .frame(width: geo.size.width, height: geo.size.height)
-                    if showGreeter {
-                        ArtImage(.greeter)
-                          .padding(WelcomeArt.greeterMargin)
-                          .allowsHitTesting(false)
-                    }
                 }
                   .frame(width: geo.size.width, height: geo.size.height)
             }
@@ -873,22 +870,13 @@ extension InitialView.OpenKind {
 
 /// Where the Welcome screen's pictures go; the desktop's `WelcomeArt` object has the same numbers.
 enum WelcomeArt {
-    /// The window is at least this big before the greeter stands in the upper left.
-    static let greeterMinWidth: CGFloat = 900
-    static let greeterMinHeight: CGFloat = 600
     static let greeterMargin: CGFloat = 16
-    /// The corner the greeter stands in; the content column leaves `greeterInset` clear on that side.
+    /// The corner the greeter stands in, behind the content (which may cover it in a small window).
     static let greeterAlignment: Alignment = .topLeading
-    /// The room kept clear at the left for the greeter, so nothing in the content column reaches it.
-    static var greeterInset: CGFloat { StarArt.greeter.size.width + 2 * greeterMargin }
     /// The part of art_robot_and_dog the Information dialog's banner shows, as fractions of its height.
     static let bannerTop: CGFloat = 0.30
     static let bannerBottom: CGFloat = 0.95
     static let bannerWidth: CGFloat = 680
-
-    static func greeterShown(window: CGSize) -> Bool {
-        window.width >= greeterMinWidth && window.height >= greeterMinHeight
-    }
 
     static var bannerHeight: CGFloat { (StarArt.robotAndDog.size.height * (bannerBottom - bannerTop)).rounded() }
 }
