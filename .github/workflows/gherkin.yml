@@ -1425,7 +1425,10 @@ jobs:
       - name: Free runner disk space
         run: |
           df -h /
-          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/share/dotnet /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost /usr/share/swift /opt/az /usr/local/.ghcup || true
+          sudo apt-get clean || true
+          docker image prune -af || true
           df -h /
 
       # Test data comes from the `test-data` release via test_data/datasets.json (see test_data/README.md); the list of what
@@ -1443,6 +1446,10 @@ jobs:
             echo "::warning::test data fetch failed (try $try of 3)"; sleep $((try * 20))
           done
           exit 1
+
+      - name: Disk after test data fetch
+        if: always()
+        run: df -h /
 
       - name: Install apt prerequisites
         run: |
@@ -1467,6 +1474,10 @@ jobs:
           name: opencv-linux
           path: opencv
 
+      - name: Disk after OpenCV download
+        if: always()
+        run: df -h /
+
       - name: Cache StarDecisionTrees
         uses: actions/cache@v5
         with:
@@ -1482,6 +1493,10 @@ jobs:
       - name: Build stard (release)
         working-directory: daemon
         run: swift build -c release -Xswiftc -static-stdlib
+
+      - name: Disk after stard build
+        if: always()
+        run: df -h /
 
       # ffmpeg/ffprobe for video import, the output video and the validator: the ffmpeg-gpu.yml artifact of this OS.
       - name: Fetch ffmpeg/ffprobe
@@ -1611,10 +1626,6 @@ jobs:
           path: star-desktop/build/gherkin-each
           if-no-files-found: warn
 
-  # ─── desktop, Windows ────────────────────────────────────────────────────────
-  # The slowest leg: stard is built from scratch on Windows (cache permitting). Same toolchain pinning as
-  # cli.yml's `windows` job and kotlin-client.yml's `windows-package` job.
-
       - name: Upload the validator reports and run configs
         if: always()
         uses: actions/upload-artifact@v6
@@ -1622,6 +1633,10 @@ jobs:
           name: gherkin-desktop-linux-shard-${{ matrix.shard.name }}-artifacts
           path: ${{ runner.temp }}/gherkin-artifacts
           if-no-files-found: warn
+
+  # ─── desktop, Windows ────────────────────────────────────────────────────────
+  # The slowest leg: stard is built from scratch on Windows (cache permitting). Same toolchain pinning as
+  # cli.yml's `windows` job and kotlin-client.yml's `windows-package` job.
 
   desktop-windows:
     name: desktop (windows-2022) · ${{ matrix.shard.label }}
