@@ -71,7 +71,6 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
     val recent by vm.recentFiles.collectAsState()
 
     BoxWithConstraints(modifier.fillMaxSize().background(StarColors.appBackground)) {
-        val showGreeter = WelcomeArt.greeterShown(maxWidth, maxHeight)
         // The night-sky still, cropped (never stretched); the intro video covers it when it plays, and draws nothing when it is missing.
         Image(
             painter = painterResource(StarArt.ART_WELCOME_BACKGROUND.resourcePath),
@@ -80,7 +79,9 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
             modifier = Modifier.fillMaxSize(),
         )
         IntroVideoBackground()
-        Box(Modifier.fillMaxSize().padding(start = if (showGreeter) WelcomeArt.greeterInset else 0.dp), contentAlignment = Alignment.Center) {
+        // A background layer: above the sky and video, below all the content, taking no room from it.
+        ArtImage(StarArt.ART_GREETER, Modifier.align(WelcomeArt.greeterAlignment).padding(WelcomeArt.greeterMargin))
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             // The whole window, as the gui's VStack is: the header, then a drop zone that takes the room there is, then the Load buttons.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -130,9 +131,6 @@ fun InitialView(vm: AppViewModel, modifier: Modifier = Modifier) {
                     )
                 }
             }
-        }
-        if (showGreeter) {
-            ArtImage(StarArt.ART_GREETER, Modifier.align(WelcomeArt.greeterAlignment).padding(WelcomeArt.greeterMargin))
         }
     }
 }
@@ -287,18 +285,12 @@ fun tileArt(kind: OpenKind): StarArt = when (kind) {
 
 /** Where the Welcome screen's pictures go; the gui's `WelcomeArt` enum has the same numbers. */
 object WelcomeArt {
-    val greeterMinWidth: Dp = 900.dp
-    val greeterMinHeight: Dp = 600.dp
     val greeterMargin: Dp = 16.dp
-    /** The corner the greeter stands in; the content column leaves [greeterInset] clear on that side. */
+    /** The corner the greeter stands in; behind the content (which may cover it in a small window). */
     val greeterAlignment: Alignment = Alignment.TopStart
-    /** The room kept clear at the left for the greeter, so nothing in the content column reaches it. */
-    val greeterInset: Dp = StarArt.ART_GREETER.width.dp + greeterMargin * 2
     /** The part of art_robot_and_dog the Information dialog's banner shows, as fractions of its height. */
     const val BANNER_TOP = 0.30
     const val BANNER_BOTTOM = 0.95
     val bannerWidth: Dp = 680.dp
     val bannerHeight: Dp = Math.round(StarArt.ART_ROBOT_AND_DOG.height * (BANNER_BOTTOM - BANNER_TOP)).toInt().dp
-
-    fun greeterShown(width: Dp, height: Dp): Boolean = width >= greeterMinWidth && height >= greeterMinHeight
 }
