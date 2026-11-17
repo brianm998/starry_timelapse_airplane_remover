@@ -1913,11 +1913,12 @@ public struct Config: Codable, Sendable {
     //        cloud merge option
     // 0.12.6 video decode in background
     //        UI improvements
+    // 0.12.7 new graphics, better UI
 
 
     public var starVersion = Config.latestVersion
 
-    public static let latestVersion = "0.12.6"
+    public static let latestVersion = "0.12.7"
 
     // defaults to basename below if not set
     public var finalOutputDir: String? = nil
