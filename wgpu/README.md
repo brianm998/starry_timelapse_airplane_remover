@@ -50,6 +50,11 @@ STAR_ONLY_WGPU_TESTS=1 STAR_WGPU=1 STAR_WGPU_BENCH=1 swift test -c release -Xswi
 
 `wgpu/<platform>/` is git-ignored. Without it `WGPUBackend.cpp` builds as stubs and nothing else changes.
 
+On a Mac the platform is always `macos-universal`: `fetch.sh` downloads both the x86_64 and the arm64 release
+and joins them with `xcrun lipo`. The gui's Release archive links both architectures with the same flags, so
+a one-architecture library (`macos-x86_64`, `macos-aarch64`) fails the other slice's link with every wgpu symbol
+undefined. Those two directories, if an older `fetch.sh` left them, are no longer read.
+
 | variable | effect |
 |---|---|
 | `STAR_WGPU=1` | turn the backend on (registration, probing, use) |

@@ -188,13 +188,14 @@ let bridgeCXXSettings: [CXXSetting] = [
 //
 // The manifest does not re-run when that directory appears: after fetching, touch this file (or
 // `swift package reset`) so the next build notices.
+//
+// On macOS it is always the universal library (arm64 + x86_64), never the build machine's own
+// architecture: the gui's Release archive links both slices with the same flags, and a one-architecture
+// library leaves the other slice with every wgpu symbol undefined ("symbol(s) not found for
+// architecture arm64" on an Intel Mac).
 // ---------------------------------------------------------------------------
 #if os(macOS)
-  #if arch(arm64)
-let wgpuPlatform = "macos-aarch64"
-  #else
-let wgpuPlatform = "macos-x86_64"
-  #endif
+let wgpuPlatform = "macos-universal"
 #elseif os(Linux)
   #if arch(arm64)
 let wgpuPlatform = "linux-aarch64"
