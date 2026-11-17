@@ -106,6 +106,24 @@ proved() {
     grep -qE 'tests="1"' $xml && grep -qE 'skipped="0"' $xml && grep -qE 'failures="0"' $xml
 }
 
+# Prints a failed feature's name and the first failure message of its Gradle XML into the log, so the tail of a red job names the
+# failure (ticket #490: the tail showed only the artifact upload).  Also adds a line to $GITHUB_STEP_SUMMARY.
+explain_failure() {
+    local f=$1 dir=$2 xml msg
+    xml=$(ls "$dir"/results/*.xml 2>/dev/null)
+    if [ -z "$xml" ]; then
+        msg="no result XML (the build did not get as far as running the test)"
+    else
+        # shellcheck disable=SC2086
+        msg=$(grep -m1 -A6 -E '<failure |<error ' $xml 2>/dev/null | head -c 1500)
+        [ -n "$msg" ] || msg="no <failure> element; the XML reports no single test that ran and passed"
+    fi
+    echo "::error::$f: first failure: $msg"
+    if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+        printf -- '- **%s** failed: `%s`\n' "$f" "$(printf '%s' "$msg" | head -n1 | cut -c1-300)" >> "$GITHUB_STEP_SUMMARY"
+    fi
+}
+
 passed=""
 failed=""
 for f in "$@"; do
@@ -143,6 +161,7 @@ for f in "$@"; do
         else
             echo "::error::$f: gradle exited $status"
         fi
+        explain_failure "$f" "$dir"
         failed="$failed $f"
     fi
 done

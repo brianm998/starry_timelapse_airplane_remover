@@ -27,6 +27,8 @@ for f in "$@"; do
     else
         mark="❌ failed or did not run"
         echo "::error::$f: no PASSED marker, the feature failed or never ran"
+        first=$(grep -m1 -hE '<failure |<error ' "$each/$f"/results/*.xml 2>/dev/null | cut -c1-400)
+        [ -z "$first" ] || echo "::error::$f: first failure: $first"
         bad=1
     fi
     rows="$rows| $f | $mark |"$'\n'
