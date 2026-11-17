@@ -51,7 +51,24 @@ if [ -f "$log" ]; then
     fi
 fi
 
+# Print why a feature is not proved: its XCTest failure lines (at most 15), or, when the log has no `Test Case` line at all (a crash
+# or timeout before the test started), the log's last 40 lines and the crash markers.  Output goes to the job log; the caller also
+# adds it to the step summary.
+explain() {
+    local t=$1 ev
+    [ -f "$log" ] || return 0
+    if grep -qE "Test [Cc]ase " "$log"; then
+        ev=$(grep -E "error: -\[.*$t|XCTAssert|failed - |Test [Cc]ase '.*$t.*' (failed|skipped)" "$log" | head -15)
+        [ -n "$ev" ] || ev="(no XCTest failure line for $t in the log)"
+    else
+        ev=$(tail -40 "$log"; echo "--- crash markers ---"
+             grep -E "Testing failed|\*\* TEST FAILED \*\*|Restarting after unexpected exit|crashed" "$log" | head -15)
+    fi
+    printf '%s\n' "$ev"
+}
+
 rows=""
+details=""
 for n in "$@"; do
     t="test$(echo "${n:0:1}" | tr a-z A-Z)${n:1}Feature"
     result="did not run"
@@ -65,7 +82,14 @@ for n in "$@"; do
         fi
     fi
     if [ "$result" != passed ]; then
-        echo "::error::$n: $result ($t is not shown as passed in $log)"
+        ev=$(explain "$t")
+        echo "::error::$n: $result ($t is not shown as passed in $log)${ev:+ -- $(printf '%s' "$ev" | head -15 | tr '\n' ' ' | cut -c1-900)}"
+        if [ -n "$ev" ]; then
+            echo "---- $n: failure evidence ----"
+            printf '%s\n' "$ev"
+            echo "---- end $n ----"
+            details="$details"$'\n'"**$n**"$'\n\n```\n'"$ev"$'\n```\n'
+        fi
         bad=1
     else
         echo "== $n: passed"
@@ -81,6 +105,7 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
         echo "| feature | result |"
         echo "| --- | --- |"
         printf '%s' "$rows"
+        printf '%s\n' "$details"
         echo
     } >> "$GITHUB_STEP_SUMMARY"
 fi
