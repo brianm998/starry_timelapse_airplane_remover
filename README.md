@@ -1,28 +1,28 @@
 # star: downloads and traffic
 
-Latest snapshot 2026-11-16. 17 snapshots since 2026-10-31.
+Latest snapshot 2026-11-17. 18 snapshots since 2026-10-31.
 
 ## Downloads
 
-**367** all time across 33 releases · new: 7d **+27** · 30d **+134***
+**368** all time across 33 releases · new: 7d **+27** · 30d **+135***
 
 | Platform | all time | +7d | +30d |
 |---|---:|---:|---:|
 | macOS | 236 | +23 | +72* |
-| Windows | 102 | +2 | +39* |
-| Linux | 29 | +2 | +23* |
+| Windows | 103 | +3 | +40* |
+| Linux | 29 | +1 | +23* |
 
 | Product | all time | +7d | +30d |
 |---|---:|---:|---:|
 | cli | 158 | +9 | +66* |
 | app (SwiftUI) | 146 | +15 | +40* |
-| desktop (Kotlin) | 63 | +3 | +28* |
+| desktop (Kotlin) | 64 | +3 | +29* |
 
 ### Latest releases
 
 | release | published | all time | +7d | +30d |
 |---|---:|---:|---:|---:|
-| 0.12.6 | 2026-11-07 | 12 | +3 | +12* |
+| 0.12.6 | 2026-11-07 | 13 | +3 | +13* |
 | 0.12.5 | 2026-10-25 | 21 | +0 | +11* |
 | 0.12.4 | 2026-10-16 | 27 | +1 | +11* |
 | 0.12.3 | 2026-10-11 | 20 | +0 | +8* |
@@ -35,7 +35,7 @@ Latest snapshot 2026-11-16. 17 snapshots since 2026-10-31.
 
 23 older releases: 200 downloads.
 
-Fixture releases (`test-data`, `ci-assets`): 5477 downloads, nearly all CI. Not counted above.
+Fixture releases (`test-data`, `ci-assets`): 5611 downloads, nearly all CI. Not counted above.
 
 `*` history starts 2026-10-31; the figure is the growth since then.
 
