@@ -14,6 +14,9 @@ set -e
 # command line, and, after the archive, star/star-appstore.entitlements and the bundle id. project.pbxproj is never edited.
 #
 # Environment (all optional locally, set by the macos-testflight job in CI):
+#   APPSTORE_FFMPEG_DIR     the LGPL-only ffmpeg and ffprobe to bundle (universal); default
+#                           ../ffmpeg/dist/macos-universal-lgpl, from ./ffmpeg/build.sh --lgpl macos-universal.
+#                           A GPL pair is refused before anything is built. They replace the ones Xcode copied in.
 #   APPSTORE_PROFILE_PATH   a Mac App Store .provisionprofile. Setting it means manual signing (a runner has no Apple ID
 #                           in Xcode); without it signing is automatic with -allowProvisioningUpdates (this Mac).
 #   APPSTORE_SIGNING        manual or automatic, to override that choice.
@@ -83,6 +86,27 @@ BUNDLE_ID="${APPSTORE_BUNDLE_ID:-com.star}"
 echo "App Store build: ${STAR_VERSION} (${BUILD_NUMBER}), bundle id ${BUNDLE_ID}"
 
 die() { echo "error: $*" >&2; exit 1; }
+
+# ── the bundled ffmpeg must be the LGPL build ────────────────────────────────
+# The store build ships the LGPL-only pair, not the GPL one in external_binaries/bin. These source copies are ad-hoc
+# signed and can be run; the bundled copies (sandbox-inherit) cannot, so check_app_bundle reads them instead.
+APPSTORE_FFMPEG_DIR="${APPSTORE_FFMPEG_DIR:-../ffmpeg/dist/macos-universal-lgpl}"
+LGPL_FIX="build it with ./ffmpeg/build.sh --lgpl macos-universal (or set APPSTORE_FFMPEG_DIR to an LGPL build)"
+for tool in ffmpeg ffprobe; do
+    [ -f "$APPSTORE_FFMPEG_DIR/$tool" ] || die "$APPSTORE_FFMPEG_DIR/$tool is missing: $LGPL_FIX"
+    archs="$(preflight_archs "$APPSTORE_FFMPEG_DIR/$tool")"
+    for arch in arm64 x86_64; do
+        case " $archs " in *" $arch "*) ;; *) die "$APPSTORE_FFMPEG_DIR/$tool has no $arch slice ($archs): $LGPL_FIX" ;; esac
+    done
+    LICENSE_TEXT="$("$APPSTORE_FFMPEG_DIR/$tool" -hide_banner -L 2>&1 || true)"
+    case "$LICENSE_TEXT" in *"Lesser General Public License"*) ;; *) die "$APPSTORE_FFMPEG_DIR/$tool is not an LGPL build of ffmpeg: $LGPL_FIX" ;; esac
+    BUILDCONF="$("$APPSTORE_FFMPEG_DIR/$tool" -hide_banner -buildconf 2>&1 || true)"
+    case "$BUILDCONF" in *--enable-gpl*|*--enable-nonfree*) die "$APPSTORE_FFMPEG_DIR/$tool is configured with --enable-gpl or --enable-nonfree: $LGPL_FIX" ;; esac
+done
+if "$APPSTORE_FFMPEG_DIR/ffmpeg" -hide_banner -encoders 2>&1 | grep -Eq 'libx26[45]'; then
+    die "$APPSTORE_FFMPEG_DIR/ffmpeg has libx264 or libx265 (GPL): $LGPL_FIX"
+fi
+echo "ffmpeg for the store build: LGPL, from ${APPSTORE_FFMPEG_DIR}"
 
 # ── team and signing ─────────────────────────────────────────────────────────
 if [ -z "$APPSTORE_TEAM_ID" ]; then
@@ -200,6 +224,10 @@ check_app_bundle() {
     for tool in ffmpeg ffprobe; do
         [ -f "$app/Contents/MacOS/$tool" ] || die "${where}: $app/Contents/MacOS/$tool is missing"
         check_entitlements "$app/Contents/MacOS/$tool" "${where} Contents/MacOS/$tool" "$TOOL_KEYS" ""
+        # read, not run: after re-signing they carry sandbox-inherit and are killed outside a sandboxed parent
+        if grep -a -q -- '--enable-gpl' "$app/Contents/MacOS/$tool"; then
+            die "${where}: $app/Contents/MacOS/$tool is a GPL build of ffmpeg (--enable-gpl); the store build bundles the LGPL one"
+        fi
     done
 }
 
@@ -257,6 +285,15 @@ done < <(find "$APP/Contents" -name Info.plist \( -path "*.bundle/*" -o -path "*
 # exactly app-sandbox + inherit (not ffmpeg.entitlements.plist, which App Review rejects), then the app, whose seal
 # covers them, with star/star-appstore.entitlements (the project itself builds with the empty star.entitlements, and an
 # entitlements build setting would reach the Swift package targets) and the flags Xcode gave it.
+# The LGPL pair replaces the GPL one Xcode copied from external_binaries/bin, with the notice the LGPL asks for.
+for tool in ffmpeg ffprobe; do
+    cp -f "$APPSTORE_FFMPEG_DIR/$tool" "$APP/Contents/MacOS/$tool"
+done
+mkdir -p "$APP/Contents/Resources/ffmpeg"
+for f in LICENSE-ffmpeg.txt BUILDINFO.txt; do
+    [ -f "$APPSTORE_FFMPEG_DIR/$f" ] || die "$APPSTORE_FFMPEG_DIR/$f is missing: $LGPL_FIX"
+    cp -f "$APPSTORE_FFMPEG_DIR/$f" "$APP/Contents/Resources/ffmpeg/$f"
+done
 IDENTITY="$(codesign -d --verbose=2 "$APP" 2>&1 | sed -n 's/^Authority=//p' | head -1)"
 [ -n "$IDENTITY" ] || die "cannot tell which identity signed ${APP}"
 echo "re-signing ffmpeg and ffprobe with ${TOOL_ENTITLEMENTS} as ${IDENTITY}"
