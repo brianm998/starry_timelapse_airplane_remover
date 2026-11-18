@@ -535,11 +535,20 @@ jobs:
           rm -f "$RUNNER_TEMP/certs.p12"
           rm -rf "$RUNNER_TEMP/private_keys"
 
+  # The LGPL-only macOS ffmpeg/ffprobe (ffmpeg/build.sh --lgpl) that the Mac App Store build bundles instead of the GPL pair.
+  ffmpeg-lgpl:
+    if: startsWith(github.ref, 'refs/tags/release/') || github.event_name == 'workflow_dispatch'
+    uses: ./.github/workflows/ffmpeg-lgpl.yml
+
   # ─── macOS (Mac App Store build -> TestFlight) ───────────────────────────────
   # The sandboxed App Store variant of the GUI (gui/appstore_release.sh), archived, exported and uploaded to App Store
   # Connect, where it shows up in TestFlight for macOS once processing is done. Submitting it for review stays a manual step.
-  # Same trigger as macos-signed-release, and it waits only for the ffmpeg artifact, not for that job or the smoke build:
-  # neither job blocks or slows the other.
+  # Same trigger as macos-signed-release, and it waits only for the LGPL ffmpeg artifact (ffmpeg-lgpl), not for that job or
+  # the smoke build: neither job blocks or slows the other.
+  #
+  # Unlike every other job, this build bundles the LGPL-only ffmpeg/ffprobe (ffmpeg-macos-universal-lgpl), not the GPL pair:
+  # the store's terms do not fit shipping a GPL build of ffmpeg (libx264/libx265). appstore_release.sh refuses to archive,
+  # export or upload if the pair it bundles is GPL.
   #
   # The App Store Connect API key secrets are the ones macos-signed-release uses; for the upload the key's role has to
   # be App Manager or Admin. Further prerequisites in repo Settings -> Secrets and variables -> Actions:
@@ -558,7 +567,7 @@ jobs:
     name: macOS App Store build -> TestFlight (macos-15)
     runs-on: macos-15
     if: startsWith(github.ref, 'refs/tags/release/') || github.event_name == 'workflow_dispatch'
-    needs: [ffmpeg]
+    needs: [ffmpeg-lgpl]
     steps:
       - name: Check the secrets this job needs
         env:
@@ -698,13 +707,13 @@ jobs:
               --dir gui/videos
           ls -lh gui/videos
 
-      - name: Fetch the universal ffmpeg/ffprobe the GUI bundles
+      - name: Fetch the universal LGPL ffmpeg/ffprobe the App Store GUI bundles
         uses: actions/download-artifact@v7
         with:
-          name: ffmpeg-macos-universal
+          name: ffmpeg-macos-universal-lgpl
           path: external_binaries/bin
 
-      - name: Check ffmpeg/ffprobe are universal
+      - name: Check the LGPL ffmpeg/ffprobe are universal
         run: |
           chmod +x external_binaries/bin/ffmpeg external_binaries/bin/ffprobe
           for t in ffmpeg ffprobe; do
@@ -716,6 +725,7 @@ jobs:
       - name: Build, check entitlements, export and upload the App Store GUI
         working-directory: gui
         env:
+          APPSTORE_FFMPEG_DIR: ${{ github.workspace }}/external_binaries/bin
           # APPSTORE_PROFILE_PATH makes the script sign manually (a runner has no Apple ID in Xcode).
           APPSTORE_PROFILE_PATH: ${{ runner.temp }}/appstore.provisionprofile
           APPSTORE_BUNDLE_ID: ${{ vars.APPSTORE_BUNDLE_ID }}
