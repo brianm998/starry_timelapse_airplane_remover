@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D5A1C0DE2F1A0001000ICN02 /* StarIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = D5A1C0DE2F1A0001000ICN01 /* StarIcon.icon */; };
 		D30356DD2E6FDC8B0092140B /* LoggingObjC in Frameworks */ = {isa = PBXBuildFile; productRef = D30356DC2E6FDC8B0092140B /* LoggingObjC */; };
 		D3058E1B2AC0745C00C58F1D /* MultiSelectSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */; };
 		D3A1C0DE000100010001AAA1 /* PreProcessingRenderPromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A1C0DE000100010001AAA0 /* PreProcessingRenderPromptView.swift */; };
@@ -199,6 +200,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D5A1C0DE2F1A0001000ICN01 /* StarIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = StarIcon.icon; sourceTree = "<group>"; };
 		D3058E1A2AC0745C00C58F1D /* MultiSelectSheetView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MultiSelectSheetView.swift; sourceTree = "<group>"; };
 		D3A1C0DE000100010001AAA0 /* PreProcessingRenderPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreProcessingRenderPromptView.swift; sourceTree = "<group>"; };
 		D3A1C0DE000300030003AAA2 /* PostProcessingRenderPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostProcessingRenderPromptView.swift; sourceTree = "<group>"; };
@@ -525,6 +527,7 @@
 				D366BB392AF84766004C9125 /* Info.plist */,
 				D310C6F329C8D8F40014FBA9 /* libStarDecisionTrees.a */,
 				D386FA14298B617400878B56 /* Assets.xcassets */,
+				D5A1C0DE2F1A0001000ICN01 /* StarIcon.icon */,
 				D386FA19298B617400878B56 /* star.entitlements */,
 				D386FA16298B617400878B56 /* Preview Content */,
 			);
@@ -760,6 +763,7 @@
 			files = (
 				D386FA18298B617400878B56 /* Preview Assets.xcassets in Resources */,
 				D386FA15298B617400878B56 /* Assets.xcassets in Resources */,
+				D5A1C0DE2F1A0001000ICN02 /* StarIcon.icon in Resources */,
 				D392EB152E0C48D60020E16A /* Assets.xcassets in Resources */,
 				D366BB3A2AF84766004C9125 /* Info.plist in Resources */,
 				D326F57E2E5274F3008E71A2 /* 11_30_2024-fx3-aurora-topaz-star.mp4 in Resources */,
@@ -1094,7 +1098,7 @@
 		D386FA33298B617400878B56 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = StarIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = star/star.entitlements;
@@ -1137,7 +1141,7 @@
 		D386FA34298B617400878B56 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = StarIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = star/star.entitlements;

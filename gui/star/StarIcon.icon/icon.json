@@ -1,0 +1,17 @@
+{
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "sky.png",
+          "name": "sky"
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  }
+}
