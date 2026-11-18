@@ -55,3 +55,13 @@ def test_macos_legs_run_whatever_the_linux_legs_did(job: str) -> None:
 
 def test_smoke_macos_still_waits_for_the_linux_legs() -> None:
     assert "needs.desktop-linux.result" in job_if("smoke-macos")
+
+
+def test_mac_gui_failure_evidence_step_is_last() -> None:
+    body = job_text("mac-gui")
+    names = list(re.finditer(r"^      - name: (.*)$", body, re.MULTILINE))
+    last = names[-1]
+    assert last.group(1).startswith("Failure evidence")
+    step = body[last.start() :]
+    assert re.search(r"^        if: failure\(\)", step, re.MULTILINE)
+    assert "gui-prove.txt" in body and "gui-xcresult-summary.txt" in body

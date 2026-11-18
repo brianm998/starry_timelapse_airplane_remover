@@ -1376,7 +1376,9 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           FEATURES: ${{ matrix.shard.features }}
-        run: gherkin/prove-xctest-features.sh gui gherkin-gui.log $FEATURES
+        run: |
+          set -o pipefail
+          gherkin/prove-xctest-features.sh gui gherkin-gui.log $FEATURES 2>&1 | tee "$RUNNER_TEMP/gui-prove.txt"
 
       # Readable failure for a red run: the xcresult's own summary.  Never fails the job itself.
       - name: Print the xcresult failure summary
@@ -1384,7 +1386,7 @@ jobs:
         continue-on-error: true
         run: |
           x="$RUNNER_TEMP/gherkin-gui.xcresult"
-          xcrun xcresulttool get test-results summary --path "$x" || xcrun xcresulttool get --legacy --path "$x" --format json | head -c 20000 || true
+          { xcrun xcresulttool get test-results summary --path "$x" || xcrun xcresulttool get --legacy --path "$x" --format json | head -c 20000 || true; } 2>&1 | tee "$RUNNER_TEMP/gui-xcresult-summary.txt"
           exit 0
 
       # The screenshots in here are the only evidence of a GUI failure.
@@ -1415,6 +1417,25 @@ jobs:
           # the sandboxed runner cannot write into the workspace, so the gallery falls back to its container's tmp
           path: ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gallery
           if-no-files-found: ignore
+
+      # Last on purpose: the watch's "failed log tail" is the end of the job, so the evidence is printed after the uploads.
+      - name: Failure evidence (last, so the log tail shows it)
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        run: |
+          echo "::error::mac gui (macos-15) shard ${{ matrix.shard.name }} failed: evidence follows"
+          echo "=== prove output ==="
+          cat "$RUNNER_TEMP/gui-prove.txt" 2>/dev/null || echo "(none)"
+          echo "=== xcresult summary (first 60 lines) ==="
+          head -n 60 "$RUNNER_TEMP/gui-xcresult-summary.txt" 2>/dev/null || echo "(none)"
+          echo "=== gherkin-gui.log (last 60 lines) ==="
+          tail -n 60 gherkin-gui.log 2>/dev/null || echo "(none)"
+          echo "=== crash markers ==="
+          grep -n -i -E 'Testing failed|TEST FAILED|crashed|Restarting after unexpected exit|jetsam|memory' gherkin-gui.log 2>/dev/null | tail -n 40 || true
+          echo "=== runner container tmp ==="
+          ls -la ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp 2>&1 || true
+          exit 0
 
   desktop-linux:
     name: desktop (ubuntu-24.04) · ${{ matrix.shard.label }}
