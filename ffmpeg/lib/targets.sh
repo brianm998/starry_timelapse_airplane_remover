@@ -100,6 +100,18 @@ ffmpeg_common_args() {
         --enable-libdav1d --enable-libsvtav1
         --enable-libvpx
     )
+    # build.sh --lgpl: no GPL parts (x264, x265), so no --enable-gpl either.  Never
+    # --enable-version3: the result stays LGPL 2.1 or later.
+    if [ "${FFMPEG_LICENSE:-gpl}" = lgpl ]; then
+        local kept=() a
+        for a in "${FFMPEG_ARGS[@]}"; do
+            case "$a" in
+                --enable-gpl|--enable-libx264|--enable-libx265) ;;
+                *) kept+=("$a") ;;
+            esac
+        done
+        FFMPEG_ARGS=("${kept[@]}")
+    fi
 }
 
 # ── macOS ────────────────────────────────────────────────────────────────────

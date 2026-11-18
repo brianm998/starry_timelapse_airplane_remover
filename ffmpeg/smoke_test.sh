@@ -5,11 +5,14 @@
 # drives them, do the hardware paths work where there is hardware, and does it link only against
 # what every machine of that OS has.
 #
-#   smoke_test.sh [--target <target>] [--hw] <dir containing ffmpeg and ffprobe>
+#   smoke_test.sh [--target <target>] [--hw] [--lgpl] <dir containing ffmpeg and ffprobe>
 #
 #   --target T   also check the binaries really are built for T (architecture, linkage rules)
 #   --hw         a hardware encoder that is built in but fails to start is a failure rather than
 #                a skip.  Use it on a machine known to have the hardware.
+#
+#   --lgpl       the build is the LGPL-only one (build.sh --lgpl): check its licence, require
+#                that libx264 and libx265 are absent, and leave out what needs them
 #
 # Exits non-zero if anything failed.  Bash 3.2 compatible (macOS /bin/bash) and runs under Git
 # Bash on Windows.
@@ -19,17 +22,19 @@ set -u
 
 TARGET=""
 REQUIRE_HW=0
+LGPL=0
 DIR=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --target) TARGET="$2"; shift 2 ;;
         --hw)     REQUIRE_HW=1; shift ;;
+        --lgpl)   LGPL=1; shift ;;
         -h|--help) sed -n '3,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*)       echo "unknown option: $1" >&2; exit 2 ;;
         *)        DIR="$1"; shift ;;
     esac
 done
-[ -n "$DIR" ] || { echo "usage: $0 [--target T] [--hw] DIR" >&2; exit 2; }
+[ -n "$DIR" ] || { echo "usage: $0 [--target T] [--hw] [--lgpl] DIR" >&2; exit 2; }
 # the tests below run from a scratch directory, so the binaries need an absolute path
 DIR="$(cd "$DIR" && pwd)" || { echo "no such directory: $DIR" >&2; exit 2; }
 
@@ -68,6 +73,20 @@ for tool in "$FFMPEG" "$FFPROBE"; do
         fail "${tool##*/} starts" "${banner:-no output}"
     fi
 done
+
+# ── licence (--lgpl) ─────────────────────────────────────────────────────────
+if [ "$LGPL" = 1 ]; then
+    echo "-- licence (LGPL build)"
+    lic=$("$FFMPEG" -hide_banner -L 2>&1)
+    case "$lic" in
+        *"Lesser General Public License"*) pass "ffmpeg -L says LGPL" ;;
+        *) fail "ffmpeg -L says LGPL" "$(printf '%s' "$lic" | head -n 1)" ;;
+    esac
+    conf=$("$FFMPEG" -hide_banner -buildconf 2>&1)
+    case "$conf" in *--enable-gpl*) fail "no --enable-gpl in buildconf" "found it" ;; *) pass "no --enable-gpl in buildconf" ;; esac
+    case "$conf" in *--enable-nonfree*) fail "no --enable-nonfree in buildconf" "found it" ;; *) pass "no --enable-nonfree in buildconf" ;; esac
+    case "$conf" in *--enable-version3*) fail "no --enable-version3 in buildconf" "found it" ;; *) pass "no --enable-version3 in buildconf" ;; esac
+fi
 
 # ── built for the right machine ──────────────────────────────────────────────
 if [ -n "$TARGET" ]; then
@@ -123,7 +142,15 @@ MUXERS=$("$FFMPEG" -hide_banner -muxers 2>/dev/null)
 HWACCELS=$("$FFMPEG" -hide_banner -hwaccels 2>/dev/null)
 has() { printf '%s\n' "$1" | grep -q -E "^ [A-Z.]{6} $2( |$)"; }
 hasmux() { printf '%s\n' "$1" | grep -q -E "^ +E +$2( |$)"; }
-for enc in libx264 libx265 libsvtav1 libvpx-vp9 prores_ks dnxhd ffv1 aac; do
+if [ "$LGPL" = 1 ]; then
+    sw_encoders="libsvtav1"
+    for enc in libx264 libx265; do
+        has "$ENCODERS" "$enc" && fail "encoder $enc absent" "an LGPL build must not have it" || pass "encoder $enc absent"
+    done
+else
+    sw_encoders="libx264 libx265 libsvtav1"
+fi
+for enc in $sw_encoders libvpx-vp9 prores_ks dnxhd ffv1 aac; do
     has "$ENCODERS" "$enc" && pass "encoder $enc" || fail "encoder $enc" "not built in"
 done
 for dec in h264 hevc prores dnxhd vp9 libdav1d aac; do
@@ -156,9 +183,10 @@ cd "$WORK" || exit 1
 mkdir frames
 
 # a source video with audio, like a camera file
-check "make a source video (libx264 + aac)" \
+if [ "$LGPL" = 1 ]; then src_enc=mpeg4; else src_enc=libx264; fi
+check "make a source video ($src_enc + aac)" \
     ff -f lavfi -i "testsrc2=size=1280x720:rate=24" -f lavfi -i "sine=frequency=440:duration=2" \
-       -frames:v 48 -c:v libx264 -pix_fmt yuv420p -c:a aac -shortest src.mp4
+       -frames:v 48 -c:v $src_enc -pix_fmt yuv420p -c:a aac -shortest src.mp4
 
 # decodeVideo(): ffprobe, then frames out as 48-bit TIFFs, audio copied out
 check "ffprobe reports 48 frames" sh -c "[ \"\$('$FFPROBE' -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=noprint_wrappers=1:nokey=1 src.mp4)\" = 48 ]"
@@ -173,9 +201,11 @@ encode() { # <name> <ext> <encoder args...>
     shift 2
     check "encode $name" ff -framerate 24 -start_number 1 -i frames/image_%04d.tiff -i audio.aac -c:a copy "$@" "out_$name.$ext"
 }
-encode h264        mp4 -c:v libx264     -pix_fmt yuv420p
-encode h264_10bit  mkv -c:v libx264     -pix_fmt yuv420p10le
-encode hevc_10bit  mp4 -c:v libx265     -pix_fmt yuv420p10le
+if [ "$LGPL" = 0 ]; then
+    encode h264        mp4 -c:v libx264     -pix_fmt yuv420p
+    encode h264_10bit  mkv -c:v libx264     -pix_fmt yuv420p10le
+    encode hevc_10bit  mp4 -c:v libx265     -pix_fmt yuv420p10le
+fi
 encode prores_422  mov -c:v prores_ks   -pix_fmt yuv422p10le
 encode prores_4444 mov -c:v prores_ks   -pix_fmt yuva444p10le -profile:v 4444
 encode vp9         mkv -c:v libvpx-vp9  -pix_fmt yuv420p -b:v 2M
@@ -183,11 +213,12 @@ encode av1         mkv -c:v libsvtav1   -pix_fmt yuv420p10le
 encode ffv1        mkv -c:v ffv1        -pix_fmt yuv444p10le
 check "encode dnxhd" ff -framerate 24 -start_number 1 -i frames/image_%04d.tiff -vf scale=1920:1080 \
     -c:v dnxhd -b:v 36M -pix_fmt yuv422p out_dnxhd.mov
-for f in out_h264.mp4 out_prores_422.mov out_av1.mkv; do
+if [ "$LGPL" = 1 ]; then probe_files="out_prores_422.mov out_av1.mkv"; else probe_files="out_h264.mp4 out_prores_422.mov out_av1.mkv"; fi
+for f in $probe_files; do
     check "ffprobe reads $f back" sh -c "[ \"\$('$FFPROBE' -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames -of default=noprint_wrappers=1:nokey=1 $f)\" = 48 ]"
 done
 check "decode AV1 with dav1d"  ff -c:v libdav1d -i out_av1.mkv -f null -
-check "decode HEVC"            ff -i out_hevc_10bit.mp4 -f null -
+[ "$LGPL" = 1 ] || check "decode HEVC"            ff -i out_hevc_10bit.mp4 -f null -
 check "decode ProRes"          ff -i out_prores_4444.mov -f null -
 
 # ── hardware ─────────────────────────────────────────────────────────────────
@@ -209,7 +240,13 @@ done
 
 # hardware decode: only meaningful on the OS whose accelerator is always there
 if [ "$TARGET_OS" = macos ] && [ "$HOST_OS" = macos ]; then
-    if out=$(ff -hwaccel videotoolbox -i out_hevc_10bit.mp4 -f null - 2>&1) \
+    # an LGPL build has no libx265 to make the HEVC file: make it with the hardware encoder
+    if [ "$LGPL" = 1 ] && has "$ENCODERS" hevc_videotoolbox; then
+        ff -framerate 24 -start_number 1 -i frames/image_%04d.tiff -c:v hevc_videotoolbox -pix_fmt yuv420p out_hevc_10bit.mp4 >/dev/null 2>&1 || rm -f out_hevc_10bit.mp4
+    fi
+    if [ ! -f out_hevc_10bit.mp4 ]; then
+        skip "hardware decode with videotoolbox" "no HEVC file (hevc_videotoolbox cannot encode here)"
+    elif out=$(ff -hwaccel videotoolbox -i out_hevc_10bit.mp4 -f null - 2>&1) \
        && ! printf '%s' "$out" | grep -q -i 'failed\|error'; then
         pass "hardware decode with videotoolbox"
     elif [ "$REQUIRE_HW" = 1 ]; then

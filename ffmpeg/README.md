@@ -160,6 +160,19 @@ NVIDIA's NVENC cannot be built on a Mac (FFmpeg's configure refuses), so its thr
 `StarCore/ffmpeg_extra_encoders.txt`, written by hand and **checked against the real Linux and Windows binaries in CI**
 (`check_extra_encoders.sh`), so a wrong line fails there rather than in a user's export.
 
+## LGPL build (Mac App Store)
+
+`./ffmpeg/build.sh --lgpl macos-universal` (or `macos-arm64` / `macos-x64`) builds an LGPL 2.1-or-later
+ffmpeg: no `--enable-gpl`, no `--enable-version3`, and no x264/x265, because GPL code in a Mac App Store
+app conflicts with the App Store terms. Everything else stays (VideoToolbox, SVT-AV1, dav1d, libvpx, and
+FFmpeg's own prores_ks, dnxhd, ffv1, aac). It builds in its own tree and stamp and lands in
+`ffmpeg/dist/<target>-lgpl/`; `--lgpl` is refused with `--install` and for non-macOS targets, so
+`external_binaries/bin` keeps the GPL build. Check it with `ffmpeg/smoke_test.sh --lgpl --target <target> <dir>`.
+CI builds it in `.github/workflows/ffmpeg-lgpl.yml` (artifact `ffmpeg-macos-universal-lgpl`).
+
+Only the App Store build is meant to use it. With it, the libx264 and libx265 encoders simply do not
+appear in the Render Video dialog (H.264 and HEVC come from VideoToolbox).
+
 ## Licence
 
 The result is GPL (x264 and x265 are GPL), which star's own GPLv3 permits. Each build writes `LICENSE-ffmpeg.txt` and a
