@@ -342,9 +342,27 @@ if [ -n "$APPLE_API_KEY_PATH" ]; then
     ALTOOL_AUTH=(--apiKey "$APPLE_API_KEY_ID" --apiIssuer "$APPLE_API_ISSUER_ID")
 fi
 
+# altool can fail and still exit 0: on 0.12.7 every App Store Connect call returned 500, altool printed
+# "ERROR: Failed to determine the Apple ID from Bundle ID ..." and exited 0, and the job went green with nothing uploaded.
+# So its output is checked too: any ERROR line fails the script, whatever the exit status.
+run_altool() { # the altool command line
+    local out status
+    out="${BUILD_DIR}/altool-$$.log"
+    # no pipefail in this script: the pipeline's status is tee's, so altool's is read from PIPESTATUS
+    "$@" 2>&1 | tee "$out"
+    status=${PIPESTATUS[0]}
+    [ "$status" -eq 0 ] || die "altool exited with status ${status} (above)"
+    # "ERROR:" lines in current altool, "*** Error:" in older ones
+    if grep -qE 'ERROR|\*\*\* Error' "$out"; then
+        echo "--- altool reported these errors:" >&2
+        grep -E 'ERROR|\*\*\* Error' "$out" >&2
+        die "altool reported an error and exited 0; treating it as a failure"
+    fi
+}
+
 if [ "$MODE" = export ]; then
     if [ -n "$APPLE_API_KEY_PATH" ]; then
-        xcrun altool --validate-app -f "$PKG" -t macos "${ALTOOL_AUTH[@]}"
+        run_altool xcrun altool --validate-app -f "$PKG" -t macos "${ALTOOL_AUTH[@]}"
     else
         echo "validation skipped: altool needs an API key (APPLE_API_KEY_PATH, APPLE_API_KEY_ID, APPLE_API_ISSUER_ID)"
     fi
@@ -358,8 +376,8 @@ fi
 # altool names the cause (no app record for the bundle id, a key without the right role).
 [ -n "$APPLE_API_KEY_PATH" ] || die "uploading needs an App Store Connect API key: set APPLE_API_KEY_PATH, APPLE_API_KEY_ID and APPLE_API_ISSUER_ID"
 echo "validating ${PKG}"
-xcrun altool --validate-app -f "$PKG" -t macos "${ALTOOL_AUTH[@]}"
+run_altool xcrun altool --validate-app -f "$PKG" -t macos "${ALTOOL_AUTH[@]}"
 echo "uploading ${STAR_VERSION} (${BUILD_NUMBER}) to App Store Connect"
-xcrun altool --upload-app -f "$PKG" -t macos "${ALTOOL_AUTH[@]}"
+run_altool xcrun altool --upload-app -f "$PKG" -t macos "${ALTOOL_AUTH[@]}"
 
 echo "uploaded ${STAR_VERSION} (${BUILD_NUMBER}); it shows in App Store Connect -> TestFlight once processing is done"
