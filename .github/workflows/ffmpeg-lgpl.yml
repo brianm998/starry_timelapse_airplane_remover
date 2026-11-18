@@ -1,0 +1,83 @@
+name: FFmpeg (LGPL build)
+
+# The LGPL-only macOS ffmpeg + ffprobe for the Mac App Store build: ffmpeg/build.sh --lgpl (no --enable-gpl, no
+# x264/x265; SVT-AV1/dav1d/libvpx/VideoToolbox stay), smoke-tested with --lgpl.  Nothing consumes it yet; the
+# App Store build switches to it separately.  Artifact:
+#   ffmpeg-macos-universal-lgpl   arm64 + x86_64 in one binary   ffmpeg, ffprobe, LICENSE-ffmpeg.txt, BUILDINFO.txt
+# The GPL build stays in ffmpeg-gpu.yml.  See "LGPL build (Mac App Store)" in ffmpeg/README.md.
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'ffmpeg/build.sh'
+      - 'ffmpeg/lib/**'
+      - 'ffmpeg/versions.env'
+      - 'ffmpeg/smoke_test.sh'
+      - '.github/workflows/ffmpeg-lgpl.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'ffmpeg/build.sh'
+      - 'ffmpeg/lib/**'
+      - 'ffmpeg/versions.env'
+      - 'ffmpeg/smoke_test.sh'
+      - '.github/workflows/ffmpeg-lgpl.yml'
+
+concurrency:
+  group: ffmpeg-${{ github.workflow }}-${{ github.ref }}
+  # only pull_request runs are cancelled by a newer push; a develop run is never cancelled
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  macos:
+    name: macOS universal LGPL (macos-15)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache the built binaries
+        id: cache
+        uses: actions/cache@v5
+        with:
+          path: ffmpeg/dist/macos-universal-lgpl
+          key: ffmpeg-macos-universal-lgpl-${{ hashFiles('ffmpeg/versions.env', 'ffmpeg/build.sh', 'ffmpeg/lib/**') }}
+
+      - name: Install build tools
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: brew install nasm pkgconf meson ninja cmake
+
+      - name: Build (arm64 + x86_64, joined, LGPL)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: ./ffmpeg/build.sh --lgpl macos-universal
+
+      # The arm64 slice runs here; the smoke test also checks the licence and that x264/x265 are absent.
+      - name: Smoke test
+        run: ./ffmpeg/smoke_test.sh --lgpl --target macos-universal ffmpeg/dist/macos-universal-lgpl
+
+      - name: Smoke test the x86_64 slice under Rosetta
+        continue-on-error: true
+        run: |
+          mkdir x64
+          for tool in ffmpeg ffprobe; do
+            lipo -thin x86_64 "ffmpeg/dist/macos-universal-lgpl/$tool" -output "x64/$tool"
+            codesign --force --sign - "x64/$tool"
+          done
+          arch -x86_64 x64/ffmpeg -hide_banner -version | head -n 1
+          arch -x86_64 ./ffmpeg/smoke_test.sh --lgpl --target macos-x64 x64
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ffmpeg-macos-universal-lgpl
+          path: ffmpeg/dist/macos-universal-lgpl
+          if-no-files-found: error
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ffmpeg-macos-lgpl-logs
+          path: ffmpeg/.work/logs
+          if-no-files-found: ignore

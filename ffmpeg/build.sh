@@ -19,6 +19,9 @@
 #                 Xcode project, the StarCore table generators and star-desktop's gradle
 #                 staging all look for ffmpeg/ffprobe
 #   --jobs N      parallel make jobs (default: every core)
+#   --lgpl        build an LGPL-only ffmpeg (no --enable-gpl, no x264/x265) for the Mac App Store,
+#                 into DIR/<target>-lgpl (macos-arm64, macos-x64, macos-universal only; not
+#                 combinable with --install)
 #   --verbose     stream the build logs instead of keeping them in files
 #
 # Environment:
@@ -45,6 +48,7 @@ OUT="$HERE/dist"
 INSTALL=0
 JOBS="$(cpu_count)"
 REQUESTED=""
+FFMPEG_LICENSE=gpl
 
 usage() { sed -n '3,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 
@@ -54,6 +58,7 @@ while [ "$#" -gt 0 ]; do
         --work)    WORK="$2"; shift 2 ;;
         --jobs)    JOBS="$2"; shift 2 ;;
         --install) INSTALL=1; shift ;;
+        --lgpl)    FFMPEG_LICENSE=lgpl; shift ;;
         --verbose) export FFMPEG_BUILD_VERBOSE=1; shift ;;
         -h|--help) usage 0 ;;
         -*)        echo "unknown option: $1" >&2; usage 1 ;;
@@ -67,6 +72,17 @@ detect_host
 if [ -z "$REQUESTED" ]; then
     if [ "$HOST_OS" = macos ]; then REQUESTED=macos-universal; else REQUESTED="$HOST_OS-$HOST_ARCH"; fi
 fi
+
+if [ "$FFMPEG_LICENSE" = lgpl ]; then
+    case "$REQUESTED" in
+        macos-arm64|macos-x64|macos-universal) ;;
+        *) die "--lgpl is only for macos-arm64, macos-x64 and macos-universal, not '$REQUESTED'" ;;
+    esac
+    [ "$INSTALL" = 0 ] || die "--lgpl cannot be combined with --install: external_binaries/bin keeps the GPL ffmpeg"
+fi
+export FFMPEG_LICENSE
+OUT_SUFFIX=""
+[ "$FFMPEG_LICENSE" != lgpl ] || OUT_SUFFIX="-lgpl"
 
 mkdir -p "$WORK"
 WORK="$(cd "$WORK" && pwd)"
@@ -109,12 +125,16 @@ preflight() {
 
 # The libraries FFmpeg links, and the steps that stamp them (the ones the ffmpeg step depends on).
 build_dependencies() {
-    run_step x264   build_x264   "$X264_COMMIT"
-    run_step x265   build_x265   "$X265_SHA256"
+    DEP_STEPS=""
+    if [ "$FFMPEG_LICENSE" != lgpl ]; then
+        run_step x264   build_x264   "$X264_COMMIT"
+        run_step x265   build_x265   "$X265_SHA256"
+        DEP_STEPS="x264 x265"
+    fi
     run_step dav1d  build_dav1d  "$DAV1D_SHA256"
     run_step svtav1 build_svtav1 "$SVTAV1_COMMIT"
     run_step libvpx build_libvpx "$LIBVPX_COMMIT"
-    DEP_STEPS="x264 x265 dav1d svtav1 libvpx"
+    DEP_STEPS="${DEP_STEPS:+$DEP_STEPS }dav1d svtav1 libvpx"
 
     # the GPU headers this target's FFmpeg is configured with (see targets.sh)
     case "$T_OS" in
@@ -138,9 +158,16 @@ build_target() {
     build_dependencies
     # its own prefix, so that FFmpeg's installed headers never sit on the include path of the
     # next FFmpeg build (an upgrade would otherwise compile against the old version's)
-    FFMPEG_PREFIX="$PREFIX-ffmpeg"
-    FFMPEG_BUILD=ffmpeg
-    run_step ffmpeg build_ffmpeg "$FFMPEG_SHA256" "$(stamps_digest $DEP_STEPS)" "${FFMPEG_ARGS[*]}"
+    if [ "$FFMPEG_LICENSE" = lgpl ]; then
+        # separate tree and stamp, so the GPL and LGPL builds never share state
+        FFMPEG_PREFIX="$PREFIX-ffmpeg-lgpl"
+        FFMPEG_BUILD=ffmpeg-lgpl
+        run_step ffmpeg-lgpl build_ffmpeg "$FFMPEG_SHA256" "$(stamps_digest $DEP_STEPS)" "${FFMPEG_ARGS[*]}"
+    else
+        FFMPEG_PREFIX="$PREFIX-ffmpeg"
+        FFMPEG_BUILD=ffmpeg
+        run_step ffmpeg build_ffmpeg "$FFMPEG_SHA256" "$(stamps_digest $DEP_STEPS)" "${FFMPEG_ARGS[*]}"
+    fi
 
     package_target
 }
@@ -182,20 +209,24 @@ strip_and_sign() {
 }
 
 package_target() {
-    local dest="$OUT/$TARGET" tool
+    local dest="$OUT/$TARGET$OUT_SUFFIX" tool
     rm -rf "$dest"
     mkdir -p "$dest"
     for tool in ffmpeg ffprobe; do
         cp "$FFMPEG_PREFIX/bin/$tool$T_EXE" "$dest/$tool$T_EXE"
         strip_and_sign "$dest/$tool$T_EXE"
     done
-    write_license_files "$dest" "$BUILD_DIR/ffmpeg/config.h"
+    write_license_files "$dest" "$BUILD_DIR/$FFMPEG_BUILD/config.h"
     log "built $dest"
 }
 
 write_license_files() { # <dest> <config.h>
     local dest=$1 config_h=$2
-    cp "$SRC_DIR/ffmpeg/COPYING.GPLv2" "$dest/LICENSE-ffmpeg.txt"
+    if [ "$FFMPEG_LICENSE" = lgpl ]; then
+        cp "$SRC_DIR/ffmpeg/COPYING.LGPLv2.1" "$dest/LICENSE-ffmpeg.txt"
+    else
+        cp "$SRC_DIR/ffmpeg/COPYING.GPLv2" "$dest/LICENSE-ffmpeg.txt"
+    fi
     {
         echo "FFmpeg $FFMPEG_VERSION, built for $TARGET by star's ffmpeg/build.sh"
         echo
@@ -203,11 +234,17 @@ write_license_files() { # <dest> <config.h>
         # the paths of the machine it was built on mean nothing to a reader
         sed -n 's/^#define FFMPEG_CONFIGURATION "\(.*\)"$/  \1/p' "$config_h" | sed "s|$WORK|<work>|g"
         echo
-        echo "This binary is licensed under the GNU GPL (see LICENSE-ffmpeg.txt) because it"
-        echo "contains x264 and x265.  The complete corresponding source is public:"
-        echo "  FFmpeg      $FFMPEG_VERSION   $FFMPEG_URL"
-        echo "  x264        $X264_COMMIT   $X264_URL"
-        echo "  x265        $X265_VERSION   $X265_URL"
+        if [ "$FFMPEG_LICENSE" = lgpl ]; then
+            echo "This binary is licensed under the GNU LGPL 2.1 or later (see LICENSE-ffmpeg.txt);"
+            echo "it contains no GPL code (no x264, no x265).  The complete corresponding source is public:"
+            echo "  FFmpeg      $FFMPEG_VERSION   $FFMPEG_URL"
+        else
+            echo "This binary is licensed under the GNU GPL (see LICENSE-ffmpeg.txt) because it"
+            echo "contains x264 and x265.  The complete corresponding source is public:"
+            echo "  FFmpeg      $FFMPEG_VERSION   $FFMPEG_URL"
+            echo "  x264        $X264_COMMIT   $X264_URL"
+            echo "  x265        $X265_VERSION   $X265_URL"
+        fi
         echo "  dav1d       $DAV1D_VERSION   $DAV1D_URL"
         echo "  SVT-AV1     $SVTAV1_VERSION   $SVTAV1_URL @ $SVTAV1_COMMIT"
         echo "  libvpx      $LIBVPX_VERSION   $LIBVPX_URL @ $LIBVPX_COMMIT"
@@ -221,18 +258,18 @@ build_universal() {
     build_target macos-arm64
     build_target macos-x64
 
-    local dest="$OUT/macos-universal" tool
+    local dest="$OUT/macos-universal$OUT_SUFFIX" tool
     rm -rf "$dest"
     mkdir -p "$dest"
     for tool in ffmpeg ffprobe; do
-        lipo -create "$OUT/macos-arm64/$tool" "$OUT/macos-x64/$tool" -output "$dest/$tool"
+        lipo -create "$OUT/macos-arm64$OUT_SUFFIX/$tool" "$OUT/macos-x64$OUT_SUFFIX/$tool" -output "$dest/$tool"
         codesign --force --sign - "$dest/$tool"
         log "$tool: $(lipo -archs "$dest/$tool")"
     done
-    cp "$OUT/macos-arm64/LICENSE-ffmpeg.txt" "$dest/"
+    cp "$OUT/macos-arm64$OUT_SUFFIX/LICENSE-ffmpeg.txt" "$dest/"
     # the slices are built alike, so one description covers both; only the heading differs
     sed '1s/built for macos-arm64/built for macos-universal (an arm64 and an x86_64 slice)/' \
-        "$OUT/macos-arm64/BUILDINFO.txt" > "$dest/BUILDINFO.txt"
+        "$OUT/macos-arm64$OUT_SUFFIX/BUILDINFO.txt" > "$dest/BUILDINFO.txt"
     log "built $dest"
 }
 
