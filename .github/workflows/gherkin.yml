@@ -789,15 +789,31 @@ jobs:
           TEST_RUNNER_STAR_CLI_BUILD: 0
         run: |
           set -o pipefail
-          xcodebuild test \
-            -project gui/star.xcodeproj \
-            -scheme star \
-            -configuration Release \
-            ENABLE_TESTABILITY=YES \
-            ${{ steps.f.outputs.only }} \
-            -resultBundlePath "$RUNNER_TEMP/gherkin-gui.xcresult" \
-            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
-            2>&1 | tee gherkin-gui.log
+          run_xcode() {
+            xcodebuild test \
+              -project gui/star.xcodeproj \
+              -scheme star \
+              -configuration Release \
+              ENABLE_TESTABILITY=YES \
+              ${{ steps.f.outputs.only }} \
+              -resultBundlePath "$RUNNER_TEMP/gherkin-gui.xcresult" \
+              CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+              2>&1 | tee "$1"
+          }
+          # actool (CompileAssetCatalogVariant, compiling gui/star/StarIcon.icon) asks ibtoold, which has died on hosted runners with
+          # nothing wrong in the catalogue (the same inputs compile locally).  Retry once, only for that failure: a test failure or a
+          # compile error must not be run twice.
+          if ! run_xcode gherkin-gui.log; then
+            if grep -q 'CompileAssetCatalogVariant failed\|ibtoold' gherkin-gui.log && ! grep -q 'Executed [0-9]* test' gherkin-gui.log; then
+              echo "::warning::asset catalogue compile failed (ibtoold); retrying the build once"
+              pkill -x ibtoold || true
+              mv gherkin-gui.log gherkin-gui-attempt1.log
+              rm -rf "$RUNNER_TEMP/gherkin-gui.xcresult"
+              run_xcode gherkin-gui.log
+            else
+              exit 1
+            fi
+          fi
 
       # Every "Executed N tests" line must be the leg's N (nothing else ran, nothing was skipped) and every feature must show passed.
       - name: "mac gui: prove the scenarios ran (not a vacuous green)"
@@ -1370,15 +1386,31 @@ jobs:
           TEST_RUNNER_STAR_CLI_BUILD: 0
         run: |
           set -o pipefail
-          xcodebuild test \
-            -project gui/star.xcodeproj \
-            -scheme star \
-            -configuration Release \
-            ENABLE_TESTABILITY=YES \
-            ${{ steps.t.outputs.only }} \
-            -resultBundlePath "$RUNNER_TEMP/gherkin-gui.xcresult" \
-            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
-            2>&1 | tee gherkin-gui.log
+          run_xcodebuild() {
+            rm -rf "$RUNNER_TEMP/gherkin-gui.xcresult"
+            xcodebuild test \
+              -project gui/star.xcodeproj \
+              -scheme star \
+              -configuration Release \
+              ENABLE_TESTABILITY=YES \
+              ${{ steps.t.outputs.only }} \
+              -resultBundlePath "$RUNNER_TEMP/gherkin-gui.xcresult" \
+              CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+              2>&1 | tee "$1"
+          }
+          if ! run_xcodebuild gherkin-gui.log; then
+            # The icon bundle (StarIcon.icon) is compiled by ibtoold, which has died on hosted runners (docs/decisions/0651).
+            # Retry once, only when the asset catalogue step failed and no test ran; any other failure is not retried.
+            if grep -q 'CompileAssetCatalogVariant failed' gherkin-gui.log && ! grep -q 'Executed [0-9]* test' gherkin-gui.log; then
+              echo "::warning::asset catalogue (actool/ibtoold) failed before any test ran; retrying once"
+              grep -n -i -E 'actool|ibtoold|error:' gherkin-gui.log | tail -n 40 || true
+              killall ibtoold 2>/dev/null || true
+              cp gherkin-gui.log gherkin-gui-first-attempt.log
+              run_xcodebuild gherkin-gui.log
+            else
+              exit 1
+            fi
+          fi
 
       # Every "Executed N tests" line must be the shard's N (nothing else ran, nothing was skipped) and every feature must show passed;
       # one ::error:: per feature that is not proved, one row per feature in the job summary.  Also when the test step failed.
@@ -1445,6 +1477,8 @@ jobs:
           grep -n -E 'error:|actool|ibtoold' gherkin-gui.log 2>/dev/null | cut -c1-400 | tail -n 40 || true
           echo "=== crash markers ==="
           grep -n -i -E 'Testing failed|TEST FAILED|crashed|Restarting after unexpected exit|jetsam|memory' gherkin-gui.log 2>/dev/null | cut -c1-400 | tail -n 40 || true
+          echo "=== actool / asset catalogue errors ==="
+          grep -n -i -E 'actool|ibtoold|CompileAssetCatalog|error:' gherkin-gui.log gherkin-gui-first-attempt.log 2>/dev/null | cut -c1-400 | tail -n 40 || true
           echo "=== runner container tmp ==="
           ls -la ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp 2>&1 || true
           exit 0
