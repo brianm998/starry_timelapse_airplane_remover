@@ -111,6 +111,8 @@ enabled = true
 gate = "pr-gate"
 exclude = []
 
+# Build fail_regex anchors "error: " to a diagnostic (line start or after ": "): a bare "error:" matched
+# benign output (warning text, test names) and failed a build whose exit status was 0 (#598).
 # Machine classes (masond's own, the ones starpipe's heavy jobs queue in too). `compile`: builds run side
 # by side. `test-suite`: one test suite at a time beside builds. `exclusive`: the whole machine (star runs, the display-owning gui
 # tests, Gherkin, and any suite that measures time, QoS or memory). The owner's resources.toml holds
@@ -175,7 +177,7 @@ uses = { compile = 1 }
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path logging 2>&1 && echo BUILD-build-logging-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-logging-OK$"
-fail_regex = "error:|Compiling failed|BUILD FAILED"
+fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
@@ -183,7 +185,7 @@ uses = { compile = 1 }
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCpp 2>&1 && echo BUILD-build-StarCpp-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-StarCpp-OK$"
-fail_regex = "error:|Compiling failed|BUILD FAILED"
+fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
@@ -191,7 +193,7 @@ uses = { compile = 1 }
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCore 2>&1 && echo BUILD-build-StarCore-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-StarCore-OK$"
-fail_regex = "error:|Compiling failed|BUILD FAILED"
+fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
@@ -199,7 +201,7 @@ uses = { compile = 1 }
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path cli 2>&1 && echo BUILD-build-cli-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-cli-OK$"
-fail_regex = "error:|Compiling failed|BUILD FAILED"
+fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
@@ -207,7 +209,7 @@ uses = { compile = 1 }
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path daemon -c release 2>&1 && echo BUILD-build-daemon-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-daemon-OK$"
-fail_regex = "error:|Compiling failed|BUILD FAILED"
+fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
@@ -215,7 +217,7 @@ uses = { compile = 1 }
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path trail_tools 2>&1 && echo BUILD-build-trail_tools-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-trail_tools-OK$"
-fail_regex = "error:|Compiling failed|BUILD FAILED"
+fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
@@ -223,7 +225,7 @@ uses = { compile = 1 }
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path decision_tree_generator 2>&1 && echo BUILD-build-decision_tree_generator-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-decision_tree_generator-OK$"
-fail_regex = "error:|Compiling failed|BUILD FAILED"
+fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
@@ -231,7 +233,7 @@ uses = { compile = 1 }
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path pipeline/monitor 2>&1 && echo BUILD-build-monitor-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-monitor-OK$"
-fail_regex = "error:|Compiling failed|BUILD FAILED"
+fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
@@ -243,7 +245,7 @@ uses = { compile = 1 }
 command = "env STAR_USE_GPU_FOR_MERGE=0 .mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd build 2>&1 && .mason/scripts/check-gui-signing.sh && echo BUILD-build-gui-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-gui-OK$"
-fail_regex = "error:|BUILD FAILED"
+fail_regex = "(^|: )error: |BUILD FAILED"
 level = "t1"
 uses = { compile = 1 }
 
@@ -251,7 +253,7 @@ uses = { compile = 1 }
 command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop compileKotlin compileTestKotlin --no-daemon 2>&1 && echo BUILD-build-desktop-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-desktop-OK$"
-fail_regex = "FAILURE: Build failed|error:"
+fail_regex = "FAILURE: Build failed|(^|: )error: "
 level = "t1"
 uses = { compile = 1 }
 
