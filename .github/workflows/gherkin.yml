@@ -937,6 +937,27 @@ jobs:
           path: ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp/gallery
           if-no-files-found: ignore
 
+      # Last on purpose: the watch's "failed log tail" is the end of the job, so the evidence is printed after the uploads.
+      - name: Failure evidence (last, so the log tail shows it)
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        run: |
+          echo "::error::smoke (macos-15) failed: evidence follows"
+          echo "=== leg outcomes ==="
+          echo "fixture=${{ steps.fixture.outcome }} cli_run=${{ steps.cli_run.outcome }} cli_prove=${{ steps.cli_prove.outcome }} gui_run=${{ steps.gui_run.outcome }} gui_prove=${{ steps.gui_prove.outcome }} desktop_run=${{ steps.desktop_run.outcome }} desktop_prove=${{ steps.desktop_prove.outcome }}"
+          echo "=== build errors (error: / actool lines) ==="
+          grep -n -i -E 'error:|actool|ibtoold|CompileAssetCatalog' gherkin-gui.log gherkin-gui-attempt1.log gherkin-gui-first-attempt.log 2>/dev/null | cut -c1-400 | tail -n 40 || true
+          echo "=== gherkin-cli.log (last 40 lines) ==="
+          if [ -f gherkin-cli.log ]; then tail -n 40 gherkin-cli.log | cut -c1-400; else echo "(none)"; fi
+          echo "=== xcresult summary (first 60 lines) ==="
+          head -n 60 "$RUNNER_TEMP/gui-xcresult-summary.txt" 2>/dev/null || echo "(none)"
+          echo "=== runner container tmp ==="
+          ls -la ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp 2>&1 || true
+          echo "=== gherkin-gui.log (last 60 lines) ==="
+          if [ -f gherkin-gui.log ]; then tail -n 60 gherkin-gui.log | cut -c1-400; else echo "(none)"; fi
+          exit 0
+
   # ─── macOS, full matrix: one build of the binaries the three macOS legs run ──────────────
   # cli-macos, mac-gui and desktop-macos each used to build the same star / stard / output validator on the same runner image (the validator
   # alone links all of StarCore: ~3 min per leg, stard another ~4 in desktop-macos).  They are built once here and shared as the artifact
