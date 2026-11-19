@@ -784,15 +784,31 @@ jobs:
           TEST_RUNNER_STAR_CLI_BUILD: 0
         run: |
           set -o pipefail
-          xcodebuild test \
-            -project gui/star.xcodeproj \
-            -scheme star \
-            -configuration Release \
-            ENABLE_TESTABILITY=YES \
-            ${{ steps.f.outputs.only }} \
-            -resultBundlePath "$RUNNER_TEMP/gherkin-gui.xcresult" \
-            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
-            2>&1 | tee gherkin-gui.log
+          run_xcode() {
+            xcodebuild test \
+              -project gui/star.xcodeproj \
+              -scheme star \
+              -configuration Release \
+              ENABLE_TESTABILITY=YES \
+              ${{ steps.f.outputs.only }} \
+              -resultBundlePath "$RUNNER_TEMP/gherkin-gui.xcresult" \
+              CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= \
+              2>&1 | tee "$1"
+          }
+          # actool (CompileAssetCatalogVariant, compiling gui/star/StarIcon.icon) asks ibtoold, which has died on hosted runners with
+          # nothing wrong in the catalogue (the same inputs compile locally).  Retry once, only for that failure: a test failure or a
+          # compile error must not be run twice.
+          if ! run_xcode gherkin-gui.log; then
+            if grep -q 'CompileAssetCatalogVariant failed\|ibtoold' gherkin-gui.log && ! grep -q 'Executed [0-9]* test' gherkin-gui.log; then
+              echo "::warning::asset catalogue compile failed (ibtoold); retrying the build once"
+              pkill -x ibtoold || true
+              mv gherkin-gui.log gherkin-gui-attempt1.log
+              rm -rf "$RUNNER_TEMP/gherkin-gui.xcresult"
+              run_xcode gherkin-gui.log
+            else
+              exit 1
+            fi
+          fi
 
       # Every "Executed N tests" line must be the leg's N (nothing else ran, nothing was skipped) and every feature must show passed.
       - name: "mac gui: prove the scenarios ran (not a vacuous green)"
