@@ -112,14 +112,17 @@ gate = "pr-gate"
 exclude = []
 
 # Machine classes (masond's own, the ones starpipe's heavy jobs queue in too). `compile`: builds run side
-# by side. `test-suite`: one test suite at a time beside builds. `exclusive`: the whole machine (star runs, the display-owning gui
+# by side. `test-suite`: two test suites at a time beside builds. `exclusive`: the whole machine (star runs, the display-owning gui
 # tests, Gherkin, and any suite that measures time, QoS or memory). The owner's resources.toml holds
 # the real counts; these are the counts the definition asks for.
 [resource.compile]
 count = 3
 
+# Two suites at once (#597, decision 0610): at one, test-suite waits were 27% of task time (1074 h in 7 days).
+# Two still keeps the heavy ones (StarCore, daemon, desktop) from all running together, and the timing- and
+# memory-sensitive suites stay on `exclusive`. The owner's resources.toml holds the real count and wins.
 [resource.test-suite]
-count = 1
+count = 2
 
 [resource.exclusive]
 count = 1
