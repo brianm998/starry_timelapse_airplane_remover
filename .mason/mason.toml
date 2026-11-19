@@ -262,19 +262,19 @@ uses = { compile = 1 }
 
 # ---------------------------------------------------------------------------------------------
 # T1 tests (starpipe `test:*`). Minimum counts are starpipe's own, from adapter_star.py's comments
-# (StarCore 1,625, daemon 314, StarCpp 254). Every other count is UNMEASURED: 1 until shadow runs.
+# (StarCore 1,625, daemon 314, StarCpp 254). The others are floors from a static count of test functions.
 # ---------------------------------------------------------------------------------------------
 [suite.test-logging]
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path logging 2>&1"
 parser = "xctest"
-min_tests = 1 # UNMEASURED
+min_tests = 60 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 uses = { test-suite = 1 }
 
 [suite.test-monitor]
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path pipeline/monitor 2>&1"
 parser = "xctest"
-min_tests = 1 # UNMEASURED
+min_tests = 80 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 uses = { test-suite = 1 }
 
@@ -292,7 +292,7 @@ uses = { test-suite = 1 }
 # cores changes the counts it observes, so it keeps the whole machine (exclusive, kept on purpose).
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path StarCpp --filter OpenCVQoSTests 2>&1"
 parser = "xctest"
-min_tests = 1 # UNMEASURED
+min_tests = 3 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 uses = { exclusive = 1 }
 
@@ -327,21 +327,21 @@ uses = { test-suite = 1 }
 [suite.test-cli]
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path cli --skip GherkinTests 2>&1"
 parser = "xctest"
-min_tests = 1 # UNMEASURED
+min_tests = 80 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 uses = { test-suite = 1 }
 
 [suite.test-trail_tools]
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path trail_tools 2>&1"
 parser = "xctest"
-min_tests = 1 # UNMEASURED
+min_tests = 22 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 uses = { test-suite = 1 }
 
 [suite.test-decision_tree_generator]
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path decision_tree_generator 2>&1"
 parser = "xctest"
-min_tests = 1 # UNMEASURED
+min_tests = 1 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 uses = { test-suite = 1 }
 
@@ -352,7 +352,7 @@ uses = { test-suite = 1 }
 [suite.test-gherkin]
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path gherkin/StarGherkin 2>&1"
 parser = "xctest"
-min_tests = 1 # UNMEASURED
+min_tests = 1 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 uses = { exclusive = 1 }
 
@@ -366,7 +366,7 @@ uses = { exclusive = 1 }
 [suite.test-gui]
 command = "env STAR_USE_GPU_FOR_MERGE=0 .mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd -only-testing:starTests test 2>&1"
 parser = "xctest"
-min_tests = 1 # UNMEASURED
+min_tests = 340 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 uses = { test-suite = 1 }
 # In a task's test step, only the XCTest classes the change needs (MASON s386): classes holding an
@@ -384,7 +384,7 @@ command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio
 parser = "junit"
 # results_file is a literal path, not a glob: MASON reads it with fs::read.
 results_file = "star-desktop/build/test-results/test-all.xml"
-min_tests = 1 # UNMEASURED
+min_tests = 700 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 # One test-suite slot, not the whole machine (2026-11-14): the tests run with java.awt.headless=true,
 # the Compose UI tests render offscreen, and no test asserts a time budget (only 30-120 s deadlines).
@@ -403,7 +403,7 @@ narrow_never = ["star-desktop/*.kts", "star-desktop/gradle/**", "star-desktop/gr
 [suite.test-pipeline]
 command = "cd pipeline && STAR_USE_GPU_FOR_MERGE=0 uv run pytest -v 2>&1"
 parser = "pytest"
-min_tests = 1 # UNMEASURED
+min_tests = 480 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 
 # ---------------------------------------------------------------------------------------------
