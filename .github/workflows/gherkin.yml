@@ -764,6 +764,11 @@ jobs:
           cp .test-data/gui_splash_video/*.mp4 gui/videos/
           ls -lh gui/videos
 
+      # Hosted runners' actool/ibtoold fail CompileAssetCatalogVariant on the Icon Composer bundle (task 644, decision 0652):
+      # build this CI checkout without the .icon. The UI tests never look at the icon.
+      - name: Build without the Icon Composer app icon (CI checkout only)
+        run: scripts/ci/strip-app-icon.sh
+
       # Release, but ENABLE_TESTABILITY=YES: the scheme's other test target (starTests) is `@testable import Star`, and Release builds every test
       # target even under -only-testing.
       # Never -target Star (bogus module errors) and no -destination (errors on this scheme): see gherkin/README.md.
@@ -1343,6 +1348,11 @@ jobs:
             echo "STAR_CLI_BUILD=0"
           } >> "$GITHUB_ENV"
 
+      # Hosted runners' actool/ibtoold fail CompileAssetCatalogVariant on the Icon Composer bundle (task 644, decision 0652):
+      # build this CI checkout without the .icon. The UI tests never look at the icon.
+      - name: Build without the Icon Composer app icon (CI checkout only)
+        run: scripts/ci/strip-app-icon.sh
+
       # Release, but ENABLE_TESTABILITY=YES: the scheme's other test target (starTests) is `@testable import Star`, and Release
       # builds every test target even under -only-testing.
       # Never -target Star (bogus module errors) and no -destination (errors on this scheme): see gherkin/README.md.
@@ -1430,7 +1440,7 @@ jobs:
           echo "=== xcresult summary (first 60 lines) ==="
           head -n 60 "$RUNNER_TEMP/gui-xcresult-summary.txt" 2>/dev/null || echo "(none)"
           echo "=== gherkin-gui.log (last 60 lines) ==="
-          tail -n 60 gherkin-gui.log 2>/dev/null | cut -c1-400 || echo "(none)"
+          if [ -f gherkin-gui.log ]; then tail -n 60 gherkin-gui.log | cut -c1-400; else echo "(none)"; fi
           echo "=== build errors (actool / error: lines) ==="
           grep -n -E 'error:|actool|ibtoold' gherkin-gui.log 2>/dev/null | cut -c1-400 | tail -n 40 || true
           echo "=== crash markers ==="
