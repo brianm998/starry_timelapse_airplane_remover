@@ -1394,7 +1394,7 @@ jobs:
           FEATURES: ${{ matrix.shard.features }}
         run: |
           set -o pipefail
-          gherkin/prove-xctest-features.sh guigherkin-gui.log $FEATURES 2>&1 | tee "$RUNNER_TEMP/gui-prove.txt"
+          gherkin/prove-xctest-features.sh gui gherkin-gui.log $FEATURES 2>&1 | tee "$RUNNER_TEMP/gui-prove.txt"
 
       # Readable failure for a red run: the xcresult's own summary.  Never fails the job itself.
       - name: Print the xcresult failure summary
