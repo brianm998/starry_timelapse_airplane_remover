@@ -1430,9 +1430,11 @@ jobs:
           echo "=== xcresult summary (first 60 lines) ==="
           head -n 60 "$RUNNER_TEMP/gui-xcresult-summary.txt" 2>/dev/null || echo "(none)"
           echo "=== gherkin-gui.log (last 60 lines) ==="
-          tail -n 60 gherkin-gui.log 2>/dev/null || echo "(none)"
+          tail -n 60 gherkin-gui.log 2>/dev/null | cut -c1-400 || echo "(none)"
+          echo "=== build errors (actool / error: lines) ==="
+          grep -n -E 'error:|actool|ibtoold' gherkin-gui.log 2>/dev/null | cut -c1-400 | tail -n 40 || true
           echo "=== crash markers ==="
-          grep -n -i -E 'Testing failed|TEST FAILED|crashed|Restarting after unexpected exit|jetsam|memory' gherkin-gui.log 2>/dev/null | tail -n 40 || true
+          grep -n -i -E 'Testing failed|TEST FAILED|crashed|Restarting after unexpected exit|jetsam|memory' gherkin-gui.log 2>/dev/null | cut -c1-400 | tail -n 40 || true
           echo "=== runner container tmp ==="
           ls -la ~/Library/Containers/com.star-guiUITests.xctrunner/Data/tmp 2>&1 || true
           exit 0
