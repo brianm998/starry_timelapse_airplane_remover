@@ -573,24 +573,29 @@ public actor MemoryMonitor {
         // the ledger knows about versus what the process is actually holding.
         let unaccounted = footprint > reservedBytes ? footprint - reservedBytes : 0
         let effective = effectiveBudget()
-        return "MemoryMonitor: \(totalWaits) waits, " +
-            "avg \(totalWaits > 0 ? String(format: "%.1f", totalWaitTime / Double(totalWaits)) : "0")s, " +
-            "\(waiters.count) queued, " +
-            "reserved=\(reservedBytes / (1024*1024))MB / \(effective / (1024*1024))MB" +
-            // Both figures, because which one is binding is the question a stalled run
-            // raises: a gap between them means something else on the machine is holding
-            // memory star would otherwise have been allowed to use.
-            (effective < budget ? " (of \(budget / (1024*1024))MB physical)" : "") + ", " +
-            "footprint=\(footprint / (1024*1024))MB " +
-            "(unaccounted \(unaccounted / (1024*1024))MB), " +
-            // The ledger-to-reality ratio the admission budget is being scaled by. A low
-            // figure is the normal state of a healthy parallel run, not a fault: it means
-            // the per-op peaks are not landing together.
-            "realized=\(String(format: "%.2f", realizedRatio)), " +
-            "systemFree=\(reality.systemAvailable() / (1024*1024))MB, " +
-            "floor=\(systemFloorBytes / (1024*1024))MB, " +
-            "realityHolds=\(realityHolds)" +
-            (underMemoryPressure ? ", UNDER PRESSURE (\(pressureLevel.rawValue))" : "")
+        let mib: UInt64 = 1024 * 1024
+        let avgWait = totalWaits > 0 ? String(format: "%.1f", totalWaitTime / Double(totalWaits)) : "0"
+        // Both figures, because which one is binding is the question a stalled run
+        // raises: a gap between them means something else on the machine is holding
+        // memory star would otherwise have been allowed to use.
+        let physical = effective < budget ? " (of \(budget / mib)MB physical)" : ""
+        // The ledger-to-reality ratio the admission budget is being scaled by. A low
+        // figure is the normal state of a healthy parallel run, not a fault: it means
+        // the per-op peaks are not landing together.
+        let realized = String(format: "%.2f", realizedRatio)
+        let pressure = underMemoryPressure ? ", UNDER PRESSURE (\(pressureLevel.rawValue))" : ""
+        return """
+            MemoryMonitor: \(totalWaits) waits, \
+            avg \(avgWait)s, \
+            \(waiters.count) queued, \
+            reserved=\(reservedBytes / mib)MB / \(effective / mib)MB\(physical), \
+            footprint=\(footprint / mib)MB \
+            (unaccounted \(unaccounted / mib)MB), \
+            realized=\(realized), \
+            systemFree=\(reality.systemAvailable() / mib)MB, \
+            floor=\(systemFloorBytes / mib)MB, \
+            realityHolds=\(realityHolds)\(pressure)
+            """
     }
 
     // MARK: - Estimation helpers
@@ -767,10 +772,14 @@ public actor MemoryMonitor {
         // Detail at info, because the user-facing sentences below are posted as warnings
         // and log themselves — two lines saying the same thing is noise.
         if level != .normal {
-            Log.i("MemoryMonitor: OS memory pressure \(previous.rawValue) → " +
-                  "\(level.rawValue) — holding new reservations " +
-                  "(reserved \(reservedBytes / (1024*1024))MB, footprint " +
-                  "\(reality.processFootprint() / (1024*1024))MB)")
+            let reservedMB = reservedBytes / (1024*1024)
+            let footprintMB = reality.processFootprint() / (1024*1024)
+            Log.i("""
+                  MemoryMonitor: OS memory pressure \(previous.rawValue) → \
+                  \(level.rawValue) — holding new reservations \
+                  (reserved \(reservedMB)MB, footprint \
+                  \(footprintMB)MB)
+                  """)
         }
 
         // The GPU pyramid builders keep textures between builds; give that memory back the
@@ -840,13 +849,15 @@ public actor MemoryMonitor {
         guard star_system_memory_breakdown(&b) == 0 else { return }
         lastBreakdownLog = now
         func mb(_ v: UInt64) -> String { "\(v / (1024*1024))MB" }
-        Log.i("MemoryMonitor: system memory low — total=\(mb(b.total)), " +
-              "counted as available=\(mb(b.available)) " +
-              "(free \(mb(b.free_bytes)) + purgeable \(mb(b.purgeable)) + " +
-              "file cache \(mb(b.file_backed))); not counted: " +
-              "inactive \(mb(b.inactive)), active \(mb(b.active)), wired \(mb(b.wired)), " +
-              "anonymous \(mb(b.anonymous)), compressed \(mb(b.compressed)); " +
-              "floor=\(mb(UInt64(systemFloorBytes)))")
+        Log.i("""
+              MemoryMonitor: system memory low — total=\(mb(b.total)), \
+              counted as available=\(mb(b.available)) \
+              (free \(mb(b.free_bytes)) + purgeable \(mb(b.purgeable)) + \
+              file cache \(mb(b.file_backed))); not counted: \
+              inactive \(mb(b.inactive)), active \(mb(b.active)), wired \(mb(b.wired)), \
+              anonymous \(mb(b.anonymous)), compressed \(mb(b.compressed)); \
+              floor=\(mb(UInt64(systemFloorBytes)))
+              """)
     }
 
     // MARK: - Internal
@@ -977,18 +988,25 @@ public actor MemoryMonitor {
                 // ledger still has room, `projected` may be UNDER budget. Subtracting
                 // unconditionally underflows — this trapped as soon as the brake landed.
                 let projected = speculativeReserved + waiter.needed
+                // Only subtracted when `projected` is over: the other branch would underflow.
+                let overMB = projected > admissionBudget
+                    ? (projected - admissionBudget) / (1024*1024) : 0
+                let budgetMB = admissionBudget / (1024*1024)
+                let projectedMB = projected / (1024*1024)
                 let why = projected > admissionBudget
-                    ? "this puts us \((projected - admissionBudget) / (1024*1024))MB over the " +
-                      "\(admissionBudget / (1024*1024))MB budget"
-                    : "the ledger has room (\(projected / (1024*1024))MB of " +
-                      "\(admissionBudget / (1024*1024))MB) but " + (blocked ?? "reality disagreed")
-                Log.w("MemoryMonitor: forcing waiter \(waiter.id) " +
-                      "(\(waiter.needed / (1024*1024))MB) through — waited " +
-                      "\(String(format: "%.0f", now.timeIntervalSince(waiter.deadline) + maxWaitTime))s, " +
-                      why + ". Further forced admissions " +
-                      "held for \(Int(forcedAdmissionInterval))s, and none at all until " +
-                      "this one is released, so \(waiters.count - 1) " +
-                      "other waiter(s) do not pile on.")
+                    ? "this puts us \(overMB)MB over the \(budgetMB)MB budget"
+                    : "the ledger has room (\(projectedMB)MB of \(budgetMB)MB) but \(blocked ?? "reality disagreed")"
+                let neededMB = waiter.needed / (1024*1024)
+                let waitedS = String(format: "%.0f", now.timeIntervalSince(waiter.deadline) + maxWaitTime)
+                let intervalS = Int(forcedAdmissionInterval)
+                Log.w("""
+                      MemoryMonitor: forcing waiter \(waiter.id) \
+                      (\(neededMB)MB) through — waited \
+                      \(waitedS)s, \(why). Further forced admissions \
+                      held for \(intervalS)s, and none at all until \
+                      this one is released, so \(waiters.count - 1) \
+                      other waiter(s) do not pile on.
+                      """)
                 released.append(waiter)
                 speculativeReserved += waiter.needed
                 lastForcedAdmission = now

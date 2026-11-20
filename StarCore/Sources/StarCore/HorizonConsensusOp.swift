@@ -257,16 +257,21 @@ actor HorizonConsensusBuild {
         let calibration = prepared.calibration
         let columns = written * parameters.gridWidth
         let overridden = columns > 0 ? 100 * Double(overriddenColumns) / Double(columns) : 0
-        Log.i("horizon consensus: \(written) of \(targets.count) frames from " +
-              "\(prepared.detections) detections; focal length \(Int(calibration.focalLength)) px " +
-              "(lines carried \(calibration.distance) frames land " +
-              String(format: "%.3f", calibration.drift * 100) + "% of the height off), " +
-              "\(calibration.rejectedEntries) of \(calibration.entries) ground fits left out " +
-              "as no camera rotation; \(prepared.paintedReferences) painted horizon(s) in reach, " +
-              "\(painted) frame(s) painted, \(corrected) corrected by them; " +
-              "the long span overrode " +
-              String(format: "%.2f", overridden) + "% of columns; in " +
-              String(format: "%.1f", Date().timeIntervalSince(started)) + "s")
+        let driftPct = String(format: "%.3f", calibration.drift * 100)
+        let overriddenPct = String(format: "%.2f", overridden)
+        let elapsed = String(format: "%.1f", Date().timeIntervalSince(started))
+        Log.i("""
+              horizon consensus: \(written) of \(targets.count) frames from \
+              \(prepared.detections) detections; focal length \(Int(calibration.focalLength)) px \
+              (lines carried \(calibration.distance) frames land \
+              \(driftPct)% of the height off), \
+              \(calibration.rejectedEntries) of \(calibration.entries) ground fits left out \
+              as no camera rotation; \(prepared.paintedReferences) painted horizon(s) in reach, \
+              \(painted) frame(s) painted, \(corrected) corrected by them; \
+              the long span overrode \
+              \(overriddenPct)% of columns; in \
+              \(elapsed)s
+              """)
     }
 
     private func prepare() async throws -> Preparation? {

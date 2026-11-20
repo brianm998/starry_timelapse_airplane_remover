@@ -247,10 +247,12 @@ extension PixelatedImage {
         let top    = max(0.0, min(1.0, searchTopFraction))
         let bottom = max(top, min(1.0, searchBottomFraction))
 
-        Log.d("frame \(frameIndex) dpHorizonMask: " +
-              "searchTop=\(String(format: "%.2f", top)), " +
-              "searchBottom=\(String(format: "%.2f", bottom)), " +
-              "lambda=\(smoothnessLambda), sobelW=\(sobelWeight), cannyW=\(cannyWeight)")
+        Log.d("""
+              frame \(frameIndex) dpHorizonMask: \
+              searchTop=\(String(format: "%.2f", top)), \
+              searchBottom=\(String(format: "%.2f", bottom)), \
+              lambda=\(smoothnessLambda), sobelW=\(sobelWeight), cannyW=\(cannyWeight)
+              """)
 
         let dpMask = try self.dpHorizonDetect(
           cannyMinThreshold: cannyMinThreshold,

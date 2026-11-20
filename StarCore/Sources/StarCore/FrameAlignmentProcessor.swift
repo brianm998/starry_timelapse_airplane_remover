@@ -677,10 +677,12 @@ final public actor FrameAlignmentProcessor {
         let originalFilename = imageAccessor.nameForImage(
           frameIndex: frameIndex, ofType: .original, atSize: .original
         ) ?? "<no name>"
-        Log.i("frame \(frameIndex) findFeatures input: " +
-              "original=\(originalFrame.description) " +
-              "originalFile=\(originalFilename) " +
-              "mask=\(horizonMask?.image.description ?? "<none>")")
+        Log.i("""
+              frame \(frameIndex) findFeatures input: \
+              original=\(originalFrame.description) \
+              originalFile=\(originalFilename) \
+              mask=\(horizonMask?.image.description ?? "<none>")
+              """)
 
         // Off the cooperative pool: SIFT detection at full resolution holds a
         // thread for a long time, and the pool cannot grow to replace it.

@@ -3057,10 +3057,12 @@ final public actor FrameHorizonProcessor {
             let dpSearchTop    = pass2Best.cropAmount / 100.0
             let dpSearchBottom = 1.0
 
-            Log.i("frame \(frameIndex) running DP at smaller resolution: " +
-                  "lambda=\(lambda), sobel=\(sobelW), canny=\(cannyW), " +
-                  "search \(String(format:"%.0f",dpSearchTop*100))%–" +
-                  "\(String(format:"%.0f",dpSearchBottom*100))%")
+            Log.i("""
+                  frame \(frameIndex) running DP at smaller resolution: \
+                  lambda=\(lambda), sobel=\(sobelW), canny=\(cannyW), \
+                  search \(String(format:"%.0f",dpSearchTop*100))%–\
+                  \(String(format:"%.0f",dpSearchBottom*100))%
+                  """)
 
             if let ogdpShrunkMask = try? await shrunkImage.dpHorizonMask(
                  at: frameIndex,
