@@ -252,7 +252,10 @@ def _class_of(words: list[str]) -> str | None:
         return TEST  # a sharded suite: its serial classes inject what they measure; measured green beside other work (#250)
     if tool in ("gradle", "gradlew"):
         tasks = [w for w in words[1:] if not w.startswith("-")]
-        return BUILD if tasks and all(t.startswith(("compile", "assemble", "checkProtoSync")) for t in tasks) else EXCLUSIVE
+        # Packaging (createDistributable, packageDmg, jar, proguard...) is a build too: it compiles and bundles,
+        # runs no tests and uses no display, so it shares the machine like compile. test/check/build/run stay exclusive.
+        build_tasks = ("compile", "assemble", "checkProtoSync", "create", "package", "jar", "proguard")
+        return BUILD if tasks and all(t.startswith(build_tasks) for t in tasks) else EXCLUSIVE
     if tool == "xcodebuild":
         actions = {w for w in words[1:] if w in ("build", "build-for-testing", "test", "test-without-building", "archive")}
         return BUILD if actions and actions <= {"build", "build-for-testing"} else EXCLUSIVE  # a gui test needs the display
