@@ -95,6 +95,7 @@ jobs:
     # opencv.yml's release tier uploads with the workflow token, and a called workflow cannot hold more than its caller grants
     permissions:
       contents: write
+      actions: read
     uses: ./.github/workflows/gherkin.yml
     with:
       smoke: true
@@ -111,6 +112,7 @@ jobs:
     if: github.event_name == 'push' && needs.tested.outputs.tested == 'true'
     permissions:
       contents: write
+      actions: read
     uses: ./.github/workflows/gherkin.yml
     with:
       smoke: true

@@ -104,7 +104,7 @@ on:
 run-name: "${{ github.event_name == 'workflow_dispatch' && format('Gherkin: {0}', inputs.features || 'full') || github.event.pull_request.title || github.event.head_commit.message }}"
 
 # gherkin-smoke.yml grants its caller job contents: write so the opencv-<os> jobs can save a build as a release asset; every other job here
-# only reads
+# only reads (desktop-linux also reads actions, for its failure-evidence step, so every caller grants actions: read too)
 permissions:
   contents: read
 
@@ -1515,6 +1515,10 @@ jobs:
         shard: ${{ fromJSON(needs.features.outputs.desktop) }}
     # a shard runs its features one after the other in the one build (the `ui` shard: every @ui feature); one old job's allowance per feature
     timeout-minutes: ${{ matrix.shard.name == 'ui' && 150 || matrix.shard.minutes['75'] }}
+    # actions: read lets the failure-evidence step list this job's steps
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v5
 
@@ -1699,22 +1703,6 @@ jobs:
         if: ${{ !cancelled() }}
         run: gherkin/summarize-desktop-features.sh ${{ matrix.shard.features }}
 
-      # A step before the run script (fetch, apt, Swift, build ...) that fails leaves no gherkin-each directory, and the log then shows only
-      # "No files were found" at the upload.  Name the step that failed (or the one a timeout cut off) from the job's own step list.
-      - name: Name the failed step
-        if: failure() || cancelled()
-        continue-on-error: true
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" --paginate \
-            --jq ".jobs[] | select(.runner_name == \"$RUNNER_NAME\") | .steps[] | select(.conclusion == \"failure\" or .conclusion == \"cancelled\" or (.status == \"in_progress\" and .name != \"Name the failed step\")) | \"::error::step '\(.name)' \(.conclusion // .status)\"" || true
-          if [ ! -d star-desktop/build/gherkin-each ]; then
-            echo "::error::gherkin/run-desktop-features.sh never started (no star-desktop/build/gherkin-each): a step before 'Run the Gherkin features in the Compose UI' failed"
-          fi
-          df -h / || true
-
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v6
@@ -1730,6 +1718,32 @@ jobs:
           name: gherkin-desktop-linux-shard-${{ matrix.shard.name }}-artifacts
           path: ${{ runner.temp }}/gherkin-artifacts
           if-no-files-found: warn
+
+      # Last, so the log tail the watch captures shows it.  A step before the run script (fetch, apt, Swift, build ...) that fails leaves no
+      # gherkin-each directory.  Name the failed step (or the one a timeout cut off) from the job's own step list (needs actions: read).
+      - name: Failure evidence (last, so the log tail shows it)
+        if: failure() || cancelled()
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "::error::desktop (ubuntu-24.04) shard ${{ matrix.shard.name }} failed: evidence follows"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs" --paginate \
+            --jq ".jobs[] | select(.runner_name == \"$RUNNER_NAME\") | .steps[] | select(.conclusion == \"failure\" or .conclusion == \"cancelled\" or (.status == \"in_progress\" and (.name | startswith(\"Failure evidence\") | not))) | \"::error::step '\(.name)' \(.conclusion // .status)\"" \
+            || echo "::warning::could not read the job's step list (gh api failed)"
+          if [ ! -d star-desktop/build/gherkin-each ]; then
+            echo "::error::gherkin/run-desktop-features.sh never started (no star-desktop/build/gherkin-each): a step before 'Run the Gherkin features in the Compose UI' failed"
+          else
+            ls -la star-desktop/build/gherkin-each || true
+            find star-desktop/build/gherkin-each \( -name '*.log' -o -name 'stard.log' \) -type f 2>/dev/null | head -20 | while read -r f; do
+              echo "::group::tail $f"
+              tail -n 60 "$f" | cut -c1-400 || true
+              echo "::endgroup::"
+            done
+          fi
+          df -h || true
+          exit 0
 
   # ─── desktop, Windows ────────────────────────────────────────────────────────
   # The slowest leg: stard is built from scratch on Windows (cache permitting). Same toolchain pinning as

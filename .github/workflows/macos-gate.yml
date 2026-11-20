@@ -103,6 +103,7 @@ jobs:
     name: Gherkin smoke (macOS)
     permissions:
       contents: write
+      actions: read
     uses: ./.github/workflows/gherkin.yml
     with:
       smoke: true

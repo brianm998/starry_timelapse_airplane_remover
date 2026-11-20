@@ -65,3 +65,18 @@ def test_mac_gui_failure_evidence_step_is_last() -> None:
     step = body[last.start() :]
     assert re.search(r"^        if: failure\(\)", step, re.MULTILINE)
     assert "gui-prove.txt" in body and "gui-xcresult-summary.txt" in body
+
+
+def test_desktop_linux_failure_evidence_step_is_last():
+    body = job_text("desktop-linux")
+    names = re.findall(r"^      - name: (.+)$", body, re.MULTILINE)
+    assert names[-1].startswith("Failure evidence")
+    step = body[body.index("      - name: Failure evidence") :]
+    assert "if: failure() || cancelled()" in step
+    assert "continue-on-error: true" in step
+    assert "actions: read" in body
+    smoke = (WORKFLOW.parent / "gherkin-smoke.yml").read_text()
+    callers = re.findall(r"^    permissions:\n((?:      .+\n)+)    uses: \./\.github/workflows/gherkin\.yml", smoke, re.MULTILINE)
+    assert len(callers) == 2
+    for perms in callers:
+        assert "actions: read" in perms
