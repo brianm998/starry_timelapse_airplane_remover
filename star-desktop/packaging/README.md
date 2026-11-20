@@ -10,8 +10,8 @@ hand-made: `python3 art/export.py` rebuilds them (and the gui's Icon Composer bu
   the `.ico`, 94% in `star.png` (Linux, no OS margin).
 - macOS 26 icon: jpackage cannot take a `.icon`, so the `fixBundledBinaries` task in `build.gradle.kts` runs
   `xcrun actool` on `gui/star/StarIcon.icon` for every built `.app` (Assets.car into `Contents/Resources`) and sets
-  `CFBundleIconName` = StarIcon in its Info.plist; `CFBundleIconFile` keeps pointing at `star.icns`. Needs Xcode 26; on CI
-  a failure fails the build, locally it only warns.
+  `CFBundleIconName` = StarIcon in its Info.plist; `CFBundleIconFile` keeps pointing at `star.icns`. Needs Xcode 26. actool is retried once; if it
+  still fails (hosted runners' ibtoold crashes) the task warns and ships `star.icns` only, on CI and locally.
 
 `.icns` and `.ico` are written in pure Python, so `python3 art/export.py --check` runs anywhere.
 

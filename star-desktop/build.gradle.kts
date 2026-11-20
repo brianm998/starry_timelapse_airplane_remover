@@ -449,27 +449,44 @@ tasks.register("fixBundledBinaries") {
             // do. Before any codesign, so the re-seal below covers it.
             val iconBundle = rootProject.file("../gui/star/StarIcon.icon")
             val onCi = !System.getenv("CI").isNullOrBlank()
-            try {
-                val res = File(app, "Contents/Resources")
+            // Best-effort everywhere: hosted macos-15 runners' ibtoold crashes on Icon Composer bundles
+            // (docs/decisions/0652, 0688). Retry once, then ship star.icns only rather than fail the installer.
+            val res = File(app, "Contents/Resources")
+            var compiled = false
+            var lastOutput = ""
+            for (attempt in 1..2) {
                 val tmp = File.createTempFile("star-icon", ".plist")
                 try {
                     val out = ByteArrayOutputStream()
-                    val r = exec {
-                        commandLine("xcrun", "actool", iconBundle.absolutePath, "--compile", res.absolutePath, "--platform", "macosx",
-                            "--minimum-deployment-target", "13.0", "--app-icon", "StarIcon", "--output-partial-info-plist", tmp.absolutePath)
-                        standardOutput = out; errorOutput = out; isIgnoreExitValue = true
-                    }
-                    if (r.exitValue != 0 || !File(res, "Assets.car").exists()) throw GradleException("actool failed (${r.exitValue}): $out")
+                    val r = try {
+                        exec {
+                            commandLine("xcrun", "actool", iconBundle.absolutePath, "--compile", res.absolutePath, "--platform", "macosx",
+                                "--minimum-deployment-target", "13.0", "--app-icon", "StarIcon", "--output-partial-info-plist", tmp.absolutePath)
+                            standardOutput = out; errorOutput = out; isIgnoreExitValue = true
+                        }.exitValue
+                    } catch (e: Exception) { out.write("exec failed: ${e.message}".toByteArray()); -1 }
+                    if (r == 0 && File(res, "Assets.car").exists()) { compiled = true; break }
+                    lastOutput = out.toString()
+                    File(res, "Assets.car").delete()
+                    logger.warn("fixBundledBinaries: actool attempt $attempt failed ($r) for ${app.name}")
                 } finally { tmp.delete() }
-                // Keep CFBundleIconFile (jpackage's star.icns) as the fallback below macOS 26.
-                val plist = File(app, "Contents/Info.plist").absolutePath
-                val pb = "/usr/libexec/PlistBuddy"
-                val set = exec { commandLine(pb, "-c", "Set :CFBundleIconName StarIcon", plist); isIgnoreExitValue = true }
-                if (set.exitValue != 0) exec { commandLine(pb, "-c", "Add :CFBundleIconName string StarIcon", plist) }
-                logger.lifecycle("fixBundledBinaries: compiled StarIcon.icon into ${app.name}")
-            } catch (e: Exception) {
-                if (onCi) throw GradleException("fixBundledBinaries: could not add the macOS 26 icon to ${app.name}: ${e.message}", e)
-                logger.warn("fixBundledBinaries: could not add the macOS 26 icon to ${app.name} (${e.message}); keeping star.icns only")
+            }
+            if (compiled) {
+                try {
+                    // Keep CFBundleIconFile (jpackage's star.icns) as the fallback below macOS 26.
+                    val plist = File(app, "Contents/Info.plist").absolutePath
+                    val pb = "/usr/libexec/PlistBuddy"
+                    val set = exec { commandLine(pb, "-c", "Set :CFBundleIconName StarIcon", plist); isIgnoreExitValue = true }
+                    if (set.exitValue != 0) exec { commandLine(pb, "-c", "Add :CFBundleIconName string StarIcon", plist) }
+                    logger.lifecycle("fixBundledBinaries: compiled StarIcon.icon into ${app.name}")
+                } catch (e: Exception) {
+                    File(res, "Assets.car").delete()
+                    logger.warn("fixBundledBinaries: could not set CFBundleIconName in ${app.name} (${e.message}); keeping star.icns only")
+                }
+            } else {
+                val errLines = lastOutput.lines().filter { it.contains("error", true) || it.contains("ibtoold", true) }.take(10)
+                logger.warn("fixBundledBinaries: macOS 26 icon not compiled for ${app.name}; keeping star.icns only\n" + errLines.joinToString("\n"))
+                if (onCi) println("::warning::fixBundledBinaries: macOS 26 icon not compiled, shipping star.icns only")
             }
             val bins = listOf("stard", "ffmpeg", "ffprobe").map { File(resDir, it) }.filter { it.exists() }
             if (bins.isEmpty()) continue
