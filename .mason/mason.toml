@@ -286,6 +286,14 @@ results_file = ".build/test-StarCpp.xml"
 min_tests = 254
 level = "t1"
 uses = { test-suite = 1 }
+# In a task's test step, only the XCTest classes the change needs (classes holding an edited line or naming a
+# changed file). The whole suite runs once at landing instead: the batch tier in landing.toml (pr-gate runs no StarCpp tests).
+narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path StarCpp --parallel --num-workers 8 --xunit-output .build/test-StarCpp.xml --skip OpenCVQoSTests {tests} 2>&1"
+narrow_tests = "StarCpp/Tests/StarCppBridgeTests/*.swift"
+narrow_split = "(?m)^\\s*(?:@\\w+\\s+)*(?:(?:public|internal|private|final|open)\\s+)*class (\\w+)\\s*:\\s*\\w*TestCase"
+narrow_each = "--filter StarCppBridgeTests.{}"
+narrow_never = ["StarCpp/Package.swift", "StarCpp/Package.resolved", "StarCpp/Tests/StarCppBridgeTests/KeypointFootprintMeasurement.swift"]
+whole_later = "batch"
 
 [suite.test-StarCpp-qos]
 # OpenCVQoSTests measures QoS-dependent worker counts: timing sensitivity. Any other load on the
@@ -315,6 +323,17 @@ results_file = ".build/test-StarCore.xml"
 min_tests = 1550 # measured 1563 test cases on 2026-11-11; 1625 was unreachable
 level = "t1"
 uses = { test-suite = 1 }
+# In a task's test step, only the XCTest classes the change needs (classes holding an edited line or naming a
+# changed file). The whole suite runs once at landing instead: pr-gate.yml:255 and :332 run the whole package.
+narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path StarCore --parallel --xunit-output .build/test-StarCore.xml {tests} 2>&1"
+narrow_tests = "StarCore/Tests/StarCoreTests/*.swift"
+narrow_split = "(?m)^\\s*(?:@\\w+\\s+)*(?:(?:public|internal|private|final|open)\\s+)*class (\\w+)\\s*:\\s*\\w*TestCase"
+narrow_each = "--filter StarCoreTests.{}"
+narrow_never = ["StarCore/Package.swift", "StarCore/Package.resolved", "StarCore/Tests/StarCoreTests/FrameHarness.swift", "StarCore/Tests/StarCoreTests/Legacy*.swift", "StarCore/Tests/StarCoreTests/*Measurement.swift", "StarCore/Tests/StarCoreTests/StuckExtractionRepro.swift"]
+# The narrowed run is plain `swift test --parallel` (no class shards: the junit file then holds just the narrowed cases).
+# The smoke classes are the whole-tree guards that must run on every StarCore change.
+narrow_smoke = ["LocalizationTests", "ConfigRoundTripTests", "ArtifactInputsTests"]
+whole_later = "ci" # pr-gate.yml:255 (static job, StarCore package tests) and :332 (macos job)
 
 [suite.test-daemon]
 command = "env STAR_USE_GPU_FOR_MERGE=0 python3 .mason/scripts/shards.py --package-path daemon --junit .build/test-daemon.xml --workers 8 --shard ExportSequenceTests --shard ExportVideoAudioTests,SessionConfigPersistenceTests --serial-shard BackgroundExtractionSessionTests 2>&1"
@@ -323,6 +342,14 @@ results_file = ".build/test-daemon.xml"
 min_tests = 313 # measured 2026-11-12: 316 test cases, 3 skipped, 313 run; the junit count excludes skips
 level = "t1"
 uses = { test-suite = 1 }
+# In a task's test step, only the XCTest classes the change needs (classes holding an edited line or naming a
+# changed file). The whole suite runs once at landing instead: pr-gate.yml:258 runs the whole package.
+narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path daemon --parallel --xunit-output .build/test-daemon.xml {tests} 2>&1"
+narrow_tests = "daemon/Tests/StarDaemonTests/*.swift"
+narrow_split = "(?m)^\\s*(?:@\\w+\\s+)*(?:(?:public|internal|private|final|open)\\s+)*class (\\w+)\\s*:\\s*\\w*TestCase"
+narrow_each = "--filter StarDaemonTests.{}"
+narrow_never = ["daemon/Package.swift", "daemon/Package.resolved", "daemon/Tests/StarDaemonTests/TestTimeout.swift", "daemon/Tests/StarDaemonTests/ExportEndToEndTestCase.swift", "daemon/proto/**"]
+whole_later = "ci" # pr-gate.yml:258 (daemon package tests)
 
 [suite.test-cli]
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path cli --skip GherkinTests 2>&1"
@@ -330,6 +357,14 @@ parser = "xctest"
 min_tests = 80 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 uses = { test-suite = 1 }
+# In a task's test step, only the XCTest classes the change needs (classes holding an edited line or naming a
+# changed file). The whole suite runs once at landing instead: the batch tier in landing.toml (pr-gate runs no cli tests).
+narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path cli --skip GherkinTests {tests} 2>&1"
+narrow_tests = "cli/Tests/starTests/*.swift"
+narrow_split = "(?m)^\\s*(?:@\\w+\\s+)*(?:(?:public|internal|private|final|open)\\s+)*class (\\w+)\\s*:\\s*\\w*TestCase"
+narrow_each = "--filter starTests.{}"
+narrow_never = ["cli/Package.swift", "cli/Package.resolved"]
+whole_later = "batch"
 
 [suite.test-trail_tools]
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path trail_tools 2>&1"
@@ -370,14 +405,16 @@ min_tests = 340 # floor: ~90% of a static count of test functions (2026-11, #601
 level = "t1"
 uses = { test-suite = 1 }
 # In a task's test step, only the XCTest classes the change needs (MASON s386): classes holding an
-# edited line, or naming a changed file. The landing batch does NOT run the gui tests
-# locally (landing.toml's batch tier lists only test-desktop); pr-gate's macOS job covers the Swift side. Shared code, the
-# project, assets and strings run it whole.
+# edited line, or naming a changed file. Nothing before landing runs these tests whole: pr-gate has no xcodebuild
+# (its macOS job runs only the StarCore and daemon package tests), so the batch tier in landing.toml runs them whole once
+# per batch (whole_later = "batch"). Shared code, the project, assets and strings run the smoke classes in a task's test step.
 narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 .mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd {tests} test 2>&1"
 narrow_tests = "gui/starTests/*.swift"
 narrow_split = "(?m)^(?:@MainActor\\s+)?(?:final )?class (\\w+)\\s*:\\s*XCTestCase"
 narrow_each = "-only-testing:starTests/{}"
 narrow_never = ["gui/star.xcodeproj/**", "gui/Assets.xcassets/**", "gui/star/Info.plist", "gui/star/*.entitlements", "StarCore/**", "StarCpp/**", "logging/**", "i18n/**"]
+narrow_smoke = ["NoHardCodedStringsTests", "IdRegistryTests"]
+whole_later = "batch"
 
 [suite.test-desktop]
 command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop test --rerun --no-daemon 2>&1"
@@ -391,20 +428,30 @@ level = "t1"
 # As `exclusive` it drained the machine for every desktop change.
 uses = { test-suite = 1 }
 # In a task's test step, only the test classes the change needs (MASON s386): edited test files, and
-# tests that name a changed file. The landing batch runs them all, whole, because of the
-# `batch` tier in landing.toml (task #441). Build files, resources, strings
+# tests that name a changed file. The landing batch also runs them all, whole, because of the
+# `batch` tier in landing.toml (task #441), and pr-gate.yml:204 runs `gradlew test` whole. Build files, resources, strings
 # and the proto run them all.
 narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop test {tests} --rerun --no-daemon 2>&1"
 narrow_tests = "star-desktop/src/test/kotlin/**/*Test.kt"
 narrow_root = "star-desktop/src/test/kotlin/"
 narrow_each = "--tests {}"
 narrow_never = ["star-desktop/*.kts", "star-desktop/gradle/**", "star-desktop/gradle.properties", "star-desktop/src/main/resources/**", "star-desktop/src/test/resources/**", "daemon/proto/**", "i18n/**"]
+narrow_smoke = ["com.star.desktop.ui.NoHardCodedStringsTest", "com.star.desktop.ui.app.IdRegistryTest", "com.star.desktop.ui.components.StarArtTest"]
+whole_later = "ci" # pr-gate.yml:204 (desktop job, gradlew test on both OSes)
 
 [suite.test-pipeline]
 command = "cd pipeline && STAR_USE_GPU_FOR_MERGE=0 uv run pytest -v 2>&1"
 parser = "pytest"
 min_tests = 480 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
+# In a task's test step, only the test files the change reaches: files edited, or naming the changed module's stem
+# (`adapter_star` for pipeline/src/starpipe/adapter_star.py). pr-gate.yml:163 runs `uv run pytest -q` whole.
+narrow_command = "cd pipeline && STAR_USE_GPU_FOR_MERGE=0 uv run pytest -v {tests} 2>&1"
+narrow_tests = "pipeline/tests/**/test_*.py"
+narrow_root = "pipeline/"
+narrow_each = "{}"
+narrow_never = ["pipeline/pyproject.toml", "pipeline/uv.lock", "pipeline/tests/conftest.py"]
+whole_later = "ci" # pr-gate.yml:163 (static job, uv run pytest)
 
 # ---------------------------------------------------------------------------------------------
 # Impact map. Entries are unioned and an unmapped path selects every suite, so a package's path

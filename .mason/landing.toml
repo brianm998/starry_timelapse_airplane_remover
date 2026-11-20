@@ -28,9 +28,12 @@ parallel = 1
 # the classes naming a changed file, so the whole-tree guard tests (NoHardCodedStringsTest, IdRegistryTest,
 # StarArtTest) never ran before landing; task #249 turned Kotlin Client red that way (run 43714730672).
 # Without this tier a batch runs no local suites at all. Task #441.
+# test-gui, test-StarCpp and test-cli are in it too (task #680): pr-gate runs none of them (no xcodebuild, no StarCpp or
+# cli tests), so this tier is the one place they run whole before landing. Their suites say `whole_later = "batch"`, so a
+# task's test step runs only the narrowed classes and the whole suite runs once per batch, not in every round.
 [[tier]]
 name = "batch"
-suites = ["test-desktop"]
+suites = ["test-desktop", "test-gui", "test-StarCpp", "test-cli"]
 
 [on_red]
 # A red CI run is rerun once (the whole run: MASON does not tell an infrastructure red from a real one).
