@@ -135,7 +135,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake make git pkg-config perl dpkg-dev zip \
+            cmake make git pkg-config perl dpkg-dev fakeroot binutils zip \
             libeigen3-dev zlib1g-dev libpng-dev libtiff-dev libjpeg-dev \
             libcurl4-openssl-dev
 
@@ -194,7 +194,7 @@ jobs:
         # packageDeb depends on it. ffmpeg/ffprobe come from the ffmpeg-linux-x64 artifact.
         run: |
           chmod +x ../ffmpeg-bin/*
-          ./gradlew packageDeb -Pffmpegdir="$PWD/../ffmpeg-bin" --no-daemon --stacktrace
+          ./gradlew packageDeb -Pffmpegdir="$PWD/../ffmpeg-bin" --no-daemon --stacktrace --console=plain
           packaging/name-installers.sh build/compose/binaries/main/deb
 
       - name: Upload .deb artifact
