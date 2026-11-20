@@ -95,6 +95,8 @@ class RunResult:
     cpu_mean: float = 0.0  # cores: the job tree's CPU seconds over the hold
     cpu_peak: float = 0.0  # cores: the busiest interval between two samples
     rss_peak_mb: float = 0.0  # the largest sum of the tree's resident sets seen
+    stopped: int = 0  # the signal starpipe was told to stop with (SIGINT/SIGTERM) while the child ran, else 0
+    killed: bool = False  # the child itself died of a signal (not masond dropping the request, not the job's own exit status)
 
 
 class _Activity:
@@ -247,6 +249,7 @@ def run_job(
         marked = ["/bin/sh", "-c", ': > "$0" && exec "$@"', marker, *inner]
         delay = masonq.RETRY_S
         drops = 0
+        parent = os.getppid()
         while True:
             waited += masonq.wait_reachable(report)  # never run unqueued
             mason = masonq.run_argv(kind, marked, ticket=who.ticket, stage=who.stage, ticket_priority=who.ticket_priority,
@@ -254,6 +257,15 @@ def run_job(
             result = _attempt(mason, cmd, cfg, cwd, stdout, env, direct=False, waited=waited)
             if os.path.exists(marker) or result.code == 0 or drops >= REQUEUE_MAX:
                 return result
+            if result.stopped or result.killed:  # told to stop, or the child was killed: nobody wants it queued again
+                return result
+            if os.getppid() != parent:
+                say = f"the caller has gone; not queueing {cmd} again"
+                if report:
+                    report(say)
+                else:
+                    print(f"starpipe: {say}", file=sys.stderr, flush=True)
+                return RunResult(result.code or 1, result.waited)
             drops += 1
             waited = result.waited
             say = f"masond dropped the queued request before {cmd} started: queueing it again ({drops} of {REQUEUE_MAX})"
@@ -273,7 +285,10 @@ def _attempt(argv: list[str], cmd: str, cfg: Config, cwd: str | None, stdout: in
     proc = subprocess.Popen(argv, process_group=0, cwd=cwd, stdout=stdout, env=env,
                             stderr=subprocess.STDOUT if stdout is not None else None)
 
+    stop: list[int] = []
+
     def forward(signum: int, _frame: object) -> None:
+        stop.append(signum)
         if proc.poll() is None:
             with contextlib.suppress(OSError):
                 os.killpg(proc.pid, signum)
@@ -305,10 +320,15 @@ def _attempt(argv: list[str], cmd: str, cfg: Config, cwd: str | None, stdout: in
             signal.signal(s, h)
     if watch is None:
         waited += time.monotonic() - queued_at
-    code = 128 + -code if code < 0 else code
+    killed = code < 0
+    code = 128 + -code if killed else code
+    stopped = stop[0] if stop else 0
+    if stopped and code and not killed and not direct and code < 128:
+        code = 128 + stopped  # `mason run` gave up with its own status after our signal: still report the stop
     if watch is None:
-        return RunResult(code, waited)
-    return RunResult(code, waited, time.monotonic() - watch.start, watch.cpu_mean, watch.cpu_peak, watch.rss_peak_mb)
+        return RunResult(code, waited, stopped=stopped, killed=killed)
+    return RunResult(code, waited, time.monotonic() - watch.start, watch.cpu_mean, watch.cpu_peak, watch.rss_peak_mb,
+                     stopped=stopped, killed=killed)
 
 
 def run(argv: list[str], **kwargs: Any) -> tuple[int, float]:
