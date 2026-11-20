@@ -163,20 +163,27 @@ struct KeypointDivisorStartupView: View {
               .font(.title2)
               .foregroundColor(.white)
             Space(height: 12)
-            // The picture sits beside the words: stacked above the presets it ran the sheet past the bottom of a 768 pt
-            // screen and put Cancel and Update out of reach (CI run 43912477865, uiStartupSpeedSharpness).
-            HStack(alignment: .top, spacing: 12) {
-                explanation
-                ArtImage(.settingKeypointSize, fitting: 80)
+            // The content scrolls and the buttons stay pinned below it, so Cancel and Update are on screen
+            // whatever the text length or language (CI uiStartupSpeedSharpness, 768 pt hosted display).
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // The picture sits beside the words: stacked above the presets it ran the sheet past the bottom of a 768 pt
+                    // screen and put Cancel and Update out of reach (CI run 43912477865, uiStartupSpeedSharpness).
+                    HStack(alignment: .top, spacing: 12) {
+                        explanation
+                        ArtImage(.settingKeypointSize, fitting: 80)
+                    }
+                    Space(height: 14)
+                    presetRows
+                    Space(height: 12)
+                    customRow
+                    if divisor >= Self.tooHighDivisor {
+                        Space(height: 6)
+                        tooHighWarning
+                    }
+                }
             }
-            Space(height: 14)
-            presetRows
-            Space(height: 12)
-            customRow
-            if divisor >= Self.tooHighDivisor {
-                Space(height: 6)
-                tooHighWarning
-            }
+              .frame(height: 400)
             Space(height: 20)
             buttons
         }
