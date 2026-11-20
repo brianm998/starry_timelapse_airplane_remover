@@ -1,13 +1,19 @@
 # App icons
 
-`star.icns` / `star.ico` / `star.png` are the old-style (824/1024 margin) form of the macOS gui's icon, converted to each OS's native
-format for jpackage (via `nativeDistributions { macOS/windows/linux { iconFile.set(...) } }`
-in `build.gradle.kts`). They are generated, not hand-made: `python3 art/export.py` rebuilds them
-(and the gui's Icon Composer bundle `StarIcon.icon`, which jpackage cannot use) from `art/masters/BR-1.png` (128 px and up) and `BR-2.png`
-(16 to 64 px, drawn to read small). The body is 824/1024 of the canvas (Apple's grid), also in the
-`.ico`; `star.png` (Linux, no OS margin) is BR-1 at 512 px with the body at 94%. `.icns` and `.ico`
-are written in pure Python, so `python3 art/export.py --check` runs anywhere. Sizes: icns 16-1024,
-ico 16, 24, 32, 48, 64 (BR-2) and 128, 256 (BR-1).
+`star.icns` / `star.ico` / `star.png` are converted to each OS's native format for jpackage (via
+`nativeDistributions { macOS/windows/linux { iconFile.set(...) } }` in `build.gradle.kts`). They are generated, not
+hand-made: `python3 art/export.py` rebuilds them (and the gui's Icon Composer bundle `StarIcon.icon`).
+
+- `star.icns` (macOS below 26) is the layered art (`ICON-bg`, `ICON-mountains`, `ICON-star` in `art/masters/`,
+  `ICON-small` below 128 px) masked to the macOS rounded rectangle at 824/1024 on transparency. Sizes 16-1024.
+- `star.ico` / `star.png` are still from `BR-1.png` (128 px and up) and `BR-2.png` (16 to 64 px); the body is 824/1024 in
+  the `.ico`, 94% in `star.png` (Linux, no OS margin).
+- macOS 26 icon: jpackage cannot take a `.icon`, so the `fixBundledBinaries` task in `build.gradle.kts` runs
+  `xcrun actool` on `gui/star/StarIcon.icon` for every built `.app` (Assets.car into `Contents/Resources`) and sets
+  `CFBundleIconName` = StarIcon in its Info.plist; `CFBundleIconFile` keeps pointing at `star.icns`. Needs Xcode 26; on CI
+  a failure fails the build, locally it only warns.
+
+`.icns` and `.ico` are written in pure Python, so `python3 art/export.py --check` runs anywhere.
 
 # Folder choosers need no bundled native library
 

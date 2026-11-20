@@ -1,3 +1,4 @@
+import java.io.ByteArrayOutputStream
 import com.google.protobuf.gradle.id
 import org.gradle.api.file.DirectoryProperty
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
@@ -143,9 +144,10 @@ compose.desktop {
             // so StarCore.ToolPaths (sibling-of-executable) resolves them with no daemon code change.
             appResourcesRootDir.set(layout.projectDirectory.dir("app-resources"))
             includeAllModules = true // the daemon-driving GUI loads classes reflectively; ship the full JDK module set
-            // Same icon as the macOS gui's Assets.xcassets/AppIcon.appiconset, converted to each OS's
-            // native format (see packaging/README.md for how to regenerate). Without these, jpackage
-            // falls back to the default Java/coffee-cup icon in the packaged app.
+            // Same art as the macOS gui's gui/star/StarIcon.icon, converted to each OS's native format
+            // (see packaging/README.md for how to regenerate). Without these, jpackage falls back to the
+            // default Java/coffee-cup icon. star.icns is the pre-macOS-26 fallback; fixBundledBinaries also
+            // compiles StarIcon.icon with actool into the .app (Assets.car + CFBundleIconName) for macOS 26.
             macOS {
                 bundleID = "com.star.desktop"
                 packageVersion = macPackageVersion
@@ -443,6 +445,32 @@ tasks.register("fixBundledBinaries") {
         if (apps.isEmpty()) { logger.info("fixBundledBinaries: no .app under build/compose/binaries (not a macOS build)"); return@doLast }
         for (app in apps) {
             val resDir = File(app, "Contents/app/resources")
+            // The macOS 26 icon: actool compiles the Icon Composer bundle into Assets.car, which jpackage cannot
+            // do. Before any codesign, so the re-seal below covers it.
+            val iconBundle = rootProject.file("../gui/star/StarIcon.icon")
+            val onCi = !System.getenv("CI").isNullOrBlank()
+            try {
+                val res = File(app, "Contents/Resources")
+                val tmp = File.createTempFile("star-icon", ".plist")
+                try {
+                    val out = ByteArrayOutputStream()
+                    val r = exec {
+                        commandLine("xcrun", "actool", iconBundle.absolutePath, "--compile", res.absolutePath, "--platform", "macosx",
+                            "--minimum-deployment-target", "13.0", "--app-icon", "StarIcon", "--output-partial-info-plist", tmp.absolutePath)
+                        standardOutput = out; errorOutput = out; isIgnoreExitValue = true
+                    }
+                    if (r.exitValue != 0 || !File(res, "Assets.car").exists()) throw GradleException("actool failed (${r.exitValue}): $out")
+                } finally { tmp.delete() }
+                // Keep CFBundleIconFile (jpackage's star.icns) as the fallback below macOS 26.
+                val plist = File(app, "Contents/Info.plist").absolutePath
+                val pb = "/usr/libexec/PlistBuddy"
+                val set = exec { commandLine(pb, "-c", "Set :CFBundleIconName StarIcon", plist); isIgnoreExitValue = true }
+                if (set.exitValue != 0) exec { commandLine(pb, "-c", "Add :CFBundleIconName string StarIcon", plist) }
+                logger.lifecycle("fixBundledBinaries: compiled StarIcon.icon into ${app.name}")
+            } catch (e: Exception) {
+                if (onCi) throw GradleException("fixBundledBinaries: could not add the macOS 26 icon to ${app.name}: ${e.message}", e)
+                logger.warn("fixBundledBinaries: could not add the macOS 26 icon to ${app.name} (${e.message}); keeping star.icns only")
+            }
             val bins = listOf("stard", "ffmpeg", "ffprobe").map { File(resDir, it) }.filter { it.exists() }
             if (bins.isEmpty()) continue
             bins.forEach { it.setExecutable(true, false) }

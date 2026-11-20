@@ -7,8 +7,8 @@ Writes (all deterministic, so a second run changes nothing):
   gui/star/StarArt.swift
   star-desktop/src/main/kotlin/com/star/desktop/ui/components/StarArt.kt
 
-  gui/star/StarIcon.icon/{icon.json,Assets/sky.png}         (Icon Composer bundle: full-bleed BR-1 scene)
-  star-desktop/packaging/{star.icns,star.ico,star.png}      (BR-2 below 128 px, BR-1 from 128 px; star.png is BR-1 at 512)
+  gui/star/StarIcon.icon/{icon.json,Assets/sky.png}         (Icon Composer bundle: sky, mountains, star layers)
+  star-desktop/packaging/{star.icns,star.ico,star.png}      (icns: ICON layers composited in a rounded tile; ICON-small below 128 px; ico/png still BR-1/BR-2)
 
   python3 art/export.py            write everything
   python3 art/export.py --check    write nothing; exit 1 if any output would change
@@ -296,7 +296,7 @@ fun StarArt.fittedSize(side: Int?): Pair<Int, Int> {{
 
 
 PACKAGING = os.path.join(ROOT, "star-desktop", "packaging")
-ICON_SPLIT = 128   # below this the simplified BR-2 is used, from here up BR-1
+ICON_SPLIT = 128   # below this the simplified art is used (ICON-small; BR-2 for the ico), from here up the full art
 
 
 def icon_body(name):
@@ -321,16 +321,48 @@ def icon_png(body, size, fill=824 / 1024):
     return encode(canvas, "png")
 
 
+ICON_TILE_FILL = 824 / 1024
+ICON_TILE_RADIUS = 0.224   # classic macOS rounded rectangle, fraction of the tile width
+
+
+def icon_master(name):
+    return Image.open(os.path.join(ART, "masters", name + ".png")).convert("RGBA")
+
+
+def icon_scene():
+    """bg, mountains, star composited with normal alpha 'over' (the same stack as the .icon bundle)."""
+    im = icon_master("ICON-bg")
+    for layer in ("ICON-mountains", "ICON-star"):
+        im = Image.alpha_composite(im, icon_master(layer))
+    return im
+
+
+def mac_tile_png(size):
+    scene = icon_master("ICON-small") if size < ICON_SPLIT else icon_scene()
+    w = round(size * ICON_TILE_FILL)
+    # draw the mask at 4x and shrink, for a smooth edge
+    ss = 4
+    mask = Image.new("L", (w * ss, w * ss), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, w * ss - 1, w * ss - 1), radius=round(w * ss * ICON_TILE_RADIUS), fill=255)
+    mask = mask.resize((w, w), Image.LANCZOS)
+    tile = scene.resize((w, w), Image.LANCZOS)
+    tile.putalpha(mask)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.paste(tile, ((size - w) // 2, (size - w) // 2))
+    return encode(canvas, "png")
+
+
 def icon_files():
     bodies = {"BR-1": icon_body("BR-1"), "BR-2": icon_body("BR-2")}
     def png(size, fill=824 / 1024):
         return icon_png(bodies["BR-2" if size < ICON_SPLIT else "BR-1"], size, fill)
     files = {}
-    # icns: 'icns' + length, then (type, length, PNG) chunks
+    # icns: 'icns' + length, then (type, length, PNG) chunks. The new layered art in the classic macOS grid
+    # (rounded tile at 824/1024 on transparency) for macOS below 26.
     chunks = b""
     for typ, px in (("ic11", 32), ("ic12", 64), ("ic07", 128), ("ic13", 256), ("ic08", 256),
                     ("ic14", 512), ("ic09", 512), ("ic10", 1024)):
-        d = png(px)
+        d = mac_tile_png(px)
         chunks += typ.encode() + (8 + len(d)).to_bytes(4, "big") + d
     files[os.path.join(PACKAGING, "star.icns")] = b"icns" + (8 + len(chunks)).to_bytes(4, "big") + chunks
     # ico: ICONDIR + entries, PNG payloads
@@ -350,63 +382,20 @@ def icon_files():
 
 
 ICON_BUNDLE = os.path.join(ROOT, "gui", "star", "StarIcon.icon")
-# BR-1's finished tile: the scene inside the glowing border, in master pixels, and the border's inner corner radius.
-ICON_INNER = (110, 120, 908, 902)
-ICON_CORNER_R = 250
-ICON_SCALE = 0.94   # the art is drawn this fraction of the canvas, the margin reflected, so the star clears macOS's mask
-
-
-def push_pull(img, valid):
-    """Fill the pixels where valid is False from the valid ones: average down in 2x steps, then blend back up."""
-    img = img * valid[..., None]
-    w = valid.astype(np.float64)
-    levels = [(img, w)]
-    while min(levels[-1][1].shape) > 2:
-        i, m = levels[-1]
-        h2, w2 = m.shape[0] // 2, m.shape[1] // 2
-        i = i[:h2 * 2, :w2 * 2].reshape(h2, 2, w2, 2, 3).sum((1, 3))
-        m = m[:h2 * 2, :w2 * 2].reshape(h2, 2, w2, 2).sum((1, 3))
-        levels.append((i, m))
-    out = levels[-1][0] / np.maximum(levels[-1][1], 1e-9)[..., None]
-    for i, m in reversed(levels[:-1]):
-        ups = [np.asarray(Image.fromarray(out.astype(np.float32)[..., c]).resize(m.shape[::-1], Image.BILINEAR)) for c in range(3)]
-        up = np.stack(ups, -1)
-        own = i / np.maximum(m, 1e-9)[..., None]
-        wgt = np.minimum(m, 1.0)[..., None]
-        out = own * wgt + up * (1 - wgt)
-    return out
-
-
-def icon_layer():
-    """A full-bleed opaque 1024x1024 layer from BR-1: the scene inside the border, the corner gaps (where the
-    master has glow and transparency) filled smoothly from their neighbours, no border, glow or transparency.
-    macOS adds the shape and the edge highlights."""
-    im = Image.open(os.path.join(ART, "masters", "BR-1.png")).convert("RGBA")
-    a = np.asarray(im.crop(ICON_INNER)).astype(np.float64)[..., :3]
-    h, w = a.shape[:2]
-    r = ICON_CORNER_R
-    yy, xx = np.mgrid[0:h, 0:w].astype(np.float64)
-    d = np.hypot(xx - np.clip(xx, r, w - 1 - r), yy - np.clip(yy, r, h - 1 - r))
-    valid = d <= r
-    filled = push_pull(a, valid)
-    filled = np.where(valid[..., None], a, filled)
-    pil = Image.fromarray(np.clip(np.rint(filled), 0, 255).astype(np.uint8))
-    inner = round(1024 * ICON_SCALE)
-    pil = pil.resize((inner, inner), Image.LANCZOS)
-    pad = (1024 - inner) // 2
-    arr = np.pad(np.asarray(pil), ((pad, 1024 - inner - pad), (pad, 1024 - inner - pad), (0, 0)), mode="reflect")
-    return encode(Image.fromarray(arr).convert("RGBA"), "png")
+# Layers front to back: icon.json lists groups (and layers in a group) topmost first, as Icon Composer shows them.
+ICON_LAYERS = (("star", "ICON-star"), ("mountains", "ICON-mountains"), ("sky", "ICON-bg"))
 
 
 def icon_bundle_files():
     spec = {
-        "groups": [{"layers": [{"image-name": "sky.png", "name": "sky"}]}],
+        "groups": [{"layers": [{"image-name": n + ".png", "name": n}]} for n, _ in ICON_LAYERS],
         "supported-platforms": {"squares": ["macOS"]},
     }
-    return {
-        os.path.join(ICON_BUNDLE, "icon.json"): (json.dumps(spec, indent=2) + "\n").encode(),
-        os.path.join(ICON_BUNDLE, "Assets", "sky.png"): icon_layer(),
-    }
+    files = {os.path.join(ICON_BUNDLE, "icon.json"): (json.dumps(spec, indent=2) + "\n").encode()}
+    for n, master in ICON_LAYERS:
+        with open(os.path.join(ART, "masters", master + ".png"), "rb") as f:
+            files[os.path.join(ICON_BUNDLE, "Assets", n + ".png")] = f.read()
+    return files
 
 
 HERO_MAX_BYTES = 400 * 1024

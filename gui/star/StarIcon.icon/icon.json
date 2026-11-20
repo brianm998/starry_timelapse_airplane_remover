@@ -3,6 +3,22 @@
     {
       "layers": [
         {
+          "image-name": "star.png",
+          "name": "star"
+        }
+      ]
+    },
+    {
+      "layers": [
+        {
+          "image-name": "mountains.png",
+          "name": "mountains"
+        }
+      ]
+    },
+    {
+      "layers": [
+        {
           "image-name": "sky.png",
           "name": "sky"
         }
