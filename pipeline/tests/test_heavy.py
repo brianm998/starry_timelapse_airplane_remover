@@ -523,3 +523,49 @@ def test_requests_dropped_again_and_again_fail_the_run(monkeypatch: pytest.Monke
     result = heavy.run_job([sys.executable, "-c", f"open({str(ran)!r}, 'w')"], config=CFG)
     assert result.code == 1 and not ran.exists()
     assert len(mason_lines(fake_mason)) == heavy.REQUEUE_MAX + 1
+
+
+def test_a_signal_while_queued_ends_starpipe_without_a_new_request(monkeypatch: pytest.MonkeyPatch, fake_mason: Path,
+                                                                    tmp_path: Path) -> None:
+    import signal
+    import threading
+
+    from starpipe import masonq
+
+    monkeypatch.setattr(masonq, "_sleep", _no_sleep)
+    monkeypatch.setenv("FAKE_MASON_WAIT", "60")  # `mason run` sits in the queue until it is told to stop
+    sent = threading.Event()
+
+    def poke() -> None:  # signal once the fake `mason run` has logged its invocation
+        while not mason_lines(fake_mason):
+            time.sleep(0.01)
+        sent.set()
+        os.kill(os.getpid(), signal.SIGTERM)
+
+    threading.Thread(target=poke, daemon=True).start()
+    result = heavy.run_job([sys.executable, "-c", "pass"], config=CFG)
+    assert sent.is_set() and len(mason_lines(fake_mason)) == 1
+    assert result.code == 128 + signal.SIGTERM
+
+
+def test_a_gone_caller_stops_the_requeue(monkeypatch: pytest.MonkeyPatch, fake_mason: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from starpipe import masonq
+
+    monkeypatch.setattr(masonq, "_sleep", _no_sleep)
+    (fake_mason.parent / "drop").write_text("99")
+    parents = iter([4242, 1, 1, 1, 1, 1, 1])
+    monkeypatch.setattr(heavy.os, "getppid", lambda: next(parents))
+    result = heavy.run_job([sys.executable, "-c", "pass"], config=CFG)
+    assert result.code != 0 and len(mason_lines(fake_mason)) == 1
+    assert "the caller has gone; not queueing" in capsys.readouterr().err
+
+
+def test_a_mason_run_killed_by_a_signal_is_not_queued_again(monkeypatch: pytest.MonkeyPatch, fake_mason: Path) -> None:
+    from starpipe import masonq
+
+    monkeypatch.setattr(masonq, "_sleep", _no_sleep)
+    script = fake_mason.parent / "mason"
+    text = script.read_text().replace('    wait = float(', '    os.kill(os.getpid(), 9)\n    wait = float(', 1)
+    script.write_text(text)
+    result = heavy.run_job([sys.executable, "-c", "pass"], config=CFG)
+    assert result.code == 128 + 9 and len(mason_lines(fake_mason)) == 1
