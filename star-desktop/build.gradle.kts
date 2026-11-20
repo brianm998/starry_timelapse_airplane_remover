@@ -1,3 +1,4 @@
+import java.io.ByteArrayOutputStream
 import com.google.protobuf.gradle.id
 import org.gradle.api.file.DirectoryProperty
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
@@ -452,7 +453,7 @@ tasks.register("fixBundledBinaries") {
                 val res = File(app, "Contents/Resources")
                 val tmp = File.createTempFile("star-icon", ".plist")
                 try {
-                    val out = java.io.ByteArrayOutputStream()
+                    val out = ByteArrayOutputStream()
                     val r = exec {
                         commandLine("xcrun", "actool", iconBundle.absolutePath, "--compile", res.absolutePath, "--platform", "macosx",
                             "--minimum-deployment-target", "13.0", "--app-icon", "StarIcon", "--output-partial-info-plist", tmp.absolutePath)
