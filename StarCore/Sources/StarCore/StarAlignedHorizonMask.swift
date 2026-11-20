@@ -162,10 +162,12 @@ public actor StarAlignedHorizonMaskCache {
         guard let computed else { return }
         computes += 1
         entry = (key, computed)
-        Log.i("StarAlignedHorizonMaskCache: computed " +
-              "\(baseMask.width)×\(baseMask.height) mask over " +
-              "\(homographies.count) homographies " +
-              "(\(computes) computed so far, \(hits) hit(s) served)")
+        Log.i("""
+              StarAlignedHorizonMaskCache: computed \
+              \(baseMask.width)×\(baseMask.height) mask over \
+              \(homographies.count) homographies \
+              (\(computes) computed so far, \(hits) hit(s) served)
+              """)
     }
 
     /// Drop whatever is held.

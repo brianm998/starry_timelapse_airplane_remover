@@ -328,10 +328,12 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                   "gaps measured, all nominal")
         } else {
             for (gap, span) in anomalies.sorted(by: { $0.key < $1.key }) {
-                Log.i("static cadence check: the capture gap between frames " +
-                      "\(gap) and \(gap + 1) measures \(String(format: "%.2f", span)) " +
-                      "of the nominal interval — pairs spanning it get a warp " +
-                      "scaled to match")
+                Log.i("""
+                      static cadence check: the capture gap between frames \
+                      \(gap) and \(gap + 1) measures \(String(format: "%.2f", span)) \
+                      of the nominal interval — pairs spanning it get a warp \
+                      scaled to match
+                      """)
             }
         }
         return anomalies
@@ -626,10 +628,12 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
                             func px(_ v: Double?) -> String {
                                 v.map { String(format: "%.2fpx", $0) } ?? "unmeasurable"
                             }
-                            Log.i("frame \(badFrame.frameIndex) keeping its measured star " +
-                                  "homography: it agrees with its neighbours' own fits " +
-                                  "to \(px(existingScore)), where the substitute would " +
-                                  "be \(px(substituteScore))")
+                            Log.i("""
+                                  frame \(badFrame.frameIndex) keeping its measured star \
+                                  homography: it agrees with its neighbours' own fits \
+                                  to \(px(existingScore)), where the substitute would \
+                                  be \(px(substituteScore))
+                                  """)
                             gateKeeps += 1
                             continue
                         }
