@@ -320,8 +320,12 @@ jobs:
   #   APPLE_API_ISSUER_ID           — issuer UUID
   #   APPLE_TEAM_ID                 — G3L75S65V9
   macos-signed-release:
-    name: macOS signed release (macos-15)
-    runs-on: macos-15
+    name: macOS signed release (macos-26)
+    # macos-26, not macos-15: archiving compiles gui/star/StarIcon.icon (Icon Composer) in a second,
+    # "thinned" actool pass, and on a macOS 15 host Xcode 26.3's AssetCatalogAgent crashes there
+    # (IBPlatformToolFailureException, ARCHIVE FAILED; run 44859482432). The OpenCV and
+    # StarDecisionTrees caches below are keyed by path only, so they are still shared with macos-15.
+    runs-on: macos-26
     # Fires on release/* tag pushes, and on manual "Run workflow" button
     # clicks from the Actions UI (workflow_dispatch). The dispatch path is
     # how you test the signing flow without cutting a real release tag.
@@ -564,8 +568,10 @@ jobs:
   # fails naming every secret that is not set.
   # The build number is <run number>.<run attempt>, so every upload and every re-run of one rises (see appstore_release.sh).
   macos-testflight:
-    name: macOS App Store build -> TestFlight (macos-15)
-    runs-on: macos-15
+    name: macOS App Store build -> TestFlight (macos-26)
+    # macos-26 for the same reason as macos-signed-release: the archive's thinned actool pass over
+    # StarIcon.icon crashes Xcode 26.3's AssetCatalogAgent on a macOS 15 host.
+    runs-on: macos-26
     if: startsWith(github.ref, 'refs/tags/release/') || github.event_name == 'workflow_dispatch'
     needs: [ffmpeg-lgpl]
     steps:
