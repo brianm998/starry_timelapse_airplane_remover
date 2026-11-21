@@ -323,8 +323,8 @@ jobs:
     name: macOS signed release (macos-26)
     # macos-26, not macos-15: archiving compiles gui/star/StarIcon.icon (Icon Composer) in a second,
     # "thinned" actool pass, and on a macOS 15 host Xcode 26.3's AssetCatalogAgent crashes there
-    # (IBPlatformToolFailureException, ARCHIVE FAILED; run 44859482432). The OpenCV and
-    # StarDecisionTrees caches below are keyed by path only, so they are still shared with macos-15.
+    # (IBPlatformToolFailureException, ARCHIVE FAILED; run 44859482432). Its newer Xcode means the
+    # StarDecisionTrees cache below is keyed on the toolchain; the OpenCV cache is still shared with macos-15.
     runs-on: macos-26
     # Fires on release/* tag pushes, and on manual "Run workflow" button
     # clicks from the Actions UI (workflow_dispatch). The dispatch path is
@@ -347,7 +347,7 @@ jobs:
         shell: bash
         run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
 
-      # Share caches with the unsigned macos smoke job — same keys.
+      # OpenCV is plain C++ libraries, so this job shares the unsigned macos smoke job's key.
       - name: Cache OpenCV
         uses: actions/cache@v5
         with:
@@ -356,13 +356,20 @@ jobs:
             opencv/include
           key: opencv-release-macos15-${{ steps.opencv-key.outputs.key }}
 
+      # The StarDecisionTrees .swiftmodule only imports under the compiler that built it, and this macos-26 job's
+      # latest-stable Xcode is newer than the macos-15 jobs' (26.6 vs 26.3 on 2026-11-21: "compiled with an older version
+      # of the compiler"), so key it on the toolchain, as gherkin.yml does, instead of sharing dt-macos15.
+      - name: Toolchain id for the cache key
+        id: toolchain
+        run: echo "id=$(xcodebuild -version | tr -c 'A-Za-z0-9.\n' _ | tr '\n' - | sed 's/-$//')" >> "$GITHUB_OUTPUT"
+
       - name: Cache StarDecisionTrees
         uses: actions/cache@v5
         with:
           path: |
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
-          key: dt-macos15-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+          key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
 
       - name: Import Developer ID certificate into a temporary keychain
         # We create a throwaway keychain rather than touching the runner's
@@ -611,7 +618,7 @@ jobs:
         shell: bash
         run: echo "key=$(opencv/cache_key.sh)" >> "$GITHUB_OUTPUT"
 
-      # Same keys as the unsigned macos smoke job and macos-signed-release.
+      # Same OpenCV key as the unsigned macos smoke job and macos-signed-release.
       - name: Cache OpenCV
         uses: actions/cache@v5
         with:
@@ -620,13 +627,18 @@ jobs:
             opencv/include
           key: opencv-release-macos15-${{ steps.opencv-key.outputs.key }}
 
+      # Toolchain-keyed, as in macos-signed-release: the macos-15 jobs' StarDecisionTrees .swiftmodule doesn't import here.
+      - name: Toolchain id for the cache key
+        id: toolchain
+        run: echo "id=$(xcodebuild -version | tr -c 'A-Za-z0-9.\n' _ | tr '\n' - | sed 's/-$//')" >> "$GITHUB_OUTPUT"
+
       - name: Cache StarDecisionTrees
         uses: actions/cache@v5
         with:
           path: |
             StarDecisionTrees/lib/release/macos
             StarDecisionTrees/include/release/macos
-          key: dt-macos15-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
+          key: dt-macos-${{ steps.toolchain.outputs.id }}-${{ hashFiles('StarDecisionTrees/Package.swift', 'StarDecisionTrees/release.sh', 'StarDecisionTrees/makeList.pl', 'StarDecisionTrees/Sources/**/*.swift') }}
 
       - name: Import the App Store certificates into a temporary keychain
         # A throwaway keychain, as in macos-signed-release. xcodebuild signs the app with Apple Distribution and the
