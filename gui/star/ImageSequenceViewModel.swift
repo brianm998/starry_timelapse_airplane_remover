@@ -3584,7 +3584,7 @@ public final class ImageSequenceViewModel {
     /// Frames within this many of the current one (and the grid selection) hold their full outlier
     /// groups. At least 2, so the neighbours that a loaded frame's decision tree features read stay
     /// loaded: groups are released only outside radius + 1.
-    static let outlierWindowRadius = 3
+    nonisolated static let outlierWindowRadius = 3
 
     @ObservationIgnored private var outlierWindowTask: Task<Void, Never>?
 
