@@ -735,7 +735,9 @@ struct StarCli: AsyncParsableCommand {
                   ),
                   imageWidth: await configManager.config().imageWidth,
                   imageHeight: await configManager.config().imageHeight,
-                  imageBytesPerPixel: await configManager.config().imageBytesPerPixel
+                  imageBytesPerPixel: await configManager.config().imageBytesPerPixel,
+                  gpuMergeEnabled: GPUCapability.mergeWillUseGPU(
+                    requested: await configManager.config().useGPUForMerge)
                 )
 
                 if let _ = callbacks.updatable {

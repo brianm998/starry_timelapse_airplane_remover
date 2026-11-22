@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "After classifying all of the Outlier Groups for a frame, we now know which pixels are considered noise and which ones are ok to keep.\nWith this data, Star then creates a removal mask, similar to a layer mask in Photoshop or the GIMP.  This mask is used to remove any noisy pixels with data from the aligned neighbor frame.",
   "ui.info_detailed_final_title": "Final bad pixel removal",
   "ui.info_detailed_final_body": "At this final step, Star simply composites the frame being processed with the aligned neighbor frame, using the removal mask as a layer mask, to only overwrite a small number of pixels in the frame we are processing.",
-  "ui.info_detailed_closing": "After Star has finished processing your image sequence, you can then watch a video of the sequence at preview resolution.  This can be helpful to allow you to make any corrections.\n\nStar is still a work in progress."
+  "ui.info_detailed_closing": "After Star has finished processing your image sequence, you can then watch a video of the sequence at preview resolution.  This can be helpful to allow you to make any corrections.\n\nStar is still a work in progress.",
+  "warning.title.gpu_merge_turned_off": "GPU Merge Turned Off",
+  "warning.gpu_merge_turned_off.message": "The previous run stopped while merging on the GPU, so GPU merge has been turned off for this session.",
+  "warning.gpu_merge_turned_off.suggestion": "If this machine's GPU is not the cause, you can turn it back on in the processing settings."
 }

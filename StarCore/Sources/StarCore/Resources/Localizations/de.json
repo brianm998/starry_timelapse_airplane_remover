@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "Nachdem alle Ausreißergruppen eines Bildes klassifiziert sind, wissen wir, welche Pixel als Rauschen gelten und welche behalten werden können.\nMit diesen Daten erstellt Star eine Entfernungsmaske, ähnlich einer Ebenenmaske in Photoshop oder GIMP. Diese Maske dient dazu, verrauschte Pixel durch Daten aus dem ausgerichteten Nachbarbild zu ersetzen.",
   "ui.info_detailed_final_title": "Endgültige Entfernung fehlerhafter Pixel",
   "ui.info_detailed_final_body": "In diesem letzten Schritt kombiniert Star das gerade verarbeitete Bild einfach mit dem ausgerichteten Nachbarbild, wobei die Entfernungsmaske als Ebenenmaske dient, sodass nur wenige Pixel im verarbeiteten Bild überschrieben werden.",
-  "ui.info_detailed_closing": "Nachdem Star die Verarbeitung Ihrer Bildsequenz abgeschlossen hat, können Sie sich ein Video der Sequenz in Vorschauauflösung ansehen. Das kann hilfreich sein, um Korrekturen vorzunehmen.\n\nStar ist noch in Entwicklung."
+  "ui.info_detailed_closing": "Nachdem Star die Verarbeitung Ihrer Bildsequenz abgeschlossen hat, können Sie sich ein Video der Sequenz in Vorschauauflösung ansehen. Das kann hilfreich sein, um Korrekturen vorzunehmen.\n\nStar ist noch in Entwicklung.",
+  "warning.title.gpu_merge_turned_off": "GPU-Zusammenführung ausgeschaltet",
+  "warning.gpu_merge_turned_off.message": "Der vorherige Lauf wurde beim Zusammenführen auf der GPU gestoppt, daher wurde die Zusammenführung auf der GPU für diese Sitzung ausgeschaltet.",
+  "warning.gpu_merge_turned_off.suggestion": "Wenn die GPU dieses Rechners nicht die Ursache ist, können Sie sie in den Verarbeitungseinstellungen wieder einschalten."
 }

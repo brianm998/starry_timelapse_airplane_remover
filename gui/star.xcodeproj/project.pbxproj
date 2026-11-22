@@ -116,6 +116,7 @@
 		A81A9417F2E1605EBC7048FD /* VideoRenderWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71A9417F2E1605EBC7048FD /* VideoRenderWiringTests.swift */; };
 		A80C57942DA9A48C0DEBA606 /* ViewModeNameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70C57942DA9A48C0DEBA606 /* ViewModeNameTests.swift */; };
 		A83B1775147954B90421CD2A /* WarningAlertTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A73B1775147954B90421CD2A /* WarningAlertTests.swift */; };
+		DD54A0010000000000000001 /* GPUMergeTurnedOffTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD54A0020000000000000002 /* GPUMergeTurnedOffTests.swift */; };
 		A81B93C70CC875B319314336 /* WorkSleepHoldTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71B93C70CC875B319314336 /* WorkSleepHoldTests.swift */; };
 		A860AA0608EF35E5C9FBB258 /* WorkflowStripTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A760AA0608EF35E5C9FBB258 /* WorkflowStripTests.swift */; };
 		B8A0E100AAAA000000000000 /* InfoDetailedTabTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A0E100AAAA000000000000 /* InfoDetailedTabTests.swift */; };
@@ -312,6 +313,7 @@
 		A71A9417F2E1605EBC7048FD /* VideoRenderWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoRenderWiringTests.swift; sourceTree = "<group>"; };
 		A70C57942DA9A48C0DEBA606 /* ViewModeNameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewModeNameTests.swift; sourceTree = "<group>"; };
 		A73B1775147954B90421CD2A /* WarningAlertTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarningAlertTests.swift; sourceTree = "<group>"; };
+		DD54A0020000000000000002 /* GPUMergeTurnedOffTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GPUMergeTurnedOffTests.swift; sourceTree = "<group>"; };
 		A71B93C70CC875B319314336 /* WorkSleepHoldTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkSleepHoldTests.swift; sourceTree = "<group>"; };
 		A760AA0608EF35E5C9FBB258 /* WorkflowStripTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStripTests.swift; sourceTree = "<group>"; };
 		B7A0E100AAAA000000000000 /* InfoDetailedTabTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InfoDetailedTabTests.swift; sourceTree = "<group>"; };
@@ -602,6 +604,7 @@
 				A71A9417F2E1605EBC7048FD /* VideoRenderWiringTests.swift */,
 				A70C57942DA9A48C0DEBA606 /* ViewModeNameTests.swift */,
 				A73B1775147954B90421CD2A /* WarningAlertTests.swift */,
+				DD54A0020000000000000002 /* GPUMergeTurnedOffTests.swift */,
 				A71B93C70CC875B319314336 /* WorkSleepHoldTests.swift */,
 				A760AA0608EF35E5C9FBB258 /* WorkflowStripTests.swift */,
 				B7A0E100AAAA000000000000 /* InfoDetailedTabTests.swift */,
@@ -938,6 +941,7 @@
 				A81A9417F2E1605EBC7048FD /* VideoRenderWiringTests.swift in Sources */,
 				A80C57942DA9A48C0DEBA606 /* ViewModeNameTests.swift in Sources */,
 				A83B1775147954B90421CD2A /* WarningAlertTests.swift in Sources */,
+				DD54A0010000000000000001 /* GPUMergeTurnedOffTests.swift in Sources */,
 				A81B93C70CC875B319314336 /* WorkSleepHoldTests.swift in Sources */,
 				A860AA0608EF35E5C9FBB258 /* WorkflowStripTests.swift in Sources */,
 				B8A0E100AAAA000000000000 /* InfoDetailedTabTests.swift in Sources */,

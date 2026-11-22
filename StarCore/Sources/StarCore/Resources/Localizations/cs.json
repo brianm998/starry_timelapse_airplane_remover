@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "Po klasifikaci všech odlehlých skupin snímku už víme, které pixely se považují za šum a které lze ponechat.\nZ těchto dat Star vytvoří masku odstranění, podobnou masce vrstvy ve Photoshopu nebo GIMPu. Tato maska slouží k nahrazení zašuměných pixelů daty ze zarovnaného sousedního snímku.",
   "ui.info_detailed_final_title": "Konečné odstranění vadných pixelů",
   "ui.info_detailed_final_body": "V tomto posledním kroku Star jednoduše složí zpracovávaný snímek se zarovnaným sousedním snímkem, přičemž maska odstranění slouží jako maska vrstvy, takže se ve zpracovávaném snímku přepíše jen malý počet pixelů.",
-  "ui.info_detailed_closing": "Až Star dokončí zpracování vaší sekvence snímků, můžete si sekvenci přehrát jako video v náhledovém rozlišení. To vám může pomoci provést případné opravy.\n\nStar je stále rozpracovaný."
+  "ui.info_detailed_closing": "Až Star dokončí zpracování vaší sekvence snímků, můžete si sekvenci přehrát jako video v náhledovém rozlišení. To vám může pomoci provést případné opravy.\n\nStar je stále rozpracovaný.",
+  "warning.title.gpu_merge_turned_off": "Slučování na GPU vypnuto",
+  "warning.gpu_merge_turned_off.message": "Předchozí běh se zastavil během slučování na GPU, proto bylo slučování na GPU pro tuto relaci vypnuto.",
+  "warning.gpu_merge_turned_off.suggestion": "Pokud příčinou není GPU tohoto počítače, můžete je znovu zapnout v nastavení zpracování."
 }

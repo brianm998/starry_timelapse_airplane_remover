@@ -69,6 +69,12 @@ public enum GPUCapability: Sendable {
         requested && !mergeForcedOff(environment: environment)
     }
 
+    /// Whether a run asking for GPU merge (`Config.useGPUForMerge`) will really merge on the
+    /// GPU: asked for, not forced off by the environment, and a GPU is present.
+    public static func mergeWillUseGPU(requested: Bool) -> Bool {
+        effectiveUseGPU(requested) && isAvailable()
+    }
+
     /// The Metal device name, e.g. "Radeon Pro Vega 64" or "Apple M2 Max", or nil
     /// when `isAvailable()` is false. For display only — nothing here should be
     /// parsed to make a decision; use `isAvailable()` for that.
