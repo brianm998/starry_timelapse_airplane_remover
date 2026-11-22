@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Gdy Star skończy przetwarzać twoją sekwencję obrazów, możesz obejrzeć film z tej sekwencji w rozdzielczości podglądu. Może to pomóc w wprowadzeniu poprawek.\n\nStar wciąż jest w trakcie rozwoju.",
   "warning.title.gpu_merge_turned_off": "Scalanie na GPU wyłączone",
   "warning.gpu_merge_turned_off.message": "Poprzedni przebieg zatrzymał się podczas scalania na GPU, dlatego scalanie na GPU zostało wyłączone w tej sesji.",
-  "warning.gpu_merge_turned_off.suggestion": "Jeśli przyczyną nie jest GPU tego komputera, możesz je ponownie włączyć w ustawieniach przetwarzania."
+  "warning.gpu_merge_turned_off.suggestion": "Jeśli przyczyną nie jest GPU tego komputera, możesz je ponownie włączyć w ustawieniach przetwarzania.",
+  "ui.output_jpeg_quality": "Jakość wyjściowego JPEG:",
+  "ui.output_quality_same_as_input": "Taka jak na wejściu ({0}%)",
+  "setting_help.output_jpeg_quality": "Jakość, z jaką zapisywane są wyjściowe klatki JPEG. Zaczyna od jakości klatek wejściowych, więc wynik jest mniej więcej tak samo ostry i tak samo duży jak to, co weszło. Obniż ją, aby uzyskać mniejsze pliki; podnieś, aby zachować więcej szczegółów, choć przekroczenie jakości wejścia nie przywróci tego, co wejście już utraciło. Zeruj przywraca jakość wejścia. Zmiana zapisuje klatki wyjściowe od nowa i zachowuje wyrównanie. Opcja jest dostępna tylko wtedy, gdy klatki to pliki JPEG."
 }

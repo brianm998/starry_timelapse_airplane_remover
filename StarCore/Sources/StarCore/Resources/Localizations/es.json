@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Cuando Star haya terminado de procesar tu secuencia de imágenes, podrás ver un vídeo de la secuencia en resolución de vista previa. Esto puede ayudarte a hacer correcciones.\n\nStar sigue siendo un trabajo en curso.",
   "warning.title.gpu_merge_turned_off": "Fusión en GPU desactivada",
   "warning.gpu_merge_turned_off.message": "La ejecución anterior se detuvo durante la fusión en la GPU, así que la fusión en GPU se ha desactivado para esta sesión.",
-  "warning.gpu_merge_turned_off.suggestion": "Si la GPU de este equipo no es la causa, puedes volver a activarla en los ajustes de procesamiento."
+  "warning.gpu_merge_turned_off.suggestion": "Si la GPU de este equipo no es la causa, puedes volver a activarla en los ajustes de procesamiento.",
+  "ui.output_jpeg_quality": "Calidad del JPEG de salida:",
+  "ui.output_quality_same_as_input": "Igual que la entrada ({0}%)",
+  "setting_help.output_jpeg_quality": "La calidad con la que se escriben los fotogramas JPEG de salida. Empieza en la calidad de los fotogramas de entrada, así que la salida queda más o menos igual de nítida y de grande que lo que entró. Bájala para obtener archivos más pequeños; súbela para conservar más detalle, aunque superar la calidad de la entrada no recupera lo que la entrada ya perdió. Restablecer la devuelve a la calidad de la entrada. Cambiarla vuelve a escribir los fotogramas de salida y conserva la alineación. Solo se ofrece cuando los fotogramas son JPEG."
 }

@@ -451,4 +451,22 @@ final class ResourceProfileFieldTests: XCTestCase {
         c.resourceProfile = .custom
         XCTAssertEqual(Mapping.protoConfig(c).resourceProfile, "custom")
     }
+
+    func testOutputJPEGQualityMapsBothWays() {
+        var c = Config()
+        XCTAssertEqual(Mapping.protoConfig(c).outputJpegQuality, 0, "unset is sent as 0")
+        c.outputJPEGQuality = 60
+        let proto = Mapping.protoConfig(c)
+        XCTAssertEqual(proto.outputJpegQuality, 60)
+        var back = Config()
+        Mapping.applyExpertConfig(&back, from: proto)
+        XCTAssertEqual(back.outputJPEGQuality, 60)
+        // 0 clears the override; an absent field leaves it alone
+        var clear = Star_V1_Config(); clear.outputJpegQuality = 0
+        Mapping.applyExpertConfig(&back, from: clear)
+        XCTAssertNil(back.outputJPEGQuality)
+        back.outputJPEGQuality = 42
+        Mapping.applyExpertConfig(&back, from: Star_V1_Config())
+        XCTAssertEqual(back.outputJPEGQuality, 42)
+    }
 }
