@@ -2335,6 +2335,11 @@ public final class ImageSequenceViewModel {
                 self.frames[frameIndex].horizonLinesChanged()
             }
         }
+        accessor.imageDeletedClosure = { [weak self] frameIndex, type, size in
+            Task { @MainActor in
+                self?.imageDeleted(frameIndex: frameIndex, type: type, size: size)
+            }
+        }
         // the frames' worker tasks take it, so it is not left mutable
         let imageAccessor = accessor
 
@@ -2752,6 +2757,30 @@ public final class ImageSequenceViewModel {
     /// Kept up to date as frames report changes, so drawing the picker does not walk every frame (and
     /// stat a file per frame for the horizon mode) on every redraw.
     var availableModes: Set<FrameViewMode> = []
+
+    /// A frame's image file was deleted (`ImageAccessor.imageDeletedClosure`): stop offering
+    /// that type for the frame, and fall back to the original if the view mode lost its images.
+    func imageDeleted(frameIndex: Int, type: FrameViewMode, size: ImageDisplaySize) {
+        guard frameIndex >= 0, frameIndex < frames.count else { return }
+        let frameView = frames[frameIndex]
+        if let path = frameView.frame?.imageAccessor.nameForImage(
+             frameIndex: frameIndex, ofType: type, atSize: size)
+        {
+            FrameImageLoader.shared.forget(path: path)
+        }
+        guard size == .original else { return }
+        frameView.existingImages.remove(type)
+        if currentIndex >= 0, currentIndex < frames.count {
+            let current = frames[currentIndex]
+            let mode = Self.viewMode(frameViewMode, whenFrameHas: { current.hasImage(type: $0) })
+            if mode != frameViewMode { frameViewMode = mode }
+        }
+    }
+
+    /// `mode` if the frame still has images of it, else `.original` (as clearing processing does).
+    static func viewMode(_ mode: FrameViewMode, whenFrameHas has: (FrameViewMode) -> Bool) -> FrameViewMode {
+        mode == .original || has(mode) ? mode : .original
+    }
 
     func recomputeAvailableModes() {
         var modes = Set<FrameViewMode>()
