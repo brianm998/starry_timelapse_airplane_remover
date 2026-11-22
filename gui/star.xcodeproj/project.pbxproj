@@ -104,6 +104,7 @@
 		A84ACFE7031B0B08736CDD9D /* SettingsWiringTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A74ACFE7031B0B08736CDD9D /* SettingsWiringTests.swift */; };
 		A879810EDD6FB781AC2D2E83 /* SharedConstantsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A779810EDD6FB781AC2D2E83 /* SharedConstantsTests.swift */; };
 		A82A70E9DB9E600F0E68DEA4 /* StarDialogStyleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72A70E9DB9E600F0E68DEA4 /* StarDialogStyleTests.swift */; };
+		D3A1C0DE0003000300039A01 /* PostProcessingRenderPromptLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A1C0DE0003000300039A02 /* PostProcessingRenderPromptLayoutTests.swift */; };
 		A8EA8902389BFB2266498A98 /* StartScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7EA8902389BFB2266498A98 /* StartScreenTests.swift */; };
 		A88E9A79BBFC6737C4295930 /* StartupHorizonResumeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A78E9A79BBFC6737C4295930 /* StartupHorizonResumeTests.swift */; };
 		A83605BF788FC1B9B270EEA7 /* SuggestedHorizonCountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A73605BF788FC1B9B270EEA7 /* SuggestedHorizonCountTests.swift */; };
@@ -299,6 +300,7 @@
 		A74ACFE7031B0B08736CDD9D /* SettingsWiringTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWiringTests.swift; sourceTree = "<group>"; };
 		A779810EDD6FB781AC2D2E83 /* SharedConstantsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedConstantsTests.swift; sourceTree = "<group>"; };
 		A72A70E9DB9E600F0E68DEA4 /* StarDialogStyleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarDialogStyleTests.swift; sourceTree = "<group>"; };
+		D3A1C0DE0003000300039A02 /* PostProcessingRenderPromptLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostProcessingRenderPromptLayoutTests.swift; sourceTree = "<group>"; };
 		A7EA8902389BFB2266498A98 /* StartScreenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartScreenTests.swift; sourceTree = "<group>"; };
 		A78E9A79BBFC6737C4295930 /* StartupHorizonResumeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartupHorizonResumeTests.swift; sourceTree = "<group>"; };
 		A73605BF788FC1B9B270EEA7 /* SuggestedHorizonCountTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestedHorizonCountTests.swift; sourceTree = "<group>"; };
@@ -588,6 +590,7 @@
 				A74ACFE7031B0B08736CDD9D /* SettingsWiringTests.swift */,
 				A779810EDD6FB781AC2D2E83 /* SharedConstantsTests.swift */,
 				A72A70E9DB9E600F0E68DEA4 /* StarDialogStyleTests.swift */,
+				D3A1C0DE0003000300039A02 /* PostProcessingRenderPromptLayoutTests.swift */,
 				A7EA8902389BFB2266498A98 /* StartScreenTests.swift */,
 				A78E9A79BBFC6737C4295930 /* StartupHorizonResumeTests.swift */,
 				A73605BF788FC1B9B270EEA7 /* SuggestedHorizonCountTests.swift */,
@@ -923,6 +926,7 @@
 				A84ACFE7031B0B08736CDD9D /* SettingsWiringTests.swift in Sources */,
 				A879810EDD6FB781AC2D2E83 /* SharedConstantsTests.swift in Sources */,
 				A82A70E9DB9E600F0E68DEA4 /* StarDialogStyleTests.swift in Sources */,
+				D3A1C0DE0003000300039A01 /* PostProcessingRenderPromptLayoutTests.swift in Sources */,
 				A8EA8902389BFB2266498A98 /* StartScreenTests.swift in Sources */,
 				A88E9A79BBFC6737C4295930 /* StartupHorizonResumeTests.swift in Sources */,
 				A83605BF788FC1B9B270EEA7 /* SuggestedHorizonCountTests.swift in Sources */,

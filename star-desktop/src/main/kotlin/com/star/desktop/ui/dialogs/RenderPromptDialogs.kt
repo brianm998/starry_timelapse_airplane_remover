@@ -114,24 +114,30 @@ fun PreRenderOptionsDialog(app: AppViewModel) {
  * most 240 x 160 dp, aspect fit; the row is left out unless both pictures exist.
  */
 @Composable
-private fun BeforeAndAfter(app: AppViewModel) {
+private fun loadBeforeAndAfter(app: AppViewModel): Pair<androidx.compose.ui.graphics.ImageBitmap, androidx.compose.ui.graphics.ImageBitmap>? {
     val index = app.currentFrameIndex
     val pictures by produceState<Pair<androidx.compose.ui.graphics.ImageBitmap, androidx.compose.ui.graphics.ImageBitmap>?>(null, index) {
         val before = app.framePicture(index, com.star.proto.FrameViewMode.VIEW_ORIGINAL)
         val after = app.framePicture(index, com.star.proto.FrameViewMode.VIEW_PROCESSED)
         value = if (before != null && after != null) before to after else null
     }
-    val p = pictures ?: return
+    return pictures
+}
+
+/** Lays out a given before / after pair (fill = false: a filling weight would stretch a picture past its 240 dp cap into any spare width): each picture at most 240 x 160 dp, shrinking (weight) in a narrow card. */
+@Composable
+internal fun BeforeAndAfterPictures(before: androidx.compose.ui.graphics.ImageBitmap, after: androidx.compose.ui.graphics.ImageBitmap) {
+    val p = before to after
     @Composable
-    fun picture(bitmap: androidx.compose.ui.graphics.ImageBitmap, modifier: Modifier) =
+    fun picture(bitmap: androidx.compose.ui.graphics.ImageBitmap, modifier: Modifier, tag: String) =
         androidx.compose.foundation.Image(
             bitmap = bitmap,
             contentDescription = null,
-            modifier = modifier.widthIn(max = 240.dp).heightIn(max = 160.dp),
+            modifier = modifier.widthIn(max = 240.dp).heightIn(max = 160.dp).testTag(tag),
             contentScale = androidx.compose.ui.layout.ContentScale.Fit,
         )
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-        picture(p.first, Modifier.weight(1f))
+        picture(p.first, Modifier.weight(1f, fill = false), "prompt.post.before")
         val arrowColor = StarColors.textSecondary
         androidx.compose.foundation.Canvas(Modifier.size(16.dp)) {
             val y = size.height / 2
@@ -140,33 +146,53 @@ private fun BeforeAndAfter(app: AppViewModel) {
             drawLine(arrowColor, androidx.compose.ui.geometry.Offset(size.width, y), androidx.compose.ui.geometry.Offset(size.width * 0.6f, y - size.height * 0.3f), stroke)
             drawLine(arrowColor, androidx.compose.ui.geometry.Offset(size.width, y), androidx.compose.ui.geometry.Offset(size.width * 0.6f, y + size.height * 0.3f), stroke)
         }
-        picture(p.second, Modifier.weight(1f))
+        picture(p.second, Modifier.weight(1f, fill = false), "prompt.post.after")
     }
 }
+
+/** 24 + 116 (art) + 16 + 240 + 8 + 16 (arrow) + 8 + 240 + 24 = 692, rounded up: room for both pictures at 240 dp. */
+internal val POST_PROMPT_MAX_WIDTH = 700.dp
 
 /** Post-processing prompt (macOS `PostProcessingRenderPromptView`): render now / preview / cancel. Return is "Yes". */
 @Composable
 fun PostProcessingRenderPrompt(app: AppViewModel) {
-    PromptCard(onScrimClick = app::dismissPostRenderPrompt, onDefaultAction = app::confirmRenderAfterProcessing) {
+    PostProcessingPromptCard(
+        pictures = loadBeforeAndAfter(app),
+        onDismiss = app::dismissPostRenderPrompt,
+        onPreview = app::previewFinalFrames,
+        onYes = app::confirmRenderAfterProcessing,
+    )
+}
+
+/** The dialog itself, free of [AppViewModel] so a test can host it with a given picture pair. */
+@Composable
+internal fun PostProcessingPromptCard(
+    pictures: Pair<androidx.compose.ui.graphics.ImageBitmap, androidx.compose.ui.graphics.ImageBitmap>?,
+    onDismiss: () -> Unit,
+    onPreview: () -> Unit,
+    onYes: () -> Unit,
+) {
+    PromptCard(onScrimClick = onDismiss, onDefaultAction = onYes, maxWidth = POST_PROMPT_MAX_WIDTH) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             ArtImage(StarArt.ART_DONE)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(localized("ui.processing_complete"), color = StarColors.textPrimary, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
-                BeforeAndAfter(app)
+                if (pictures != null) BeforeAndAfterPictures(pictures.first, pictures.second)
                 Text(localized("ui.render_video_now"), color = StarColors.textSecondary, fontSize = 15.sp)
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedButton(onClick = app::dismissPostRenderPrompt, modifier = Modifier.testTag("prompt.post.cancel")) { Text(localized("ui.cancel")) }
+            OutlinedButton(onClick = onDismiss, modifier = Modifier.testTag("prompt.post.cancel")) { Text(localized("ui.cancel")) }
             Box(Modifier.weight(1f))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 HoverTip(localized("ui.play_the_final_processed_frames_from_the")) {
-                    OutlinedButton(onClick = app::previewFinalFrames) { Text(localized("ui.preview_first")) }
+                    OutlinedButton(onClick = onPreview, modifier = Modifier.testTag("prompt.post.preview")) { Text(localized("ui.preview_first")) }
                 }
                 HoverTip(localized("ui.render_now_using_the_current_settings")) {
                     Button(
-                        onClick = app::confirmRenderAfterProcessing,
+                        onClick = onYes,
                         colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent),
+                        modifier = Modifier.testTag("prompt.post.yes"),
                     ) { Text(localized("ui.yes")) }
                 }
             }
@@ -203,6 +229,7 @@ internal fun PromptCard(
     onScrimClick: (() -> Unit)?,
     onDefaultAction: () -> Unit,
     onEscape: (() -> Unit)? = null,
+    maxWidth: androidx.compose.ui.unit.Dp = 520.dp,
     content: @Composable () -> Unit,
 ) {
     Box(
@@ -215,7 +242,8 @@ internal fun PromptCard(
     ) {
         Column(
             Modifier
-                .widthIn(min = 380.dp, max = 520.dp)
+                .widthIn(min = 380.dp, max = maxWidth)
+                .testTag("prompt.card")
                 .clip(StarShapes.card)
                 .background(StarColors.prefsCard)
                 .clickable(enabled = false) {}
