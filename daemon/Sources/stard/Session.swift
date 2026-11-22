@@ -878,6 +878,8 @@ actor Session {
         }
         await flushSaves()
         await configManager.flush()
+        // Release the homography.db connection and its three descriptors.
+        await configManager.homographyDatabase.close()
         // This sequence's cached reference statistics must not outlive it (another session may
         // open a sequence whose frames share these indices).
         await ReferenceHorizonStatsRegistry.shared.removeAll()

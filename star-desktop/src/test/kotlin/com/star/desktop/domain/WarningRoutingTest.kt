@@ -65,7 +65,7 @@ class WarningRoutingTest {
     /** An engine that predates the flag still gets the three the Mac app lists. */
     @Test fun anEngineWithoutTheFlagIsAskedAboutTheKnownKinds() {
         for (kind in listOf("memoryPressure", "lowSystemMemory", "footprintOverBudget")) assertTrue(WarningRouting.passes(warning(kind)), kind)
-        for (kind in listOf("outputWriteFailed", "lowDiskSpace", "previousRunDied", "memoryGatingDisabled")) assertFalse(WarningRouting.passes(warning(kind)), kind)
+        for (kind in listOf("outputWriteFailed", "lowDiskSpace", "previousRunDied", "gpuMergeTurnedOff", "memoryGatingDisabled")) assertFalse(WarningRouting.passes(warning(kind)), kind)
     }
 
     @Test fun theTimerComesTheBannerDownOnlyIfItIsStillThatBanner() {
