@@ -133,6 +133,47 @@ final class ArtifactInvalidationTests: FrameHarnessTestCase {
         XCTAssertEqual(left[.mergedHorizon], 3)
     }
 
+    /// A record from before the intermediates were lossless TIFF has no
+    /// `intermediateFormatVersion`.  That reads as a change in every stage that owns them, so a
+    /// sequence with JPEG caches is rebuilt once rather than mixing old and new files.
+    func testAnOlderIntermediateFormatRebuildsTheSequenceOnce() async throws {
+        let harness = try await makeHarness()
+        var older = harness.config
+        older.cleanMethod = .selective
+        await harness.updateConfig { $0.cleanMethod = .selective }
+        try await plantEveryArtifact(in: harness)
+
+        // the record an older star wrote: the same inputs without the format key
+        var record = ArtifactInputs.current(from: older)
+        var stages = record.stages
+        for (stage, var inputs) in stages {
+            inputs.removeValue(forKey: "intermediateFormatVersion")
+            stages[stage] = inputs
+        }
+        record = ArtifactInputs(version: record.version, stages: stages)
+        XCTAssertNotEqual(record, ArtifactInputs.current(from: older))
+        try record.save(toTempOutputPath: older.tempOutputPath)
+
+        let (range, byIndex) = wholeSequence(harness)
+        let now = await harness.configManager.config()
+        await frameGraphBuilder.invalidateStaleArtifacts(
+          frames: harness.frames, range: range, framesByIndex: byIndex, config: now)
+
+        let left = present(in: harness)
+        XCTAssertNil(left[.horizon])
+        XCTAssertNil(left[.mergedHorizon])
+        XCTAssertNil(left[.alignment])
+        XCTAssertNil(left[.outliers])
+        XCTAssertNil(left[.output])
+
+        // rebuilt once: the record is now current, and the next run deletes nothing
+        try await plantEveryArtifact(in: harness)
+        await frameGraphBuilder.invalidateStaleArtifacts(
+          frames: harness.frames, range: range, framesByIndex: byIndex, config: now)
+        XCTAssertEqual(present(in: harness)[.alignment], 3)
+        XCTAssertEqual(present(in: harness)[.outliers], 3)
+    }
+
     /// Read while outliers are classified, after the frames are aligned.
     func testAnOutlierSettingRedoesTheOutliersAndTheOutputOnly() async throws {
         let harness = try await makeHarness()
