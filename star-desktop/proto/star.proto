@@ -210,6 +210,8 @@ message SessionInfo {
   string    config_json_path      = 9;
   // How far extracting the video's frames has got, for a session whose frames are still arriving; absent (or complete) otherwise.
   FrameExtraction extraction      = 10;
+  // The JPEG quality (1 to 100) of the sequence's frames, read the way StarCore does (JPEGQuality.ofSequence); 0 = not a JPEG sequence.
+  int32     source_jpeg_quality   = 11;
 }
 
 message FrameRange { int32 start = 1; int32 end = 2; }   // [start, end)
@@ -422,6 +424,9 @@ message Config {
   // the memory budget and the pipeline depth) start as the limits of the profile being left (macOS `Config.makeCustom`), so opening Custom changes
   // nothing until a limit is edited. Without it the request's own limits are taken as sent, which is what a settings sheet that edits them wants.
   optional bool   start_custom_from_profile                            = 70;
+  // Config.outputJPEGQuality: the quality (1 to 100) the output JPEG frames are written at. 0 = same as the input's (nil in StarCore); always
+  // sent. A present value is applied, 0 clearing the override. SessionInfo.source_jpeg_quality is the input's, where the slider starts.
+  optional int32  output_jpeg_quality                                  = 71;
 }
 
 enum CleanMethod {

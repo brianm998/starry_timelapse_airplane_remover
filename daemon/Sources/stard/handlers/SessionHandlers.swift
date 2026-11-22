@@ -21,7 +21,8 @@ enum SessionHandlers {
             let config = await session.configManager.config()
             let imageInfo = await session.imageInfo
             let frameCount = await session.frameCount
-            let info = Mapping.sessionInfo(session: session, config: config, imageInfo: imageInfo, frameCount: frameCount)
+            let info = Mapping.sessionInfo(session: session, config: config, imageInfo: imageInfo, frameCount: frameCount,
+                                           sourceJPEGQuality: await session.sourceJPEGQuality)
             try await transport.respond(id: id, payload: info.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
@@ -43,7 +44,8 @@ enum SessionHandlers {
             let config = await session.configManager.config()
             let imageInfo = await session.imageInfo
             let frameCount = await session.frameCount
-            let info = Mapping.sessionInfo(session: session, config: config, imageInfo: imageInfo, frameCount: frameCount)
+            let info = Mapping.sessionInfo(session: session, config: config, imageInfo: imageInfo, frameCount: frameCount,
+                                           sourceJPEGQuality: await session.sourceJPEGQuality)
             try await transport.respond(id: id, payload: info.serializedData())
         } catch {
             await transport.sendError(id: id, message: "\(error)")
@@ -159,7 +161,8 @@ enum SessionHandlers {
             let imageInfo  = await session.imageInfo
             let frameCount = await session.frameCount
             let info = Mapping.sessionInfo(session: session, config: config, imageInfo: imageInfo,
-                                           frameCount: frameCount, videoInfo: await session.videoInfo)
+                                           frameCount: frameCount, sourceJPEGQuality: await session.sourceJPEGQuality,
+                                           videoInfo: await session.videoInfo)
             var done = Star_V1_OpenProgress()
             done.kind = .done(info)
             if let data = try? done.serializedData() {
@@ -191,7 +194,8 @@ enum SessionHandlers {
                 let config = await session.configManager.config()
                 let imageInfo = await session.imageInfo
                 let frameCount = await session.frameCount
-                resp.sessions.append(Mapping.sessionInfo(session: session, config: config, imageInfo: imageInfo, frameCount: frameCount))
+                resp.sessions.append(Mapping.sessionInfo(session: session, config: config, imageInfo: imageInfo, frameCount: frameCount,
+                                           sourceJPEGQuality: await session.sourceJPEGQuality))
             }
             try await transport.respond(id: id, payload: resp.serializedData())
         } catch {

@@ -67,12 +67,35 @@ final class FormatMismatchLog: @unchecked Sendable {
     func contains(_ frameIndex: Int) -> Bool { lock.lock(); defer { lock.unlock() }; return frames.contains(frameIndex) }
 }
 
+/// The user's output JPEG quality (`Config.outputJPEGQuality`) as the writers see it: one box shared
+/// by every copy of an `ImageAccessor`, so changing it takes effect without rebuilding the frames.
+public final class OutputJPEGQualityOverride: @unchecked Sendable {
+    private let lock = NSLock()
+    private var quality: Int?
+    public init(_ quality: Int?) { self.quality = quality }
+    /// nil follows the input's quality.
+    public var value: Int? {
+        get { lock.lock(); defer { lock.unlock() }; return quality }
+        set { lock.lock(); defer { lock.unlock() }; quality = newValue }
+    }
+}
+
 // read and write access to different image types for a given frame
 public struct ImageAccessor: Sendable {
     let config: Config
     let formatMismatches = FormatMismatchLog()
-    /// The quality output JPEG frames are written at: the sequence's own (import setting or estimate), else 95.
-    let outputJPEGQuality: Int
+    /// The quality the input frames have: the sequence's own (import setting or estimate), else 95.
+    let inputJPEGQuality: Int
+    /// The quality output JPEGs are written at: the user's override (`Config.outputJPEGQuality`) else the input's.
+    /// The override is read from `outputQualityOverride`, which every copy of this accessor (the frames take
+    /// copies) shares, so a change made while a sequence is open reaches frames that have not yet written.
+    var outputJPEGQuality: Int {
+        min(max(outputQualityOverride.value ?? inputJPEGQuality, 1), 100)
+    }
+    /// Starts as `config.outputJPEGQuality`; a client sets it when the user moves the slider.
+    public let outputQualityOverride: OutputJPEGQualityOverride
+    /// The quality the input frames have, which an unset override follows.
+    public var sourceJPEGQuality: Int { inputJPEGQuality }
 
     /// True once a read of this frame's original found it did not match the sequence's format.
     func originalMismatchesSequence(frameIndex: Int) -> Bool {
@@ -121,16 +144,17 @@ public struct ImageAccessor: Sendable {
     ) {
         // the dirname (not full path) of where the main output files will sit
         self.config = config
+        self.outputQualityOverride = OutputJPEGQualityOverride(config.outputJPEGQuality)
         self.frameIndexToBaseNameMap = frameIndexToBaseNameMap
         self.imageSequence = imageSequence
         self.imageSavedClosure = imageSavedClosure
         let firstFrame = imageSequence.filenames.first
         let folder = firstFrame.map { ($0 as NSString).deletingLastPathComponent }
         if let learnt = JPEGQuality.ofSequence(folder: folder, firstFramePath: firstFrame) {
-            self.outputJPEGQuality = learnt
+            self.inputJPEGQuality = learnt
             Log.i("output JPEG quality \(learnt), taken from the input frames")
         } else {
-            self.outputJPEGQuality = JPEGQuality.fallback
+            self.inputJPEGQuality = JPEGQuality.fallback
         }
         mkdirs()                // XXX called more than needed
     }

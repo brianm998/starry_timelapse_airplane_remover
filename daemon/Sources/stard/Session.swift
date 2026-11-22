@@ -59,6 +59,11 @@ actor Session {
     /// was never processed is unmarked as soon as the run is queued.
     private var refinementMarks: Set<Int> = []
 
+    /// The JPEG quality of the sequence's frames (nil when they are not JPEGs): where a client's output-quality slider starts.
+    private(set) var sourceJPEGQuality: Int?
+    /// Shared with every frame's image accessor; set from the config a client sends so the outputs follow the slider.
+    private var outputQualityOverride: OutputJPEGQualityOverride?
+
     /// Where a user's edits are written down.  StarCore's own queue, the one the macOS app uses:
     /// a frame is put in "purgatory" when it is edited, and ten seconds after the last edit its
     /// finished image and decisions are written.  Built with the frame graph because the class
@@ -95,6 +100,10 @@ actor Session {
             frameIndexToBaseNameMap[i] = removePath(fromString: fn)
         }
 
+        let firstFrame = filenames.first
+        sourceJPEGQuality = JPEGQuality.ofSequence(folder: firstFrame.map { ($0 as NSString).deletingLastPathComponent },
+                                                   firstFramePath: firstFrame)
+
         let weakSelf = WeakSessionRef(self)
         // Told whenever a preview is written, which is how a client learns that the picture it has is old.
         var imageAccessor = ImageAccessor(
@@ -105,6 +114,7 @@ actor Session {
             guard size == .preview else { return }
             Task { await weakSelf.session?.onImageSaved(frameIndex: frameIndex, type: type) }
         }
+        outputQualityOverride = imageAccessor.outputQualityOverride
         // Told whenever a frame's horizon lines change, so the client draws them again.
         imageAccessor.horizonChangedClosure = { frameIndex in
             Task { await weakSelf.session?.horizonRefined(frameIndex: frameIndex) }
@@ -210,6 +220,7 @@ actor Session {
     func updateConfig(from proto: Star_V1_Config) async -> Config {
         let config = Session.applying(proto, to: await configManager.config())
         await configManager.update(config)
+        outputQualityOverride?.value = config.outputJPEGQuality
         // The client is told the config is applied; make that include the
         // file, since update() writes asynchronously now.
         await configManager.flush()

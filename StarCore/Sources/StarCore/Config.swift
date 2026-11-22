@@ -348,6 +348,11 @@ public struct Config: Codable, Sendable {
     /// The gui always renders and ignores this.
     public var writeOutputFiles: Bool = true
 
+    /// The quality (1...100) the output JPEG frames are written at. nil means the same as the
+    /// input's (`ImageAccessor.outputJPEGQuality`, learnt from the sequence); a value overrides it.
+    /// Only JPEG sequences have outputs it applies to.
+    public var outputJPEGQuality: Int? = nil
+
     /// Whether a run that finds its settings have changed since the artifacts on disk were
     /// built throws those artifacts away and rebuilds them.
     ///
@@ -1596,6 +1601,7 @@ public struct Config: Codable, Sendable {
         self.writeFrameProcessedPreviewFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFrameProcessedPreviewFiles) ?? self.writeFrameProcessedPreviewFiles
         self.writeFrameThumbnailFiles = try c.decodeIfPresent(Bool.self, forKey: .writeFrameThumbnailFiles) ?? self.writeFrameThumbnailFiles
         self.writeOutputFiles = try c.decodeIfPresent(Bool.self, forKey: .writeOutputFiles) ?? self.writeOutputFiles
+        self.outputJPEGQuality = try c.decodeIfPresent(Int.self, forKey: .outputJPEGQuality)
         self.reprocessOnSettingsChange = try c.decodeIfPresent(Bool.self, forKey: .reprocessOnSettingsChange) ?? self.reprocessOnSettingsChange
         if let value = try c.decodeIfPresent(Bool.self, forKey: .useGPUForMerge) {
             self.useGPUForMerge = value

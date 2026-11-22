@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "After Star has finished processing your image sequence, you can then watch a video of the sequence at preview resolution.  This can be helpful to allow you to make any corrections.\n\nStar is still a work in progress.",
   "warning.title.gpu_merge_turned_off": "GPU Merge Turned Off",
   "warning.gpu_merge_turned_off.message": "The previous run stopped while merging on the GPU, so GPU merge has been turned off for this session.",
-  "warning.gpu_merge_turned_off.suggestion": "If this machine's GPU is not the cause, you can turn it back on in the processing settings."
+  "warning.gpu_merge_turned_off.suggestion": "If this machine's GPU is not the cause, you can turn it back on in the processing settings.",
+  "ui.output_jpeg_quality": "Output JPEG quality:",
+  "ui.output_quality_same_as_input": "Same as the input ({0}%)",
+  "setting_help.output_jpeg_quality": "The quality the output JPEG frames are written at. It starts at the quality of the input frames, so the outputs are about as sharp and as large as what went in. Lower it for smaller files; raise it to keep more detail, though going above the input's quality cannot bring back what the input already lost. Reset sets it back to the input's quality. Changing it writes the output frames again and keeps the alignment. It is only offered when the frames are JPEGs."
 }

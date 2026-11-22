@@ -1578,6 +1578,12 @@ public struct Star_V1_SessionInfo: @unchecked Sendable {
   /// Clears the value of `extraction`. Subsequent reads from it will return its default value.
   public mutating func clearExtraction() {_uniqueStorage()._extraction = nil}
 
+  /// The JPEG quality (1 to 100) of the sequence's frames, read the way StarCore does (JPEGQuality.ofSequence); 0 = not a JPEG sequence.
+  public var sourceJpegQuality: Int32 {
+    get {_storage._sourceJpegQuality}
+    set {_uniqueStorage()._sourceJpegQuality = newValue}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2439,6 +2445,17 @@ public struct Star_V1_Config: @unchecked Sendable {
   public var hasStartCustomFromProfile: Bool {_storage._startCustomFromProfile != nil}
   /// Clears the value of `startCustomFromProfile`. Subsequent reads from it will return its default value.
   public mutating func clearStartCustomFromProfile() {_uniqueStorage()._startCustomFromProfile = nil}
+
+  /// Config.outputJPEGQuality: the quality (1 to 100) the output JPEG frames are written at. 0 = same as the input's (nil in StarCore); always
+  /// sent. A present value is applied, 0 clearing the override. SessionInfo.source_jpeg_quality is the input's, where the slider starts.
+  public var outputJpegQuality: Int32 {
+    get {_storage._outputJpegQuality ?? 0}
+    set {_uniqueStorage()._outputJpegQuality = newValue}
+  }
+  /// Returns true if `outputJpegQuality` has been explicitly set.
+  public var hasOutputJpegQuality: Bool {_storage._outputJpegQuality != nil}
+  /// Clears the value of `outputJpegQuality`. Subsequent reads from it will return its default value.
+  public mutating func clearOutputJpegQuality() {_uniqueStorage()._outputJpegQuality = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -5751,7 +5768,7 @@ extension Star_V1_VideoInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplem
 
 extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SessionInfo"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_count\0\u{3}image_width\0\u{3}image_height\0\u{3}components_per_pixel\0\u{1}config\0\u{3}scratch_session_dir\0\u{3}source_video_info\0\u{3}config_json_path\0\u{1}extraction\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}session_id\0\u{3}frame_count\0\u{3}image_width\0\u{3}image_height\0\u{3}components_per_pixel\0\u{1}config\0\u{3}scratch_session_dir\0\u{3}source_video_info\0\u{3}config_json_path\0\u{1}extraction\0\u{3}source_jpeg_quality\0")
 
   fileprivate class _StorageClass {
     var _sessionID: String = String()
@@ -5764,6 +5781,7 @@ extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     var _sourceVideoInfo: Star_V1_VideoInfo? = nil
     var _configJsonPath: String = String()
     var _extraction: Star_V1_FrameExtraction? = nil
+    var _sourceJpegQuality: Int32 = 0
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -5784,6 +5802,7 @@ extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       _sourceVideoInfo = source._sourceVideoInfo
       _configJsonPath = source._configJsonPath
       _extraction = source._extraction
+      _sourceJpegQuality = source._sourceJpegQuality
     }
   }
 
@@ -5812,6 +5831,7 @@ extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
         case 8: try { try decoder.decodeSingularMessageField(value: &_storage._sourceVideoInfo) }()
         case 9: try { try decoder.decodeSingularStringField(value: &_storage._configJsonPath) }()
         case 10: try { try decoder.decodeSingularMessageField(value: &_storage._extraction) }()
+        case 11: try { try decoder.decodeSingularInt32Field(value: &_storage._sourceJpegQuality) }()
         default: break
         }
       }
@@ -5854,6 +5874,9 @@ extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       try { if let v = _storage._extraction {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 10)
       } }()
+      if _storage._sourceJpegQuality != 0 {
+        try visitor.visitSingularInt32Field(value: _storage._sourceJpegQuality, fieldNumber: 11)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -5873,6 +5896,7 @@ extension Star_V1_SessionInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
         if _storage._sourceVideoInfo != rhs_storage._sourceVideoInfo {return false}
         if _storage._configJsonPath != rhs_storage._configJsonPath {return false}
         if _storage._extraction != rhs_storage._extraction {return false}
+        if _storage._sourceJpegQuality != rhs_storage._sourceJpegQuality {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -6380,7 +6404,7 @@ extension Star_V1_ConfigChangePreview: SwiftProtobuf.Message, SwiftProtobuf._Mes
 
 extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Config"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{3}use_gpu_for_sift\0\u{3}use_gpu_for_akaze\0\u{3}resource_profile\0\u{3}reprocess_on_settings_change\0\u{3}max_mat_memory_fraction\0\u{3}gpu_device_name\0\u{3}image_sequence_dirname\0\u{3}cloud_aware_merge\0\u{3}pixel_threshold\0\u{3}custom_cpu_width\0\u{3}custom_qos\0\u{3}custom_gpu_width\0\u{3}custom_gpu_duty_cycle\0\u{3}custom_disk_streams_per_volume\0\u{3}custom_io_policy\0\u{3}start_custom_from_profile\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}output_path\0\u{3}temp_output_path\0\u{3}clean_method\0\u{3}detection_type\0\u{3}horizon_detection_enabled\0\u{3}tripod_head_was_moving\0\u{3}number_of_frames_to_process_concurrently\0\u{3}ignore_lower_pixels\0\u{3}pixel_replacement_overrides\0\u{3}static_neighbor_frame_overrides\0\u{3}aligned_neighbor_frame_overrides\0\u{3}write_outlier_group_files\0\u{3}write_frame_preview_files\0\u{1}video\0\u{3}star_version\0\u{3}number_aligned_neighbor_frames\0\u{3}number_static_neighbor_frames\0\u{3}homography_smoothing_epsilon\0\u{3}keypoint_memory_multiplier\0\u{3}outlier_memory_multiplier\0\u{3}merge_memory_multiplier\0\u{3}use_reference_horizon_smoothing\0\u{3}reference_horizon_smoothing_max_distance\0\u{3}use_reference_horizon_brightness_refinement\0\u{3}reference_horizon_brightness_refinement_search_radius\0\u{3}reference_horizon_brightness_refinement_hist_buckets\0\u{3}reference_horizon_neighborhood_size\0\u{3}horizon_spike_removal_enabled\0\u{3}horizon_spike_max_width\0\u{3}horizon_spike_max_deviation_fraction\0\u{3}horizon_spike_window_half\0\u{4}\u{2}use_canny_for_horizon_detection\0\u{3}canny_min_threshold\0\u{3}canny_max_threshold\0\u{3}canny_use_l2_gradient\0\u{4}\u{2}allow_earth_alignment\0\u{3}alignment_max_keypoints\0\u{3}alignment_write_debug_images\0\u{3}alignment_ground_horizon_extension\0\u{3}alignment_sky_horizon_extension\0\u{3}alignment_base_image_dilate_size\0\u{3}alignment_base_image_threshold_value\0\u{3}horizon_memory_multiplier\0\u{3}horizon_reservation_floor_mb\0\u{4}\u{2}max_concurrent_keypoint_ops\0\u{3}merge_streaming_threshold_mb\0\u{3}alignment_keypoint_detection_divisor\0\u{3}startup_horizon_frame_indices\0\u{3}startup_horizon_frame_position\0\u{3}use_gpu_acceleration\0\u{3}gpu_hardware_available\0\u{3}use_gpu_for_sift\0\u{3}use_gpu_for_akaze\0\u{3}resource_profile\0\u{3}reprocess_on_settings_change\0\u{3}max_mat_memory_fraction\0\u{3}gpu_device_name\0\u{3}image_sequence_dirname\0\u{3}cloud_aware_merge\0\u{3}pixel_threshold\0\u{3}custom_cpu_width\0\u{3}custom_qos\0\u{3}custom_gpu_width\0\u{3}custom_gpu_duty_cycle\0\u{3}custom_disk_streams_per_volume\0\u{3}custom_io_policy\0\u{3}start_custom_from_profile\0\u{3}output_jpeg_quality\0\u{c} \u{1}\u{c}%\u{1}\u{c}/\u{1}")
 
   fileprivate class _StorageClass {
     var _outputPath: String = String()
@@ -6450,6 +6474,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
     var _customDiskStreamsPerVolume: Int32? = nil
     var _customIoPolicy: String? = nil
     var _startCustomFromProfile: Bool? = nil
+    var _outputJpegQuality: Int32? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -6527,6 +6552,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       _customDiskStreamsPerVolume = source._customDiskStreamsPerVolume
       _customIoPolicy = source._customIoPolicy
       _startCustomFromProfile = source._startCustomFromProfile
+      _outputJpegQuality = source._outputJpegQuality
     }
   }
 
@@ -6612,6 +6638,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         case 68: try { try decoder.decodeSingularInt32Field(value: &_storage._customDiskStreamsPerVolume) }()
         case 69: try { try decoder.decodeSingularStringField(value: &_storage._customIoPolicy) }()
         case 70: try { try decoder.decodeSingularBoolField(value: &_storage._startCustomFromProfile) }()
+        case 71: try { try decoder.decodeSingularInt32Field(value: &_storage._outputJpegQuality) }()
         default: break
         }
       }
@@ -6825,6 +6852,9 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
       try { if let v = _storage._startCustomFromProfile {
         try visitor.visitSingularBoolField(value: v, fieldNumber: 70)
       } }()
+      try { if let v = _storage._outputJpegQuality {
+        try visitor.visitSingularInt32Field(value: v, fieldNumber: 71)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -6901,6 +6931,7 @@ extension Star_V1_Config: SwiftProtobuf.Message, SwiftProtobuf._MessageImplement
         if _storage._customDiskStreamsPerVolume != rhs_storage._customDiskStreamsPerVolume {return false}
         if _storage._customIoPolicy != rhs_storage._customIoPolicy {return false}
         if _storage._startCustomFromProfile != rhs_storage._startCustomFromProfile {return false}
+        if _storage._outputJpegQuality != rhs_storage._outputJpegQuality {return false}
         return true
       }
       if !storagesAreEqual {return false}

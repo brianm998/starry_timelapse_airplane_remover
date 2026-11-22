@@ -259,6 +259,7 @@ struct ProcessingSettingsView: View {
     @State private var showMinAlignmentFramesInfo = false
     @State private var showStaticNeighborFrameInfo = false
     @State private var showPixelThresholdInfo = false
+    @State private var showOutputJPEGQualityInfo = false
     @State private var showProcessingModeInfo = false
     @State private var showCannyMinThresholdView = false
     @State private var showCannyMaxThresholdView = false
@@ -313,7 +314,7 @@ struct ProcessingSettingsView: View {
     private var addSpacer: Bool {
         showCameraMotionInfo || showSceneTypeInfo || showProcessingMethodInfo ||
         showAutoPreservationMethodInfo || showProcessFramesInfo ||
-        showNeighborFrameInfo || showPixelThresholdInfo || showProcessingModeInfo ||
+        showNeighborFrameInfo || showPixelThresholdInfo || showOutputJPEGQualityInfo || showProcessingModeInfo ||
         showUseCannyInfo || showCannyMinThresholdView ||
         showCannyMaxThresholdView || showCannyL2GradientView ||
         showStaticNeighborFrameInfo ||
@@ -367,6 +368,7 @@ struct ProcessingSettingsView: View {
         showMinAlignmentFramesInfo = true
         showStaticNeighborFrameInfo = true
         showPixelThresholdInfo = true
+        showOutputJPEGQualityInfo = true
         showProcessingModeInfo = true
         showUseCannyInfo = true
         showCannyMinThresholdView = true
@@ -421,6 +423,7 @@ struct ProcessingSettingsView: View {
         showMinAlignmentFramesInfo = false        
         showStaticNeighborFrameInfo = false
         showPixelThresholdInfo = false
+        showOutputJPEGQualityInfo = false
         showProcessingModeInfo = false
         showUseCannyInfo = false
         showCannyMinThresholdView = false
@@ -690,6 +693,53 @@ struct ProcessingSettingsView: View {
             // Whether clouds come out banded is something anyone shooting a moving sky wants
             // to be able to turn on.
             self.cloudAwareMergeView
+            // The frames' own quality is the starting point, so only JPEG sequences have one.
+            if viewModel.showsOutputQuality {
+                Divider()
+                self.outputJPEGQualityView
+            }
+        }
+    }
+
+    /// `Config.outputJPEGQuality`: the quality the output JPEGs are written at; the input's unless overridden.
+    private var outputJPEGQualityView: some View {
+        InfoTextInstructionGridRow(
+          showInfo: $showOutputJPEGQualityInfo,
+          addSpacer: { addSpacer },
+          infoText: localized("setting_help.output_jpeg_quality")
+        ) {
+            HStack {
+                HStack {
+                    Spacer()
+                    Text(localized("ui.output_jpeg_quality"))
+                      .font(.title2)
+                      .foregroundColor(.white)
+                      .opacity(0.6)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(localized("ui.jpeg_quality", viewModel.outputQualityValue))
+                          .foregroundColor(.white)
+                          .frame(minWidth: 110, alignment: .leading)
+                        Slider(value: Binding(
+                                 get: { Double(viewModel.outputQualityValue) },
+                                 set: { viewModel.setOutputQuality(Int($0.rounded())) }),
+                               in: Double(FrameDecodeFormat.jpegQualityRange.lowerBound)...Double(FrameDecodeFormat.jpegQualityRange.upperBound),
+                               step: 1)
+                          .accessibilityIdentifier("settings.outputQuality.slider")
+                        Button(localized("ui.reset")) { viewModel.resetOutputQuality() }
+                          .disabled(viewModel.outputJPEGQuality == nil)
+                          .accessibilityIdentifier("settings.outputQuality.reset")
+                    }
+                    if viewModel.outputQualityMatchesInput {
+                        Text(localized("ui.output_quality_same_as_input", viewModel.sourceJPEGQuality ?? viewModel.outputQualityValue))
+                          .font(.body)
+                          .foregroundColor(.white)
+                          .opacity(0.6)
+                    }
+                }
+                Spacer()
+            }
         }
     }
 

@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Až Star dokončí zpracování vaší sekvence snímků, můžete si sekvenci přehrát jako video v náhledovém rozlišení. To vám může pomoci provést případné opravy.\n\nStar je stále rozpracovaný.",
   "warning.title.gpu_merge_turned_off": "Slučování na GPU vypnuto",
   "warning.gpu_merge_turned_off.message": "Předchozí běh se zastavil během slučování na GPU, proto bylo slučování na GPU pro tuto relaci vypnuto.",
-  "warning.gpu_merge_turned_off.suggestion": "Pokud příčinou není GPU tohoto počítače, můžete je znovu zapnout v nastavení zpracování."
+  "warning.gpu_merge_turned_off.suggestion": "Pokud příčinou není GPU tohoto počítače, můžete je znovu zapnout v nastavení zpracování.",
+  "ui.output_jpeg_quality": "Kvalita výstupního JPEG:",
+  "ui.output_quality_same_as_input": "Stejná jako u vstupu ({0} %)",
+  "setting_help.output_jpeg_quality": "Kvalita, s jakou se zapisují výstupní snímky JPEG. Začíná na kvalitě vstupních snímků, takže výstup je zhruba stejně ostrý a velký jako vstup. Nižší hodnota dá menší soubory; vyšší zachová více detailů, ale kvalita nad úrovní vstupu nevrátí to, co vstup už ztratil. Tlačítko Obnovit vrátí kvalitu vstupu. Změna znovu zapíše výstupní snímky a zachová zarovnání. Nabízí se jen tehdy, když jsou snímky ve formátu JPEG."
 }
