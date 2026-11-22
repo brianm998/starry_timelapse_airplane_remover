@@ -1,0 +1,58 @@
+#!/bin/bash
+# PATH shim: keep unsigned gui builds out. Agents run `xcodebuild ... CODE_SIGNING_ALLOWED=NO` on
+# gui/star.xcodeproj; that makes an unsigned test host, a new TCC identity every build, so macOS's
+# removable-volume prompt returns and blocks the run (task #888). This sends such a call to
+# .mason/scripts/xcodebuild-signed.sh with the unsigned settings removed.
+#
+# Install: the owner puts `<main checkout>/.mason/shims` first in `agent_env.PATH` for project star
+# in MASON's config. Anything else goes to the next xcodebuild on PATH after this directory (so the
+# UI-test guard at /usr/local/bin still runs). STAR_TEST_SIGN_IDENTITY=- leaves a call alone;
+# STAR_XCODEBUILD_SHIM_PASSED=1 (set by xcodebuild-signed.sh) passes straight through.
+
+self_dir="$(cd "$(dirname "$0")" && pwd -P)"
+
+next_xcodebuild() {
+  local d p
+  local IFS=:
+  for d in $PATH; do
+    [ -n "$d" ] || continue
+    p="$d/xcodebuild"
+    if [ -x "$p" ] && [ -f "$p" ] && [ "$(cd "$d" && pwd -P)" != "$self_dir" ]; then
+      echo "$p"; return 0
+    fi
+  done
+  return 1
+}
+
+passthrough() {
+  local n
+  n="$(next_xcodebuild)" || { echo "xcodebuild shim: no other xcodebuild on PATH" >&2; exit 127; }
+  exec "$n" "$@"
+}
+
+[ -z "$STAR_XCODEBUILD_SHIM_PASSED" ] && [ "$STAR_TEST_SIGN_IDENTITY" != "-" ] || passthrough "$@"
+
+unsigned=0; gui=0; prev=""; top=""
+for a in "$@"; do
+  case "$a" in
+    CODE_SIGNING_ALLOWED=NO|CODE_SIGN_IDENTITY=-) unsigned=1 ;;
+    *gui/star.xcodeproj*) gui=1 ;;
+  esac
+  if [ "$prev" = "-project" ]; then
+    top="${top:-$(git rev-parse --show-toplevel 2>/dev/null)}"
+    [ -n "$top" ] && [ -e "$a" ] && [ "$(cd "$(dirname "$a")" && pwd -P)/$(basename "$a")" = "$(cd "$top" && pwd -P)/gui/star.xcodeproj" ] && gui=1
+  fi
+  prev="$a"
+done
+[ "$unsigned" = 1 ] && [ "$gui" = 1 ] || passthrough "$@"
+
+top="$(git rev-parse --show-toplevel 2>/dev/null)"
+wrapper="$top/.mason/scripts/xcodebuild-signed.sh"
+[ -n "$top" ] && [ -x "$wrapper" ] || passthrough "$@"
+
+args=()
+for a in "$@"; do
+  case "$a" in CODE_SIGNING_ALLOWED=NO|CODE_SIGN_IDENTITY=-) ;; *) args+=("$a") ;; esac
+done
+echo "xcodebuild shim: signing this gui build so the removable-volume Allow persists; see CLAUDE.md" >&2
+exec "$wrapper" ${args[@]+"${args[@]}"}

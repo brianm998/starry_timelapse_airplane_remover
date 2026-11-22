@@ -43,3 +43,34 @@ def test_hook_and_adapter_patterns_agree() -> None:
                 "ls", "echo swift test"):
         hook_hit = run(cmd) is not None
         assert hook_hit == bool(star.HEAVY_PATTERN.search(cmd)), cmd
+
+
+GUI_UNSIGNED = ("xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug "
+                "CODE_SIGNING_ALLOWED=NO test -only-testing:starTests/X")
+
+
+def wrapped_command(out: dict[str, object] | None) -> str:
+    assert out is not None
+    return out["hookSpecificOutput"]["updatedInput"]["command"]  # type: ignore[index,return-value]
+
+
+def test_unsigned_gui_test_is_rewritten_to_the_signing_wrapper() -> None:
+    cmd = wrapped_command(run(GUI_UNSIGNED, {"STAR_TEST_SIGN_IDENTITY": ""}))
+    assert ".mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star" in cmd
+    assert "CODE_SIGNING_ALLOWED" not in cmd
+    assert "-configuration Debug test -only-testing:starTests/X" in cmd
+    cmd = wrapped_command(run(GUI_UNSIGNED.replace("CODE_SIGNING_ALLOWED=NO", "CODE_SIGN_IDENTITY=-")))
+    assert "xcodebuild-signed.sh" in cmd and "CODE_SIGN_IDENTITY" not in cmd
+
+
+def test_other_xcodebuild_commands_are_not_rewritten() -> None:
+    other = wrapped_command(run("xcodebuild -project other/x.xcodeproj -scheme star CODE_SIGNING_ALLOWED=NO build"))
+    assert "xcodebuild-signed" not in other and "CODE_SIGNING_ALLOWED=NO" in other
+    plain = wrapped_command(run("xcodebuild -project gui/star.xcodeproj -scheme star build"))
+    assert "xcodebuild-signed" not in plain
+
+
+def test_opt_out_and_already_signed_are_left_alone() -> None:
+    assert "xcodebuild-signed" not in wrapped_command(run(GUI_UNSIGNED, {"STAR_TEST_SIGN_IDENTITY": "-"}))
+    signed = ".mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star build"
+    assert wrapped_command(run(signed)).count("xcodebuild-signed.sh") == 1
