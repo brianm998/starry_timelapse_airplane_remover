@@ -20,6 +20,27 @@ HEAVY = re.compile(
     r"|\.build/[\w-]+/(?:star|stard)\b|star-gherkin\b)"
 )
 
+XCODEBUILD_SEGMENT = re.compile(
+    r"(?P<pre>(?:^|[;&|(\n])\s*)(?:[\w./-]+/)?xcodebuild\b(?P<args>[^;&|\n]*)"
+)
+UNSIGNED = re.compile(r"(?<!\S)(?:CODE_SIGNING_ALLOWED=NO|CODE_SIGN_IDENTITY=-)(?!\S)")
+SIGNED_WRAPPER = ".mason/scripts/xcodebuild-signed.sh"
+
+
+def sign_gui_builds(command: str) -> str:
+    """Rewrite unsigned gui xcodebuild calls to the signing wrapper (task #888)."""
+    if os.environ.get("STAR_TEST_SIGN_IDENTITY") == "-" or "xcodebuild-signed.sh" in command:
+        return command
+
+    def fix(m: re.Match[str]) -> str:
+        args = m.group("args")
+        if "gui/star.xcodeproj" not in args or not UNSIGNED.search(args):
+            return m.group(0)
+        args = re.sub(r"[ \t]{2,}", " ", UNSIGNED.sub("", args))
+        return f"{m.group('pre')}{SIGNED_WRAPPER}{args.rstrip() if not args.endswith(' ') else args}"
+
+    return XCODEBUILD_SEGMENT.sub(fix, command)
+
 
 def main() -> None:
     if os.environ.get("STARPIPE_NO_WRAP"):
@@ -34,6 +55,10 @@ def main() -> None:
         return
     if not (HEAVY.search(command) and shim.exists() and shutil.which("uv")):
         return
+    try:
+        command = sign_gui_builds(command)
+    except re.error:
+        pass
     wrapped = f"{shlex.quote(str(shim))} heavy -- bash -c {shlex.quote(command)}"
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
