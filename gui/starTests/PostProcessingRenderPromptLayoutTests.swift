@@ -47,7 +47,7 @@ final class PostProcessingRenderPromptLayoutTests: XCTestCase {
         let L = PostProcessingRenderPromptLayout.self
         let needed = L.padding * 2 + L.artWidth + L.columnSpacing + L.pictureSize.width * 2 + L.arrowGap * 2
         XCTAssertGreaterThanOrEqual(r.fitting.width, needed)
-        XCTAssertGreaterThanOrEqual(r.fitting.width, 690)
+        XCTAssertGreaterThanOrEqual(r.fitting.width, 685)  // 20+116+16+240+8+17+8+240+20
         XCTAssertGreaterThanOrEqual(r.buttons.count, 3)
         for f in r.buttons {
             XCTAssertTrue(r.bounds.insetBy(dx: -0.5, dy: -0.5).contains(f), "button \(f) outside \(r.bounds)")
