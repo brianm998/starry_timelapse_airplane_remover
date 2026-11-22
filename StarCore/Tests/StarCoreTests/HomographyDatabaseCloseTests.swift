@@ -17,11 +17,14 @@ final class HomographyDatabaseCloseTests: XCTestCase {
         var count = 0
         for name in (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd")) ?? [] {
             guard let fd = Int32(name) else { continue }
+            var found: String?
+            #if canImport(Darwin)
             var buf = [CChar](repeating: 0, count: Int(PATH_MAX))
-            if fcntl(fd, F_GETPATH, &buf) == 0 {
-                let path = String(cString: buf)
-                if path.hasPrefix(real) && path.contains("homography.db") { count += 1 }
-            }
+            if fcntl(fd, F_GETPATH, &buf) == 0 { found = String(cString: buf) }
+            #else
+            found = try? FileManager.default.destinationOfSymbolicLink(atPath: "/proc/self/fd/\(fd)")
+            #endif
+            if let path = found, path.hasPrefix(real) && path.contains("homography.db") { count += 1 }
         }
         return count
     }
