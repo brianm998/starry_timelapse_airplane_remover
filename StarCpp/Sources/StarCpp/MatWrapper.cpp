@@ -43,7 +43,8 @@ std::atomic<uint64_t> MatWrapperImpl::totalInstances_{0};
 // Disambiguates concurrent writes to the same destination path, below.
 static std::atomic<uint64_t> writeSequence_{0};
 
-static cv::Mat ensure8U(const cv::Mat& input) {
+// Min/max stretch: for near-black debug images that are shown to be seen.
+static cv::Mat ensure8UStretched(const cv::Mat& input) {
     if (input.depth() == CV_8U) return input;
     cv::Mat output;
     double minVal, maxVal;
@@ -56,6 +57,23 @@ static cv::Mat ensure8U(const cv::Mat& input) {
                         -minVal * 255.0 / (maxVal - minVal));
     }
     return output;
+}
+
+// Faithful conversion: fixed 1/257 for 16-bit (65535 -> 255), 255 for a 0-1 float.
+// Other depths have no fixed scale and fall back to the stretch.
+static cv::Mat ensure8U(const cv::Mat& input) {
+    if (input.depth() == CV_8U) return input;
+    cv::Mat output;
+    int type = CV_MAKETYPE(CV_8U, input.channels());
+    if (input.depth() == CV_16U) {
+        input.convertTo(output, type, 1.0 / 257.0);
+        return output;
+    }
+    if (input.depth() == CV_32F || input.depth() == CV_64F) {
+        input.convertTo(output, type, 255.0);
+        return output;
+    }
+    return ensure8UStretched(input);
 }
 
 // Helper: create a MatWrapperRef from a freshly produced cv::Mat that the caller is
@@ -680,10 +698,11 @@ bool mat_wrapper_write_cache_to(MatWrapperRef ref, const char *filename) {
     return false;
 }
 
-bool mat_wrapper_save_jpeg(MatWrapperRef ref, uint32_t quality, const char *filename) {
+bool mat_wrapper_save_jpeg(MatWrapperRef ref, uint32_t quality, const char *filename,
+                           bool stretched) {
     if (!ref) return false;
     try {
-        cv::Mat eightBit = ensure8U(ref->mat);
+        cv::Mat eightBit = stretched ? ensure8UStretched(ref->mat) : ensure8U(ref->mat);
         std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, (int)quality};
         return writeMatAtomically(eightBit, std::string(filename), params, "saveJpeg");
     } KHT_CATCH_LOG("mat_wrapper_save_jpeg")
@@ -728,10 +747,10 @@ MatWrapperRef mat_wrapper_down_scale(MatWrapperRef ref, uint64_t width, uint64_t
     return nullptr;
 }
 
-MatWrapperRef mat_wrapper_ensure_eight_bit(MatWrapperRef ref) {
+MatWrapperRef mat_wrapper_ensure_eight_bit(MatWrapperRef ref, bool stretched) {
     if (!ref) return nullptr;
     try {
-        return wrap(ensure8U(ref->mat));
+        return wrap(stretched ? ensure8UStretched(ref->mat) : ensure8U(ref->mat));
     } KHT_CATCH_LOG("mat_wrapper_ensure_eight_bit")
     return nullptr;
 }
@@ -740,7 +759,7 @@ MatWrapperRef mat_wrapper_ensure_eight_bit(MatWrapperRef ref) {
 MatWrapperRef mat_wrapper_ensure_gray_8u(MatWrapperRef ref) {
     if (!ref) return nullptr;
     try {
-        cv::Mat result = ensure8U(ref->mat);
+        cv::Mat result = ensure8UStretched(ref->mat);
         if (result.channels() > 1) {
             cv::Mat gray;
             if (result.channels() == 4)      cv::cvtColor(result, gray, cv::COLOR_BGRA2GRAY);
@@ -796,7 +815,7 @@ MatWrapperRef mat_wrapper_ensure_16_bits(MatWrapperRef ref) {
     try {
         if (ref->mat.depth() != CV_16U) {
             cv::Mat img16;
-            ref->mat.convertTo(img16, CV_16U, 256.0);
+            ref->mat.convertTo(img16, CV_16U, 257.0);
             return wrap(img16);
         }
         return mat_wrapper_alias(ref);
@@ -809,7 +828,7 @@ MatWrapperRef mat_wrapper_ensure_8_bits(MatWrapperRef ref) {
     try {
         if (ref->mat.depth() != CV_8U) {
             cv::Mat img8;
-            ref->mat.convertTo(img8, CV_8U, 1.0/256.0);
+            ref->mat.convertTo(img8, CV_8U, 1.0/257.0);
             return wrap(img8);
         }
         return mat_wrapper_alias(ref);

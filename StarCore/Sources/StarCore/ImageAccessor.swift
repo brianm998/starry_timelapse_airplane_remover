@@ -585,7 +585,8 @@ public struct ImageAccessor: Sendable {
                 }
                 if let downScaled {
                     _ = await IOWork.run(path: filename, bytes: downScaled.byteCount) {
-                        downScaled.saveJpeg(withQuality: 60, filename: filename)
+                        downScaled.saveJpeg(withQuality: 60, filename: filename,
+                                            stretched: type.previewsAreStretched)
                     }
                     imageSavedClosure?(downScaled, frameIndex, type, size)
                 }
@@ -926,7 +927,7 @@ public struct ImageAccessor: Sendable {
 
                 // make it 8 bit with scaling
 
-                if let eightBitVersion = scaledImage.ensureEightBit {
+                if let eightBitVersion = scaledImage.ensureEightBit(stretched: type.previewsAreStretched) {
                     // write to file
                     eightBitVersion.saveJpeg(withQuality: 50, filename: filename)
                     Log.d("frame \(frameIndex) wrote preview to \(filename)")
@@ -953,7 +954,7 @@ public struct ImageAccessor: Sendable {
       quality: UInt = 90
     ) async throws -> Bool {
         guard let fullResImage = try await load(frameIndex: frameIndex, type: type, atSize: .original),
-              let eightBit = fullResImage.ensureEightBit
+              let eightBit = fullResImage.ensureEightBit(stretched: type.previewsAreStretched)
         else { return false }
         try ensureParentDirectoriesExist(for: filename)
         if FileManager.default.fileExists(atPath: filename) {
@@ -1084,7 +1085,7 @@ public struct ImageAccessor: Sendable {
                          width: UInt(previewSize.width),
                          height: UInt(previewSize.height)
                        ),
-                       let eightBitVersion = smallerImage.ensureEightBit
+                       let eightBitVersion = smallerImage.ensureEightBit(stretched: false)
                     {
                         eightBitVersion.saveJpeg(
                           withQuality: 50,
@@ -1101,7 +1102,7 @@ public struct ImageAccessor: Sendable {
                          width: UInt(thumbnailSize.width),
                          height: UInt(thumbnailSize.height)
                        ),
-                       let eightBitVersion = smallerImage.ensureEightBit
+                       let eightBitVersion = smallerImage.ensureEightBit(stretched: false)
                     {
                         eightBitVersion.saveJpeg(
                           withQuality: 50,

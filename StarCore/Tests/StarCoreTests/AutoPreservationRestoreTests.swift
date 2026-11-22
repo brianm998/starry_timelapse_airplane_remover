@@ -130,7 +130,7 @@ final class AutoPreservationRestoreTests: FrameHarnessTestCase {
     func testEightBitSequenceRendersAndStaysEightBit() async throws {
         let output8 = try await render(bits: 8, originalValue: 200, autoValue: 10, named: "autokeep8")
         XCTAssertEqual(output8.bitsPerComponent, 8, "an 8-bit sequence was written out at another depth")
-        // readPixel reads 16-bit images; the 8 -> 16 conversion is exact (x256), so compare there
-        try assertRestoredExactlyTheKeepGroups(output8.ensure16Bits, original: 200 * 256, auto: 10 * 256)
+        // readPixel reads 16-bit images; the 8 -> 16 conversion is exact (x257), so compare there
+        try assertRestoredExactlyTheKeepGroups(output8.ensure16Bits, original: 200 * 257, auto: 10 * 257)
     }
 }
