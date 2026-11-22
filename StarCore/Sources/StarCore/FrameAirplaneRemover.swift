@@ -313,6 +313,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     
     // Goes through set(state:) rather than assigning directly so the completion hook
     // that releases this frame's recomputable buffers actually fires.
+    /// See `FrameOutlierProcessor.releaseOutlierGroups()`.
+    public func releaseOutlierGroups() async -> Bool { await outlierProcessor.releaseOutlierGroups() }
+
+    /// See `FrameOutlierProcessor.loadCountsFromSummary()`.
+    @discardableResult
+    public func loadOutlierCountsFromSummary() async -> Bool { await outlierProcessor.loadCountsFromSummary() }
+
     public func changesHandled() { self.set(state: .complete) }
 
     public func updateCombineSubjects() async {

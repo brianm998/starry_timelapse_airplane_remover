@@ -333,6 +333,54 @@ final public actor FrameOutlierProcessor {
         }
     }
 
+    /// Whether a save of this frame's decisions is running (the file system monitor is busy).
+    /// Drop this frame's groups from memory, if nothing would be lost. Refuses (returns false) while
+    /// a load is in flight or the frame has an unsaved edit. Counts stay on the observer; the groups
+    /// reload from disk on demand.
+    public func releaseOutlierGroups() async -> Bool {
+        guard inFlightLoad == nil, outlierGroups != nil else { return false }
+        if let frame, await frame.hasChanges() { return false }
+        if !outliersLoadedFromFile {
+            // computed in this session: make sure its decisions are on disk before they leave memory
+            await writeOutliersRemoveReasons()
+        }
+        outlierGroups = nil
+        outliersLoadedFromFile = false
+        return true
+    }
+
+    /// Set the observer's counts from `OutlierCounts.json` without loading any groups. A frame
+    /// without the summary (a sequence from before it existed) is loaded once, which writes the
+    /// summary, and released again. Returns false when the frame has no outliers on disk.
+    @discardableResult
+    public func loadCountsFromSummary() async -> Bool {
+        let dir = await outliersDirname
+        if outlierGroups != nil {
+            await frame?.updateCombineSubjects()
+            return true
+        }
+        var counts = OutlierCounts.load(frameDir: dir)
+        if counts == nil {
+            guard FileManager.default.fileExists(atPath: await blobBinaryFilename) else { return false }
+            try? await loadOutliers(loadOnly: true)
+            if let groups = outlierGroups {
+                try? await groups.write(to: await configManager.config().outlierOutputDirname)
+                counts = await groups.currentCounts()
+                await frame?.updateCombineSubjects()
+                _ = await releaseOutlierGroups()
+                return true
+            }
+            return false
+        }
+        if let counts, let observer = await frame?.getObserver() {
+            await observer.set(numberOfPositiveOutliers: counts.positive,
+                               numberOfNegativeOutliers: counts.negative,
+                               numberOfUndecidedOutliers: counts.undecided,
+                               numberOfTrashOutliers: counts.trash)
+        }
+        return true
+    }
+
     public func initializeEmptyOutlierGroups() async {
         outlierGroups = OutlierGroups(
           frameIndex: frameIndex,

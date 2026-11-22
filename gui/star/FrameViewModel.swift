@@ -153,9 +153,10 @@ public class FrameViewModel {
                 Task { await self.refreshProducibleImages() }
                 Task.detached {
                     await frame.set(observer: self.frameObserver)
-                    try await frame.loadOutliers(loadOnly: true)
+                    // counts only: full groups load for the frames near the current one
+                    // (ImageSequenceViewModel.updateOutlierWindow)
+                    await frame.loadOutlierCountsFromSummary()
                     Task { @MainActor in
-                        await self.setOutlierGroups()
                         self.refreshHorizonOverlay()
                         self.refreshFrameHorizonOverlay()
                     }
@@ -537,6 +538,32 @@ public class FrameViewModel {
                 self.gridHorizonOverlays = overlays
             }
         }
+    }
+
+    /// Load this frame's full outlier groups and build their views.
+    func loadFullOutliers() async {
+        guard let frame else { return }
+        try? await frame.loadOutliers(loadOnly: true)
+        if outlierViews == nil {
+            await setOutlierGroups()
+        }
+    }
+
+    /// Drop this frame's full outlier groups and the views built from them, unless it has an unsaved
+    /// edit. Counts stay. Returns whether the groups were released.
+    @discardableResult
+    func unloadFullOutliers() async -> Bool {
+        guard let frame else { return false }
+        if await frame.getOutlierGroups() == nil {
+            // groups already gone (released elsewhere): drop the views that outlived them
+            if outlierViews != nil, !(await frame.hasChanges()) { outlierViews = nil }
+            return false
+        }
+        guard await frame.releaseOutlierGroups() else { return false }
+        outlierViews = nil
+        trashImage = nil
+        positiveOutlierImage = nil
+        return true
     }
 
     func setOutlierGroups(forced: Bool = false) async {
