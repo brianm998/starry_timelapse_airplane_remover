@@ -3586,7 +3586,7 @@ public final class ImageSequenceViewModel {
     /// loaded: groups are released only outside radius + 1.
     nonisolated static let outlierWindowRadius = 3
 
-    @ObservationIgnored private var outlierWindowTask: Task<Void, Never>?
+    @ObservationIgnored var outlierWindowTask: Task<Void, Never>?
 
     /// The frames that should hold full outlier groups now.
     var outlierWindowIndices: Set<Int> {
