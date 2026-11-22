@@ -1,5 +1,6 @@
 package com.star.desktop.ui.dialogs
 
+import com.star.desktop.domain.SettingsEdit
 import com.star.proto.Config
 import kotlin.test.Test
 import kotlin.test.assertEquals
