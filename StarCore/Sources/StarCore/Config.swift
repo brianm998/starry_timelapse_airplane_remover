@@ -1980,7 +1980,7 @@ public struct Config: Codable, Sendable {
             mkdir(dirname)
 
             try jsonData.write(to: URL(fileURLWithPath: fullPath))
-            Log.i("wrote \(fullPath)")
+            Log.d("wrote \(fullPath)")
         } catch {
             Log.e("could not write \(filename): \(error)")
         }

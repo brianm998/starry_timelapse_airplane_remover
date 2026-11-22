@@ -383,7 +383,11 @@ public actor MemoryMonitor {
         message += "\(reality.systemAvailable() / (1024*1024))MB available), "
         message += "maxWait=\(Int(self.maxWaitTime))s, "
         message += "forcedGap=\(Int(self.forcedAdmissionInterval))s"
-        Log.i(message)
+        // "admitting right now" and "available" move with system load: key on the settings.
+        let key = "\(self.budgetFraction)|\(physicalMemory)|\(budget)|\(self.maxWaitTime)|\(self.forcedAdmissionInterval)"
+        if LogOnChange.configBlock.changed("MemoryMonitor", key) {
+            Log.i(message)
+        }
     }
 
     // MARK: - Public API

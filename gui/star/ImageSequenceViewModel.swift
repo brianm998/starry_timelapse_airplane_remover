@@ -2475,7 +2475,12 @@ public final class ImageSequenceViewModel {
                     // run concurrently on the preview queue, entirely ungated.
                     let previewUnit = await frame.configManager.config().workingFrameBytes
                     for mode in FrameViewMode.allCases {
-                        if imageAccessor.urlForImage(
+                        // nameForImage does not log; urlForImage warns for a type with no
+                        // original-size file (.blobs), which is not an error here.
+                        if imageAccessor.nameForImage(
+                             frameIndex: frame.frameIndex, ofType: mode, atSize: .original
+                           ) != nil,
+                           imageAccessor.urlForImage(
                              frameIndex: frame.frameIndex,
                              ofType: mode,
                              atSize: .original
