@@ -624,7 +624,11 @@ public final class ViewModel {
             closing.disable()
             // What the user changed in the last few seconds is still waiting for its save: write it out in the
             // background, so the window is gone at once and the edits are not (they were lost here before).
-            Task { await closing.flushSaves() }
+            // Then let go of its homography.db connection (3 descriptors); a straggler reopens it.
+            Task {
+                await closing.flushSaves()
+                await closing.config.homographyDatabase.close()
+            }
         }
         imageSequence = nil
         FolderAccess.releaseAll()
