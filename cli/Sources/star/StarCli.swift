@@ -736,8 +736,7 @@ struct StarCli: AsyncParsableCommand {
                   imageWidth: await configManager.config().imageWidth,
                   imageHeight: await configManager.config().imageHeight,
                   imageBytesPerPixel: await configManager.config().imageBytesPerPixel,
-                  gpuMergeEnabled: GPUCapability.mergeWillUseGPU(
-                    requested: await configManager.config().useGPUForMerge)
+                  gpuMergeEnabled: runMarkerGPUMergeEnabled(await configManager.config())
                 )
 
                 if let _ = callbacks.updatable {
@@ -908,6 +907,19 @@ func frameErrorSummary(_ errors: [String], resumePath: String) -> String {
 /// `run()` ends there with that on stderr and a non-zero exit. A missing file is an error
 /// too: `ConfigManager(configFilename:)` quietly substitutes an empty `Config` for one,
 /// which is right for the gui creating a new session but here would mean resuming nothing.
+/// What the cli records as the run marker's `gpuMergeEnabled`: whether this run's merge will
+/// really go to the GPU. The next launch of either client reads it to tell whether a run that died
+/// in a merge phase died in a GPU merge, and if so turns GPU merge off.
+func runMarkerGPUMergeEnabled(
+  _ config: Config,
+  environment: [String: String] = ProcessInfo.processInfo.environment,
+  gpuAvailable: () -> Bool = { GPUCapability.isAvailable() }
+) -> Bool {
+    GPUCapability.mergeWillUseGPU(requested: config.useGPUForMerge,
+                                  environment: environment,
+                                  gpuAvailable: gpuAvailable)
+}
+
 func loadSavedConfig(at path: String) async throws -> ConfigManager {
     guard FileManager.default.fileExists(atPath: path) else {
         throw ValidationError("\(path): no such file")

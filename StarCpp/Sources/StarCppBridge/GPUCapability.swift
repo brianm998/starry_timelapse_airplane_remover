@@ -70,9 +70,13 @@ public enum GPUCapability: Sendable {
     }
 
     /// Whether a run asking for GPU merge (`Config.useGPUForMerge`) will really merge on the
-    /// GPU: asked for, not forced off by the environment, and a GPU is present.
-    public static func mergeWillUseGPU(requested: Bool) -> Bool {
-        effectiveUseGPU(requested) && isAvailable()
+    /// GPU: asked for, not forced off by the environment, and a GPU is present. `environment` and
+    /// `gpuAvailable` are injectable so tests never depend on the process or the machine.
+    public static func mergeWillUseGPU(
+        requested: Bool,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        gpuAvailable: () -> Bool = { GPUCapability.isAvailable() }) -> Bool {
+        effectiveUseGPU(requested, environment: environment) && gpuAvailable()
     }
 
     /// The Metal device name, e.g. "Radeon Pro Vega 64" or "Apple M2 Max", or nil
