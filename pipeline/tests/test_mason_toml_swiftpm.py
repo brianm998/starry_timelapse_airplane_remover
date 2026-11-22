@@ -3,6 +3,7 @@
 import re
 import tomllib
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 FLAG = "--disable-build-manifest-caching"
@@ -13,15 +14,15 @@ def _commands() -> list[tuple[str, str]]:
     data = tomllib.loads((ROOT / ".mason/mason.toml").read_text())
     found: list[tuple[str, str]] = []
 
-    def walk(node: object, path: str) -> None:
+    def walk(node: Any, path: str) -> None:
         if isinstance(node, dict):
-            for k, v in node.items():
+            for k, v in node.items():  # pyright: ignore[reportUnknownVariableType]
                 if k in ("command", "narrow_command") and isinstance(v, str) and SWIFT.search(v):
                     found.append((f"{path}.{k}", v))
                 else:
-                    walk(v, f"{path}.{k}")
+                    walk(v, f"{path}.{k}")  # pyright: ignore[reportUnknownArgumentType]
         elif isinstance(node, list):
-            for i, v in enumerate(node):
+            for i, v in enumerate(node):  # pyright: ignore[reportUnknownVariableType,reportUnknownArgumentType]
                 walk(v, f"{path}[{i}]")
 
     walk(data, "")
