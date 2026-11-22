@@ -207,8 +207,8 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
             var inFlight = 0
             for frame in sorted {
                 let frameIndex = frame.frameIndex
-                guard let path = config.keypointPath(frameIndex: frameIndex,
-                                                     ofType: .starAligned)
+                guard let path = config.existingKeypointPath(frameIndex: frameIndex,
+                                                             ofType: .starAligned)
                 else { continue }
                 if inFlight >= 8, let result = await taskGroup.next() {
                     if let (index, points) = result { positions[index] = points }
