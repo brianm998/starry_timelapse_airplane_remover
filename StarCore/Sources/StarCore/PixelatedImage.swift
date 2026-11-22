@@ -841,7 +841,13 @@ extension PixelatedImage {
     }
 
     var ensureEightBit: PixelatedImage? {
-        PixelatedImage(mat: mat.ensureEightBit())
+        ensureEightBit(stretched: true)
+    }
+
+    /// 8-bit copy. `stretched` auto-levels a 16-bit image to its own min/max (for near-black
+    /// debug images); otherwise 16-bit scales by a fixed 1/257, as it does everywhere else.
+    func ensureEightBit(stretched: Bool) -> PixelatedImage? {
+        PixelatedImage(mat: mat.ensureEightBit(stretched: stretched))
     }
 }
 
@@ -1207,9 +1213,9 @@ extension PixelatedImage {
 
     /// Save as a JPEG. Returns whether the file is now on disk.
     @discardableResult
-    public func saveJpeg(withQuality quality: UInt, filename: String) -> Bool {
+    public func saveJpeg(withQuality quality: UInt, filename: String, stretched: Bool = true) -> Bool {
         try? ensureParentDirectoriesExist(for: filename)
-        return self.mat.saveJpeg(quality: UInt32(quality), filename: filename)
+        return self.mat.saveJpeg(quality: UInt32(quality), filename: filename, stretched: stretched)
     }
 
     public var description: String { "PixelatedImage: \(self.mat)" }
