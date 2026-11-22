@@ -94,6 +94,11 @@ public struct ImageAccessor: Sendable {
     /// to the frames, which take copies.
     public var horizonChangedClosure: (@Sendable (Int) -> Void)? = nil
 
+    /// Told the frame index, type and size of an image file `deleteImage` actually removed (not
+    /// one that was not there).  How the gui stops offering an image type whose files are gone.
+    /// Set before the accessor is handed to the frames, which take copies; the daemon leaves it unset.
+    public var imageDeletedClosure: (@Sendable (Int, FrameViewMode, ImageDisplaySize) -> Void)? = nil
+
     /// Say that `frameIndex`'s horizon lines have changed (`horizonChangedClosure`).
     public func horizonLinesChanged(frameIndex: Int) {
         horizonChangedClosure?(frameIndex)
@@ -838,8 +843,12 @@ public struct ImageAccessor: Sendable {
                                        atSize: size)
         {
             let removedLegacy = removeLegacyFile(frameIndex: frameIndex, ofType: imageType, atSize: size)
-            if removedLegacy, !FileManager.default.fileExists(atPath: filename) { return }
+            if removedLegacy, !FileManager.default.fileExists(atPath: filename) {
+                imageDeletedClosure?(frameIndex, imageType, size)
+                return
+            }
             try FileManager.default.removeItem(atPath: filename)
+            imageDeletedClosure?(frameIndex, imageType, size)
             if imageType.isHorizonMask && size == .original {
                 Task { await horizonColumnsCache.invalidate(path: filename) }
                 horizonLinesChanged(frameIndex: frameIndex)

@@ -2118,15 +2118,14 @@ public final class ImageSequenceViewModel {
     /// `extractionError`; `disable()` lets go of it.
     @ObservationIgnored private let sleepHold = WorkSleepHold(blocker: AppNapDisabler())
     
-    init(
+    convenience init(
       viewModel: ViewModel,
       with configManager: ConfigManager,
       frameSource: FrameSource? = nil,
       closure: @Sendable @escaping (Int, Double) -> Void
     ) async throws {
-        self.topViewModel = viewModel
-        self.trashLevel = await constants.getTrashLevel()
-        self.smallTrashMax = await constants.getSmallTrashMax()
+        let trashLevel = await constants.getTrashLevel()
+        let smallTrashMax = await constants.getSmallTrashMax()
 
         var config = configManager.config()
 
@@ -2135,7 +2134,30 @@ public final class ImageSequenceViewModel {
             config.writeFramePreviewFiles = true
             configManager.update(config)
         }
-        
+
+        self.init(viewModel: viewModel, configManager: configManager,
+                  trashLevel: trashLevel, smallTrashMax: smallTrashMax)
+
+        Log.d("loaded config \(config.imageSequenceDirname)")
+
+        try await openSequence(configManager: configManager, config: config,
+                               frameSource: frameSource, closure: closure)
+    }
+
+    /// The settings half of opening a sequence: every stored property from the config, and
+    /// nothing read from disk.  Tests build a sequence model with no frames this way.
+    init(
+      viewModel: ViewModel?,
+      configManager: ConfigManager,
+      trashLevel: Double,
+      smallTrashMax: Int
+    ) {
+        self.topViewModel = viewModel
+        self.trashLevel = trashLevel
+        self.smallTrashMax = smallTrashMax
+
+        let config = configManager.config()
+
         if !config.cleanMethod.usesOutliers {
             self.selectionMode = .none
         } 
@@ -2197,9 +2219,14 @@ public final class ImageSequenceViewModel {
 
         let ignoreLowerPixels = config.ignoreLowerPixels 
         self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir
-                    
-        Log.d("loaded config \(config.imageSequenceDirname)")
+    }
 
+    private func openSequence(
+      configManager: ConfigManager,
+      config: Config,
+      frameSource: FrameSource?,
+      closure: @Sendable @escaping (Int, Double) -> Void
+    ) async throws {
         // The detection type the frames are processed with is read from this global, so it is this sequence's own
         // each time one is opened, not whatever the last one (or the preference) left in it.
         await constants.set(detectionType: config.detectionType)
@@ -2265,7 +2292,6 @@ public final class ImageSequenceViewModel {
         Log.d("loaded imageInfo \(imageInfo)")
 
         // The Light profile asks for the weaker, background activity; read each time work begins.
-        let configManager = self.config
         sleepHold.light = { configManager.config().resourceProfile == .light }
         
         self.matInstancesTask = Task { [weak self] in 
@@ -2334,6 +2360,11 @@ public final class ImageSequenceViewModel {
             Task { @MainActor in
                 guard let self, frameIndex < self.frames.count else { return }
                 self.frames[frameIndex].horizonLinesChanged()
+            }
+        }
+        accessor.imageDeletedClosure = { [weak self] frameIndex, type, size in
+            Task { @MainActor in
+                self?.imageDeleted(frameIndex: frameIndex, type: type, size: size)
             }
         }
         // the frames' worker tasks take it, so it is not left mutable
@@ -2753,6 +2784,30 @@ public final class ImageSequenceViewModel {
     /// Kept up to date as frames report changes, so drawing the picker does not walk every frame (and
     /// stat a file per frame for the horizon mode) on every redraw.
     var availableModes: Set<FrameViewMode> = []
+
+    /// A frame's image file was deleted (`ImageAccessor.imageDeletedClosure`): stop offering
+    /// that type for the frame, and fall back to the original if the view mode lost its images.
+    func imageDeleted(frameIndex: Int, type: FrameViewMode, size: ImageDisplaySize) {
+        guard frameIndex >= 0, frameIndex < frames.count else { return }
+        let frameView = frames[frameIndex]
+        if let path = frameView.frame?.imageAccessor.nameForImage(
+             frameIndex: frameIndex, ofType: type, atSize: size)
+        {
+            FrameImageLoader.shared.forget(path: path)
+        }
+        guard size == .original else { return }
+        frameView.existingImages.remove(type)
+        if currentIndex >= 0, currentIndex < frames.count {
+            let current = frames[currentIndex]
+            let mode = Self.viewMode(frameViewMode, whenFrameHas: { current.hasImage(type: $0) })
+            if mode != frameViewMode { frameViewMode = mode }
+        }
+    }
+
+    /// `mode` if the frame still has images of it, else `.original` (as clearing processing does).
+    static func viewMode(_ mode: FrameViewMode, whenFrameHas has: (FrameViewMode) -> Bool) -> FrameViewMode {
+        mode == .original || has(mode) ? mode : .original
+    }
 
     func recomputeAvailableModes() {
         var modes = Set<FrameViewMode>()
