@@ -177,7 +177,7 @@ uses = { compile = 1 }
 # T1 builds (starpipe `build:*`). The dependents of a changed package are built too (impact map).
 # ---------------------------------------------------------------------------------------------
 [suite.build-logging]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path logging 2>&1 && echo BUILD-build-logging-OK"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path logging 2>&1 && echo BUILD-build-logging-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-logging-OK$"
 fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
@@ -185,7 +185,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-StarCpp]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCpp 2>&1 && echo BUILD-build-StarCpp-OK"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path StarCpp 2>&1 && echo BUILD-build-StarCpp-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-StarCpp-OK$"
 fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
@@ -193,7 +193,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-StarCore]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path StarCore 2>&1 && echo BUILD-build-StarCore-OK"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path StarCore 2>&1 && echo BUILD-build-StarCore-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-StarCore-OK$"
 fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
@@ -201,7 +201,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-cli]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path cli 2>&1 && echo BUILD-build-cli-OK"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path cli 2>&1 && echo BUILD-build-cli-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-cli-OK$"
 fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
@@ -209,7 +209,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-daemon]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path daemon -c release 2>&1 && echo BUILD-build-daemon-OK"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path daemon -c release 2>&1 && echo BUILD-build-daemon-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-daemon-OK$"
 fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
@@ -217,7 +217,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-trail_tools]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path trail_tools 2>&1 && echo BUILD-build-trail_tools-OK"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path trail_tools 2>&1 && echo BUILD-build-trail_tools-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-trail_tools-OK$"
 fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
@@ -225,7 +225,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-decision_tree_generator]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path decision_tree_generator 2>&1 && echo BUILD-build-decision_tree_generator-OK"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path decision_tree_generator 2>&1 && echo BUILD-build-decision_tree_generator-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-decision_tree_generator-OK$"
 fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
@@ -233,7 +233,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-monitor]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --package-path pipeline/monitor 2>&1 && echo BUILD-build-monitor-OK"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path pipeline/monitor 2>&1 && echo BUILD-build-monitor-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-monitor-OK$"
 fail_regex = "(^|: )error: |Compiling failed|BUILD FAILED"
@@ -265,14 +265,14 @@ uses = { compile = 1 }
 # (StarCore 1,625, daemon 314, StarCpp 254). The others are floors from a static count of test functions.
 # ---------------------------------------------------------------------------------------------
 [suite.test-logging]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path logging 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path logging 2>&1"
 parser = "xctest"
 min_tests = 60 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 uses = { test-suite = 1 }
 
 [suite.test-monitor]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path pipeline/monitor 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path pipeline/monitor 2>&1"
 parser = "xctest"
 min_tests = 80 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
@@ -280,7 +280,7 @@ uses = { test-suite = 1 }
 
 # StarCpp: parallel, with the one class that measures QoS skipped here and run alone below.
 [suite.test-StarCpp]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path StarCpp --filter StarCppBridgeTests --parallel --num-workers 8 --xunit-output .build/test-StarCpp.xml --skip OpenCVQoSTests 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path StarCpp --filter StarCppBridgeTests --parallel --num-workers 8 --xunit-output .build/test-StarCpp.xml --skip OpenCVQoSTests 2>&1"
 parser = "junit"
 results_file = ".build/test-StarCpp.xml"
 min_tests = 254
@@ -288,7 +288,7 @@ level = "t1"
 uses = { test-suite = 1 }
 # In a task's test step, only the XCTest classes the change needs (classes holding an edited line or naming a
 # changed file). The whole suite runs once at landing instead: the batch tier in landing.toml (pr-gate runs no StarCpp tests).
-narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path StarCpp --parallel --num-workers 8 --xunit-output .build/test-StarCpp.xml --skip OpenCVQoSTests {tests} 2>&1"
+narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path StarCpp --parallel --num-workers 8 --xunit-output .build/test-StarCpp.xml --skip OpenCVQoSTests {tests} 2>&1"
 narrow_tests = "StarCpp/Tests/StarCppBridgeTests/*.swift"
 narrow_split = "(?m)^\\s*(?:@\\w+\\s+)*(?:(?:public|internal|private|final|open)\\s+)*class (\\w+)\\s*:\\s*\\w*TestCase"
 narrow_each = "--filter StarCppBridgeTests.{}"
@@ -298,7 +298,7 @@ whole_later = "batch"
 [suite.test-StarCpp-qos]
 # OpenCVQoSTests measures QoS-dependent worker counts: timing sensitivity. Any other load on the
 # cores changes the counts it observes, so it keeps the whole machine (exclusive, kept on purpose).
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path StarCpp --filter OpenCVQoSTests 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path StarCpp --filter OpenCVQoSTests 2>&1"
 parser = "xctest"
 min_tests = 3 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
@@ -308,7 +308,7 @@ uses = { exclusive = 1 }
 # worktrees by link-artifacts.sh. Measured 2026-11-14: 20 tests, 2 benchmarks skipped (STAR_WGPU_BENCH),
 # 18 run. The two Metal comparisons hold to the CPU bounds when the CPU merge is forced (#352).
 [suite.test-StarCpp-wgpu]
-command = "env STAR_USE_GPU_FOR_MERGE=0 STAR_WGPU=1 swift test --package-path StarCpp --filter StarCppWGPUTests 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 STAR_WGPU=1 swift test --disable-build-manifest-caching --package-path StarCpp --filter StarCppWGPUTests 2>&1"
 parser = "xctest"
 min_tests = 18
 level = "t1"
@@ -325,7 +325,7 @@ level = "t1"
 uses = { test-suite = 1 }
 # In a task's test step, only the XCTest classes the change needs (classes holding an edited line or naming a
 # changed file). The whole suite runs once at landing instead: pr-gate.yml:255 and :332 run the whole package.
-narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path StarCore --parallel --xunit-output .build/test-StarCore.xml {tests} 2>&1"
+narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path StarCore --parallel --xunit-output .build/test-StarCore.xml {tests} 2>&1"
 narrow_tests = "StarCore/Tests/StarCoreTests/*.swift"
 narrow_split = "(?m)^\\s*(?:@\\w+\\s+)*(?:(?:public|internal|private|final|open)\\s+)*class (\\w+)\\s*:\\s*\\w*TestCase"
 narrow_each = "--filter StarCoreTests.{}"
@@ -344,7 +344,7 @@ level = "t1"
 uses = { test-suite = 1 }
 # In a task's test step, only the XCTest classes the change needs (classes holding an edited line or naming a
 # changed file). The whole suite runs once at landing instead: pr-gate.yml:258 runs the whole package.
-narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path daemon --parallel --xunit-output .build/test-daemon.xml {tests} 2>&1"
+narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path daemon --parallel --xunit-output .build/test-daemon.xml {tests} 2>&1"
 narrow_tests = "daemon/Tests/StarDaemonTests/*.swift"
 narrow_split = "(?m)^\\s*(?:@\\w+\\s+)*(?:(?:public|internal|private|final|open)\\s+)*class (\\w+)\\s*:\\s*\\w*TestCase"
 narrow_each = "--filter StarDaemonTests.{}"
@@ -352,14 +352,14 @@ narrow_never = ["daemon/Package.swift", "daemon/Package.resolved", "daemon/Tests
 whole_later = "ci" # pr-gate.yml:258 (daemon package tests)
 
 [suite.test-cli]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path cli --skip GherkinTests 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path cli --skip GherkinTests 2>&1"
 parser = "xctest"
 min_tests = 70 # floor: ~90% of the 78 starTests functions on develop (GherkinTests is skipped and not counted; #937)
 level = "t1"
 uses = { test-suite = 1 }
 # In a task's test step, only the XCTest classes the change needs (classes holding an edited line or naming a
 # changed file). The whole suite runs once at landing instead: the batch tier in landing.toml (pr-gate runs no cli tests).
-narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path cli --skip GherkinTests {tests} 2>&1"
+narrow_command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path cli --skip GherkinTests {tests} 2>&1"
 narrow_tests = "cli/Tests/starTests/*.swift"
 narrow_split = "(?m)^\\s*(?:@\\w+\\s+)*(?:(?:public|internal|private|final|open)\\s+)*class (\\w+)\\s*:\\s*\\w*TestCase"
 narrow_each = "--filter starTests.{}"
@@ -367,14 +367,14 @@ narrow_never = ["cli/Package.swift", "cli/Package.resolved"]
 whole_later = "batch"
 
 [suite.test-trail_tools]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path trail_tools 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path trail_tools 2>&1"
 parser = "xctest"
 min_tests = 22 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 uses = { test-suite = 1 }
 
 [suite.test-decision_tree_generator]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path decision_tree_generator 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path decision_tree_generator 2>&1"
 parser = "xctest"
 min_tests = 1 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
@@ -385,7 +385,7 @@ uses = { test-suite = 1 }
 # image sequences, holding many GB resident (peak compressor size is the OOM signal here), and
 # beside another suite they swap and miss their deadlines.
 [suite.test-gherkin]
-command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path gherkin/StarGherkin 2>&1"
+command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path gherkin/StarGherkin 2>&1"
 parser = "xctest"
 min_tests = 1 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"

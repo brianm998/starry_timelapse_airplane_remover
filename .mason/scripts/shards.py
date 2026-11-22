@@ -98,6 +98,10 @@ def plan(known: dict[str, str], shards: list[list[str]], serial: list[str]) -> t
     return [[known[c] for c in g] for g in groups if g], [known[c] for c in serial]
 
 
+# SwiftPM reuses a stale build plan when a file is added to a local dependency (task #985).
+SWIFTPM_FLAGS = ["--disable-build-manifest-caching"]
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--package-path")
@@ -118,16 +122,16 @@ def main(argv: list[str]) -> int:
     if not a.package_path:
         ap.error("--package-path is required")
     pkg = a.package_path
-    build = run(["swift", "build", "--build-tests", "--package-path", pkg])
+    build = run(["swift", "build", *SWIFTPM_FLAGS, "--build-tests", "--package-path", pkg])
     print(build.stdout, end="")
     if build.returncode:
         return 1
-    bin_dir = run(["swift", "build", "--build-tests", "--package-path", pkg, "--show-bin-path"]).stdout.strip().splitlines()[-1]
+    bin_dir = run(["swift", "build", *SWIFTPM_FLAGS, "--build-tests", "--package-path", pkg, "--show-bin-path"]).stdout.strip().splitlines()[-1]
     bundles = sorted(Path(bin_dir).glob("*.xctest"))
     if not bundles:
         print(f"shards: no .xctest bundle in {bin_dir}", file=sys.stderr)
         return 1
-    listing = run(["swift", "test", "list", "--skip-build", "--package-path", pkg])
+    listing = run(["swift", "test", "list", *SWIFTPM_FLAGS, "--skip-build", "--package-path", pkg])
     if listing.returncode:
         print(listing.stdout, file=sys.stderr)
         return 1

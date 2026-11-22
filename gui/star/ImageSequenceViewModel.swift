@@ -334,7 +334,11 @@ public final class ImageSequenceViewModel {
 
     // Multi-frame selection. Always contains currentIndex when non-empty.
     // Count > 1 means a genuine multi-selection is active.
-    var selectedFrameIndices: Set<Int> = []
+    // The selection is part of the outlier window: a newly selected frame loads its full groups,
+    // and one dropped from the selection may be released.
+    var selectedFrameIndices: Set<Int> = [] {
+        didSet { if oldValue != selectedFrameIndices { updateOutlierWindow() } }
+    }
 
     var isMultiSelecting: Bool { selectedFrameIndices.count > 1 }
 
@@ -824,6 +828,7 @@ public final class ImageSequenceViewModel {
                 return
             }
             if oldValue != currentIndex { prioritizeForUser() }
+            if oldValue != currentIndex { updateOutlierWindow() }
             if currentIndex >= 0,
                currentIndex < self.frames.count
             {
@@ -2479,6 +2484,9 @@ public final class ImageSequenceViewModel {
 
                         Task { @MainActor in
                             self.frames[frameIndex].frame = frame
+                            if abs(frameIndex - self.currentIndex) <= Self.outlierWindowRadius {
+                                self.updateOutlierWindow()
+                            }
                             closure(loadedCount, update)
                         }
 
@@ -3198,6 +3206,9 @@ public final class ImageSequenceViewModel {
         }
         
         self.frames[frame.frameIndex].frame = frame
+        if abs(frame.frameIndex - self.currentIndex) <= Self.outlierWindowRadius {
+            updateOutlierWindow()
+        }
 
         if self.initialLoadInProgress {
             var haveAll = true
@@ -3648,12 +3659,60 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    /// Frames within this many of the current one (and the grid selection) hold their full outlier
+    /// groups. At least 2, so the neighbours that a loaded frame's decision tree features read stay
+    /// loaded: groups are released only outside radius + 1.
+    nonisolated static let outlierWindowRadius = 3
+
+    @ObservationIgnored var outlierWindowTask: Task<Void, Never>?
+
+    /// The frames that should hold full outlier groups now.
+    var outlierWindowIndices: Set<Int> {
+        guard !frames.isEmpty else { return [] }
+        let lo = max(0, currentIndex - Self.outlierWindowRadius)
+        let hi = min(frames.count - 1, currentIndex + Self.outlierWindowRadius)
+        var wanted = lo <= hi ? Set(lo...hi) : []
+        wanted.formUnion(selectedFrameIndices.filter { $0 >= 0 && $0 < frames.count })
+        return wanted
+    }
+
+    /// Load full groups for the frames in the window, nearest first, and release those well outside it
+    /// (a frame with an unsaved edit refuses to release). One task at a time, so quick moves don't interleave.
+    func updateOutlierWindow() {
+        outlierWindowTask?.cancel()
+        let previous = outlierWindowTask
+        let center = currentIndex
+        outlierWindowTask = Task { @MainActor [weak self] in
+            await previous?.value
+            guard let self, !Task.isCancelled else { return }
+            let wanted = self.outlierWindowIndices
+            for index in wanted.sorted(by: { abs($0 - center) < abs($1 - center) }) {
+                if Task.isCancelled { return }
+                let view = self.frames[index]
+                guard view.frame != nil else { continue }
+                if await view.frame?.getOutlierGroups() == nil || view.outlierViews == nil {
+                    await view.loadFullOutliers()
+                }
+            }
+            let keep = self.currentIndex
+            let keepRadius = Self.outlierWindowRadius + 1
+            for (index, view) in self.frames.enumerated() {
+                if Task.isCancelled { return }
+                if abs(index - keep) <= keepRadius || self.selectedFrameIndices.contains(index) { continue }
+                await view.unloadFullOutliers()
+            }
+        }
+    }
+
     /// Load a frame's outliers from disk and count its decisions the way the daemon's frame info does, so that fast advancement can
     /// tell whether to pass over it.  A frame with no outliers on disk stays unknown.
     private func loadOutlierCounts(of frameView: FrameViewModel) async {
         guard let frame = frameView.frame else { return }
         if await frame.getOutlierGroups() == nil {
-            try? await frame.loadOutliers(loadOnly: true)
+            // the stored summary answers without loading groups; a sequence without one is loaded
+            // once, which writes it, and released again
+            await frame.loadOutlierCountsFromSummary()
+            return
         }
         guard let groups = await frame.getOutlierGroups() else { return }
         var positive = 0, negative = 0, undecided = 0
@@ -3763,22 +3822,47 @@ public final class ImageSequenceViewModel {
     /// Run the decision tree over every frame that has outliers, with the settings the one-frame command uses (the desktop client's
     /// "Decision Tree, All Frames", which the gui now has too).  Each frame it changes is marked as changed, which queues its save and
     /// with it the new final image, as the daemon does for the same command.
-    func applyDecisionTreeToAllFrames() {
+    /// A frame the tree changed nothing on is not marked, so it is not saved again and can be released behind the sweep.
+    @discardableResult
+    func applyDecisionTreeToAllFrames() -> Task<Void, Never> {
         let overwrite = !classifyOnlyUnclassified
         let minimumSize = minimumClassificationSize
-        Task.detached(priority: .userInitiated) { [self] in
+        return Task.detached(priority: .userInitiated) { [self] in
             let all = await MainActor.run { self.frames.compactMap { $0.frame } }
             for frame in all {
-                if await frame.getOutlierGroups() == nil {
-                    try? await frame.loadOutliers(loadOnly: true)
+                // features read the neighbours' groups: have them loaded around this frame
+                let index = frame.frameIndex
+                let views = await MainActor.run { self.frames.map { $0.frame } }
+                for near in max(0, index - 1)...min(views.count - 1, index + 1) {
+                    if let nearFrame = views[near], await nearFrame.getOutlierGroups() == nil {
+                        try? await nearFrame.loadOutliers(loadOnly: true)
+                    }
                 }
-                guard await frame.getOutlierGroups() != nil else { continue } // no outliers on disk: nothing to decide
-                await frame.applyDecisionTreeToAllOutliers(overwrite: overwrite, minimumSize: minimumSize)
-                await frame.markAsChanged()
+                if let groups = await frame.getOutlierGroups() { // no outliers on disk: nothing to decide
+                    let before = await Self.decisions(of: groups)
+                    await frame.applyDecisionTreeToAllOutliers(overwrite: overwrite, minimumSize: minimumSize)
+                    if await Self.decisions(of: groups) != before { await frame.markAsChanged() }
+                }
+                // release the frames left behind (edited ones refuse), one frame at a time
+                let (center, selected) = await MainActor.run { (self.currentIndex, self.selectedFrameIndices) }
+                let behind = index - 2
+                if behind >= 0, abs(behind - center) > Self.outlierWindowRadius + 1, !selected.contains(behind) {
+                    _ = await views[behind]?.releaseOutlierGroups()
+                }
             }
+            await MainActor.run { self.updateOutlierWindow() }
             let current = await MainActor.run { self.currentFrameView }
             await current.setOutlierGroups(forced: true)
         }
+    }
+
+    /// Every group's decision, by id, to tell whether the decision tree changed a frame.
+    nonisolated private static func decisions(of groups: OutlierGroups) async -> [UInt16: String] {
+        var result: [UInt16: String] = [:]
+        for (id, group) in await groups.getMembers() {
+            result[id] = String(describing: await group.shouldRemove())
+        }
+        return result
     }
 
     /// Write out every edit still waiting for its save (the sequence is being closed), and return once they are on disk.
