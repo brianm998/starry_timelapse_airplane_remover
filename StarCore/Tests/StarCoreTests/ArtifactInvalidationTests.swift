@@ -40,8 +40,11 @@ final class ArtifactInvalidationTests: FrameHarnessTestCase {
             }
 
             for type in [FrameViewMode.starAligned, .earthAligned] {
-                guard let path = config.keypointPath(frameIndex: index, ofType: type)
+                guard let kpb = config.keypointPath(frameIndex: index, ofType: type)
                 else { continue }
+                // Odd frames carry only the legacy .yaml, even ones the .kpb: invalidation
+                // has to delete both forms.
+                let path = index % 2 == 0 ? kpb : Config.legacyKeypointPath(forKeypointPath: kpb)
                 StarCore.mkdir((path as NSString).deletingLastPathComponent)
                 try Data("keypoints".utf8).write(to: URL(fileURLWithPath: path))
             }

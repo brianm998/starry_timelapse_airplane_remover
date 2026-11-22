@@ -62,7 +62,7 @@ final class KeypointOp: AsyncOperation, @unchecked Sendable {
     override func hasWorkToDo() async -> Bool {
         // No path means no cache to check, not "already done".
         guard let keypointPath else { return true }
-        return !FileManager.default.fileExists(atPath: keypointPath)
+        return Config.existingKeypointPath(forKeypointPath: keypointPath) == nil
     }
 
     override func acquireExecutionSlot() async {
