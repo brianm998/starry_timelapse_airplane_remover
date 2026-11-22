@@ -334,7 +334,11 @@ public final class ImageSequenceViewModel {
 
     // Multi-frame selection. Always contains currentIndex when non-empty.
     // Count > 1 means a genuine multi-selection is active.
-    var selectedFrameIndices: Set<Int> = []
+    // The selection is part of the outlier window: a newly selected frame loads its full groups,
+    // and one dropped from the selection may be released.
+    var selectedFrameIndices: Set<Int> = [] {
+        didSet { if oldValue != selectedFrameIndices { updateOutlierWindow() } }
+    }
 
     var isMultiSelecting: Bool { selectedFrameIndices.count > 1 }
 
@@ -3744,10 +3748,12 @@ public final class ImageSequenceViewModel {
     /// Run the decision tree over every frame that has outliers, with the settings the one-frame command uses (the desktop client's
     /// "Decision Tree, All Frames", which the gui now has too).  Each frame it changes is marked as changed, which queues its save and
     /// with it the new final image, as the daemon does for the same command.
-    func applyDecisionTreeToAllFrames() {
+    /// A frame the tree changed nothing on is not marked, so it is not saved again and can be released behind the sweep.
+    @discardableResult
+    func applyDecisionTreeToAllFrames() -> Task<Void, Never> {
         let overwrite = !classifyOnlyUnclassified
         let minimumSize = minimumClassificationSize
-        Task.detached(priority: .userInitiated) { [self] in
+        return Task.detached(priority: .userInitiated) { [self] in
             let all = await MainActor.run { self.frames.compactMap { $0.frame } }
             for frame in all {
                 // features read the neighbours' groups: have them loaded around this frame
@@ -3758,9 +3764,10 @@ public final class ImageSequenceViewModel {
                         try? await nearFrame.loadOutliers(loadOnly: true)
                     }
                 }
-                if await frame.getOutlierGroups() != nil { // no outliers on disk: nothing to decide
+                if let groups = await frame.getOutlierGroups() { // no outliers on disk: nothing to decide
+                    let before = await Self.decisions(of: groups)
                     await frame.applyDecisionTreeToAllOutliers(overwrite: overwrite, minimumSize: minimumSize)
-                    await frame.markAsChanged()
+                    if await Self.decisions(of: groups) != before { await frame.markAsChanged() }
                 }
                 // release the frames left behind (edited ones refuse), one frame at a time
                 let (center, selected) = await MainActor.run { (self.currentIndex, self.selectedFrameIndices) }
@@ -3773,6 +3780,15 @@ public final class ImageSequenceViewModel {
             let current = await MainActor.run { self.currentFrameView }
             await current.setOutlierGroups(forced: true)
         }
+    }
+
+    /// Every group's decision, by id, to tell whether the decision tree changed a frame.
+    nonisolated private static func decisions(of groups: OutlierGroups) async -> [UInt16: String] {
+        var result: [UInt16: String] = [:]
+        for (id, group) in await groups.getMembers() {
+            result[id] = String(describing: await group.shouldRemove())
+        }
+        return result
     }
 
     /// Write out every edit still waiting for its save (the sequence is being closed), and return once they are on disk.

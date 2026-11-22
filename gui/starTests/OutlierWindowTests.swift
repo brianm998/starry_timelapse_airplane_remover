@@ -206,4 +206,68 @@ final class OutlierWindowTests: XCTestCase {
         let back = await snapshot(f.frames[0])
         XCTAssertEqual(back, edited)
     }
+
+    // the selection is part of the window: selecting a far frame loads it, deselecting releases it
+    func testSelectingAFarFrameLoadsItsGroups() async throws {
+        let f = try await fixture(count: 12)
+        defer { try? FileManager.default.removeItem(at: f.dir) }
+        await settle(f.model)
+        let r = ImageSequenceViewModel.outlierWindowRadius
+        let notYet = await snapshot(f.frames[10])
+        XCTAssertNil(notYet)
+
+        f.model.selectedFrameIndices = [0, 10]
+        await f.model.outlierWindowTask?.value
+        let selected = await snapshot(f.frames[10])
+        XCTAssertEqual(selected?.count, 3, "a selected frame outside the window loads its groups")
+        let loaded = await loadedFrames(f)
+        XCTAssertEqual(loaded, Set(0...r).union([10]))
+
+        f.model.selectedFrameIndices = [0]
+        await f.model.outlierWindowTask?.value
+        let dropped = await snapshot(f.frames[10])
+        XCTAssertNil(dropped, "a frame dropped from the selection is released")
+    }
+
+    // Decision Tree, All Frames: loads each frame with its neighbours, releases the unedited ones behind
+    // it, never releases an edited frame, and leaves every frame with its counts and its stored groups.
+    func testApplyTreeToAllFramesReleasesBehindAndKeepsEdits() async throws {
+        let f = try await fixture(count: 12)
+        defer { try? FileManager.default.removeItem(at: f.dir) }
+        await settle(f.model)
+        let r = ImageSequenceViewModel.outlierWindowRadius
+        let stored = await snapshot(f.frames[0])
+
+        // an unsaved user edit on a frame outside the window
+        try await f.frames[8].loadOutliers(loadOnly: true)
+        guard let groups = await f.frames[8].getOutlierGroups(),
+              let g = await groups.members[3] else { return XCTFail("frame 8 should load") }
+        _ = await g.shouldRemove(.userSelected(true))
+        await f.frames[8].markAsChanged()
+        guard let edited = await snapshot(f.frames[8]) else { return XCTFail("frame 8 should be loaded") }
+
+        // the fixture's groups are below minimumClassificationSize, so the tree changes no decision
+        XCTAssertGreaterThan(f.model.minimumClassificationSize, 16)
+        await f.model.applyDecisionTreeToAllFrames().value
+        await f.model.outlierWindowTask?.value
+
+        let loaded = await loadedFrames(f)
+        // releases happen only outside radius + 1, so the sweep's frame r + 1 stays
+        XCTAssertEqual(loaded, Set(0...(r + 1)).union([8]), "frames behind the sweep are released, the edited one is not")
+        let kept = await snapshot(f.frames[8])
+        XCTAssertEqual(kept, edited, "the edit survives the sweep")
+        for i in 0..<f.frames.count where i != 8 {
+            let changed = await f.frames[i].hasChanges()
+            XCTAssertFalse(changed, "frame \(i): an unchanged frame is not marked")
+        }
+        for view in f.model.frames {
+            XCTAssertNotNil(view.frameObserver.numberOfPositiveOutliers, "frame \(view.frameIndex) keeps its counts")
+        }
+
+        // a released frame comes back with its stored groups
+        f.model.currentIndex = 11
+        await f.model.outlierWindowTask?.value
+        let back = await snapshot(f.frames[11])
+        XCTAssertEqual(back, stored,"frame 11 reloads the same stored groups")
+    }
 }

@@ -358,20 +358,17 @@ final public actor FrameOutlierProcessor {
             await frame?.updateCombineSubjects()
             return true
         }
-        var counts = OutlierCounts.load(frameDir: dir)
-        if counts == nil {
+        guard let counts = OutlierCounts.load(frameDir: dir) else {
             guard FileManager.default.fileExists(atPath: await blobBinaryFilename) else { return false }
             try? await loadOutliers(loadOnly: true)
-            if let groups = outlierGroups {
-                try? await groups.write(to: await configManager.config().outlierOutputDirname)
-                counts = await groups.currentCounts()
-                await frame?.updateCombineSubjects()
-                _ = await releaseOutlierGroups()
-                return true
-            }
-            return false
+            guard let groups = outlierGroups else { return false }
+            // writes OutlierCounts.json beside the paint data, so the next open needs no full load
+            try? await groups.write(to: await configManager.config().outlierOutputDirname)
+            await frame?.updateCombineSubjects()
+            _ = await releaseOutlierGroups()
+            return true
         }
-        if let counts, let observer = await frame?.getObserver() {
+        if let observer = await frame?.getObserver() {
             await observer.set(numberOfPositiveOutliers: counts.positive,
                                numberOfNegativeOutliers: counts.negative,
                                numberOfUndecidedOutliers: counts.undecided,
