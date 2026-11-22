@@ -1,5 +1,7 @@
 import XCTest
+import AppKit
 import StarCore
+import StarCppBridge
 @testable import Star
 
 /// Which frames hold full outlier groups: the current one plus or minus a radius, and the grid selection.
