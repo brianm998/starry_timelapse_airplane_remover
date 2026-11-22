@@ -58,7 +58,9 @@ public class FrameViewModel {
 
     /// Monotonically-increasing counter. Each call to refreshHorizonOverlay()
     /// stamps the launched task; only the most-recently-requested result is applied.
-    private var horizonOverlayVersion: UInt = 0
+    private(set) var horizonOverlayVersion: UInt = 0
+    /// The version whose result `horizonOverlays` last took; equals `horizonOverlayVersion` once a refresh is done.
+    @ObservationIgnored private(set) var appliedHorizonOverlayVersion: UInt = 0
     private var frameHorizonOverlayVersion: UInt = 0
     private var gridHorizonOverlayVersion: UInt = 0
     
@@ -466,6 +468,7 @@ public class FrameViewModel {
                 guard self.horizonOverlayVersion == version else { return }
                 // lines are drawn by HorizonLinesCanvas; the picture underneath did not change
                 self.horizonOverlays = overlays
+                self.appliedHorizonOverlayVersion = version
             }
         }
     }

@@ -79,14 +79,56 @@ final class FrameImageLoaderTests: XCTestCase {
         let path = try writeJPEG("h.jpg")
         let entry = loader.request(path: path)
         await entry.settled()
-        let config = ConfigManager(configFilename: dir.appendingPathComponent("c.json").path, config: Config())
-        let frame = FrameViewModel(config, 0)
+
+        // a real frame, so refreshHorizonOverlay() gets past `guard let frame`
+        let seqDir = dir.appendingPathComponent("seq")
+        try FileManager.default.createDirectory(at: seqDir, withIntermediateDirectories: true)
+        for i in 0..<2 {
+            let rep = NSBitmapImageRep(
+              bitmapDataPlanes: nil, pixelsWide: 32, pixelsHigh: 24, bitsPerSample: 8,
+              samplesPerPixel: 3, hasAlpha: false, isPlanar: false,
+              colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+            try rep.representation(using: .tiff, properties: [:])!
+              .write(to: seqDir.appendingPathComponent(String(format: "frame_%03d.tiff", i)))
+        }
+        var config = Config(
+          outputPath: dir.path, imageSequenceName: "seq", imageSequencePath: dir.path,
+          writeOutlierGroupFiles: false, writeFramePreviewFiles: false,
+          writeFrameProcessedPreviewFiles: false, writeFrameThumbnailFiles: false)
+        let imageSequence = try ImageSequence(dirname: seqDir.path, supportedImageFileTypes: [".tiff"])
+        let filenames = await imageSequence.filenames
+        let imageInfo = try await imageSequence.getImageInfo()
+        config.set(imageInfo: imageInfo)
+        let manager = ConfigManager(configFilename: dir.appendingPathComponent("c.json").path, config: config)
+        var names: [Int: String] = [:]
+        for (i, f) in filenames.enumerated() { names[i] = removePath(fromString: f) }
+        let accessor = ImageAccessor(config: config, imageSequence: imageSequence,
+                                     frameIndexToBaseNameMap: names)
+        let real = try await FrameAirplaneRemover(
+          with: manager, initialConfig: config,
+          width: imageInfo.imageWidth, height: imageInfo.imageHeight,
+          componentsPerPixel: imageInfo.componentsPerPixel, callbacks: Callbacks(),
+          imageSequence: imageSequence, atIndex: 0,
+          outputFilename: "\(config.outputPath)/\(config.basename)",
+          baseName: names[0] ?? "frame_000", writeOutputFiles: false, imageAccessor: accessor)
+
+        let model = FrameViewModel(manager, 0)
+        model.frame = real
+        // let the refresh that setting `frame` starts finish, so ours is the only one in flight
+        await waitUntil("initial refresh") {
+            model.horizonOverlayVersion > 0 && model.appliedHorizonOverlayVersion == model.horizonOverlayVersion
+        }
+
         let before = loader.requestCount(forPath: path)
         let total = loader.totalRequests
-        let reload = frame.reloadID
-        frame.refreshHorizonOverlay()
-        try await Task.sleep(nanoseconds: 100_000_000)
-        XCTAssertEqual(frame.reloadID, reload, "a horizon refresh must not signal a picture reload")
+        let reload = model.reloadID
+        let versionBefore = model.horizonOverlayVersion
+        model.refreshHorizonOverlay()
+        XCTAssertEqual(model.horizonOverlayVersion, versionBefore + 1, "refresh must have run, not returned at the nil-frame guard")
+        await waitUntil("refresh applied") {
+            model.appliedHorizonOverlayVersion == model.horizonOverlayVersion
+        }
+        XCTAssertEqual(model.reloadID, reload, "a horizon refresh must not signal a picture reload")
         XCTAssertEqual(loader.requestCount(forPath: path), before)
         XCTAssertEqual(loader.totalRequests, total)
         if case .loaded = entry.phase {} else { XCTFail("picture dropped") }
