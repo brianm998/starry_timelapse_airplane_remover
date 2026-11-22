@@ -57,8 +57,10 @@ struct PostProcessingRenderPromptLayout: View {
         if let pictures {
             HStack(spacing: Self.arrowGap) {
                 picture(pictures.before)
+                  .accessibilityIdentifier("prompt.post.before")
                 Image(systemName: "arrow.right")
                 picture(pictures.after)
+                  .accessibilityIdentifier("prompt.post.after")
             }
         }
     }
@@ -95,10 +97,12 @@ struct PostProcessingRenderPromptLayout: View {
                 Spacer()
 
                 Button(localized("ui.preview_first"), action: previewFirst)
+                  .accessibilityIdentifier("prompt.post.preview")
                   .help(localized("ui.play_the_final_processed_frames_from_the"))
 
                 Button(localized("ui.yes"), action: yes)
                   .keyboardShortcut(.defaultAction)
+                  .accessibilityIdentifier("prompt.post.yes")
                   .help(localized("ui.render_now_using_the_current_settings"))
             }
         }
@@ -107,5 +111,7 @@ struct PostProcessingRenderPromptLayout: View {
           .frame(minWidth: Self.minWidth)
           .fixedSize()
           .starDialogStyle()
+          .accessibilityElement(children: .contain)
+          .accessibilityIdentifier("prompt.card")
     }
 }
