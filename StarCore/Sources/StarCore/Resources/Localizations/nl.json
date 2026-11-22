@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Nadat Star klaar is met het verwerken van je beeldreeks, kun je een video van de reeks bekijken in voorbeeldresolutie. Dat kan helpen om correcties aan te brengen.\n\nStar is nog in ontwikkeling.",
   "warning.title.gpu_merge_turned_off": "GPU-samenvoeging uitgezet",
   "warning.gpu_merge_turned_off.message": "De vorige run is gestopt tijdens het samenvoegen op de GPU, daarom is samenvoegen op de GPU voor deze sessie uitgezet.",
-  "warning.gpu_merge_turned_off.suggestion": "Als de GPU van deze computer niet de oorzaak is, kunt u het in de verwerkingsinstellingen weer aanzetten."
+  "warning.gpu_merge_turned_off.suggestion": "Als de GPU van deze computer niet de oorzaak is, kunt u het in de verwerkingsinstellingen weer aanzetten.",
+  "ui.output_jpeg_quality": "Kwaliteit van de JPEG-uitvoer:",
+  "ui.output_quality_same_as_input": "Gelijk aan de invoer ({0}%)",
+  "setting_help.output_jpeg_quality": "De kwaliteit waarmee de JPEG-beelden van de uitvoer worden geschreven. Ze begint bij de kwaliteit van de invoerbeelden, zodat de uitvoer ongeveer even scherp en even groot is als wat erin ging. Lager geeft kleinere bestanden; hoger behoudt meer detail, al brengt een kwaliteit boven die van de invoer niet terug wat de invoer al kwijt was. Herstel zet haar terug op de kwaliteit van de invoer. Wijzigen schrijft de uitvoerbeelden opnieuw en behoudt de uitlijning. Ze wordt alleen aangeboden als de beelden JPEG's zijn."
 }

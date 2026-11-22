@@ -559,6 +559,11 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         if config.tripodHeadWasMoving {
             inputs["allowEarthAlignment"] = str(config.allowEarthAlignment)
         }
+        // The quality the output JPEGs are written at, when the user overrode the input's.
+        // Absent while unset, so a record written before the setting existed still matches.
+        if let quality = config.outputJPEGQuality {
+            inputs["outputJPEGQuality"] = str(quality)
+        }
         return inputs
     }
 

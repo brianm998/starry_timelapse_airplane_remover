@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Depois que o Star terminar de processar sua sequência de imagens, você poderá assistir a um vídeo da sequência em resolução de pré-visualização. Isso pode ajudar você a fazer correções.\n\nO Star ainda é um trabalho em andamento.",
   "warning.title.gpu_merge_turned_off": "Mesclagem na GPU desativada",
   "warning.gpu_merge_turned_off.message": "A execução anterior foi interrompida durante a mesclagem na GPU, então a mesclagem na GPU foi desativada nesta sessão.",
-  "warning.gpu_merge_turned_off.suggestion": "Se a GPU deste computador não for a causa, você pode ativá-la novamente nos ajustes de processamento."
+  "warning.gpu_merge_turned_off.suggestion": "Se a GPU deste computador não for a causa, você pode ativá-la novamente nos ajustes de processamento.",
+  "ui.output_jpeg_quality": "Qualidade do JPEG de saída:",
+  "ui.output_quality_same_as_input": "Igual à entrada ({0}%)",
+  "setting_help.output_jpeg_quality": "A qualidade com que os quadros JPEG de saída são gravados. Ela começa na qualidade dos quadros de entrada, então a saída fica mais ou menos tão nítida e tão grande quanto o que entrou. Diminua para obter arquivos menores; aumente para manter mais detalhes, embora passar da qualidade da entrada não recupere o que a entrada já perdeu. Redefinir a devolve à qualidade da entrada. Alterá-la grava os quadros de saída de novo e mantém o alinhamento. Ela só é oferecida quando os quadros são JPEG."
 }

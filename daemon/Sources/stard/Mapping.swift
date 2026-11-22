@@ -436,6 +436,7 @@ enum Mapping {
         out.useGpuAcceleration = c.useGPUForMerge
         out.cloudAwareMerge = c.cloudAwareMerge
         out.pixelThreshold = c.pixelThreshold
+        out.outputJpegQuality = Int32(c.outputJPEGQuality ?? 0)     // 0 = same as the input's
         // Read-only: not a Config field, so there is nothing for applyExpertConfig to
         // apply it back onto — computed fresh on every outgoing Config so a client
         // always shows the daemon's own machine's hardware, not a stale answer from
@@ -464,6 +465,9 @@ enum Mapping {
         if p.hasNumberAlignedNeighborFrames { c.numberAlignedNeighborFrames = Int(p.numberAlignedNeighborFrames) }
         if p.hasNumberStaticNeighborFrames { c.numberStaticNeighborFrames = Int(p.numberStaticNeighborFrames) }
         if p.hasHomographySmoothingEpsilon { c.homographySmoothingEpsilon = p.homographySmoothingEpsilon }
+        if p.hasOutputJpegQuality {
+            c.outputJPEGQuality = p.outputJpegQuality <= 0 ? nil : min(Int(p.outputJpegQuality), 100)
+        }
         if p.hasKeypointMemoryMultiplier { c.keypointMemoryMultiplier = Int(p.keypointMemoryMultiplier) }
         if p.hasOutlierMemoryMultiplier { c.outlierMemoryMultiplier = Int(p.outlierMemoryMultiplier) }
         if p.hasMergeMemoryMultiplier { c.mergeMemoryMultiplier = Int(p.mergeMemoryMultiplier) }
@@ -613,7 +617,7 @@ enum Mapping {
     // MARK: - SessionInfo
 
     static func sessionInfo(session: Session, config: Config, imageInfo: ImageInfo,
-                            frameCount: Int, videoInfo vi: VideoInfo? = nil) -> Star_V1_SessionInfo {
+                            frameCount: Int, sourceJPEGQuality: Int?, videoInfo vi: VideoInfo? = nil) -> Star_V1_SessionInfo {
         var info = Star_V1_SessionInfo()
         info.sessionID = session.sessionID
         info.frameCount = Int32(frameCount)
@@ -624,6 +628,7 @@ enum Mapping {
         info.scratchSessionDir = session.scratchSessionDir
         info.configJsonPath = session.configJsonPath
         if let vi { info.sourceVideoInfo = videoInfo(vi) }
+        info.sourceJpegQuality = Int32(sourceJPEGQuality ?? 0)
         let source = session.extractionSource
         if let source, !source.progress.isComplete { info.extraction = frameExtraction(of: source, snapshot: true) }
         return info

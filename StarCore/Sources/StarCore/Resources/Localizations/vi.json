@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Sau khi Star xử lý xong chuỗi ảnh của bạn, bạn có thể xem video của chuỗi ở độ phân giải xem trước. Điều này có thể giúp bạn thực hiện các chỉnh sửa.\n\nStar vẫn đang trong quá trình phát triển.",
   "warning.title.gpu_merge_turned_off": "Đã tắt hợp nhất bằng GPU",
   "warning.gpu_merge_turned_off.message": "Lần chạy trước đã dừng khi đang hợp nhất trên GPU, nên việc hợp nhất bằng GPU đã bị tắt cho phiên này.",
-  "warning.gpu_merge_turned_off.suggestion": "Nếu GPU của máy này không phải nguyên nhân, bạn có thể bật lại trong phần cài đặt xử lý."
+  "warning.gpu_merge_turned_off.suggestion": "Nếu GPU của máy này không phải nguyên nhân, bạn có thể bật lại trong phần cài đặt xử lý.",
+  "ui.output_jpeg_quality": "Chất lượng JPEG đầu ra:",
+  "ui.output_quality_same_as_input": "Giống đầu vào ({0}%)",
+  "setting_help.output_jpeg_quality": "Chất lượng dùng để ghi các khung JPEG đầu ra. Giá trị ban đầu là chất lượng của các khung đầu vào, nên kết quả có độ nét và dung lượng gần như bằng những gì đưa vào. Giảm xuống để có tệp nhỏ hơn; tăng lên để giữ nhiều chi tiết hơn, dù vượt quá chất lượng đầu vào cũng không lấy lại được những gì đầu vào đã mất. Đặt lại sẽ đưa về chất lượng của đầu vào. Thay đổi sẽ ghi lại các khung đầu ra và giữ nguyên căn chỉnh. Tùy chọn này chỉ hiện khi các khung là JPEG."
 }

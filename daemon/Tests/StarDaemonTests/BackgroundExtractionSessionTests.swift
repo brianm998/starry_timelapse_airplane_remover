@@ -77,7 +77,7 @@ final class BackgroundExtractionSessionTests: XCTestCase {
         XCTAssertTrue(source.isAvailable(0))
 
         let config = await session.configManager.config()
-        let info = Mapping.sessionInfo(session: session, config: config, imageInfo: await session.imageInfo, frameCount: 900)
+        let info = Mapping.sessionInfo(session: session, config: config, imageInfo: await session.imageInfo, frameCount: 900, sourceJPEGQuality: nil)
         XCTAssertEqual(info.frameCount, 900)
         XCTAssertTrue(info.extraction.active)
         XCTAssertTrue(info.extraction.seekable)

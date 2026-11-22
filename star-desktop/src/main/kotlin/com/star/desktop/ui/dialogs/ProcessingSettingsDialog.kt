@@ -191,6 +191,9 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
     var detection by remember(cfg) { mutableStateOf(cfg.detectionType) }
     var horizon by remember(cfg) { mutableStateOf(cfg.horizonDetectionEnabled) }
     var tripod by remember(cfg) { mutableStateOf(cfg.tripodHeadWasMoving) }
+    // The output JPEG quality override, 0 = same as the input's; the input's quality is 0 when the frames are not JPEGs.
+    var outputQuality by remember(cfg) { mutableStateOf(if (cfg.hasOutputJpegQuality()) cfg.outputJpegQuality else 0) }
+    val sourceQuality = svm?.info?.sourceJpegQuality ?: 0
     var concurrency by remember(cfg) { mutableStateOf(cfg.numberOfFramesToProcessConcurrently.coerceAtLeast(1)) }
     // Daemons that predate the profile send none: they behave as Full.
     var useProfile by remember(cfg) { mutableStateOf(if (cfg.hasResourceProfile()) cfg.resourceProfile else "full") }
@@ -214,7 +217,7 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
     }.map { it.label }.toSet()
 
     fun proposal(texts: Map<String, String>): Config =
-        proposedConfig(applied, clean, detection, horizon, tripod, concurrency, useProfile, edit, boolEdits, texts, frameMax)
+        proposedConfig(applied, clean, detection, horizon, tripod, concurrency, useProfile, edit, boolEdits, texts, frameMax, outputQuality)
 
     // What applying the committed edits sends now: the four basic choices, which the daemon takes whole, and what else differs.
     val proposed = proposal(textEdits.toMap())
@@ -405,6 +408,15 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                             }
                             // The cloud-aware merge, which anyone shooting a moving sky may want.
                             ExpertGroup(MERGE_FIELDS, cfg, edit, boolEdits, textEdits, drafts, info, frameCount, daemonVersion)
+                            // The quality the output JPEGs are written at, which starts at the input's: only JPEG frames have one.
+                            if (OutputQuality.visible(sourceQuality)) {
+                                SettingGroup(
+                                    localized("ui.output_jpeg_quality").removeSuffix(":"), info = info, infoId = OUTPUT_QUALITY_ID,
+                                    help = localized("setting_help.output_jpeg_quality"),
+                                ) {
+                                    OutputQualityRow(outputQuality, sourceQuality, { outputQuality = it })
+                                }
+                            }
                         }
                         SettingsTab.GPU -> GpuGroup(cfg, edit, boolEdits, info, daemonVersion)
                         SettingsTab.ALIGNMENT -> ExpertGroup(ALIGNMENT_FIELDS, cfg, edit, boolEdits, textEdits, drafts, info, frameCount, daemonVersion)
@@ -488,6 +500,7 @@ internal fun noEditsProposal(applied: Config): Config {
     return proposedConfig(
         applied, applied.cleanMethod, applied.detectionType, applied.horizonDetectionEnabled, applied.tripodHeadWasMoving,
         applied.numberOfFramesToProcessConcurrently.coerceAtLeast(1), profile, edit, emptyMap(), emptyMap(), 1,
+        applied.outputJpegQuality,
     )
 }
 
@@ -505,7 +518,7 @@ private val SHEET_MAX_HEIGHT = 780.dp
  */
 internal fun proposedConfig(
     applied: Config, clean: CleanMethod, detection: DetectionType, horizon: Boolean, tripod: Boolean, concurrency: Int, profile: String,
-    edit: SettingsEdit, bools: Map<String, Boolean>, texts: Map<String, String>, frameMax: Int,
+    edit: SettingsEdit, bools: Map<String, Boolean>, texts: Map<String, String>, frameMax: Int, outputQuality: Int = applied.outputJpegQuality,
 ): Config {
     // Not optional in the proto: the daemon sets all of these from whatever it is sent, so leaving one out would put it back to its default.
     val b = Config.newBuilder()
@@ -517,6 +530,8 @@ internal fun proposedConfig(
     if (applied.hasResourceProfile() && applied.resourceProfile != profile || !applied.hasResourceProfile() && profile != "full") {
         b.setResourceProfile(profile)
     }
+    // 0 = same as the input's, and is sent too, which is how an override is taken back.
+    if (outputQuality != applied.outputJpegQuality) b.setOutputJpegQuality(outputQuality)
     // Unsupported fields are skipped: they render as read-only so there should be no edit to apply, and sending one to a daemon that
     // does not know the field would be a silent no-op at best. A field that does not apply, or whose text is not a valid number,
     // is not sent either.
@@ -548,6 +563,30 @@ private fun SettingGroup(
             Text(title, color = if (enabled) StarColors.textSecondary else StarColors.textDisabled, fontSize = 12.sp)
         }
         content()
+    }
+}
+
+/** The slider (as the video import's), the reset beside it and, while the outputs follow the input, the note saying so. */
+@Composable
+internal fun OutputQualityRow(override: Int, sourceQuality: Int, onChange: (Int) -> Unit) {
+    val shown = OutputQuality.shown(override, sourceQuality)
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(localized("ui.jpeg_quality", shown), color = StarColors.textPrimary, fontSize = 12.sp, modifier = Modifier.testTag("settings.outputQuality.value"))
+            androidx.compose.material3.Slider(
+                value = shown.toFloat(),
+                onValueChange = { onChange(OutputQuality.overrideFor(it.toInt(), sourceQuality)) },
+                valueRange = OutputQuality.MIN.toFloat()..OutputQuality.MAX.toFloat(),
+                steps = OutputQuality.MAX - OutputQuality.MIN - 1,
+                modifier = Modifier.weight(1f).testTag("settings.outputQuality.slider"),
+            )
+            OutlinedButton(onClick = { onChange(0) }, enabled = override != 0, modifier = Modifier.testTag("settings.outputQuality.reset")) {
+                Text(localized("ui.reset"), fontSize = 12.sp)
+            }
+        }
+        if (OutputQuality.matchesInput(override, sourceQuality)) {
+            Text(localized("ui.output_quality_same_as_input", sourceQuality), color = StarColors.textDisabled, fontSize = 10.sp, modifier = Modifier.testTag("settings.outputQuality.same"))
+        }
     }
 }
 
@@ -939,7 +978,8 @@ internal val PERFORMANCE_FIELDS: List<ExpertField> = listOf(
 private val ALL_FIELDS: List<ExpertField> = ALIGNMENT_FIELDS + HORIZON_FIELDS + MEMORY_FIELDS + MERGE_FIELDS + PERFORMANCE_FIELDS
 
 /** Every row that has an explanation, which Show Info opens: the pickers and each field with help text. */
-private val ALL_INFO_IDS: List<String> = listOf("clean", "autoselective", "detection", "scene", "camera") + ALL_FIELDS.filter { it.helpKeys.isNotEmpty() }.map { it.label }
+internal const val OUTPUT_QUALITY_ID = "outputquality"
+private val ALL_INFO_IDS: List<String> = listOf("clean", "autoselective", "detection", "scene", "camera", OUTPUT_QUALITY_ID) + ALL_FIELDS.filter { it.helpKeys.isNotEmpty() }.map { it.label }
 
 /** The toggles by id, for the rules that read one toggle from another's row. */
 private val BOOL_FIELDS: Map<String, BoolField> = ALL_FIELDS.filterIsInstance<BoolField>().associateBy { it.label }

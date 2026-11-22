@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Nachdem Star die Verarbeitung Ihrer Bildsequenz abgeschlossen hat, können Sie sich ein Video der Sequenz in Vorschauauflösung ansehen. Das kann hilfreich sein, um Korrekturen vorzunehmen.\n\nStar ist noch in Entwicklung.",
   "warning.title.gpu_merge_turned_off": "GPU-Zusammenführung ausgeschaltet",
   "warning.gpu_merge_turned_off.message": "Der vorherige Lauf wurde beim Zusammenführen auf der GPU gestoppt, daher wurde die Zusammenführung auf der GPU für diese Sitzung ausgeschaltet.",
-  "warning.gpu_merge_turned_off.suggestion": "Wenn die GPU dieses Rechners nicht die Ursache ist, können Sie sie in den Verarbeitungseinstellungen wieder einschalten."
+  "warning.gpu_merge_turned_off.suggestion": "Wenn die GPU dieses Rechners nicht die Ursache ist, können Sie sie in den Verarbeitungseinstellungen wieder einschalten.",
+  "ui.output_jpeg_quality": "Qualität der JPEG-Ausgabe:",
+  "ui.output_quality_same_as_input": "Wie die Eingabe ({0} %)",
+  "setting_help.output_jpeg_quality": "Die Qualität, mit der die JPEG-Bilder der Ausgabe geschrieben werden. Sie beginnt bei der Qualität der Eingabebilder, sodass die Ausgabe etwa so scharf und so groß ist wie das, was hineinkam. Niedriger ergibt kleinere Dateien; höher bewahrt mehr Details, wobei eine Qualität über der der Eingabe nicht zurückbringt, was die Eingabe schon verloren hat. Zurücksetzen stellt die Qualität der Eingabe wieder her. Eine Änderung schreibt die Ausgabebilder neu und behält die Ausrichtung. Sie wird nur angeboten, wenn die Bilder JPEGs sind."
 }
