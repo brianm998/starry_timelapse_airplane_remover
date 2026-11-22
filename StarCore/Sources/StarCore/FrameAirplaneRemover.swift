@@ -631,7 +631,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     public nonisolated func process(
       startIndex: Int = 0,
       endIndex: Int? = nil,      // will be last index of frames
-      progressClosure: @Sendable @escaping (SequenceProcessingState) -> Void
+      progressClosure: @Sendable @escaping (SequenceProcessingState) -> Void,
+      cancelledClosure: @Sendable @escaping () -> Void = {}
     ) async {
         Log.d("processAll")
 
@@ -652,6 +653,8 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                 }
             } errorClosure: { errorString in
                 Log.e("handle this error: \(errorString)")
+            } cancelledClosure: {
+                cancelledClosure()
             }
         }
     }

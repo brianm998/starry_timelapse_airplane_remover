@@ -172,6 +172,13 @@ public class Processor {
             }
         } errorClosure: { errorString in
             // logged above
+        } cancelledClosure: {
+            // dropped by a cancel: no completion will come, so do not wait for one forever.
+            Log.e("ERROR: run cancelled")
+            Task {
+                await collected.append("run cancelled")
+                semaphore.signal()
+            }
         }
 
         await semaphore.wait()

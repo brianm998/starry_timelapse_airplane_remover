@@ -2833,8 +2833,17 @@ public final class ImageSequenceViewModel {
     /// modal's Stop button does.
     func stopProcessing() {
         cancelProcessing()
-        Task { await frameGraphBuilder.cancelAllOperations() }
+        // Kept, so a Start that follows waits for this cancel to land: a cancel that arrived
+        // after the next build had entered would drop that build.
+        let previous = pendingStop
+        pendingStop = Task {
+            await previous?.value
+            await frameGraphBuilder.cancelAllOperations()
+        }
     }
+
+    /// The cancel `stopProcessing` issued, until a Start has waited for it.
+    private var pendingStop: Task<Void, Never>?
 
     /// Put the processing modal up for a run that is starting, unless the user has turned
     /// that off in Preferences.
@@ -2999,8 +3008,12 @@ public final class ImageSequenceViewModel {
         processingGeneration += 1
         let capturedGen = processingGeneration
         if let frame = frames[0].frame {
+            let stop = pendingStop
+            pendingStop = nil
             Task {
                 Log.d("beginProcessing")
+                // an earlier Stop's cancel has to have landed before this build starts.
+                await stop?.value
                 // Before the graph is built, which surveys the disk: a horizon reference
                 // the user painted and put off applying is taken on by this run, so
                 // pressing "Process Frames" is a way through it and not a way around it.
@@ -3023,6 +3036,16 @@ public final class ImageSequenceViewModel {
                         default:
                             break
                         }
+                    }
+                } cancelled: {
+                    // the build was dropped by a cancel: leave the processing state, for this
+                    // run only.  A cancelled run sets no menu bar outcome.
+                    Task { @MainActor in
+                        guard self.processingGeneration == capturedGen else { return }
+                        Log.i("processing run dropped by a cancel")
+                        self.isProcessingFrames = false
+                        self.processingModalShowing = false
+                        self.processingStatusText = nil
                     }
                 }
             }
@@ -3068,13 +3091,15 @@ public final class ImageSequenceViewModel {
       frame: FrameAirplaneRemover,
       startIndex: Int = 0,
       endIndex: Int? = nil,      // will be last index of frames
-      closure: @Sendable @escaping (SequenceProcessingState) -> Void
+      closure: @Sendable @escaping (SequenceProcessingState) -> Void,
+      cancelled: @Sendable @escaping () -> Void = {}
     ) async {
         Log.d("processAll")
         await frame.process(
           startIndex: startIndex,
           endIndex: endIndex,
-          progressClosure: closure
+          progressClosure: closure,
+          cancelledClosure: cancelled
         )
     }
     
@@ -3428,6 +3453,12 @@ public final class ImageSequenceViewModel {
                     Task { @MainActor in
                         // only the current run's end ends the run state: a superseded run finishing
                         // (or being cancelled) must not clear it under the one that replaced it
+                        if self.processingGeneration == runGeneration {
+                            self.isProcessingFrames = false
+                        }
+                    }
+                } cancelled: {
+                    Task { @MainActor in
                         if self.processingGeneration == runGeneration {
                             self.isProcessingFrames = false
                         }
