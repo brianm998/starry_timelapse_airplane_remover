@@ -119,13 +119,13 @@ struct GridRightPanel: View {
             infoRow(localized("ui.index"), value: "\(viewModel.currentIndex)")
 
             if let f = frame.frame,
-               let url = f.imageAccessor.urlForImage(
+               let name = f.imageAccessor.nameForImage(
                  frameIndex: f.frameIndex,
                  ofType: .original,
                  atSize: .original
                )
             {
-                infoRow(localized("ui.file"), value: url.lastPathComponent)
+                infoRow(localized("ui.file"), value: (name as NSString).lastPathComponent)
                     .lineLimit(2)
             }
 

@@ -28,7 +28,19 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         self.name = "alignment validation"
     }
 
+    /// True when this op, its task, or any dependency was cancelled.  A Stop cancels the
+    /// queue's operations in no particular order, so a homography op cancelled first
+    /// finishes at once and can release this op to run before its own `cancel()` arrives.
+    /// It then finds nothing stored, which is a consequence of the Stop and not a failure.
+    private var wasCancelled: Bool {
+        isCancelled || Task.isCancelled || dependencies.contains(where: \.isCancelled)
+    }
+
     override func asyncExecute() async {
+        if wasCancelled {
+            Log.i("alignment validation cancelled")
+            return
+        }
         do {
             Log.d("start")
             let config = await configManager.config()
@@ -82,6 +94,10 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
         }
 
         guard let median = medianHomography(among: homographies) else {
+            if wasCancelled {
+                Log.i("alignment validation cancelled")
+                return
+            }
             Log.e("ERROR, canceling no homographies found")
             let message = "no usable star alignment was found between these frames, " +
               "so the sequence cannot be processed"
@@ -393,6 +409,10 @@ final class AlignmentValidationOp: AsyncOperation, @unchecked Sendable {
 
         let nonNilCount = entries.lazy.filter { $0.homography != nil }.count
         guard nonNilCount > 0 else {
+            if wasCancelled {
+                Log.i("alignment validation cancelled")
+                return
+            }
             Log.e("No homography results found")
             let message = "no usable star alignment was found between these frames, " +
               "so the sequence cannot be processed"
