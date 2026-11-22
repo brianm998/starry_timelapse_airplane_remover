@@ -50,8 +50,10 @@ public actor KeypointCache {
     /// Set the byte budget. 0 disables eviction.
     public func configure(maxBytes: Int) {
         self.maxBytes = max(0, maxBytes)
-        Log.i("KeypointCache budget \(self.maxBytes / (1024*1024))MB " +
-              "(holding \(totalBytes / (1024*1024))MB in \(cache.count) entries)")
+        if LogOnChange.configBlock.changed("KeypointCache", "\(self.maxBytes)") {
+            Log.i("KeypointCache budget \(self.maxBytes / (1024*1024))MB " +
+                  "(holding \(totalBytes / (1024*1024))MB in \(cache.count) entries)")
+        }
         evictIfNeeded()
     }
 

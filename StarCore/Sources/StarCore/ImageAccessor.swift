@@ -348,7 +348,13 @@ public struct ImageAccessor: Sendable {
                                 numRetries -= 1
                                 continue
                             }
-                            Log.i("file at \(filename) does not exist :(")
+                            // Only a missing original is news; a static sequence never has a
+                            // horizon mask, and an unprocessed frame has no outlier images.
+                            if imageType == .original {
+                                Log.i("file at \(filename) does not exist :(")
+                            } else {
+                                Log.d("file at \(filename) does not exist :(")
+                            }
                             return nil  // original does not exist, nothing to return
                         default:
                             if let image = try await createMissingImage(

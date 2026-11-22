@@ -206,7 +206,10 @@ public final actor FrameGraphBuilder {
         message += "\(kc.bytesPerOp / (1024 * 1024))MB/op of \(kc.budget / (1024 * 1024))MB budget), "
         message += "frames cap \(config.frameConcurrency)\(explicit) "
         message += "→ bound by \(kc.binding)"
-        Log.i(message)
+        // The values in the line only; "context" says who asked and is not a value.
+        if LogOnChange.configBlock.changed("KeypointLimiter", String(message.drop(while: { $0 != "]" }))) {
+            Log.i(message)
+        }
     }
 
     public func add(operation: Operation) {
