@@ -5,7 +5,7 @@ import ImageIO
 import logging
 import StarCore
 
-/// Where every frame picture in the gui comes from.  It replaces `AsyncImage`, which stays on its
+/// Where every frame picture in the gui comes from.  It replaces SwiftUI's built-in async image view, which stays on its
 /// placeholder forever when a load fails or is cancelled, and which needed the caller to stat the
 /// file on the main thread first.
 ///
