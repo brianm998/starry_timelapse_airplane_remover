@@ -2258,7 +2258,8 @@ public final class ImageSequenceViewModel {
           resumeConfigPath: markerConfig.jsonPath(named: "config.json"),
           imageWidth: markerConfig.imageWidth,
           imageHeight: markerConfig.imageHeight,
-          imageBytesPerPixel: markerConfig.imageBytesPerPixel
+          imageBytesPerPixel: markerConfig.imageBytesPerPixel,
+          gpuMergeEnabled: GPUCapability.mergeWillUseGPU(requested: markerConfig.useGPUForMerge)
         )
         
         Log.d("loaded imageInfo \(imageInfo)")

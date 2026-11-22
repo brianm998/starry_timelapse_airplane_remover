@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "Después de clasificar todos los grupos atípicos de un fotograma, ya sabemos qué píxeles se consideran ruido y cuáles se pueden conservar.\nCon estos datos, Star crea una máscara de eliminación, similar a una máscara de capa en Photoshop o GIMP. Esta máscara sirve para sustituir los píxeles ruidosos por datos del fotograma vecino alineado.",
   "ui.info_detailed_final_title": "Eliminación final de píxeles defectuosos",
   "ui.info_detailed_final_body": "En este último paso, Star simplemente compone el fotograma que se está procesando con el fotograma vecino alineado, usando la máscara de eliminación como máscara de capa, para sobrescribir solo un pequeño número de píxeles del fotograma que estamos procesando.",
-  "ui.info_detailed_closing": "Cuando Star haya terminado de procesar tu secuencia de imágenes, podrás ver un vídeo de la secuencia en resolución de vista previa. Esto puede ayudarte a hacer correcciones.\n\nStar sigue siendo un trabajo en curso."
+  "ui.info_detailed_closing": "Cuando Star haya terminado de procesar tu secuencia de imágenes, podrás ver un vídeo de la secuencia en resolución de vista previa. Esto puede ayudarte a hacer correcciones.\n\nStar sigue siendo un trabajo en curso.",
+  "warning.title.gpu_merge_turned_off": "Fusión en GPU desactivada",
+  "warning.gpu_merge_turned_off.message": "La ejecución anterior se detuvo durante la fusión en la GPU, así que la fusión en GPU se ha desactivado para esta sesión.",
+  "warning.gpu_merge_turned_off.suggestion": "Si la GPU de este equipo no es la causa, puedes volver a activarla en los ajustes de procesamiento."
 }

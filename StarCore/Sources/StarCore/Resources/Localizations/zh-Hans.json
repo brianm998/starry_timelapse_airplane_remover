@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "为一帧的所有离群组分类之后,我们就知道哪些像素被视为噪点,哪些可以保留。\n利用这些数据,Star 创建一个移除蒙版,类似于 Photoshop 或 GIMP 中的图层蒙版。该蒙版用于把有噪点的像素替换为已对齐相邻帧的数据。",
   "ui.info_detailed_final_title": "最终坏像素去除",
   "ui.info_detailed_final_body": "在这最后一步,Star 只是把正在处理的帧与已对齐的相邻帧合成,以移除蒙版作为图层蒙版,只覆盖正在处理的帧中的少量像素。",
-  "ui.info_detailed_closing": "Star 处理完你的图像序列后,你可以用预览分辨率观看该序列的视频。这有助于你进行修正。\n\nStar 仍在开发中。"
+  "ui.info_detailed_closing": "Star 处理完你的图像序列后,你可以用预览分辨率观看该序列的视频。这有助于你进行修正。\n\nStar 仍在开发中。",
+  "warning.title.gpu_merge_turned_off": "已关闭 GPU 合并",
+  "warning.gpu_merge_turned_off.message": "上一次运行在 GPU 上合并时停止了，因此本次会话已关闭 GPU 合并。",
+  "warning.gpu_merge_turned_off.suggestion": "如果问题不在这台电脑的 GPU，可以在处理设置中重新打开。"
 }

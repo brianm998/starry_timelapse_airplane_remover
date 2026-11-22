@@ -79,6 +79,16 @@ public enum GPUOps {
         stateLock.withLock { _deviceNanoseconds &+= nanoseconds }
     }
 
+    nonisolated(unsafe) private static var _mergesInFlight = 0
+
+    /// Merge calls (`medianMerge`, `alignedMerge`) currently holding a GPU slot, i.e. actually
+    /// inside Metal.  Not counted while waiting for a slot, and warps are not counted.
+    /// The run marker records it, so a run that dies mid-merge is recognisable afterwards.
+    public static var mergesInFlight: Int { stateLock.withLock { _mergesInFlight } }
+
+    static func mergeBegan() { stateLock.withLock { _mergesInFlight += 1 } }
+    static func mergeEnded() { stateLock.withLock { _mergesInFlight -= 1 } }
+
     /// GPU entry points currently waiting for a slot.
     public static var waiting: Int { gate.waiting }
 
@@ -497,9 +507,13 @@ private final class MetalGPUBackend: @unchecked Sendable {
 
     /// Runs `body` inside `gpuSlots`. Every public entry point below must go
     /// through this rather than calling into Metal directly.
-    private func withGPUSlot<T>(_ body: () -> T) -> T {
+    private func withGPUSlot<T>(merge: Bool = false, _ body: () -> T) -> T {
         GPUOps.gate.acquire()
         defer { GPUOps.gate.release() }
+        if merge {
+            GPUOps.mergeBegan()
+        }
+        defer { if merge { GPUOps.mergeEnded() } }
         let start = DispatchTime.now().uptimeNanoseconds
         // Drained here because callers are worker threads that seldom drain one, and an
         // autoreleased buffer lives until a pool does: reading a buffer through `contents()`
@@ -695,7 +709,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
     func medianMerge(sources: UnsafeMutablePointer<MatWrapperRef?>, count: Int,
                      misses: MatWrapperRef?, outlierThreshold: Double, includeAll: Bool,
                      dst: MatWrapperRef) -> Bool {
-        withGPUSlot {
+        withGPUSlot(merge: true) {
             medianMergeImpl(sources: sources, count: count, misses: misses,
                             outlierThreshold: outlierThreshold, includeAll: includeAll, dst: dst)
         }
@@ -833,7 +847,7 @@ private final class MetalGPUBackend: @unchecked Sendable {
     func alignedMerge(base: MatWrapperRef, neighbours: UnsafeMutablePointer<MatWrapperRef?>,
                       neighbourCount: Int, homographies: UnsafePointer<Double>,
                       outlierThreshold: Double, includeAll: Bool, dst: MatWrapperRef) -> Bool {
-        withGPUSlot {
+        withGPUSlot(merge: true) {
             alignedMergeImpl(base: base, neighbours: neighbours, neighbourCount: neighbourCount,
                              homographies: homographies, outlierThreshold: outlierThreshold,
                              includeAll: includeAll, dst: dst)

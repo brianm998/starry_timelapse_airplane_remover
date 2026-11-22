@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "Après avoir classé tous les groupes aberrants d'une image, nous savons quels pixels sont considérés comme du bruit et lesquels peuvent être conservés.\nAvec ces données, Star crée un masque de suppression, semblable à un masque de calque dans Photoshop ou GIMP. Ce masque sert à remplacer les pixels bruités par des données de l'image voisine alignée.",
   "ui.info_detailed_final_title": "Suppression finale des mauvais pixels",
   "ui.info_detailed_final_body": "À cette dernière étape, Star compose simplement l'image en cours de traitement avec l'image voisine alignée, en utilisant le masque de suppression comme masque de calque, pour n'écraser qu'un petit nombre de pixels de l'image que nous traitons.",
-  "ui.info_detailed_closing": "Une fois que Star a fini de traiter votre séquence d'images, vous pouvez regarder une vidéo de la séquence en résolution d'aperçu. Cela peut vous aider à apporter des corrections.\n\nStar est encore en cours de développement."
+  "ui.info_detailed_closing": "Une fois que Star a fini de traiter votre séquence d'images, vous pouvez regarder une vidéo de la séquence en résolution d'aperçu. Cela peut vous aider à apporter des corrections.\n\nStar est encore en cours de développement.",
+  "warning.title.gpu_merge_turned_off": "Fusion sur GPU désactivée",
+  "warning.gpu_merge_turned_off.message": "L'exécution précédente s'est arrêtée pendant la fusion sur le GPU ; la fusion sur GPU a donc été désactivée pour cette session.",
+  "warning.gpu_merge_turned_off.suggestion": "Si le GPU de cet ordinateur n'est pas en cause, vous pouvez la réactiver dans les réglages de traitement."
 }

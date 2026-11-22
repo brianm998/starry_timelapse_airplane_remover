@@ -847,6 +847,7 @@ public struct ImageAccessor: Sendable {
             if removedLegacy, !FileManager.default.fileExists(atPath: filename) { return }
             try FileManager.default.removeItem(atPath: filename)
             if imageType.isHorizonMask && size == .original {
+                Task { await horizonColumnsCache.invalidate(path: filename) }
                 horizonLinesChanged(frameIndex: frameIndex)
             }
         }

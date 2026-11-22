@@ -2451,25 +2451,39 @@ final public actor FrameHorizonProcessor {
         // The first ground row of every image column, nil where it has none, per kind.
         var sources: [(HorizonThumbnailOverlay.Kind, ([Int?], Int, Int))] = []
 
-        if let initialImage = try? await imageAccessor.load(
-               frameIndex: frameIndex, type: .horizon, atSize: .original) {
-            sources.append((.initial, Self.horizonColumns(of: initialImage)))
+        if let columns = await initialHorizonColumns() {
+            sources.append((.initial, columns))
         }
         // A frame inheriting the sequence's one painted reference was not painted itself:
         // that reference is its merged horizon (`loadOrCreateMergedHorizonMask` serves it as
         // such), drawn blue, and green is kept for the frames the user actually painted.
-        let perFrameReference = try? await loadPerFrameHorizonReferenceMask()
-        if perFrameReference == nil, let globalReference = try? await loadHorizonReferenceMask() {
-            sources.append((.merged, Self.horizonColumns(of: globalReference.image)))
-        } else if let mergedImage = await loadMergedHorizonForOverlayWithRetry() {
-            sources.append((.merged, Self.horizonColumns(of: mergedImage)))
+        let perFrameReferencePath = referenceHorizonPaths().perFrame
+        if perFrameReferencePath == nil,
+           let globalPath = referenceHorizonPaths().global,
+           let columns = await horizonColumnsCache.columns(atPath: globalPath, loadMask: {
+               [weak self] in
+               guard let self else { return nil }
+               return try? await self.loadHorizonReferenceMask()?.image
+           }) {
+            sources.append((.merged, columns))
+        } else if let mergedPath = imageAccessor.nameForImage(
+                    frameIndex: frameIndex, ofType: .mergedHorizon, atSize: .original),
+                  let columns = await horizonColumnsCache.columns(atPath: mergedPath, loadMask: {
+                      [weak self] in await self?.loadMergedHorizonForOverlayWithRetry()
+                  }) {
+            sources.append((.merged, columns))
         }
         // Read as the line it is stored as, not built into a full-size mask first.
         if let consensus = await horizonConsensusColumns() {
             sources.append((.consensus, consensus))
         }
-        if let perFrameReference {
-            sources.append((.reference, Self.horizonColumns(of: perFrameReference.image)))
+        if let perFrameReferencePath,
+           let columns = await horizonColumnsCache.columns(atPath: perFrameReferencePath, loadMask: {
+               [weak self] in
+               guard let self else { return nil }
+               return try? await self.loadPerFrameHorizonReferenceMask()?.image
+           }) {
+            sources.append((.reference, columns))
         }
 
         return sources.map { kind, columns in
@@ -2477,6 +2491,45 @@ final public actor FrameHorizonProcessor {
                                   thumbnailWidth: thumbnailWidth,
                                   thumbnailHeight: thumbnailHeight)
         }
+    }
+
+    /// The painted reference files this frame could draw: its own, and the sequence's.  Each
+    /// is nil when there is no such file.
+    private func referenceHorizonPaths() -> (perFrame: String?, global: String?) {
+        guard let mergedPath = imageAccessor.nameForImage(
+                frameIndex: frameIndex, ofType: .mergedHorizon, atSize: .original)
+        else { return (nil, nil) }
+        let referenceDir = URL(fileURLWithPath: mergedPath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("horizonReference")
+        let global = referenceDir.appendingPathComponent("reference.tiff").path
+        return (existingPerFrameReference(in: referenceDir)?.path,
+                FileManager.default.fileExists(atPath: global) ? global : nil)
+    }
+
+    /// The raw detection's line: from its sidecar when that matches the mask file, else read
+    /// out of the decoded mask.  Either way kept in `horizonColumnsCache`.
+    private func initialHorizonColumns() async -> ([Int?], Int, Int)? {
+        guard let path = imageAccessor.nameForImage(
+                frameIndex: frameIndex, ofType: .horizon, atSize: .original),
+              FileManager.default.fileExists(atPath: path)
+        else { return nil }
+        if let cached = await horizonColumnsCache.cached(atPath: path) {
+            return cached
+        }
+        if let frame,
+           let rows = HorizonLineSidecar.read(frameIndex: frameIndex, width: frame.width,
+                                              height: frame.height, maskPath: path,
+                                              config: imageAccessor.config) {
+            await horizonColumnsCache.remember(atPath: path, rows: rows,
+                                               width: frame.width, height: frame.height)
+            return (rows, frame.width, frame.height)
+        }
+        let accessor = imageAccessor
+        let index = frameIndex
+        return await horizonColumnsCache.columns(atPath: path, loadMask: {
+            try? await accessor.load(frameIndex: index, type: .horizon, atSize: .original)
+        })
     }
 
     /// Scale image-space horizon rows to a thumbnail's.
@@ -2499,10 +2552,6 @@ final public actor FrameHorizonProcessor {
             }
         }
         return HorizonThumbnailOverlay(kind: kind, yPerColumn: thumbY, height: thumbnailHeight)
-    }
-
-    private static func horizonColumns(of mask: PixelatedImage) -> ([Int?], Int, Int) {
-        (CombinedHorizonDetector.extractHorizonY(from: mask), mask.width, mask.height)
     }
 
     /// This frame's horizon consensus line at full width, under the conditions

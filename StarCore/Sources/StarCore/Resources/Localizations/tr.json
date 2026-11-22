@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "Bir karenin tüm aykırı grupları sınıflandırıldıktan sonra hangi piksellerin gürültü sayıldığını ve hangilerinin tutulabileceğini artık biliriz.\nBu verilerle Star, Photoshop veya GIMP'teki katman maskesine benzer bir kaldırma maskesi oluşturur. Bu maske, gürültülü pikselleri hizalanmış komşu karedeki verilerle değiştirmek için kullanılır.",
   "ui.info_detailed_final_title": "Kötü piksellerin son kaldırılması",
   "ui.info_detailed_final_body": "Bu son adımda Star, kaldırma maskesini katman maskesi olarak kullanarak işlenen kareyi hizalanmış komşu kareyle birleştirir; böylece işlediğimiz karede yalnızca az sayıda piksel üzerine yazılır.",
-  "ui.info_detailed_closing": "Star görüntü dizinizi işlemeyi bitirdikten sonra dizinin önizleme çözünürlüğündeki videosunu izleyebilirsiniz. Bu, düzeltmeler yapmanıza yardımcı olabilir.\n\nStar hâlâ geliştirilme aşamasındadır."
+  "ui.info_detailed_closing": "Star görüntü dizinizi işlemeyi bitirdikten sonra dizinin önizleme çözünürlüğündeki videosunu izleyebilirsiniz. Bu, düzeltmeler yapmanıza yardımcı olabilir.\n\nStar hâlâ geliştirilme aşamasındadır.",
+  "warning.title.gpu_merge_turned_off": "GPU Birleştirme Kapatıldı",
+  "warning.gpu_merge_turned_off.message": "Önceki çalıştırma GPU üzerinde birleştirme sırasında durdu; bu yüzden bu oturum için GPU ile birleştirme kapatıldı.",
+  "warning.gpu_merge_turned_off.suggestion": "Bu bilgisayarın GPU'su neden değilse, işleme ayarlarından yeniden açabilirsiniz."
 }

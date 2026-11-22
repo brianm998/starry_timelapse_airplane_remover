@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "Depois de classificar todos os grupos discrepantes de um quadro, sabemos quais pixels são considerados ruído e quais podem ser mantidos.\nCom esses dados, o Star cria uma máscara de remoção, semelhante a uma máscara de camada no Photoshop ou no GIMP. Essa máscara é usada para substituir os pixels ruidosos por dados do quadro vizinho alinhado.",
   "ui.info_detailed_final_title": "Remoção final de pixels ruins",
   "ui.info_detailed_final_body": "Nesta etapa final, o Star simplesmente compõe o quadro que está sendo processado com o quadro vizinho alinhado, usando a máscara de remoção como máscara de camada, para sobrescrever apenas um pequeno número de pixels no quadro que estamos processando.",
-  "ui.info_detailed_closing": "Depois que o Star terminar de processar sua sequência de imagens, você poderá assistir a um vídeo da sequência em resolução de pré-visualização. Isso pode ajudar você a fazer correções.\n\nO Star ainda é um trabalho em andamento."
+  "ui.info_detailed_closing": "Depois que o Star terminar de processar sua sequência de imagens, você poderá assistir a um vídeo da sequência em resolução de pré-visualização. Isso pode ajudar você a fazer correções.\n\nO Star ainda é um trabalho em andamento.",
+  "warning.title.gpu_merge_turned_off": "Mesclagem na GPU desativada",
+  "warning.gpu_merge_turned_off.message": "A execução anterior foi interrompida durante a mesclagem na GPU, então a mesclagem na GPU foi desativada nesta sessão.",
+  "warning.gpu_merge_turned_off.suggestion": "Se a GPU deste computador não for a causa, você pode ativá-la novamente nos ajustes de processamento."
 }

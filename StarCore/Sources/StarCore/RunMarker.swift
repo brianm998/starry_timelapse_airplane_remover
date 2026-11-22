@@ -1,5 +1,6 @@
 import Foundation
 import StarCoreC
+import StarCppBridge
 import logging
 
 #if canImport(Darwin)
@@ -104,6 +105,13 @@ public struct RunMarker: Codable, Sendable, Equatable {
     /// it reads them back. `Codable` only because the rest of the struct is.
     public var fatalSignal: String?
 
+    /// How many GPU merges were inside Metal at the last heartbeat.  Optional so markers
+    /// written before this field existed still decode.
+    public var gpuMergesInFlight: Int?
+
+    /// Whether the run was going to use the GPU for merging, set at run start.
+    public var gpuMergeEnabled: Bool?
+
     public init(id: String,
                 client: String,
                 starVersion: String = Config.latestVersion,
@@ -118,6 +126,33 @@ public struct RunMarker: Codable, Sendable, Equatable {
         self.startedAt = startedAt
         self.heartbeatAt = startedAt
         self.hostPhysicalMemoryBytes = hostPhysicalMemoryBytes
+    }
+
+    // MARK: - GPU merge
+
+    /// Phases (`currentPhase`) in which the merge runs, used when the heartbeat never caught
+    /// a merge in flight.
+    static let mergePhases: Set<String> = ["mergingHorizon", "creatingEarthAlignedFrame",
+                                           "creatingStarAlignedFrame"]
+
+    /// The run died with a GPU merge in progress, or (failing evidence of that) in a merge
+    /// phase with GPU merge enabled.  A window-server lockup ends here: the machine is
+    /// restarted and the marker survives with a stale heartbeat.
+    ///
+    /// Only meaningful for an abandoned marker, which is the only kind a client ever reads.
+    public var diedDuringGPUMerge: Bool {
+        if let gpuMergesInFlight, gpuMergesInFlight > 0 { return true }
+        guard gpuMergeEnabled == true, let currentPhase else { return false }
+        return RunMarker.mergePhases.contains(currentPhase)
+    }
+
+    /// The warning that says GPU merge has been turned off because of this marker.
+    public var asGPUMergeWarning: StarWarning {
+        StarWarning(kind: .gpuMergeTurnedOff,
+                    severity: .warning,
+                    message: localized("warning.gpu_merge_turned_off.message"),
+                    suggestion: localized("warning.gpu_merge_turned_off.suggestion"),
+                    time: heartbeatAt)
     }
 
     // MARK: - Diagnosis
@@ -181,7 +216,8 @@ public struct RunMarker: Codable, Sendable, Equatable {
         // then goes on to finish normally. A sequence with an untrackable ground would
         // otherwise have every later kill of it blamed on memory.
         case .outputWriteFailed, .lowDiskSpace, .previousRunDied,
-             .artifactsInvalidated, .groundAlignmentFailed, .frameFinishFailed, .none:
+             .artifactsInvalidated, .groundAlignmentFailed, .frameFinishFailed,
+             .gpuMergeTurnedOff, .none:
             memoryWarning = false
         }
 
@@ -582,7 +618,8 @@ public actor RunMarkerStore {
                        logPath: String? = nil,
                        imageWidth: Int? = nil,
                        imageHeight: Int? = nil,
-                       imageBytesPerPixel: Int? = nil)
+                       imageBytesPerPixel: Int? = nil,
+                       gpuMergeEnabled: Bool? = nil)
     {
         guard var marker else { return }
         if let framesCompleted { marker.framesCompleted = framesCompleted }
@@ -593,6 +630,7 @@ public actor RunMarkerStore {
         if let imageWidth { marker.imageWidth = imageWidth }
         if let imageHeight { marker.imageHeight = imageHeight }
         if let imageBytesPerPixel { marker.imageBytesPerPixel = imageBytesPerPixel }
+        if let gpuMergeEnabled { marker.gpuMergeEnabled = gpuMergeEnabled }
         self.marker = marker
     }
 
@@ -653,6 +691,7 @@ public actor RunMarkerStore {
         let footprint = star_process_footprint()
         if footprint > marker.peakFootprintBytes { marker.peakFootprintBytes = footprint }
         marker.lastWarning = latestWarningSnapshot
+        marker.gpuMergesInFlight = GPUOps.mergesInFlight
         self.marker = marker
         write()
     }

@@ -1,5 +1,6 @@
 import Foundation
 import StarCore
+import StarCppBridge
 import StarDaemonMessages
 import logging
 
@@ -33,7 +34,8 @@ actor SessionManager {
               resumeConfigPath: session.configJsonPath,
               imageWidth: config.imageWidth,
               imageHeight: config.imageHeight,
-              imageBytesPerPixel: config.imageBytesPerPixel
+              imageBytesPerPixel: config.imageBytesPerPixel,
+              gpuMergeEnabled: GPUCapability.mergeWillUseGPU(requested: config.useGPUForMerge)
             )
             await RunMarkerStore.shared.describe(
               sequenceName: config.imageSequenceDirname,

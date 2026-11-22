@@ -338,6 +338,29 @@ public final class ViewModel {
         self.showWarningAlert = true
     }
 
+    /// Report the runs a previous session left unfinished, one critical `previousRunDied` each.
+    ///
+    /// For one that died inside a GPU merge, also turn GPU merge off — the machine-wide
+    /// choice the Processing Settings toggle edits, so the user can turn it back on — and say
+    /// so in the banner.  `turnOffGPUMerge` is a parameter so a test does not write the real
+    /// preferences file.
+    func reportAbandonedRuns(_ markers: [RunMarker],
+                             turnOffGPUMerge: () -> Void = {
+                                 UserPreferencesStore.shared.preferences.useGPUForMerge = false
+                             }) {
+        for marker in markers {
+            Log.w("previous run did not finish: \(marker.report)")
+            // The config, when the run left one star can still find, is what puts a
+            // "Restart Now" button on the alert instead of only an OK.
+            report(warning: marker.asWarning, restartableConfigPath: marker.restartableConfigPath)
+            if marker.diedDuringGPUMerge {
+                Log.w("the previous run died during a GPU merge: turning GPU merge off")
+                turnOffGPUMerge()
+                report(warning: marker.asGPUMergeWarning)
+            }
+        }
+    }
+
     /// The alert's "Restart Now" button: re-open the sequence the stopped run was working on
     /// and carry on processing it.
     ///
@@ -601,7 +624,11 @@ public final class ViewModel {
             closing.disable()
             // What the user changed in the last few seconds is still waiting for its save: write it out in the
             // background, so the window is gone at once and the edits are not (they were lost here before).
-            Task { await closing.flushSaves() }
+            // Then let go of its homography.db connection (3 descriptors); a straggler reopens it.
+            Task {
+                await closing.flushSaves()
+                await closing.config.homographyDatabase.close()
+            }
         }
         imageSequence = nil
         FolderAccess.releaseAll()
