@@ -101,17 +101,17 @@ final class KeypointDivisorTests: XCTestCase {
     func testFilenameIsUnchangedAtTheTwoLegacyValues() {
         var c = config()
         c.alignmentKeypointDetectionDivisor = 1.0
-        XCTAssertEqual(c.keypointFilename(frameIndex: 3, ofType: .starAligned), "3.sky.yaml")
+        XCTAssertEqual(c.keypointFilename(frameIndex: 3, ofType: .starAligned), "3.sky.kpb")
         c.alignmentKeypointDetectionDivisor = 2.0
-        XCTAssertEqual(c.keypointFilename(frameIndex: 3, ofType: .starAligned), "3.sky.half.yaml",
+        XCTAssertEqual(c.keypointFilename(frameIndex: 3, ofType: .starAligned), "3.sky.half.kpb",
                        "feature files written in the bool era must stay reachable")
     }
 
     func testFilenameEncodesOtherDivisors() {
         var c = config()
         c.alignmentKeypointDetectionDivisor = 1.5
-        XCTAssertEqual(c.keypointFilename(frameIndex: 3, ofType: .starAligned), "3.sky.div1.50.yaml")
-        XCTAssertEqual(c.keypointFilename(frameIndex: 3, ofType: .earthAligned), "3.earth.div1.50.yaml")
+        XCTAssertEqual(c.keypointFilename(frameIndex: 3, ofType: .starAligned), "3.sky.div1.50.kpb")
+        XCTAssertEqual(c.keypointFilename(frameIndex: 3, ofType: .earthAligned), "3.earth.div1.50.kpb")
     }
 
     /// The invariant that matters: no two divisors may share a filename, or one run's
@@ -126,8 +126,8 @@ final class KeypointDivisorTests: XCTestCase {
                 XCTFail("divisor \(divisor) and \(clash) both produce \(name)")
             }
             seen[name] = divisor
-            XCTAssertTrue(name.hasSuffix(".yaml"),
-                          "OpenCV FileStorage picks its format from the extension")
+            XCTAssertTrue(name.hasSuffix(".kpb"),
+                          "the binary writer is chosen by the extension")
         }
     }
 

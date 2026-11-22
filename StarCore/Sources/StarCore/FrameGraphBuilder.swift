@@ -411,17 +411,20 @@ public final actor FrameGraphBuilder {
             var deleted = 0
             for frameIndex in range.keypoint {
                 for type in [FrameViewMode.starAligned, .earthAligned] {
-                    guard let path = config.keypointPath(frameIndex: frameIndex,
-                                                         ofType: type),
-                          FileManager.default.fileExists(atPath: path)
+                    guard let kpb = config.keypointPath(frameIndex: frameIndex,
+                                                        ofType: type)
                     else { continue }
-                    do {
-                        try FileManager.default.removeItem(atPath: path)
-                        deleted += 1
-                    } catch {
-                        // Not fatal, but it does mean this frame will reuse a stale file,
-                        // so it is worth more than a debug line.
-                        Log.w("could not delete stale \(path): \(error)")
+                    // Both forms: a legacy .yaml left beside would be read once the .kpb is gone.
+                    for path in [kpb, Config.legacyKeypointPath(forKeypointPath: kpb)] {
+                        guard FileManager.default.fileExists(atPath: path) else { continue }
+                        do {
+                            try FileManager.default.removeItem(atPath: path)
+                            deleted += 1
+                        } catch {
+                            // Not fatal, but it does mean this frame will reuse a stale file,
+                            // so it is worth more than a debug line.
+                            Log.w("could not delete stale \(path): \(error)")
+                        }
                     }
                 }
             }

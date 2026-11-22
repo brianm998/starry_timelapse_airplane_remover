@@ -245,6 +245,18 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     ///      averaged over 48px, which steadies the weight from one frame to the next.
     public static let cloudAwareMergeAlgorithmVersion = 2
 
+    /// Which on-disk format the full-size intermediates are written in (aligned and
+    /// earth-aligned merges, the subtraction, horizon and merged-horizon masks).
+    ///
+    /// - 1: named with the source frame's extension, so a JPEG sequence cached lossy JPEGs.
+    /// - 2: lossless TIFF whatever the source (`FrameViewMode.isLosslessIntermediate`).
+    ///
+    /// Recorded in the stages that own those files.  A record from before it lacks the key,
+    /// which reads as a change, so a sequence with JPEG caches is rebuilt once instead of
+    /// mixing old JPEGs with new TIFFs.  The painted references are not rebuilt: they live in
+    /// `horizonReference/`, which no stage deletes.
+    public static let intermediateFormatVersion = 2
+
     public let version: Int
 
     /// stage rawValue → setting name → value.  Nested rather than flat so a stage can be
@@ -288,6 +300,7 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
         var inputs: [String: String] = [
             "horizonDetectionEnabled":    str(config.horizonDetectionEnabled),
             "useCombinedHorizonDetection": str(config.useCombinedHorizonDetection),
+            "intermediateFormatVersion":  str(intermediateFormatVersion),
         ]
         if config.useCombinedHorizonDetection {
             // A static sequence detects no per-frame masks at all — its merge reads the
@@ -337,6 +350,7 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             "numberStaticNeighborFrames":   str(config.numberStaticNeighborFrames),
             "alignedNeighborFrameOverrides": str(config.alignedNeighborFrameOverrides),
             "staticNeighborFrameOverrides":  str(config.staticNeighborFrameOverrides),
+            "intermediateFormatVersion":     str(intermediateFormatVersion),
         ]
 
         // A static sequence's merged mask is made by one of two methods (see
@@ -432,6 +446,7 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             // ground are aligned separately at all.
             "horizonDetectionEnabled":       str(config.horizonDetectionEnabled),
             "alignmentAlgorithmVersion":     str(alignmentAlgorithmVersion),
+            "intermediateFormatVersion":     str(intermediateFormatVersion),
         ]
         // A fixed camera has no ground to align: the earth branch median merges the
         // static neighbours instead, and reads none of the earth settings.
@@ -501,6 +516,9 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             "cleanMethod": str(config.cleanMethod),
         ]
         guard config.cleanMethod.usesOutliers else { return inputs }
+
+        // The subtraction image outlier detection reloads first is one of the intermediates.
+        inputs["intermediateFormatVersion"] = str(intermediateFormatVersion)
 
         inputs["detectionType"] = config.detectionType.rawValue
         inputs["ignoreLowerPixels"] = str(config.ignoreLowerPixels)

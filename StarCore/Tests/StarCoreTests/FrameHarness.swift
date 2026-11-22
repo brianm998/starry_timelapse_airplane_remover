@@ -83,6 +83,8 @@ final class FrameHarness {
     /// - Parameter frameWriter: replaces the synthetic sky with the image to write for each frame
     ///   index, for a test that needs another depth or flat content.  The sequence format is read
     ///   from what is written, as a real run reads it, so an 8-bit writer is an 8-bit sequence.
+    /// - Parameter sourceExtension: the frames' file type, `"jpg"` for a JPEG sequence (use an 8-bit
+    ///   `frameWriter`: JPEG holds no more).
     /// - Parameter frameSizes: per-frame width/height overrides, for a sequence with a stray
     ///   frame of another size.  The sequence format is still read from frame 0, as in a real run.
     static func make(frameCount: Int = 3,
@@ -94,6 +96,7 @@ final class FrameHarness {
                      frameSizes: [Int: (width: Int, height: Int)] = [:],
                      staticStars: Bool = false,
                      frameWriter: ((Int) -> PixelatedImage)? = nil,
+                     sourceExtension: String = "tiff",
                      named name: String = "harness",
                      file: StaticString = #filePath,
                      line: UInt = #line) async throws -> FrameHarness {
@@ -114,7 +117,7 @@ final class FrameHarness {
                                        seed: index,
                                        staticStars: staticStars)
             // zero padded so the glob's lexicographic sort matches frame order
-            let path = sequenceDir.appendingPathComponent(String(format: "frame_%03d.tiff", index)).path
+            let path = sequenceDir.appendingPathComponent(String(format: "frame_%03d.\(sourceExtension)", index)).path
             image.mat.write(to: path)
         }
 
@@ -129,7 +132,7 @@ final class FrameHarness {
         )
 
         let imageSequence = try ImageSequence(dirname: sequenceDir.path,
-                                             supportedImageFileTypes: [".tiff"])
+                                             supportedImageFileTypes: [".\(sourceExtension)"])
         let filenames = await imageSequence.filenames
         XCTAssertEqual(filenames.count, frameCount,
                        "the harness wrote \(frameCount) frames but ImageSequence found " +
