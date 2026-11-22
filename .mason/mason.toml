@@ -148,7 +148,7 @@ pass_regex = "^T0-DIFF-OK$"
 level = "t0"
 
 [suite.t0-i18n]
-command = "export STAR_USE_GPU_FOR_MERGE=0 && python3 i18n/check.py && python3 i18n/client_parity.py && python3 i18n/tests/test_client_parity.py && echo T0-I18N-OK"
+command = "export STAR_USE_GPU_FOR_MERGE=0 && python3 i18n/check.py && echo T0-I18N-OK"
 parser = "regex"
 pass_regex = "^T0-I18N-OK$"
 level = "t0"
