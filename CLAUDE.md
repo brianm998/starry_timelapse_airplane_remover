@@ -112,10 +112,12 @@ tests or GPU-vs-CPU comparisons here; leave those to CI or another machine.
   dependency: 'StarDecisionTrees'`, or a late `lstat(.../gui/videos/...)` / `lstat(.../ffmpeg)` after
   every Swift file has already compiled. `gui/videos` is the one link `git status` shows (the
   `.gitignore` entry has a trailing slash), so don't commit it.
-- **gui**: `xcodebuild -project gui/star.xcodeproj -scheme star -configuration Debug
-  CODE_SIGNING_ALLOWED=NO build`. Always `-scheme star`, never `-target Star`: the target skips the
-  scheme's package graph and fails with `Unable to find module dependency: 'logging'`, and it leaves
-  `build/` dirs behind. Leave out `-destination`. The app module is `Star`
+- **gui**: `.mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star
+  -configuration Debug -derivedDataPath .build/gui-dd build` (tests: `... -only-testing:starTests/<Class>
+  test`). Never `CODE_SIGNING_ALLOWED=NO`: an unsigned test host is a new TCC identity every build, so
+  the removable-volume prompt comes back and blocks the run. Always `-scheme star`, never `-target Star`:
+  the target skips the scheme's package graph and fails with `Unable to find module dependency:
+  'logging'`, and it leaves `build/` dirs behind. Leave out `-destination`. The app module is `Star`
   (`@testable import Star`).
 - **cli**: build with SwiftPM (`cd cli && swift build`), which is what `cli/build-optimized` runs.
   `cli/star.xcodeproj` can hit an `ld` assertion (`dylibToOrdinal`) even at a clean HEAD, so don't
