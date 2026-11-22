@@ -491,6 +491,12 @@ extension PixelatedImage {
         self.mat.write(to: imageFilename)
     }
 
+    /// As `writeTIFFEncoding(toFilename:)`, and a JPEG name is written at `jpegQuality`.
+    @discardableResult
+    public func writeTIFFEncoding(toFilename imageFilename: String, jpegQuality: Int) -> Bool {
+        self.mat.write(to: imageFilename, jpegQuality: jpegQuality)
+    }
+
     /// Writes an uncompressed TIFF with no fsync: for intermediates that are rebuilt when
     /// missing or unreadable. Uncompressed so reloading takes the direct-read path.
     @discardableResult

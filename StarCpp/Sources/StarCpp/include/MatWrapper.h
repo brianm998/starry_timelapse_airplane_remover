@@ -82,6 +82,8 @@ bool       mat_wrapper_owns_data(MatWrapperRef ref);
 /// and the Swift caller had no way to know the frame had not been written. On a full disk a
 /// run would report success with output frames missing.
 bool          mat_wrapper_write_to(MatWrapperRef ref, const char *filename);
+// As above, and a JPEG name is written at `jpegQuality` (1...100) instead of OpenCV's 95.
+bool          mat_wrapper_write_to_quality(MatWrapperRef ref, const char *filename, int jpegQuality);
 // Uncompressed TIFF, atomic rename, no fsync: for intermediates that are recomputed when
 // missing or unreadable.
 bool          mat_wrapper_write_cache_to(MatWrapperRef ref, const char *filename);
