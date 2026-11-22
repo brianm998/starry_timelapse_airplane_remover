@@ -508,6 +508,25 @@ public actor OutlierGroups {
         )
         
         Log.d("frame \(frameIndex) wrote outlier group paint data to \(outlierGroupPaintDataFilename): \(contents)")
+
+        // the small count summary beside it, so a client can show badges without loading groups
+        let counts = await currentCounts()
+        let countsData = try JSONEncoder().encode(counts)
+        try countsData.write(to: URL(fileURLWithPath: OutlierCounts.path(frameDir: frameDir)),
+                             options: .atomic)
+    }
+
+    /// Decision counts of the groups held now, by the rule `FrameAirplaneRemover.updateCombineSubjects` uses.
+    public func currentCounts() async -> OutlierCounts {
+        var counts = OutlierCounts(positive: 0, negative: 0, undecided: 0, trash: trash.count)
+        for group in members.values {
+            if let shouldRemove = await group.shouldRemove() {
+                if shouldRemove.willRemove { counts.positive += 1 } else { counts.negative += 1 }
+            } else {
+                counts.undecided += 1
+            }
+        }
+        return counts
     }
 
     // outputs an 8 bit monochrome image that contains a white
@@ -574,3 +593,31 @@ public actor OutlierGroups {
 }
 
 
+
+
+/// How many of a frame's outlier groups are decided each way. Written beside
+/// `OutlierGroupPaintData.json` on every save, so the filmstrip badges and fast advance can read
+/// a frame's counts without loading its groups (which hold pixel sets).
+public struct OutlierCounts: Codable, Equatable, Sendable {
+    public var positive: Int
+    public var negative: Int
+    public var undecided: Int
+    public var trash: Int
+
+    public init(positive: Int, negative: Int, undecided: Int, trash: Int) {
+        self.positive = positive
+        self.negative = negative
+        self.undecided = undecided
+        self.trash = trash
+    }
+
+    public static let filename = "OutlierCounts.json"
+
+    public static func path(frameDir: String) -> String { "\(frameDir)/\(filename)" }
+
+    /// The stored summary, or nil if there is none (a sequence made before it existed) or it is unreadable.
+    public static func load(frameDir: String) -> OutlierCounts? {
+        guard let data = FileManager.default.contents(atPath: path(frameDir: frameDir)) else { return nil }
+        return try? JSONDecoder().decode(OutlierCounts.self, from: data)
+    }
+}
