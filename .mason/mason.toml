@@ -300,7 +300,7 @@ whole_later = "batch"
 # cores changes the counts it observes, so it keeps the whole machine (exclusive, kept on purpose).
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path StarCpp --filter OpenCVQoSTests 2>&1"
 parser = "xctest"
-min_tests = 2 # 3 test functions; testLowQoSUsesFewerWorkersThanNormalQoS skips on Intel (x86_64), so 2 run here (#849)
+min_tests = 3 # floor: ~90% of a static count of test functions (2026-11, #601)
 level = "t1"
 uses = { exclusive = 1 }
 

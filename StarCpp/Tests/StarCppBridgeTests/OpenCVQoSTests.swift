@@ -67,6 +67,22 @@ final class OpenCVQoSTests: XCTestCase {
         #endif
     }
 
+    /// The other direction: a raised caller (Full in "Use of this Mac", the gui's foreground
+    /// work) must not have its OpenCV loops dropped to a lower class, nor raised past it.
+    /// Runs on every Mac, Intel included, unlike the width test.
+    func testWorkersInheritAUserInitiatedCaller() throws {
+        #if !os(macOS)
+        throw XCTSkip("QoS classes are Apple-only")
+        #else
+        let c = observe(at: .userInitiated)
+        XCTAssertEqual(c[0], 0,
+                       "workers ran above .userInitiated: \(c)")
+        XCTAssertEqual(c[3] + c[4], 0,
+                       "workers of a .userInitiated caller ran at .utility or .background: \(c)")
+        XCTAssertGreaterThan(c[1], 0, "\(c)")
+        #endif
+    }
+
     func testWorkersInheritABackgroundCaller() throws {
         #if !os(macOS)
         throw XCTSkip("QoS classes are Apple-only")
