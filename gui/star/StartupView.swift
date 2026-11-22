@@ -145,14 +145,11 @@ private struct FirstFramePicture: View {
         // reading existingImages makes this redraw when the preview arrives
         let _ = frame.existingImages
         let accessor = frame.frame?.imageAccessor
-        let url = accessor?.urlForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .preview)
-          ?? accessor?.urlForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .original)
-        if let url {
-            AsyncImage(url: url) { image in
-                image.resizable().aspectRatio(contentMode: .fit)
-            } placeholder: {
-                Color.clear
-            }
+        let preview = accessor?.nameForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .preview)
+        let original = accessor?.nameForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .original)
+        if let shownPath = preview ?? original {
+            LoaderPicture(path: shownPath, fallbackPath: original, reloadToken: frame.reloadID)
+              .aspectRatio(contentMode: .fit)
               .frame(width: 320)
               .clipShape(RoundedRectangle(cornerRadius: 6))
               .accessibilityIdentifier("startup.firstframe")

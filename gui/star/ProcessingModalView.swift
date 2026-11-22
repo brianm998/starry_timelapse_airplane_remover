@@ -72,7 +72,8 @@ struct ProcessingModalView: View {
               index < viewModel.frames.count,
               let frame = viewModel.frames[index].frame
         else { return nil }
-        return frame.imageAccessor.urlForImage(frameIndex: index, ofType: .final, atSize: .preview)
+        return frame.imageAccessor.nameForImage(frameIndex: index, ofType: .final, atSize: .preview)
+          .map { URL(fileURLWithPath: $0) }
     }
 
     var body: some View {
@@ -842,11 +843,8 @@ struct ProcessingFrameThumbnail: View {
     var body: some View {
         Group {
             if let shown {
-                AsyncImage(url: shown) { image in
-                    image.resizable().aspectRatio(contentMode: .fit)
-                } placeholder: {
-                    Color.clear
-                }
+                LoaderPicture(path: shown.path)
+                  .aspectRatio(contentMode: .fit)
             } else {
                 Color.clear
             }

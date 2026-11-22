@@ -58,7 +58,9 @@ public class FrameViewModel {
 
     /// Monotonically-increasing counter. Each call to refreshHorizonOverlay()
     /// stamps the launched task; only the most-recently-requested result is applied.
-    private var horizonOverlayVersion: UInt = 0
+    private(set) var horizonOverlayVersion: UInt = 0
+    /// The version whose result `horizonOverlays` last took; equals `horizonOverlayVersion` once a refresh is done.
+    @ObservationIgnored private(set) var appliedHorizonOverlayVersion: UInt = 0
     private var frameHorizonOverlayVersion: UInt = 0
     private var gridHorizonOverlayVersion: UInt = 0
     
@@ -123,6 +125,10 @@ public class FrameViewModel {
       atSize size: ImageDisplaySize)
     {
         existingImages.insert(type)
+        // a new picture of this frame and size: the loader drops what it holds and loads it again
+        if let path = frame?.imageAccessor.nameForImage(frameIndex: frameIndex, ofType: type, atSize: size) {
+            FrameImageLoader.shared.invalidate(path: path)
+        }
         if size == .preview {
             reloadID = UUID()
         }
@@ -169,122 +175,54 @@ public class FrameViewModel {
     var positiveOutlierImage: Image?
     var negativeOutlierImage: Image?
     
-    @ViewBuilder
-    public var thumbnailImage: some View {
-        if let frame,
-           let url = frame.imageAccessor.urlForImage(
-             frameIndex: frame.frameIndex,
-             ofType: .original,
-             atSize: .thumbnail
-           )
-        {
-            AsyncImage(
-              url: url.appending(
-                queryItems: [
-                  URLQueryItem(
-                    name: "v",
-                    value: reloadID.uuidString
-                  )
-                ]
-              )
-            ) { image in
-                image
-            } placeholder: {
-                initialImage
+    /// The path of this frame's picture; string work only, no file access.
+    private func picturePath(type: FrameViewMode, size: ImageDisplaySize) -> String? {
+        frame?.imageAccessor.nameForImage(frameIndex: frameIndex, ofType: type, atSize: size)
+    }
+
+    /// Makes the picture at a smaller size from the original, as the loader finds it missing.
+    private func queuePreview(type: FrameViewMode, size: ImageDisplaySize) {
+        guard let frame = self.frame else { return }
+        Task {
+            let op = PreviewOp(
+              frameView: self,
+              imageAccessor: frame.imageAccessor,
+              frameIndex: frame.frameIndex,
+              type: type,
+              size: size,
+              // A preview loads the full-resolution image to downscale it;
+              // without a unit the .preview multiplier gates nothing.
+              rawImageBytes: await frame.configManager.config().workingFrameBytes
+            ) { errorString in
+                Log.e("frame \(frame.frameIndex) unable to create \(size) image: \(errorString)")
             }
-        } else {
-            ZStack {
-                Color(white: 0.15)
-                Text(localized("ui.n_a"))
-                  .font(.largeTitle)
-                  .foregroundColor(Color(white: 0.45))
-            }
-              .task(id: reloadID) {
-                  if let frame = self.frame,
-                     frame.imageAccessor.urlForImage(
-                       frameIndex: frame.frameIndex,
-                       ofType: .original,
-                       atSize: .thumbnail
-                     ) == nil
-                  {
-                      Task {
-                          let op = PreviewOp(
-                            frameView: self,
-                            imageAccessor: frame.imageAccessor,
-                            frameIndex: frame.frameIndex,
-                            type: .original,
-                            size: .thumbnail,
-                            // A preview loads the full-resolution image to downscale it;
-                            // without a unit the .preview multiplier gates nothing.
-                            rawImageBytes: await frame.configManager.config().workingFrameBytes
-                          ) { errorString in
-                              Log.e("frame \(frame.frameIndex) unable to create thumbnail: \(errorString)")
-                          }
-                          op.queuePriority = .veryHigh
-                          await frameGraphBuilder.add(operation: op)
-                      }
-                  }
-              }
+            op.queuePriority = .veryHigh
+            await frameGraphBuilder.add(operation: op)
         }
     }
 
     @ViewBuilder
+    public var thumbnailImage: some View {
+        LoaderPicture(
+          path: picturePath(type: .original, size: .thumbnail),
+          failure: .thumbnail,
+          resizable: false,
+          reloadToken: reloadID,
+          onMissing: { [weak self] in self?.queuePreview(type: .original, size: .thumbnail) })
+    }
+
+    @ViewBuilder
     public func previewImage(type: FrameViewMode) -> some View {
-        if let frame,
-           let url = frame.imageAccessor.urlForImage(
-             frameIndex: frame.frameIndex,
-             ofType: type,
-             atSize: .preview
-           )
-        {
-            AsyncImage(
-              url: url.appending(
-                queryItems: [
-                  URLQueryItem(
-                    name: "v",
-                    value: reloadID.uuidString
-                  )
-                ]
-              )
-            ) { image in
-                image.resizable()
-            } placeholder: {
-                initialImage
-            }
-        } else {
-            ZStack {
-                Color(white: 0.15)
-                Text(localized("ui.image_not_found_for_frame", type.longName))
-                  .font(.system(size: 28, weight: .medium))
-                  .multilineTextAlignment(.center)
-                  .padding()
-                  .foregroundColor(Color(white: 0.45))
-            }
-              .task(id: reloadID) {
-                  if let frame = self.frame,
-                     frame.imageAccessor.urlForImage(
-                       frameIndex: frame.frameIndex,
-                       ofType: type,
-                       atSize: .preview
-                     ) == nil
-                  {
-                      Task {
-                          let op = PreviewOp(
-                            frameView: self,
-                            imageAccessor: frame.imageAccessor,
-                            frameIndex: frame.frameIndex,
-                            type: type,
-                            size: .preview,
-                            rawImageBytes: await frame.configManager.config().workingFrameBytes
-                          ) { errorString in
-                              Log.e("frame \(frame.frameIndex) unable to create thumbnail: \(errorString)")
-                          }
-                          op.queuePriority = .veryHigh
-                          await frameGraphBuilder.add(operation: op)
-                      }
-                  }
-              }
-        }
+        LoaderPicture(
+          path: picturePath(type: type, size: .preview),
+          failure: .preview(type.longName),
+          reloadToken: reloadID,
+          onMissing: { [weak self] in self?.queuePreview(type: type, size: .preview) })
+    }
+
+    /// The path of this frame's picture of `type` at `size`, for views that load it themselves.
+    func imagePath(type: FrameViewMode, size: ImageDisplaySize) -> String? {
+        picturePath(type: type, size: size)
     }
 
     // puts view outliers into the trash
@@ -528,8 +466,9 @@ public class FrameViewModel {
             )
             await MainActor.run {
                 guard self.horizonOverlayVersion == version else { return }
+                // lines are drawn by HorizonLinesCanvas; the picture underneath did not change
                 self.horizonOverlays = overlays
-                self.reloadID = UUID()
+                self.appliedHorizonOverlayVersion = version
             }
         }
     }
@@ -645,7 +584,5 @@ public class FrameViewModel {
     
 }
 
-// XXX make this a loading view
-fileprivate let initialImage = Image(systemName: "rectangle.fill").resizable()
 
 
