@@ -873,15 +873,16 @@ final public actor FrameHorizonProcessor {
             existingNames in
             var found: [Int: String] = [:]
             for candidateIndex in 0..<frameCount {
-                guard let candidatePath = accessor.nameForImage(
+                guard accessor.nameForImage(
                         frameIndex: candidateIndex,
                         ofType: .mergedHorizon,
                         atSize: .original
-                      )
+                      ) != nil
                 else { continue }
-                let candidateFileName = URL(fileURLWithPath: candidatePath).lastPathComponent
-                if existingNames.contains(candidateFileName) {
-                    found[candidateIndex] = referenceDir.appendingPathComponent(candidateFileName).path
+                if let name = accessor.referenceFileNames(frameIndex: candidateIndex)
+                     .first(where: { existingNames.contains($0) })
+                {
+                    found[candidateIndex] = referenceDir.appendingPathComponent(name).path
                 }
             }
             return found
@@ -1558,13 +1559,12 @@ final public actor FrameHorizonProcessor {
         else { return nil }
 
         let mergedURL   = URL(fileURLWithPath: mergedPath)
-        let frameRefURL = mergedURL
+        let referenceDir = mergedURL
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("horizonReference")
-            .appendingPathComponent(mergedURL.lastPathComponent)
 
-        guard FileManager.default.fileExists(atPath: frameRefURL.path),
+        guard let frameRefURL = existingPerFrameReference(in: referenceDir),
               let refImage = PixelatedImage(filename: frameRefURL.path)?.asHorizonMask
         else { return nil }
 
@@ -1589,7 +1589,6 @@ final public actor FrameHorizonProcessor {
         else { return nil }
 
         let mergedURL       = URL(fileURLWithPath: mergedPath)
-        let frameFileName   = mergedURL.lastPathComponent
         let referenceDir    = mergedURL
             .deletingLastPathComponent()    // …/mergedHorizon
             .deletingLastPathComponent()    // …/output (tempOutputPath)
@@ -1597,8 +1596,7 @@ final public actor FrameHorizonProcessor {
 
         // 1. Per-frame reference.  Read straight from disk: this file belongs to this
         // frame alone, so there is no second reader to share a cached copy with.
-        let frameRefURL = referenceDir.appendingPathComponent(frameFileName)
-        if FileManager.default.fileExists(atPath: frameRefURL.path),
+        if let frameRefURL = existingPerFrameReference(in: referenceDir),
            let refImage = PixelatedImage(filename: frameRefURL.path)?.asHorizonMask
         {
             Log.d("frame \(frameIndex) loadHorizonReferenceMask: found per-frame reference")
@@ -2366,6 +2364,16 @@ final public actor FrameHorizonProcessor {
 
     // MARK: - Filmstrip horizon thumbnail overlay
 
+    /// This frame's own painted reference in `referenceDir`: the TIFF, or the file older
+    /// versions wrote under the source frame's name.
+    func existingPerFrameReference(in referenceDir: URL) -> URL? {
+        for name in imageAccessor.referenceFileNames(frameIndex: frameIndex) {
+            let url = referenceDir.appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: url.path) { return url }
+        }
+        return nil
+    }
+
     /// Returns `true` if a user-painted reference horizon file exists on disk
     /// for this frame (either per-frame or global).  Synchronous — no I/O beyond
     /// a file-existence check.
@@ -2377,13 +2385,11 @@ final public actor FrameHorizonProcessor {
               )
         else { return false }
         let mergedURL     = URL(fileURLWithPath: mergedPath)
-        let frameFileName = mergedURL.lastPathComponent
         let referenceDir  = mergedURL
             .deletingLastPathComponent()    // …/mergedHorizon
             .deletingLastPathComponent()    // …/output
             .appendingPathComponent("horizonReference")
-        return FileManager.default.fileExists(
-                   atPath: referenceDir.appendingPathComponent(frameFileName).path)
+        return existingPerFrameReference(in: referenceDir) != nil
             || FileManager.default.fileExists(
                    atPath: referenceDir.appendingPathComponent("reference.tiff").path)
     }
@@ -2587,7 +2593,9 @@ final public actor FrameHorizonProcessor {
             throw "saveHorizonReferenceMask: cannot determine output path for frame \(frameIndex)"
         }
         let mergedURL     = URL(fileURLWithPath: mergedPath)
-        let frameFileName = mergedURL.lastPathComponent
+        guard let frameFileName = imageAccessor.referenceFileName(frameIndex: frameIndex) else {
+            throw "saveHorizonReferenceMask: no file name for frame \(frameIndex)"
+        }
         let referenceDir  = mergedURL
             .deletingLastPathComponent()
             .deletingLastPathComponent()
