@@ -354,7 +354,7 @@ whole_later = "ci" # pr-gate.yml:258 (daemon package tests)
 [suite.test-cli]
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --package-path cli --skip GherkinTests 2>&1"
 parser = "xctest"
-min_tests = 80 # floor: ~90% of a static count of test functions (2026-11, #601)
+min_tests = 70 # floor: ~90% of the 78 starTests functions on develop (GherkinTests is skipped and not counted; #937)
 level = "t1"
 uses = { test-suite = 1 }
 # In a task's test step, only the XCTest classes the change needs (classes holding an edited line or naming a
