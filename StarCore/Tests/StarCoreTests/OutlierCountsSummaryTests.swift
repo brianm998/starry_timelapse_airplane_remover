@@ -21,8 +21,8 @@ final class OutlierCountsSummaryTests: FrameHarnessTestCase {
     private func writeFixture(_ h: FrameHarness, _ outlier: FrameOutlierProcessor) async throws {
         let saved = OutlierGroups(frameIndex: 0, config: h.config)
         let a = makeGroup(id: 1, at: 10), b = makeGroup(id: 2, at: 30), c = makeGroup(id: 3, at: 50)
-        await a.set(shouldRemove: .userSelected(true))
-        await b.set(shouldRemove: .userSelected(false))
+        _ = await a.shouldRemove(.userSelected(true))
+        _ = await b.shouldRemove(.userSelected(false))
         await saved.add(a); await saved.add(b); await saved.add(c)
         try await saved.writeOutliersBinary(to: await outlier.outliersDirname)
         try await saved.write(to: h.config.outlierOutputDirname)
@@ -80,7 +80,7 @@ final class OutlierCountsSummaryTests: FrameHarnessTestCase {
             guard let groups = await outlier.getOutlierGroups() else { return [] }
             var rows: [String] = []
             for (id, g) in await groups.getMembers() {
-                rows.append("\(id) \(await g.bounds) \(String(describing: await g.shouldRemove()))")
+                rows.append("\(id) \(g.bounds) \(String(describing: await g.shouldRemove()))")
             }
             return rows.sorted()
         }

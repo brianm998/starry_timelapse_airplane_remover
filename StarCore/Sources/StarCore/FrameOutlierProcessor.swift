@@ -333,7 +333,6 @@ final public actor FrameOutlierProcessor {
         }
     }
 
-    /// Whether a save of this frame's decisions is running (the file system monitor is busy).
     /// Drop this frame's groups from memory, if nothing would be lost. Refuses (returns false) while
     /// a load is in flight or the frame has an unsaved edit. Counts stay on the observer; the groups
     /// reload from disk on demand.
