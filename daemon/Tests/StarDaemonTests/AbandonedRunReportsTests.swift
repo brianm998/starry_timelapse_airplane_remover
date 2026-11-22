@@ -43,6 +43,17 @@ final class AbandonedRunReportsTests: XCTestCase {
         XCTAssertFalse(report.warning.describesAPassingCondition, "it stays true, so its banner must not expire")
     }
 
+    /// Sent after the previousRunDied report, and only for a run that died inside a GPU merge.
+    func testGPUMergeWarningOnlyForARunThatDiedInAGPUMerge() {
+        var inMerge = marker(resume: nil)
+        inMerge.gpuMergesInFlight = 1
+        let warning = AbandonedRunReports.gpuMergeWarning(for: inMerge)
+        XCTAssertEqual(warning?.kind, .gpuMergeTurnedOff)
+        XCTAssertEqual(warning?.severity, .warning)
+        XCTAssertEqual(warning?.describesAPassingCondition, false)
+        XCTAssertNil(AbandonedRunReports.gpuMergeWarning(for: marker(resume: nil)))
+    }
+
     func testARunWhoseConfigIsStillThereCanBeRestarted() throws {
         let config = scratch.appendingPathComponent("config.json")
         try Data("{}".utf8).write(to: config)
@@ -74,7 +85,7 @@ final class AbandonedRunReportsTests: XCTestCase {
         for kind in [StarWarning.Kind.memoryPressure, .lowSystemMemory, .footprintOverBudget] {
             XCTAssertTrue(warning(kind).describesAPassingCondition, "\(kind)")
         }
-        for kind in [StarWarning.Kind.outputWriteFailed, .lowDiskSpace, .previousRunDied, .memoryGatingDisabled] {
+        for kind in [StarWarning.Kind.outputWriteFailed, .lowDiskSpace, .previousRunDied, .gpuMergeTurnedOff, .memoryGatingDisabled] {
             XCTAssertFalse(warning(kind).describesAPassingCondition, "\(kind)")
         }
     }

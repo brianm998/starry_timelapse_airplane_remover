@@ -258,7 +258,7 @@ final class PassingConditionTests: XCTestCase {
     /// was — so it stays up until the user takes it down.  `outputWriteFailed` is the one that
     /// matters most: it is about the user's product going missing.
     func testTheFactsAboutARunDoNot() {
-        for kind in [StarWarning.Kind.outputWriteFailed, .lowDiskSpace, .previousRunDied,
+        for kind in [StarWarning.Kind.outputWriteFailed, .lowDiskSpace, .previousRunDied, .gpuMergeTurnedOff,
                      .oversizedReservation, .memoryGatingDisabled, .artifactsInvalidated,
                      .groundAlignmentFailed, .frameFinishFailed] {
             XCTAssertFalse(warning(kind).describesAPassingCondition, "\(kind)")
@@ -271,7 +271,7 @@ final class PassingConditionTests: XCTestCase {
         let passing: Set<StarWarning.Kind> = [.memoryPressure, .lowSystemMemory,
                                              .footprintOverBudget]
         let staying: Set<StarWarning.Kind> = [.outputWriteFailed, .lowDiskSpace, .previousRunDied,
-                                             .oversizedReservation, .memoryGatingDisabled,
+                                             .gpuMergeTurnedOff, .oversizedReservation, .memoryGatingDisabled,
                                              .artifactsInvalidated, .groundAlignmentFailed,
                                              .frameFinishFailed]
         XCTAssertTrue(passing.isDisjoint(with: staying))

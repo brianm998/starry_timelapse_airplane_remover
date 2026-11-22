@@ -635,6 +635,8 @@ class AppViewModel(
 
     /** A warning from the engine. */
     fun report(warning: com.star.proto.Warning) {
+        // A run that died in a GPU merge: GPU merge is off from here on, for sessions opened later too.
+        com.star.desktop.domain.GpuMergeTurnedOff.apply(warning, prefs)
         _warningState.update { WarningRouting.report(it, warning, System.currentTimeMillis()) }
         val banner = _warningState.value.banner
         // The newest report wins, so whatever timer was running was for one that is gone.

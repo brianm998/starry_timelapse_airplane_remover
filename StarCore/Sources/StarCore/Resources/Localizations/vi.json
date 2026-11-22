@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "Sau khi phân loại tất cả các nhóm ngoại lai của một khung, giờ ta biết điểm ảnh nào được coi là nhiễu và điểm ảnh nào có thể giữ lại.\nVới dữ liệu này, Star tạo một mặt nạ loại bỏ, tương tự mặt nạ lớp trong Photoshop hoặc GIMP. Mặt nạ này dùng để thay các điểm ảnh nhiễu bằng dữ liệu từ khung lân cận đã căn chỉnh.",
   "ui.info_detailed_final_title": "Loại bỏ điểm ảnh xấu lần cuối",
   "ui.info_detailed_final_body": "Ở bước cuối cùng này, Star chỉ cần ghép khung đang xử lý với khung lân cận đã căn chỉnh, dùng mặt nạ loại bỏ làm mặt nạ lớp, để chỉ ghi đè một số ít điểm ảnh trong khung đang xử lý.",
-  "ui.info_detailed_closing": "Sau khi Star xử lý xong chuỗi ảnh của bạn, bạn có thể xem video của chuỗi ở độ phân giải xem trước. Điều này có thể giúp bạn thực hiện các chỉnh sửa.\n\nStar vẫn đang trong quá trình phát triển."
+  "ui.info_detailed_closing": "Sau khi Star xử lý xong chuỗi ảnh của bạn, bạn có thể xem video của chuỗi ở độ phân giải xem trước. Điều này có thể giúp bạn thực hiện các chỉnh sửa.\n\nStar vẫn đang trong quá trình phát triển.",
+  "warning.title.gpu_merge_turned_off": "Đã tắt hợp nhất bằng GPU",
+  "warning.gpu_merge_turned_off.message": "Lần chạy trước đã dừng khi đang hợp nhất trên GPU, nên việc hợp nhất bằng GPU đã bị tắt cho phiên này.",
+  "warning.gpu_merge_turned_off.suggestion": "Nếu GPU của máy này không phải nguyên nhân, bạn có thể bật lại trong phần cài đặt xử lý."
 }

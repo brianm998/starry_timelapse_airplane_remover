@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "Dopo aver classificato tutti i gruppi anomali di un fotogramma, sappiamo quali pixel sono considerati rumore e quali si possono tenere.\nCon questi dati, Star crea una maschera di rimozione, simile a una maschera di livello in Photoshop o GIMP. Questa maschera serve a sostituire i pixel rumorosi con i dati del fotogramma vicino allineato.",
   "ui.info_detailed_final_title": "Rimozione finale dei pixel difettosi",
   "ui.info_detailed_final_body": "In quest'ultimo passo, Star si limita a comporre il fotogramma in elaborazione con il fotogramma vicino allineato, usando la maschera di rimozione come maschera di livello, per sovrascrivere solo un piccolo numero di pixel nel fotogramma che stiamo elaborando.",
-  "ui.info_detailed_closing": "Quando Star ha finito di elaborare la tua sequenza di immagini, puoi guardare un video della sequenza a risoluzione di anteprima. Può esserti utile per apportare eventuali correzioni.\n\nStar è ancora un lavoro in corso."
+  "ui.info_detailed_closing": "Quando Star ha finito di elaborare la tua sequenza di immagini, puoi guardare un video della sequenza a risoluzione di anteprima. Può esserti utile per apportare eventuali correzioni.\n\nStar è ancora un lavoro in corso.",
+  "warning.title.gpu_merge_turned_off": "Unione su GPU disattivata",
+  "warning.gpu_merge_turned_off.message": "L'esecuzione precedente si è interrotta durante l'unione sulla GPU, quindi l'unione su GPU è stata disattivata per questa sessione.",
+  "warning.gpu_merge_turned_off.suggestion": "Se la GPU di questo computer non è la causa, puoi riattivarla nelle impostazioni di elaborazione."
 }
