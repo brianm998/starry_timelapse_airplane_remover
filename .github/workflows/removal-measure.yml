@@ -88,6 +88,10 @@ jobs:
         working-directory: trail_tools
         run: swift test
 
+      # gherkin/compare-formats.py's own tests (pipx and Python are on every hosted runner).
+      - name: Unit-test the format comparison
+        run: pipx run pytest -q gherkin/tests
+
       - name: Measure every dataset x clean method
         run: gherkin/measure-removal.sh linux measure-out
 
@@ -95,6 +99,11 @@ jobs:
         if: always()
         run: |
           python3 gherkin/measure-removal-summary.py measure-out | tee measure-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: JPEG vs 16-bit TIFF parity
+        run: |
+          set -o pipefail
+          python3 gherkin/compare-formats.py measure-out --os linux --gate --json measure-out/format-parity.json | tee format-parity.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload reports, crops and logs
         if: always()
@@ -104,6 +113,7 @@ jobs:
           path: |
             measure-out
             measure-summary.md
+            format-parity.md
           retention-days: 30
 
   measure-macos:
@@ -165,6 +175,10 @@ jobs:
         working-directory: trail_tools
         run: swift test
 
+      # gherkin/compare-formats.py's own tests (pipx and Python are on every hosted runner).
+      - name: Unit-test the format comparison
+        run: pipx run pytest -q gherkin/tests
+
       - name: Measure every dataset x clean method
         run: gherkin/measure-removal.sh macos measure-out
 
@@ -172,6 +186,11 @@ jobs:
         if: always()
         run: |
           python3 gherkin/measure-removal-summary.py measure-out | tee measure-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: JPEG vs 16-bit TIFF parity
+        run: |
+          set -o pipefail
+          python3 gherkin/compare-formats.py measure-out --os macos --tag cpu --gate --json measure-out/format-parity.json | tee format-parity.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload reports, crops and logs
         if: always()
@@ -181,4 +200,5 @@ jobs:
           path: |
             measure-out
             measure-summary.md
+            format-parity.md
           retention-days: 30

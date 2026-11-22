@@ -31,6 +31,11 @@ fi
 # "repeat" is an identical second run on the same runner: how much do two runs of the same thing differ? 
 # On macOS also repeat one run with the GPU off, to see how far Metal and the CPU path differ on the same runner.
 if [ "$os" = "macos" ]; then runs+=("a7sii_10_16bit:selective:--unchanged-outside:cpu"); fi
+# gherkin/compare-formats.py compares JPEG with 16-bit TIFF; on macOS both sides need the CPU path so a GPU difference is not counted as a format difference (Linux is CPU already).
+if [ "$os" = "macos" ]; then
+  runs+=("a7sii_10:selective::cpu" "a7sii_10:automatic:false::cpu" "a7sii_10:automatic:true::cpu"
+         "a7sii_10_16bit:automatic:false::cpu" "a7sii_10_16bit:automatic:true::cpu")
+fi
 
 for spec in "${runs[@]}"; do
   IFS=: read -r ds m1 m2 m3 m4 <<< "$spec"

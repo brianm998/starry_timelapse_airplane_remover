@@ -27,4 +27,6 @@ for a in "$@"; do
     break
   fi
 done
+# The shim in .mason/shims passes straight through when this is set (no loop back into it).
+export STAR_XCODEBUILD_SHIM_PASSED=1
 exec xcodebuild "$@" ${extra[@]+"${extra[@]}"} CODE_SIGN_STYLE=Manual "CODE_SIGN_IDENTITY=$ident" "DEVELOPMENT_TEAM=$team"
