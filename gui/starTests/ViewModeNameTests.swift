@@ -70,6 +70,8 @@ final class ViewModeNameTests: XCTestCase {
 
     func testTheNotFoundLineNamesTheMode() throws {
         let source = try String(contentsOfFile: #filePath.replacingOccurrences(of: "starTests/ViewModeNameTests.swift", with: "star/FrameViewModel.swift"), encoding: .utf8)
-        XCTAssertTrue(source.contains("localized(\"ui.image_not_found_for_frame\", type.longName)"))
+        XCTAssertTrue(source.contains("failure: .preview(type.longName)"))
+        let panel = try String(contentsOfFile: #filePath.replacingOccurrences(of: "starTests/ViewModeNameTests.swift", with: "star/FrameImageLoader.swift"), encoding: .utf8)
+        XCTAssertTrue(panel.contains("localized(\"ui.image_not_found_for_frame\", name)"))
     }
 }
