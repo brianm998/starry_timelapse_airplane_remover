@@ -2118,15 +2118,14 @@ public final class ImageSequenceViewModel {
     /// `extractionError`; `disable()` lets go of it.
     @ObservationIgnored private let sleepHold = WorkSleepHold(blocker: AppNapDisabler())
     
-    init(
+    convenience init(
       viewModel: ViewModel,
       with configManager: ConfigManager,
       frameSource: FrameSource? = nil,
       closure: @Sendable @escaping (Int, Double) -> Void
     ) async throws {
-        self.topViewModel = viewModel
-        self.trashLevel = await constants.getTrashLevel()
-        self.smallTrashMax = await constants.getSmallTrashMax()
+        let trashLevel = await constants.getTrashLevel()
+        let smallTrashMax = await constants.getSmallTrashMax()
 
         var config = configManager.config()
 
@@ -2135,7 +2134,30 @@ public final class ImageSequenceViewModel {
             config.writeFramePreviewFiles = true
             configManager.update(config)
         }
-        
+
+        self.init(viewModel: viewModel, configManager: configManager,
+                  trashLevel: trashLevel, smallTrashMax: smallTrashMax)
+
+        Log.d("loaded config \(config.imageSequenceDirname)")
+
+        try await openSequence(configManager: configManager, config: config,
+                               frameSource: frameSource, closure: closure)
+    }
+
+    /// The settings half of opening a sequence: every stored property from the config, and
+    /// nothing read from disk.  Tests build a sequence model with no frames this way.
+    init(
+      viewModel: ViewModel?,
+      configManager: ConfigManager,
+      trashLevel: Double,
+      smallTrashMax: Int
+    ) {
+        self.topViewModel = viewModel
+        self.trashLevel = trashLevel
+        self.smallTrashMax = smallTrashMax
+
+        let config = configManager.config()
+
         if !config.cleanMethod.usesOutliers {
             self.selectionMode = .none
         } 
@@ -2197,9 +2219,14 @@ public final class ImageSequenceViewModel {
 
         let ignoreLowerPixels = config.ignoreLowerPixels 
         self.ignoreLowerPixels = CGFloat(ignoreLowerPixels) // XXX need to sync back the other dir
-                    
-        Log.d("loaded config \(config.imageSequenceDirname)")
+    }
 
+    private func openSequence(
+      configManager: ConfigManager,
+      config: Config,
+      frameSource: FrameSource?,
+      closure: @Sendable @escaping (Int, Double) -> Void
+    ) async throws {
         // The detection type the frames are processed with is read from this global, so it is this sequence's own
         // each time one is opened, not whatever the last one (or the preference) left in it.
         await constants.set(detectionType: config.detectionType)
@@ -2265,7 +2292,6 @@ public final class ImageSequenceViewModel {
         Log.d("loaded imageInfo \(imageInfo)")
 
         // The Light profile asks for the weaker, background activity; read each time work begins.
-        let configManager = self.config
         sleepHold.light = { configManager.config().resourceProfile == .light }
         
         self.matInstancesTask = Task { [weak self] in 

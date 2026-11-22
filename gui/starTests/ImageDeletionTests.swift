@@ -6,29 +6,64 @@ import StarCore
 @MainActor
 final class ImageDeletionTests: XCTestCase {
 
-    private func frameView() -> FrameViewModel {
-        FrameViewModel(ConfigManager(configFilename: NSTemporaryDirectory() + "c838.json", config: Config()), 3)
+    /// A sequence model with `count` frames and no images on disk: only the settings half of opening one.
+    private func sequence(frames count: Int) -> ImageSequenceViewModel {
+        var config = Config()
+        config.useGPUForMerge = false
+        let manager = ConfigManager(configFilename: NSTemporaryDirectory() + "c838-\(UUID().uuidString).json",
+                                    config: config)
+        let model = ImageSequenceViewModel(viewModel: nil, configManager: manager, trashLevel: 0.5, smallTrashMax: 0)
+        model.set(numberOfFrames: count)
+        return model
     }
 
     func testDeletingFinalUpdatesExistingImages() {
-        let frame = frameView()
-        frame.existingImages = [.original, .final]
-        var removedReports = 0
-        frame.onImageAvailabilityChange = { _, removed in if removed { removedReports += 1 } }
+        let model = sequence(frames: 2)
+        model.frames[0].existingImages = [.original, .final]
+        model.frames[1].existingImages = [.original, .final]
+        XCTAssertTrue(model.availableModes.contains(.final))
 
-        // what `imageDeleted` does for a full-size deletion
-        frame.existingImages.remove(.final)
+        // a preview-size deletion does not mean the full image is gone
+        model.imageDeleted(frameIndex: 0, type: .final, size: .preview)
+        XCTAssertEqual(model.frames[0].existingImages, [.original, .final])
 
-        XCTAssertFalse(frame.existingImages.contains(.final))
-        XCTAssertTrue(frame.existingImages.contains(.original))
-        XCTAssertEqual(removedReports, 1, "the sequence recomputes availableModes on removal")
+        model.imageDeleted(frameIndex: 0, type: .final, size: .original)
+        XCTAssertEqual(model.frames[0].existingImages, [.original])
+        XCTAssertEqual(model.frames[1].existingImages, [.original, .final])
+        XCTAssertTrue(model.availableModes.contains(.final), "frame 1 still has its final image")
+
+        model.imageDeleted(frameIndex: 1, type: .final, size: .original)
+        XCTAssertEqual(model.frames[1].existingImages, [.original])
+        XCTAssertFalse(model.availableModes.contains(.final), "no frame has a final image any more")
+        XCTAssertTrue(model.availableModes.contains(.original))
+    }
+
+    func testDeletingAnOutOfRangeFrameIsIgnored() {
+        let model = sequence(frames: 1)
+        model.frames[0].existingImages = [.original, .final]
+        model.imageDeleted(frameIndex: 5, type: .final, size: .original)
+        model.imageDeleted(frameIndex: -1, type: .final, size: .original)
+        XCTAssertEqual(model.frames[0].existingImages, [.original, .final])
     }
 
     func testViewModeFallsBackToOriginal() {
-        let frame = frameView()
-        frame.existingImages = [.original, .final]
-        XCTAssertEqual(ImageSequenceViewModel.viewMode(.final, whenFrameHas: { frame.hasImage(type: $0) }), .final)
-        frame.existingImages.remove(.final)
-        XCTAssertEqual(ImageSequenceViewModel.viewMode(.final, whenFrameHas: { frame.hasImage(type: $0) }), .original)
+        let model = sequence(frames: 2)
+        model.frames[0].existingImages = [.original, .final]
+        model.frames[1].existingImages = [.original, .final]
+        model.currentIndex = 1
+        model.frameViewMode = .final
+
+        // another frame losing its image leaves the current one's mode alone
+        model.imageDeleted(frameIndex: 0, type: .final, size: .original)
+        XCTAssertEqual(model.frameViewMode, .final)
+
+        model.imageDeleted(frameIndex: 1, type: .final, size: .original)
+        XCTAssertEqual(model.frameViewMode, .original)
+    }
+
+    func testViewModeHelper() {
+        XCTAssertEqual(ImageSequenceViewModel.viewMode(.final, whenFrameHas: { $0 == .final }), .final)
+        XCTAssertEqual(ImageSequenceViewModel.viewMode(.final, whenFrameHas: { _ in false }), .original)
+        XCTAssertEqual(ImageSequenceViewModel.viewMode(.original, whenFrameHas: { _ in false }), .original)
     }
 }
