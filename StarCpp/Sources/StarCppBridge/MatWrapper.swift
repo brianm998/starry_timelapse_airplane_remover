@@ -70,6 +70,12 @@ public final class MatWrapper: @unchecked Sendable {
         mat_wrapper_write_to(ref, filename)
     }
 
+    /// As `write(to:)`; a JPEG name is written at `jpegQuality` rather than OpenCV's 95.
+    @discardableResult
+    public func write(to filename: String, jpegQuality: Int) -> Bool {
+        mat_wrapper_write_to_quality(ref, filename, Int32(jpegQuality))
+    }
+
     /// Writes an uncompressed TIFF without fsync, for intermediate caches that are rebuilt
     /// when missing or unreadable. Uncompressed so loading it takes the direct-read path.
     @discardableResult
