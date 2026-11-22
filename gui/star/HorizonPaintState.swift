@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import StarCore
 
 /// Phase of the horizon painter workflow.
 ///
@@ -102,6 +103,36 @@ final class HorizonPaintState {
     /// Transition to the given phase.  Used by the view layer to move to
     /// `.computing` once the band is complete.
     func setPhase(_ newPhase: HorizonPainterPhase) { phase = newPhase }
+
+    // MARK: - Failure message
+
+    /// Why the last detection or refinement did not produce a horizon, in the user's
+    /// language; `nil` when there is nothing to report.  Cleared by the next stroke and
+    /// by `resetForNewFrame()`.  The desktop client's `errorText` is the same thing.
+    var detectionError: String? = nil
+
+    /// `true` when a band result has at least one detected column.  A result whose columns
+    /// are all `nil` is a failure, as it is on the desktop (`result.any { it >= 0 }`).
+    static func hasDetectedColumn(_ horizon: [Int?]) -> Bool {
+        horizon.contains { $0 != nil }
+    }
+
+    /// Band detection gave no usable horizon: say so and go back to band selection.
+    func bandComputationFailed() {
+        detectionError = localized("ui.horizon_detection_failed_adjust_the_band_and_try_again")
+        phase = .bandSelection
+    }
+
+    /// A refinement stroke failed: say so and put back the horizon the solver last gave,
+    /// undoing the stroke's optimistic change to the preview.
+    func refinementFailed() {
+        detectionError = localized("ui.refinement_failed_try_another_stroke")
+        if let solved = lastHorizonY {
+            previewHorizonY = solved
+            expandedPath = HorizonPaintState.skyPath(horizonY: solved)
+            expansionGeneration += 1
+        }
+    }
 
     // MARK: - Band boundaries
 
@@ -337,6 +368,7 @@ final class HorizonPaintState {
     /// gap.  This produces a continuous band rather than two isolated circles.
     /// Gap-filling is **never** applied across a gesture boundary.
     func addStroke(at center: CGPoint) {
+        detectionError = nil
         // Reset gesture bounds and per-column extent at the start of a new
         // segment so each gesture tracks only its own affected region.
         if isNewSegment {
@@ -625,6 +657,7 @@ final class HorizonPaintState {
     /// loaded asynchronously.
     func resetForNewFrame() {
         let savedIsErasing = isErasing
+        detectionError = nil
         clear()              // clears everything including isErasing; brushRadius is untouched
         phase = .computing   // override bandSelection set by clear()
         // Restore *after* the phase, not before: isErasing's didSet forces the value back to
