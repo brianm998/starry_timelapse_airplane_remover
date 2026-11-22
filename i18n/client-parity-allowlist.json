@@ -1,0 +1,7 @@
+{
+  "warning.*": {"side": "gui", "why": "engine: StarWarning text is rendered in StarCore (StarWarning.swift) and reaches the desktop already localised through stard"},
+  "severity.*": {"side": "gui", "why": "engine: composed into run_marker report text inside StarCore (RunMarker.swift), sent to the desktop as a StarWarning"},
+  "run_marker.*": {"side": "gui", "why": "engine: RunMarker.asWarning builds the abandoned-run report in StarCore; stard sends it to the desktop (AbandonedRunReports.swift)"},
+  "operation.*": {"side": "gui", "why": "gap: the progress line names the running operation via UpdatableProgressMonitor (gui only); the desktop's progress dialog never shows the operation name"},
+  "progress.frames_in_*": {"side": "gui", "why": "gap: 'N frames in <state/operation>' progress suffix comes from UpdatableProgressMonitor (gui only); the desktop progress dialog lacks it"}
+}
