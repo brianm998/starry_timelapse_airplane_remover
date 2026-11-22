@@ -2377,8 +2377,8 @@ public struct Config: Codable, Sendable {
             scaleSuffix = String(format: ".div%.2f", divisor)
         }
         switch type {
-        case .starAligned:  return "\(frameIndex).sky\(scaleSuffix).yaml"
-        case .earthAligned: return "\(frameIndex).earth\(scaleSuffix).yaml"
+        case .starAligned:  return "\(frameIndex).sky\(scaleSuffix).kpb"
+        case .earthAligned: return "\(frameIndex).earth\(scaleSuffix).kpb"
         default:            return nil
         }
     }
@@ -2392,6 +2392,40 @@ public struct Config: Codable, Sendable {
         guard let filename = keypointFilename(frameIndex: frameIndex, ofType: type)
         else { return nil }
         return "\(dirForKeypointData)/\(filename)"
+    }
+
+    /// The extension new feature files get: a compact binary layout (`STARKP01`), which loads
+    /// in milliseconds where the YAML `cv::FileStorage` wrote took ~170 ms a frame.
+    public static let keypointExtension = "kpb"
+    /// The extension earlier versions wrote.  Those files still load.
+    public static let legacyKeypointExtension = "yaml"
+
+    /// The `.yaml` twin of a `.kpb` keypoint path, the name earlier versions wrote.
+    public static func legacyKeypointPath(forKeypointPath path: String) -> String {
+        let suffix = "." + keypointExtension
+        guard path.hasSuffix(suffix) else { return path }
+        return String(path.dropLast(suffix.count)) + "." + legacyKeypointExtension
+    }
+
+    /// The `.yaml` path for a frame's feature set, as an older version named it.
+    public func legacyKeypointPath(frameIndex: Int, ofType type: FrameViewMode) -> String? {
+        keypointPath(frameIndex: frameIndex, ofType: type)
+          .map { Config.legacyKeypointPath(forKeypointPath: $0) }
+    }
+
+    /// The feature file that is on disk for this frame: `.kpb` first, then a legacy `.yaml`.
+    /// `nil` when neither exists.
+    public func existingKeypointPath(frameIndex: Int, ofType type: FrameViewMode) -> String? {
+        guard let path = keypointPath(frameIndex: frameIndex, ofType: type) else { return nil }
+        return Config.existingKeypointPath(forKeypointPath: path)
+    }
+
+    public static func existingKeypointPath(forKeypointPath path: String) -> String? {
+        let fm = FileManager.default
+        if fm.fileExists(atPath: path) { return path }
+        let legacy = legacyKeypointPath(forKeypointPath: path)
+        if legacy != path, fm.fileExists(atPath: legacy) { return legacy }
+        return nil
     }
 
 

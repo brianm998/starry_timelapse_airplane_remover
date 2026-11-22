@@ -394,8 +394,10 @@ final public actor FrameAlignmentProcessor {
                 // stat'd when it decided whether to build a KeypointOp at all — so the
                 // path is built in one place, see Config.keypointPath.
                 var keypoints: OCVFeatureSet? = nil
-                if let keypointPath = config.keypointPath(frameIndex: neighborIndex,
-                                                          ofType: type)
+                if let keypointPath = config.existingKeypointPath(frameIndex: neighborIndex,
+                                                                  ofType: type)
+                                        ?? config.keypointPath(frameIndex: neighborIndex,
+                                                               ofType: type)
                 {
                     keypoints = await keypointCache.load(fromFilename: keypointPath)
                 } else {
@@ -602,7 +604,12 @@ final public actor FrameAlignmentProcessor {
             throw "unable to loadOrCreateOCVFeatures of type \(type)"
         }
 
+        // A legacy .yaml is loaded as is (cached under its own path); new files are .kpb.
         if let features = await keypointCache.load(fromFilename: fullPath) {
+            return features
+        }
+        let legacyPath = Config.legacyKeypointPath(forKeypointPath: fullPath)
+        if let features = await keypointCache.load(fromFilename: legacyPath) {
             return features
         }
 

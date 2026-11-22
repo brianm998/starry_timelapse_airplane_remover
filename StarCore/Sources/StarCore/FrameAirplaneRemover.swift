@@ -265,9 +265,7 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
     nonisolated public func keypointsExistOnDisk(ofType type: FrameViewMode,
                                                  config: Config) -> Bool
     {
-        guard let path = config.keypointPath(frameIndex: frameIndex, ofType: type)
-        else { return false }
-        return FileManager.default.fileExists(atPath: path)
+        config.existingKeypointPath(frameIndex: frameIndex, ofType: type) != nil
     }
 
     /// True when this frame's classified outlier set is already on disk.
