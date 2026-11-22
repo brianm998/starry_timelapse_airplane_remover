@@ -12,59 +12,21 @@ public struct FrameEditImageView: View {
     @Bindable var frameViewModel: FrameViewModel
     
     private var fullResolutionImage: some View {
-        @Bindable var viewModel = viewModel
-        return Group {
+        Group {
             if let nextFrame = frameViewModel.frame {
-                if let url = nextFrame.imageAccessor.urlForImage(
-                     frameIndex: nextFrame.frameIndex,
-                     ofType: viewModel.frameViewMode,
-                     atSize: .original)
-                {
-                    let appendedURL = url.appending(
-                        queryItems: [
-                          URLQueryItem(
-                            name: "v",
-                            value: frameViewModel.reloadID.uuidString
-                          )
-                        ]
-                      )
-                    AsyncImage(url: appendedURL) { phase in
-                        if let image = phase.image {
-                            image
-                        } else {
-                            self.previewImage
-                        }
-                    }
-                } else if let url = nextFrame.imageAccessor.urlForImage(
-                            frameIndex: nextFrame.frameIndex,
-                            ofType: viewModel.frameViewMode,
-                            atSize: .preview)
-                {
-                    let appendedURL = url.appending(
-                        queryItems: [
-                          URLQueryItem(
-                            name: "v",
-                            value: frameViewModel.reloadID.uuidString
-                          )
-                        ]
-                      )
-                    AsyncImage(url: appendedURL) { phase in
-                        if let image = phase.image {
-                            image
-                              .resizable()
-                        } else {
-                            ProgressView()
-                              .colorScheme(.dark)
-                        }
-                    }
-                }
+                FullResolutionPicture(
+                  path: nextFrame.imageAccessor.nameForImage(
+                    frameIndex: nextFrame.frameIndex,
+                    ofType: viewModel.frameViewMode,
+                    atSize: .original),
+                  reloadID: frameViewModel.reloadID,
+                  fallback: self.previewImage)
             } else {
                 Text(localized("ui.image_witn_no_frame")) // XXX make this better
             }
         }
     }
 
-    
     /// In the default mode the full-size aligned TIFFs are never written, so opening one at
     /// full resolution builds it now (uncompressed, no fsync) and then shows it.
     private func makeFullSizeAlignedImageIfNeeded() async {
@@ -267,6 +229,36 @@ public struct FrameEditImageView: View {
           }
           .onChange(of: viewModel.shouldShowTrash) {
               maybeLoadTrash()
+          }
+    }
+}
+
+/// The full-size original, loaded uncached (it is too big to keep), with the preview showing
+/// until it arrives and whenever it cannot be read.
+private struct FullResolutionPicture<Fallback: View>: View {
+    let path: String?
+    let reloadID: UUID
+    let fallback: Fallback
+
+    @State private var image: NSImage?
+
+    private struct TaskKey: Hashable {
+        let path: String?
+        let reloadID: UUID
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+            } else {
+                fallback
+            }
+        }
+          .task(id: TaskKey(path: path, reloadID: reloadID)) {
+              guard let path else { image = nil; return }
+              let loaded = await FrameImageLoader.shared.loadUncached(path: path)
+              if !Task.isCancelled { image = loaded }
           }
     }
 }

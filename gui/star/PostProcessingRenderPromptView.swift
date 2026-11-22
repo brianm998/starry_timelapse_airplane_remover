@@ -7,10 +7,10 @@ struct PostProcessingRenderPromptView: View {
     /// The frame on screen as it was and as star left it; nil unless both pictures exist.
     private var pictures: PostProcessingRenderPromptLayout.Pictures? {
         guard let frame = viewModel.currentFrame,
-              let before = frame.imageAccessor.urlForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .preview),
-              let after = frame.imageAccessor.urlForImage(frameIndex: frame.frameIndex, ofType: .final, atSize: .preview)
+              let before = frame.imageAccessor.nameForImage(frameIndex: frame.frameIndex, ofType: .original, atSize: .preview),
+              let after = frame.imageAccessor.nameForImage(frameIndex: frame.frameIndex, ofType: .final, atSize: .preview)
         else { return nil }
-        return .init(before: before, after: after)
+        return .init(before: URL(fileURLWithPath: before), after: URL(fileURLWithPath: after))
     }
 
     var body: some View {
@@ -66,11 +66,8 @@ struct PostProcessingRenderPromptLayout: View {
     }
 
     private func picture(_ url: URL) -> some View {
-        AsyncImage(url: url) { image in
-            image.resizable().aspectRatio(contentMode: .fit)
-        } placeholder: {
-            Color.clear
-        }
+        LoaderPicture(path: url.path)
+          .aspectRatio(contentMode: .fit)
           .frame(width: Self.pictureSize.width, height: Self.pictureSize.height)
     }
 

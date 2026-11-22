@@ -130,10 +130,31 @@ open class AsyncOperation: Operation, @unchecked Sendable {
             // what wedged the keypoint phase — see `KeypointLimiter`.
             await self.acquireExecutionSlot()
 
+            // Stop must stop: an op cancelled while parked for a slot does no work.
+            if self.isCancelled || Task.isCancelled {
+                Log.d("\(self.name ?? "\(self.type)") cancelled while waiting for a slot")
+                await self.releaseExecutionSlot()
+                self.finish()
+                return
+            }
+
             // Reserve memory budget so the scheduler doesn't start more ops
             // than RAM can support.
+            var granted = true
             if memBytes > 0 {
-                await MemoryMonitor.shared.reserve(bytes: memBytes)
+                granted = await MemoryMonitor.shared.reserve(bytes: memBytes)
+            }
+
+            // Cancelled while parked for memory (not granted), or granted just as the
+            // cancel landed: give back whatever was granted and skip the work.
+            if !granted || self.isCancelled || Task.isCancelled {
+                Log.d("\(self.name ?? "\(self.type)") cancelled while waiting for memory")
+                if granted && memBytes > 0 {
+                    await MemoryMonitor.shared.release(bytes: memBytes)
+                }
+                await self.releaseExecutionSlot()
+                self.finish()
+                return
             }
 
             let probe = logOperationMemory ? MemoryProbe(type: self.type,
