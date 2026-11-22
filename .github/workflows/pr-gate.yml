@@ -103,6 +103,11 @@ jobs:
       - name: Localization catalogue
         run: python3 i18n/check.py
 
+      - name: Client catalogue parity
+        run: |
+          python3 i18n/client_parity.py
+          python3 i18n/tests/test_client_parity.py
+
       - name: Set up Swift (for the Gherkin generator)
         uses: SwiftyLab/setup-swift@latest
         with:
