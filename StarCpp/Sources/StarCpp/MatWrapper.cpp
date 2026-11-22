@@ -643,11 +643,26 @@ static bool nameIsTiff(const char *filename) {
     return ends(".tif") || ends(".tiff");
 }
 
-bool mat_wrapper_write_to(MatWrapperRef ref, const char *filename) {
+static bool nameIsJpeg(const char *filename) {
+    const std::string name(filename);
+    auto ends = [&](const char *suffix) {
+        const size_t n = std::strlen(suffix);
+        if (name.size() < n) return false;
+        for (size_t i = 0; i < n; ++i)
+            if (std::tolower((unsigned char)name[name.size() - n + i]) != suffix[i]) return false;
+        return true;
+    };
+    return ends(".jpg") || ends(".jpeg");
+}
+
+// jpegQuality <= 0 leaves OpenCV's default (95); it only matters for a JPEG name.
+static bool writeToImpl(MatWrapperRef ref, const char *filename, int jpegQuality) {
     if (!ref) return false;
     try {
         Log_d("writeTo: %s", filename);
         std::vector<int> params;
+        if (jpegQuality > 0 && nameIsJpeg(filename))
+            params = {cv::IMWRITE_JPEG_QUALITY, std::min(jpegQuality, 100)};
         if (nameIsTiff(filename) && !lzwWorthIt(ref->mat))
             params = {cv::IMWRITE_TIFF_COMPRESSION, 1};     // as writeCacheTo
         return writeMatAtomically(ref->mat, std::string(filename), params, "writeTo");
@@ -661,6 +676,14 @@ bool mat_wrapper_write_to(MatWrapperRef ref, const char *filename) {
         Log_e("writeTo: %s unknown exception", filename);
     }
     return false;
+}
+
+bool mat_wrapper_write_to(MatWrapperRef ref, const char *filename) {
+    return writeToImpl(ref, filename, 0);
+}
+
+bool mat_wrapper_write_to_quality(MatWrapperRef ref, const char *filename, int jpegQuality) {
+    return writeToImpl(ref, filename, jpegQuality);
 }
 
 bool mat_wrapper_write_cache_to(MatWrapperRef ref, const char *filename) {
