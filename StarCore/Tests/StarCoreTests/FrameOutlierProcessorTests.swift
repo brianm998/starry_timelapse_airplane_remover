@@ -436,8 +436,7 @@ final class FrameOutlierProcessorTests: FrameHarnessTestCase {
         }
     }
 
-    /// While another load is running `loadOutliers` returns at once ("Not loading twice"), so a bulk
-    /// decision that merely called it would still find nothing. It has to wait for the load.
+    /// While another load is running `loadOutliers` waits for it, so a bulk decision finds the groups.
     func testRemoveAllWaitsForALoadInFlight() async throws {
         let h = try await FrameHarness.make(frameCount: 1, width: 128, height: 128, named: "removeallwait")
         harness = h
@@ -789,11 +788,15 @@ private actor VisitRecorder {
 
 extension FrameOutlierProcessor {
     /// Pretend a load is running, so the in-flight path can be driven without a real read.
-    func holdLoading(_ loading: Bool) { isLoadingOutliers = loading }
+    func holdLoading(_ loading: Bool) {
+        inFlightLoad = loading ? Task { [self] in
+            while await getOutlierGroups() == nil { try await Task.sleep(nanoseconds: 10_000_000) }
+        } : nil
+    }
 
     /// What a load does when it finishes: publish the groups and stop being "in flight".
     func finishLoading(with groups: OutlierGroups) {
         outlierGroups = groups
-        isLoadingOutliers = false
+        inFlightLoad = nil
     }
 }
