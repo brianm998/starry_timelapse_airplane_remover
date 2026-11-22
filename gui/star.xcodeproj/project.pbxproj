@@ -64,6 +64,7 @@
 		D386FA18298B617400878B56 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D386FA17298B617400878B56 /* Preview Assets.xcassets */; };
 		A874D8817E1EDBCAF88B46CD /* AlignmentDeviationPointTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A774D8817E1EDBCAF88B46CD /* AlignmentDeviationPointTests.swift */; };
 		A8EB9C1AD64B213249D4C7EF /* AlignmentExamplesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7EB9C1AD64B213249D4C7EF /* AlignmentExamplesTests.swift */; };
+		A8FBB9520000000000852001 /* HorizonPaintStateFailureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7FBB9520000000000852001 /* HorizonPaintStateFailureTests.swift */; };
 		A8FBB673048ADB96BE7741FB /* AlignmentWindowTextsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7FBB673048ADB96BE7741FB /* AlignmentWindowTextsTests.swift */; };
 		A8E9733680EC9CCC730BC7CE /* BottomStatusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E9733680EC9CCC730BC7CE /* BottomStatusTests.swift */; };
 		A8CD8F2D9E742A510C76BCCB /* ClickRuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7CD8F2D9E742A510C76BCCB /* ClickRuleTests.swift */; };
@@ -261,6 +262,7 @@
 		D386FA1E298B617400878B56 /* starTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = starTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A774D8817E1EDBCAF88B46CD /* AlignmentDeviationPointTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlignmentDeviationPointTests.swift; sourceTree = "<group>"; };
 		A7EB9C1AD64B213249D4C7EF /* AlignmentExamplesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlignmentExamplesTests.swift; sourceTree = "<group>"; };
+		A7FBB9520000000000852001 /* HorizonPaintStateFailureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HorizonPaintStateFailureTests.swift; sourceTree = "<group>"; };
 		A7FBB673048ADB96BE7741FB /* AlignmentWindowTextsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlignmentWindowTextsTests.swift; sourceTree = "<group>"; };
 		A7E9733680EC9CCC730BC7CE /* BottomStatusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BottomStatusTests.swift; sourceTree = "<group>"; };
 		A7CD8F2D9E742A510C76BCCB /* ClickRuleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClickRuleTests.swift; sourceTree = "<group>"; };
@@ -552,6 +554,7 @@
 				A774D8817E1EDBCAF88B46CD /* AlignmentDeviationPointTests.swift */,
 				A7EB9C1AD64B213249D4C7EF /* AlignmentExamplesTests.swift */,
 				A7FBB673048ADB96BE7741FB /* AlignmentWindowTextsTests.swift */,
+				A7FBB9520000000000852001 /* HorizonPaintStateFailureTests.swift */,
 				A7E9733680EC9CCC730BC7CE /* BottomStatusTests.swift */,
 				A7CD8F2D9E742A510C76BCCB /* ClickRuleTests.swift */,
 				A7566D6AB54F59CB2BC25FF4 /* CommandTableTests.swift */,
@@ -889,6 +892,7 @@
 				A874D8817E1EDBCAF88B46CD /* AlignmentDeviationPointTests.swift in Sources */,
 				A8EB9C1AD64B213249D4C7EF /* AlignmentExamplesTests.swift in Sources */,
 				A8FBB673048ADB96BE7741FB /* AlignmentWindowTextsTests.swift in Sources */,
+				A8FBB9520000000000852001 /* HorizonPaintStateFailureTests.swift in Sources */,
 				A8E9733680EC9CCC730BC7CE /* BottomStatusTests.swift in Sources */,
 				A8CD8F2D9E742A510C76BCCB /* ClickRuleTests.swift in Sources */,
 				A8566D6AB54F59CB2BC25FF4 /* CommandTableTests.swift in Sources */,
