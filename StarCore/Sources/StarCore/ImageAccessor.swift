@@ -850,6 +850,7 @@ public struct ImageAccessor: Sendable {
             try FileManager.default.removeItem(atPath: filename)
             imageDeletedClosure?(frameIndex, imageType, size)
             if imageType.isHorizonMask && size == .original {
+                Task { await horizonColumnsCache.invalidate(path: filename) }
                 horizonLinesChanged(frameIndex: frameIndex)
             }
         }
