@@ -576,7 +576,8 @@ public final actor FrameGraphBuilder {
       startIndex: Int = 0,
       endIndex: Int? = nil,      // will be last index of frames
       closure: @escaping ([String]) -> Void,
-      errorClosure: @escaping @Sendable (String) -> Void
+      errorClosure: @escaping @Sendable (String) -> Void,
+      cancelledClosure: (@Sendable () -> Void)? = nil
     ) async {
         let generationOnEntry = cancelGeneration
         buildsInProgress += 1
@@ -1398,6 +1399,8 @@ public final actor FrameGraphBuilder {
         // caller asked to stop.
         guard cancelGeneration == generationOnEntry else {
             Log.i("FrameGraphBuilder: build cancelled before it enqueued; dropping its \(allOps.count) operations")
+            // tell the caller, so it does not wait for a completion that will never come.
+            cancelledClosure?()
             return
         }
 
@@ -1596,7 +1599,8 @@ public final actor FrameGraphBuilder {
     ///
     /// Queued operations are skipped immediately.  Running operations finish
     /// their current async step and then mark themselves finished.  The
-    /// `GraphCompletionOp` will be cancelled and its closure will not fire,
+    /// `GraphCompletionOp` will be cancelled and its closure will not fire
+    /// (a build dropped before it enqueued calls its `cancelledClosure` instead),
     /// so callers that track processing state (e.g. `isProcessingFrames`)
     /// must reset that state themselves after calling this method.
     public func cancelAllOperations() {

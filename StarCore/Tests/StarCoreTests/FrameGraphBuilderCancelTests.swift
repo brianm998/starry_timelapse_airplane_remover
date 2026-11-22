@@ -26,11 +26,13 @@ final class FrameGraphBuilderCancelTests: FrameHarnessTestCase {
             let builder = FrameGraphBuilder()
             await builder.set(configManager: h.configManager)
             let completed = Counter()
+            let cancelled = Counter()
 
             let build = Task {
                 await builder.build(frames: frames,
                                     closure: { _ in completed.bump() },
-                                    errorClosure: { _ in })
+                                    errorClosure: { _ in },
+                                    cancelledClosure: { cancelled.bump() })
             }
             // wait until the build has entered, then cancel while it is still constructing.
             // (A cancel that precedes the build's entry is a different, legitimate order:
@@ -44,6 +46,7 @@ final class FrameGraphBuilderCancelTests: FrameHarnessTestCase {
             let queued = await builder.queue.operationCount
             XCTAssertEqual(queued, 0, "attempt \(attempt): operations were enqueued after the cancel")
             XCTAssertEqual(completed.value, 0, "attempt \(attempt): a cancelled build completed")
+            XCTAssertEqual(cancelled.value, 1, "attempt \(attempt): the dropped build did not report a cancel")
         }
     }
 }

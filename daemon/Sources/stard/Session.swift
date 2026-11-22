@@ -423,8 +423,24 @@ actor Session {
                 Task { await weakSelf.session?.runCompleted(generation: generation, errors: errorList) }
             } errorClosure: { errorString in
                 Log.e("stard: op error: \(errorString)")
+            } cancelledClosure: {
+                Task { await weakSelf.session?.runDropped(generation: generation) }
             }
         }
+    }
+
+    /// The build was dropped by a cancel before it enqueued.  If it is still this session's
+    /// current run nothing announced the end, so do that; a stale drop was announced by stopRun.
+    private func runDropped(generation: Int) async {
+        guard activeRun == generation else {
+            Log.i("stard: ignoring the drop of a stopped processing run")
+            return
+        }
+        await endStepReports(generation: generation)
+        activeRun = nil
+        buildTask = nil
+        Log.i("stard: processing run dropped by a cancel")
+        emitSequenceState("cancelled")
     }
 
     /// The graph's completion handler.  Ignored unless `generation` is still the current run.
