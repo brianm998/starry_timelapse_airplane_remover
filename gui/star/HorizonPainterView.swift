@@ -352,12 +352,19 @@ private func triggerBandComputation(
         // Only send the *current* session back to band selection: a failure
         // belonging to a frame the user has already left must not disturb the
         // one now on screen.
-        if paintState.isCurrentSession(session) { paintState.setPhase(.bandSelection) }
+        if paintState.isCurrentSession(session) { paintState.bandComputationFailed() }
         return
     }
 
     guard paintState.isCurrentSession(session) else {
         Log.d("HorizonPainterView: dropping band computation from a finished session")
+        paintState.endExpanding()
+        return
+    }
+
+    // A result with every column empty is a failure, not a horizon to refine.
+    guard HorizonPaintState.hasDetectedColumn(horizon) else {
+        paintState.bandComputationFailed()
         paintState.endExpanding()
         return
     }
@@ -507,13 +514,16 @@ private func triggerObjectSelection(
     } catch {
         Log.w("HorizonPainterView: object selection failed: \(error)")
         paintState.endExpanding()
+        if paintState.isCurrentSession(session) { paintState.refinementFailed() }
         return
     }
 
-    guard !Task.isCancelled,
-          paintState.isCurrentSession(session),
-          let local = snappedHorizon
-    else {
+    guard !Task.isCancelled, paintState.isCurrentSession(session) else {
+        paintState.endExpanding()
+        return
+    }
+    guard let local = snappedHorizon else {
+        paintState.refinementFailed()
         paintState.endExpanding()
         return
     }
@@ -792,7 +802,7 @@ struct HorizonPainterToolbarView: View {
             .transition(.opacity)
         }
 
-        if let err = saveError {
+        if let err = saveError ?? paintState.detectionError {
             Text(err)
                 .foregroundColor(.red)
                 .font(.caption)
