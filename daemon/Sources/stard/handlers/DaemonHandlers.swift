@@ -33,6 +33,9 @@ enum DaemonHandlers {
             for marker in await AbandonedRunReports.shared.take() {
                 let report = AbandonedRunReports.report(for: marker)
                 await transport.sendWarning(report.warning, restartableConfigPath: report.restartableConfigPath)
+                if let gpu = AbandonedRunReports.gpuMergeWarning(for: marker) {
+                    await transport.sendWarning(gpu, restartableConfigPath: nil)
+                }
             }
         } catch {
             await transport.sendError(id: id, message: "\(error)")

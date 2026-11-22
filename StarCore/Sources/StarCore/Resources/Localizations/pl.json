@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "Po sklasyfikowaniu wszystkich grup odstających klatki wiemy już, które piksele uznaje się za szum, a które można zachować.\nZ tych danych Star tworzy maskę usuwania, podobną do maski warstwy w Photoshopie lub GIMP-ie. Ta maska służy do zastąpienia zaszumionych pikseli danymi z wyrównanej sąsiedniej klatki.",
   "ui.info_detailed_final_title": "Końcowe usunięcie złych pikseli",
   "ui.info_detailed_final_body": "W tym ostatnim kroku Star po prostu składa przetwarzaną klatkę z wyrównaną sąsiednią klatką, używając maski usuwania jako maski warstwy, aby nadpisać tylko niewielką liczbę pikseli w przetwarzanej klatce.",
-  "ui.info_detailed_closing": "Gdy Star skończy przetwarzać twoją sekwencję obrazów, możesz obejrzeć film z tej sekwencji w rozdzielczości podglądu. Może to pomóc w wprowadzeniu poprawek.\n\nStar wciąż jest w trakcie rozwoju."
+  "ui.info_detailed_closing": "Gdy Star skończy przetwarzać twoją sekwencję obrazów, możesz obejrzeć film z tej sekwencji w rozdzielczości podglądu. Może to pomóc w wprowadzeniu poprawek.\n\nStar wciąż jest w trakcie rozwoju.",
+  "warning.title.gpu_merge_turned_off": "Scalanie na GPU wyłączone",
+  "warning.gpu_merge_turned_off.message": "Poprzedni przebieg zatrzymał się podczas scalania na GPU, dlatego scalanie na GPU zostało wyłączone w tej sesji.",
+  "warning.gpu_merge_turned_off.suggestion": "Jeśli przyczyną nie jest GPU tego komputera, możesz je ponownie włączyć w ustawieniach przetwarzania."
 }

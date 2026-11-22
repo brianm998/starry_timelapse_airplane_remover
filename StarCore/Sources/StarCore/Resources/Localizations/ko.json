@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "한 프레임의 모든 이상치 그룹을 분류하고 나면, 어떤 픽셀이 노이즈로 간주되고 어떤 픽셀을 남겨도 되는지 알게 됩니다.\n이 데이터로 Star는 Photoshop이나 GIMP의 레이어 마스크와 비슷한 제거 마스크를 만듭니다. 이 마스크는 노이즈가 있는 픽셀을 정렬된 이웃 프레임의 데이터로 교체하는 데 쓰입니다.",
   "ui.info_detailed_final_title": "불량 픽셀 최종 제거",
   "ui.info_detailed_final_body": "이 마지막 단계에서 Star는 제거 마스크를 레이어 마스크로 사용해 처리 중인 프레임을 정렬된 이웃 프레임과 합성하여, 처리 중인 프레임의 소수 픽셀만 덮어씁니다.",
-  "ui.info_detailed_closing": "Star가 이미지 시퀀스 처리를 마치면 미리보기 해상도로 시퀀스의 영상을 볼 수 있습니다. 수정할 때 도움이 될 수 있습니다.\n\nStar는 아직 개발 중입니다."
+  "ui.info_detailed_closing": "Star가 이미지 시퀀스 처리를 마치면 미리보기 해상도로 시퀀스의 영상을 볼 수 있습니다. 수정할 때 도움이 될 수 있습니다.\n\nStar는 아직 개발 중입니다.",
+  "warning.title.gpu_merge_turned_off": "GPU 병합 꺼짐",
+  "warning.gpu_merge_turned_off.message": "이전 실행이 GPU에서 병합하는 도중 멈춰서 이번 세션에서는 GPU 병합을 껐습니다.",
+  "warning.gpu_merge_turned_off.suggestion": "이 컴퓨터의 GPU가 원인이 아니라면 처리 설정에서 다시 켤 수 있습니다."
 }
