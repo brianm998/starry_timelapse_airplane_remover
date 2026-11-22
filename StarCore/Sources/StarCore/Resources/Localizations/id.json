@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Setelah Star selesai memproses urutan gambar Anda, Anda dapat menonton video urutan tersebut pada resolusi pratinjau. Ini dapat membantu Anda melakukan koreksi.\n\nStar masih dalam pengembangan.",
   "warning.title.gpu_merge_turned_off": "Penggabungan GPU Dimatikan",
   "warning.gpu_merge_turned_off.message": "Proses sebelumnya berhenti saat menggabungkan di GPU, sehingga penggabungan GPU dimatikan untuk sesi ini.",
-  "warning.gpu_merge_turned_off.suggestion": "Jika GPU mesin ini bukan penyebabnya, Anda dapat menyalakannya kembali di pengaturan pemrosesan."
+  "warning.gpu_merge_turned_off.suggestion": "Jika GPU mesin ini bukan penyebabnya, Anda dapat menyalakannya kembali di pengaturan pemrosesan.",
+  "ui.output_jpeg_quality": "Kualitas JPEG keluaran:",
+  "ui.output_quality_same_as_input": "Sama dengan masukan ({0}%)",
+  "setting_help.output_jpeg_quality": "Kualitas saat bingkai JPEG keluaran ditulis. Nilai awalnya mengikuti kualitas bingkai masukan, sehingga keluaran kurang lebih sama tajam dan sama besarnya dengan yang masuk. Turunkan untuk file yang lebih kecil; naikkan untuk menjaga lebih banyak detail, meski melampaui kualitas masukan tidak mengembalikan apa yang sudah hilang dari masukan. Atur ulang mengembalikannya ke kualitas masukan. Mengubahnya menulis ulang bingkai keluaran dan mempertahankan penyelarasan. Pengaturan ini hanya ditawarkan jika bingkainya JPEG."
 }

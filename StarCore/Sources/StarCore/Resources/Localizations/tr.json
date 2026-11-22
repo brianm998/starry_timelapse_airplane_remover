@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Star görüntü dizinizi işlemeyi bitirdikten sonra dizinin önizleme çözünürlüğündeki videosunu izleyebilirsiniz. Bu, düzeltmeler yapmanıza yardımcı olabilir.\n\nStar hâlâ geliştirilme aşamasındadır.",
   "warning.title.gpu_merge_turned_off": "GPU Birleştirme Kapatıldı",
   "warning.gpu_merge_turned_off.message": "Önceki çalıştırma GPU üzerinde birleştirme sırasında durdu; bu yüzden bu oturum için GPU ile birleştirme kapatıldı.",
-  "warning.gpu_merge_turned_off.suggestion": "Bu bilgisayarın GPU'su neden değilse, işleme ayarlarından yeniden açabilirsiniz."
+  "warning.gpu_merge_turned_off.suggestion": "Bu bilgisayarın GPU'su neden değilse, işleme ayarlarından yeniden açabilirsiniz.",
+  "ui.output_jpeg_quality": "Çıktı JPEG kalitesi:",
+  "ui.output_quality_same_as_input": "Girdiyle aynı (%{0})",
+  "setting_help.output_jpeg_quality": "Çıktı JPEG karelerinin yazıldığı kalite. Girdi karelerinin kalitesinden başlar; bu yüzden çıktı, girenle yaklaşık aynı netlikte ve boyuttadır. Daha küçük dosyalar için düşürün; daha fazla ayrıntı korumak için yükseltin, ancak girdinin kalitesinin üstüne çıkmak girdinin zaten kaybettiğini geri getirmez. Sıfırla, girdinin kalitesine geri döner. Değiştirmek çıktı karelerini yeniden yazar ve hizalamayı korur. Yalnızca kareler JPEG olduğunda sunulur."
 }

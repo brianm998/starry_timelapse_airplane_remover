@@ -199,6 +199,7 @@ final class ConfigRoundTripTests: XCTestCase {
 
         // Optionals that default to nil, so the encoder leaves them out entirely
         try put("finalOutputDir", "some/final/output/dir")
+        try put("outputJPEGQuality", 61)
 
         return out
     }

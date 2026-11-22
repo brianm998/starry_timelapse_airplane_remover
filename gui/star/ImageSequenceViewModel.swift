@@ -1693,6 +1693,40 @@ public final class ImageSequenceViewModel {
         }
     }
 
+    /// `Config.outputJPEGQuality`: nil writes the outputs at the input's quality, a number overrides it.
+    var outputJPEGQuality: Int? {
+        didSet {
+            var realConfig = config.config()
+            realConfig.outputJPEGQuality = outputJPEGQuality
+            config.update(realConfig)
+            // frames that have not written yet follow the slider too
+            outputQualityOverride?.value = outputJPEGQuality
+        }
+    }
+    /// The JPEG quality of the sequence's frames, nil while unknown or when they are not JPEGs (TIFF, PNG...).
+    var sourceJPEGQuality: Int?
+    /// Shared with the frames' image accessor; set when the sequence is opened.
+    var outputQualityOverride: OutputJPEGQualityOverride?
+
+    /// The slider is offered only when there is an input quality to start from, i.e. for JPEG frames.
+    var showsOutputQuality: Bool { sourceJPEGQuality != nil }
+    /// What the slider shows: the override, else the input's.
+    var outputQualityValue: Int { outputJPEGQuality ?? sourceJPEGQuality ?? JPEGQuality.fallback }
+    /// True while the outputs follow the input's quality (the note "Same as the input" is shown).
+    var outputQualityMatchesInput: Bool { outputQualityValue == (sourceJPEGQuality ?? outputQualityValue) }
+
+    /// Moving the slider. Landing on the input's own quality is no override at all.
+    func setOutputQuality(_ quality: Int) {
+        let clamped = min(max(quality, 1), 100)
+        let new: Int? = clamped == sourceJPEGQuality ? nil : clamped
+        if new != outputJPEGQuality { outputJPEGQuality = new }
+    }
+
+    /// The reset control: back to following the input.
+    func resetOutputQuality() {
+        if outputJPEGQuality != nil { outputJPEGQuality = nil }
+    }
+
     var keypointMemoryMultiplier: Int {
         didSet {
             var realConfig = config.config()
@@ -2181,6 +2215,7 @@ public final class ImageSequenceViewModel {
         self.reprocessOnSettingsChange = config.reprocessOnSettingsChange
         self.memoryBudgetFraction = config.maxMatMemoryFraction
         self.keypointMemoryMultiplier = config.keypointMemoryMultiplier
+        self.outputJPEGQuality = config.outputJPEGQuality
         self.maxConcurrentKeypointOps = config.maxConcurrentKeypointOps
         self.mergeStreamingThresholdMB = config.mergeStreamingThresholdMB
         self.outlierMemoryMultiplier = config.outlierMemoryMultiplier
@@ -2369,6 +2404,14 @@ public final class ImageSequenceViewModel {
         }
         // the frames' worker tasks take it, so it is not left mutable
         let imageAccessor = accessor
+        let qualityOverrideBox = imageAccessor.outputQualityOverride
+        let inputQuality = JPEGQuality.ofSequence(
+          folder: filenames.first.map { ($0 as NSString).deletingLastPathComponent },
+          firstFramePath: filenames.first)
+        await MainActor.run {
+            self.outputQualityOverride = qualityOverrideBox
+            self.sourceJPEGQuality = inputQuality
+        }
 
 
         let imageInfo = try await imageSequence.getImageInfo()

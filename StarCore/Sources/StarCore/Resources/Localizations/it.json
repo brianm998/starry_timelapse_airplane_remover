@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Quando Star ha finito di elaborare la tua sequenza di immagini, puoi guardare un video della sequenza a risoluzione di anteprima. Può esserti utile per apportare eventuali correzioni.\n\nStar è ancora un lavoro in corso.",
   "warning.title.gpu_merge_turned_off": "Unione su GPU disattivata",
   "warning.gpu_merge_turned_off.message": "L'esecuzione precedente si è interrotta durante l'unione sulla GPU, quindi l'unione su GPU è stata disattivata per questa sessione.",
-  "warning.gpu_merge_turned_off.suggestion": "Se la GPU di questo computer non è la causa, puoi riattivarla nelle impostazioni di elaborazione."
+  "warning.gpu_merge_turned_off.suggestion": "Se la GPU di questo computer non è la causa, puoi riattivarla nelle impostazioni di elaborazione.",
+  "ui.output_jpeg_quality": "Qualità del JPEG in uscita:",
+  "ui.output_quality_same_as_input": "Uguale all'ingresso ({0}%)",
+  "setting_help.output_jpeg_quality": "La qualità con cui vengono scritti i fotogrammi JPEG in uscita. Parte dalla qualità dei fotogrammi in ingresso, quindi l'uscita è nitida e grande più o meno quanto ciò che è entrato. Abbassala per file più piccoli; alzala per conservare più dettaglio, anche se superare la qualità dell'ingresso non restituisce ciò che l'ingresso aveva già perso. Ripristina la riporta alla qualità dell'ingresso. Cambiarla riscrive i fotogrammi in uscita e mantiene l'allineamento. Viene proposta solo quando i fotogrammi sono JPEG."
 }

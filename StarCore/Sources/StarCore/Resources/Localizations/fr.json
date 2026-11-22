@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Une fois que Star a fini de traiter votre séquence d'images, vous pouvez regarder une vidéo de la séquence en résolution d'aperçu. Cela peut vous aider à apporter des corrections.\n\nStar est encore en cours de développement.",
   "warning.title.gpu_merge_turned_off": "Fusion sur GPU désactivée",
   "warning.gpu_merge_turned_off.message": "L'exécution précédente s'est arrêtée pendant la fusion sur le GPU ; la fusion sur GPU a donc été désactivée pour cette session.",
-  "warning.gpu_merge_turned_off.suggestion": "Si le GPU de cet ordinateur n'est pas en cause, vous pouvez la réactiver dans les réglages de traitement."
+  "warning.gpu_merge_turned_off.suggestion": "Si le GPU de cet ordinateur n'est pas en cause, vous pouvez la réactiver dans les réglages de traitement.",
+  "ui.output_jpeg_quality": "Qualité du JPEG de sortie :",
+  "ui.output_quality_same_as_input": "Identique à l'entrée ({0} %)",
+  "setting_help.output_jpeg_quality": "La qualité avec laquelle les images JPEG de sortie sont écrites. Elle part de la qualité des images d'entrée, si bien que la sortie est à peu près aussi nette et aussi volumineuse que ce qui est entré. Baissez-la pour obtenir des fichiers plus petits ; augmentez-la pour garder plus de détails, sachant qu'aller au-delà de la qualité de l'entrée ne rend pas ce que l'entrée a déjà perdu. Réinitialiser la remet à la qualité de l'entrée. La modifier réécrit les images de sortie et conserve l'alignement. Elle n'est proposée que lorsque les images sont des JPEG."
 }

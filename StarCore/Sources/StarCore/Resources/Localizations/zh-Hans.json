@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Star 处理完你的图像序列后,你可以用预览分辨率观看该序列的视频。这有助于你进行修正。\n\nStar 仍在开发中。",
   "warning.title.gpu_merge_turned_off": "已关闭 GPU 合并",
   "warning.gpu_merge_turned_off.message": "上一次运行在 GPU 上合并时停止了，因此本次会话已关闭 GPU 合并。",
-  "warning.gpu_merge_turned_off.suggestion": "如果问题不在这台电脑的 GPU，可以在处理设置中重新打开。"
+  "warning.gpu_merge_turned_off.suggestion": "如果问题不在这台电脑的 GPU，可以在处理设置中重新打开。",
+  "ui.output_jpeg_quality": "输出 JPEG 质量：",
+  "ui.output_quality_same_as_input": "与输入相同（{0}%）",
+  "setting_help.output_jpeg_quality": "输出 JPEG 帧写出时使用的质量。它从输入帧的质量开始，因此输出的清晰度和大小与输入大致相当。调低可得到更小的文件；调高可保留更多细节，但超过输入的质量并不能找回输入已经丢失的内容。点击“重置”会恢复为输入的质量。更改后会重新写出输出帧，并保留对齐结果。仅当帧为 JPEG 时才会显示。"
 }

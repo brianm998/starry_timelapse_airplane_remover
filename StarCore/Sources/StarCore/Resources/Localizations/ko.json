@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Star가 이미지 시퀀스 처리를 마치면 미리보기 해상도로 시퀀스의 영상을 볼 수 있습니다. 수정할 때 도움이 될 수 있습니다.\n\nStar는 아직 개발 중입니다.",
   "warning.title.gpu_merge_turned_off": "GPU 병합 꺼짐",
   "warning.gpu_merge_turned_off.message": "이전 실행이 GPU에서 병합하는 도중 멈춰서 이번 세션에서는 GPU 병합을 껐습니다.",
-  "warning.gpu_merge_turned_off.suggestion": "이 컴퓨터의 GPU가 원인이 아니라면 처리 설정에서 다시 켤 수 있습니다."
+  "warning.gpu_merge_turned_off.suggestion": "이 컴퓨터의 GPU가 원인이 아니라면 처리 설정에서 다시 켤 수 있습니다.",
+  "ui.output_jpeg_quality": "출력 JPEG 품질:",
+  "ui.output_quality_same_as_input": "입력과 동일 ({0}%)",
+  "setting_help.output_jpeg_quality": "출력 JPEG 프레임을 기록할 때의 품질입니다. 입력 프레임의 품질에서 시작하므로 출력은 입력과 거의 같은 선명도와 크기가 됩니다. 파일을 작게 하려면 낮추고, 디테일을 더 남기려면 높이세요. 다만 입력 품질보다 높여도 입력이 이미 잃은 것은 되살아나지 않습니다. 재설정하면 입력의 품질로 돌아갑니다. 바꾸면 출력 프레임을 다시 기록하며 정렬은 유지됩니다. 프레임이 JPEG일 때만 표시됩니다."
 }

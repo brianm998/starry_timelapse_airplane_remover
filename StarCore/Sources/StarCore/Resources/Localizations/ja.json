@@ -1301,5 +1301,8 @@
   "ui.info_detailed_closing": "Star が画像シーケンスの処理を終えたら、プレビュー解像度でシーケンスの動画を見られます。修正を行う際に役立ちます。\n\nStar はまだ開発途上です。",
   "warning.title.gpu_merge_turned_off": "GPUマージをオフにしました",
   "warning.gpu_merge_turned_off.message": "前回の実行はGPUでのマージ中に停止したため、このセッションではGPUマージをオフにしました。",
-  "warning.gpu_merge_turned_off.suggestion": "このマシンのGPUが原因でない場合は、処理設定でオンに戻せます。"
+  "warning.gpu_merge_turned_off.suggestion": "このマシンのGPUが原因でない場合は、処理設定でオンに戻せます。",
+  "ui.output_jpeg_quality": "出力JPEGの画質：",
+  "ui.output_quality_same_as_input": "入力と同じ（{0}%）",
+  "setting_help.output_jpeg_quality": "出力するJPEGフレームを書き出すときの画質です。最初は入力フレームの画質になっているため、出力は入力とほぼ同じ鮮明さとサイズになります。ファイルを小さくしたいときは下げ、ディテールを残したいときは上げてください。ただし、入力の画質より高くしても、入力がすでに失ったものは戻りません。「リセット」を押すと入力の画質に戻ります。変更すると出力フレームが書き直され、アライメントはそのまま残ります。フレームがJPEGのときだけ表示されます。"
 }
