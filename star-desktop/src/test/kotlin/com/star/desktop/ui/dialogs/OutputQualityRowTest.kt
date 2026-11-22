@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class OutputQualityRowTest {
     @Test fun theSliderStartsAtTheInputsQualityForJpeg() {
         assertTrue(OutputQuality.visible(83))
-        assertEquals(83, OutputQuality.shown(override = 0, sourceQuality = 83))
+        assertEquals(83, OutputQuality.shown(chosen = 0, sourceQuality = 83))
         assertTrue(OutputQuality.matchesInput(0, 83))
     }
 
@@ -19,10 +19,10 @@ class OutputQualityRowTest {
     }
 
     @Test fun movingTheSliderOverridesAndResetClears() {
-        val override = OutputQuality.overrideFor(60, 83)
-        assertEquals(60, override)
-        assertEquals(60, OutputQuality.shown(override, 83))
-        assertFalse(OutputQuality.matchesInput(override, 83))
+        val moved = OutputQuality.overrideFor(60, 83)
+        assertEquals(60, moved)
+        assertEquals(60, OutputQuality.shown(moved, 83))
+        assertFalse(OutputQuality.matchesInput(moved, 83))
         // the reset control sends 0
         assertEquals(83, OutputQuality.shown(0, 83))
     }

@@ -411,7 +411,7 @@ private fun SettingsSheet(app: AppViewModel, cfg: Config, sheetSize: DpSize) {
                             // The quality the output JPEGs are written at, which starts at the input's: only JPEG frames have one.
                             if (OutputQuality.visible(sourceQuality)) {
                                 SettingGroup(
-                                    localized("ui.output_jpeg_quality").removeSuffix(":"), info = info, infoId = OUTPUT_QUALITY_ID,
+                                    localized("ui.output_jpeg_quality").trimEnd(':', '：'), info = info, infoId = OUTPUT_QUALITY_ID,
                                     help = localized("setting_help.output_jpeg_quality"),
                                 ) {
                                     OutputQualityRow(outputQuality, sourceQuality, { outputQuality = it })
@@ -568,8 +568,8 @@ private fun SettingGroup(
 
 /** The slider (as the video import's), the reset beside it and, while the outputs follow the input, the note saying so. */
 @Composable
-internal fun OutputQualityRow(override: Int, sourceQuality: Int, onChange: (Int) -> Unit) {
-    val shown = OutputQuality.shown(override, sourceQuality)
+internal fun OutputQualityRow(chosen: Int, sourceQuality: Int, onChange: (Int) -> Unit) {
+    val shown = OutputQuality.shown(chosen, sourceQuality)
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(localized("ui.jpeg_quality", shown), color = StarColors.textPrimary, fontSize = 12.sp, modifier = Modifier.testTag("settings.outputQuality.value"))
@@ -580,11 +580,11 @@ internal fun OutputQualityRow(override: Int, sourceQuality: Int, onChange: (Int)
                 steps = OutputQuality.MAX - OutputQuality.MIN - 1,
                 modifier = Modifier.weight(1f).testTag("settings.outputQuality.slider"),
             )
-            OutlinedButton(onClick = { onChange(0) }, enabled = override != 0, modifier = Modifier.testTag("settings.outputQuality.reset")) {
+            OutlinedButton(onClick = { onChange(0) }, enabled = chosen != 0, modifier = Modifier.testTag("settings.outputQuality.reset")) {
                 Text(localized("ui.reset"), fontSize = 12.sp)
             }
         }
-        if (OutputQuality.matchesInput(override, sourceQuality)) {
+        if (OutputQuality.matchesInput(chosen, sourceQuality)) {
             Text(localized("ui.output_quality_same_as_input", sourceQuality), color = StarColors.textDisabled, fontSize = 10.sp, modifier = Modifier.testTag("settings.outputQuality.same"))
         }
     }

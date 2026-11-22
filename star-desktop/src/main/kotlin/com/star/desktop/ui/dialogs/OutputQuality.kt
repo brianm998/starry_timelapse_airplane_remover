@@ -12,10 +12,10 @@ internal object OutputQuality {
     fun visible(sourceQuality: Int): Boolean = sourceQuality in MIN..MAX
 
     /** What the slider shows: the override, else the input's. */
-    fun shown(override: Int, sourceQuality: Int): Int = if (override in MIN..MAX) override else sourceQuality
+    fun shown(chosen: Int, sourceQuality: Int): Int = if (chosen in MIN..MAX) chosen else sourceQuality
 
     /** The note "Same as the input" is shown while the outputs follow the input's quality. */
-    fun matchesInput(override: Int, sourceQuality: Int): Boolean = shown(override, sourceQuality) == sourceQuality
+    fun matchesInput(chosen: Int, sourceQuality: Int): Boolean = shown(chosen, sourceQuality) == sourceQuality
 
     /** The override a slider position means: landing on the input's own quality is no override at all (0). */
     fun overrideFor(position: Int, sourceQuality: Int): Int {
