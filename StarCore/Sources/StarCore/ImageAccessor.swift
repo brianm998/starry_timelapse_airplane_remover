@@ -71,6 +71,8 @@ final class FormatMismatchLog: @unchecked Sendable {
 public struct ImageAccessor: Sendable {
     let config: Config
     let formatMismatches = FormatMismatchLog()
+    /// The quality output JPEG frames are written at: the sequence's own (import setting or estimate), else 95.
+    let outputJPEGQuality: Int
 
     /// True once a read of this frame's original found it did not match the sequence's format.
     func originalMismatchesSequence(frameIndex: Int) -> Bool {
@@ -122,6 +124,14 @@ public struct ImageAccessor: Sendable {
         self.frameIndexToBaseNameMap = frameIndexToBaseNameMap
         self.imageSequence = imageSequence
         self.imageSavedClosure = imageSavedClosure
+        let firstFrame = imageSequence.filenames.first
+        let folder = firstFrame.map { ($0 as NSString).deletingLastPathComponent }
+        if let learnt = JPEGQuality.ofSequence(folder: folder, firstFramePath: firstFrame) {
+            self.outputJPEGQuality = learnt
+            Log.i("output JPEG quality \(learnt), taken from the input frames")
+        } else {
+            self.outputJPEGQuality = JPEGQuality.fallback
+        }
         mkdirs()                // XXX called more than needed
     }
 
@@ -542,8 +552,9 @@ public struct ImageAccessor: Sendable {
             // The user's actual product. A failure here is recorded rather than
             // discarded — before the write path could report one, a full disk meant
             // star worked through the whole sequence, wrote nothing, and exited 0.
+            let quality = outputJPEGQuality
             let ok = await IOWork.run(path: filename, bytes: image.byteCount) {
-                image.writeTIFFEncoding(toFilename: filename)
+                image.writeTIFFEncoding(toFilename: filename, jpegQuality: quality)
             }
             if !ok {
                 await OutputWriteFailures.shared.record(path: filename,
@@ -565,8 +576,9 @@ public struct ImageAccessor: Sendable {
             // under tempOutputPath. A write failure there is worth a log line — it'll
             // just be recreated next run — but not the critical "disk full, your
             // render is at risk" alert that OutputWriteFailures raises.
+            let quality = outputJPEGQuality
             let ok = await IOWork.run(path: filename, bytes: image.byteCount) {
-                image.writeTIFFEncoding(toFilename: filename)
+                image.writeTIFFEncoding(toFilename: filename, jpegQuality: quality)
             }
             if ok, type == .horizon {
                 // The one row per column the horizon consensus reads out of this mask,
