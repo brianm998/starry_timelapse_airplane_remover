@@ -2404,10 +2404,14 @@ public final class ImageSequenceViewModel {
         }
         // the frames' worker tasks take it, so it is not left mutable
         let imageAccessor = accessor
-        self.outputQualityOverride = imageAccessor.outputQualityOverride
-        self.sourceJPEGQuality = JPEGQuality.ofSequence(
+        let qualityOverrideBox = imageAccessor.outputQualityOverride
+        let inputQuality = JPEGQuality.ofSequence(
           folder: filenames.first.map { ($0 as NSString).deletingLastPathComponent },
           firstFramePath: filenames.first)
+        await MainActor.run {
+            self.outputQualityOverride = qualityOverrideBox
+            self.sourceJPEGQuality = inputQuality
+        }
 
 
         let imageInfo = try await imageSequence.getImageInfo()
