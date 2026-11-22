@@ -61,6 +61,31 @@ public enum FrameViewMode: String,
         }
     }
 
+    /// True for full-size intermediates that must never be lossy: masks, aligned merges, the
+    /// subtraction and the validation/remove masks. At original size they are written as TIFF
+    /// whatever the source format (`ImageAccessor.dirAndNameForImage`), so a JPEG sequence is
+    /// processed from the same pixels a TIFF sequence would give. The output types and
+    /// `.original` keep the source's format.
+    public var isLosslessIntermediate: Bool {
+        switch self {
+        case .horizon, .mergedHorizon, .userHorizon, .consensusHorizon,
+             .starAligned, .failedStarAligned, .earthAligned, .failedEarthAligned,
+             .subtraction, .validation, .removeMask:
+            true
+        default:
+            false
+        }
+    }
+
+    /// The painted (or hard to recompute) types whose pre-TIFF files, named with the source
+    /// frame's extension, are still read when no TIFF exists.
+    var hasLegacySourceExtensionName: Bool {
+        switch self {
+        case .horizon, .mergedHorizon, .userHorizon: true
+        default: false
+        }
+    }
+
     public var shortName: String {
         switch self {
         case .original:

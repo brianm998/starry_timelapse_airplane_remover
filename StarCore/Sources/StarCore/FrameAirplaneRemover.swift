@@ -227,13 +227,13 @@ final public actor FrameAirplaneRemover: Equatable, Hashable {
                                                           ofType: .mergedHorizon,
                                                           atSize: .original)
         else { return false }
-        let merged = URL(fileURLWithPath: mergedPath)
-        let reference = merged
+        let referenceDir = URL(fileURLWithPath: mergedPath)
           .deletingLastPathComponent()
           .deletingLastPathComponent()
           .appendingPathComponent("horizonReference")
-          .appendingPathComponent(merged.lastPathComponent)
-        return FileManager.default.fileExists(atPath: reference.path)
+        return imageAccessor.referenceFileNames(frameIndex: frameIndex).contains {
+            FileManager.default.fileExists(atPath: referenceDir.appendingPathComponent($0).path)
+        }
     }
 
     /// Whether this frame's first-round horizon needs nothing more done to it, for the

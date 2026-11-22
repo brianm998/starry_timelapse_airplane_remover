@@ -510,12 +510,20 @@ public struct ImageAccessor: Sendable {
                          atSize size: ImageDisplaySize,
                          overwrite: Bool) async
     {
-        guard let filename = nameForImage(frameIndex: frameIndex,
-                                          ofType: type,
-                                          atSize: size)
+        guard let filename = canonicalNameForImage(frameIndex: frameIndex,
+                                                   ofType: type,
+                                                   atSize: size)
         else {
             Log.w("no place to save image of type \(type) at size \(size)")
             return
+        }
+        // not every type's full-size directory is made up front (the remove mask's is not)
+        if size == .original, type.isLosslessIntermediate { try? ensureParentDirectoriesExist(for: filename) }
+        // Once the TIFF is there, the old source-extension copy (a lossy JPEG cache) is dead weight.
+        defer {
+            if size == .original, FileManager.default.fileExists(atPath: filename) {
+                removeLegacyFile(frameIndex: frameIndex, ofType: type, atSize: size)
+            }
         }
 
         switch size {
@@ -585,7 +593,63 @@ public struct ImageAccessor: Sendable {
         }
     }
 
+    /// The file name `baseFileName` gets for a lossless intermediate: the same name with
+    /// its extension replaced by `.tif`. A name already `.tif`/`.tiff` is kept.
+    static func losslessIntermediateName(_ baseFileName: String) -> String {
+        let ext = (baseFileName as NSString).pathExtension.lowercased()
+        if ext == "tif" || ext == "tiff" { return baseFileName }
+        return ((baseFileName as NSString).deletingPathExtension as String) + ".tif"
+    }
+
+    /// The name a per-frame painted reference in `horizonReference/` is written under.
+    public func referenceFileName(frameIndex: Int) -> String? {
+        guard let base = frameIndexToBaseNameMap[frameIndex] else { return nil }
+        return Self.losslessIntermediateName(base)
+    }
+
+    /// The names a frame's per-frame painted reference may have, current first: the TIFF
+    /// name, then the one older versions wrote (the source frame's name, extension and all).
+    public func referenceFileNames(frameIndex: Int) -> [String] {
+        guard let base = frameIndexToBaseNameMap[frameIndex] else { return [] }
+        let current = Self.losslessIntermediateName(base)
+        return current == base ? [current] : [current, base]
+    }
+
+    /// The full-size file an older star wrote for this image, named with the source frame's
+    /// extension, when that differs from the current name; nil for types that never had one.
+    func legacyNameForImage(frameIndex: Int,
+                            ofType type: FrameViewMode,
+                            atSize size: ImageDisplaySize) -> String? {
+        guard size == .original, type.isLosslessIntermediate,
+              let dir = config.dirForImage(ofType: type, atSize: .original),
+              let base = frameIndexToBaseNameMap[frameIndex],
+              Self.losslessIntermediateName(base) != base
+        else { return nil }
+        return "\(dir)/\(base)"
+    }
+
+    /// Where an image is read from. For the painted types the old source-extension file is
+    /// used when there is no TIFF yet (it cannot be recomputed); every other type is a cache
+    /// that is rebuilt when its TIFF is missing.
     public func nameForImage(
+      frameIndex: Int,
+      ofType type: FrameViewMode,
+      atSize size: ImageDisplaySize
+    ) -> String? {
+        guard let canonical = canonicalNameForImage(frameIndex: frameIndex, ofType: type, atSize: size)
+        else { return nil }
+        if type.hasLegacySourceExtensionName, type != .userHorizon, size == .original,
+           !FileManager.default.fileExists(atPath: canonical),
+           let legacy = legacyNameForImage(frameIndex: frameIndex, ofType: type, atSize: size),
+           FileManager.default.fileExists(atPath: legacy)
+        {
+            return legacy
+        }
+        return canonical
+    }
+
+    /// Where an image is written: always the current name, never a legacy file.
+    func canonicalNameForImage(
       frameIndex: Int,
       ofType type: FrameViewMode,
       atSize size: ImageDisplaySize
@@ -602,6 +666,18 @@ public struct ImageAccessor: Sendable {
         return nil
     }
 
+    /// Delete the old JPEG-named copy of a cache once its TIFF replaces it.
+    @discardableResult
+    private func removeLegacyFile(frameIndex: Int, ofType type: FrameViewMode,
+                                  atSize size: ImageDisplaySize) -> Bool {
+        if let legacy = legacyNameForImage(frameIndex: frameIndex, ofType: type, atSize: size),
+           FileManager.default.fileExists(atPath: legacy)
+        {
+            return (try? FileManager.default.removeItem(atPath: legacy)) != nil
+        }
+        return false
+    }
+
     // Returns the path to the user-defined horizon mask for the given frame.
     // For original: checks per-frame file first, then falls back to reference.tiff.
     // For preview: returns a per-frame JPEG path in horizonReference-previews/.
@@ -612,9 +688,14 @@ public struct ImageAccessor: Sendable {
         case .original:
             guard let dir = config.dirForImage(ofType: .userHorizon, atSize: .original)
             else { return nil }
-            let perFramePath = "\(dir)/\(baseFileName)"
+            let perFramePath = "\(dir)/\(Self.losslessIntermediateName(baseFileName))"
             if FileManager.default.fileExists(atPath: perFramePath) {
                 return perFramePath
+            }
+            // a reference painted before the markers were TIFF: still the user's
+            let legacyPath = "\(dir)/\(baseFileName)"
+            if FileManager.default.fileExists(atPath: legacyPath) {
+                return legacyPath
             }
             let globalPath = "\(dir)/reference.tiff"
             if FileManager.default.fileExists(atPath: globalPath) {
@@ -631,6 +712,20 @@ public struct ImageAccessor: Sendable {
     }
 
     public func dirAndNameForImage(
+      frameIndex: Int,
+      ofType type: FrameViewMode,
+      atSize size: ImageDisplaySize
+    ) -> (String, String)? {
+        guard let (dir, name) = sourceNamedDirAndNameForImage(frameIndex: frameIndex,
+                                                              ofType: type, atSize: size)
+        else { return nil }
+        if size == .original, type.isLosslessIntermediate {
+            return (dir, Self.losslessIntermediateName(name))
+        }
+        return (dir, name)
+    }
+
+    private func sourceNamedDirAndNameForImage(
       frameIndex: Int,
       ofType type: FrameViewMode,
       atSize size: ImageDisplaySize
@@ -742,6 +837,8 @@ public struct ImageAccessor: Sendable {
                                        ofType: imageType,
                                        atSize: size)
         {
+            let removedLegacy = removeLegacyFile(frameIndex: frameIndex, ofType: imageType, atSize: size)
+            if removedLegacy, !FileManager.default.fileExists(atPath: filename) { return }
             try FileManager.default.removeItem(atPath: filename)
             if imageType.isHorizonMask && size == .original {
                 horizonLinesChanged(frameIndex: frameIndex)
