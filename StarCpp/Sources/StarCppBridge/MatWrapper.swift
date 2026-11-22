@@ -84,8 +84,8 @@ public final class MatWrapper: @unchecked Sendable {
     }
 
     @discardableResult
-    public func saveJpeg(quality: UInt32, filename: String) -> Bool {
-        mat_wrapper_save_jpeg(ref, quality, filename)
+    public func saveJpeg(quality: UInt32, filename: String, stretched: Bool = true) -> Bool {
+        mat_wrapper_save_jpeg(ref, quality, filename, stretched)
     }
 
     public func bottomCrop(_ n: Int32) -> MatWrapper? {
@@ -103,8 +103,8 @@ public final class MatWrapper: @unchecked Sendable {
         return MatWrapper(ref: r)
     }
 
-    public func ensureEightBit() -> MatWrapper {
-        MatWrapper(ref: mat_wrapper_ensure_eight_bit(ref))
+    public func ensureEightBit(stretched: Bool = true) -> MatWrapper {
+        MatWrapper(ref: mat_wrapper_ensure_eight_bit(ref, stretched))
     }
 
     /// Convert to single-channel 8-bit grayscale (CV_8UC1).

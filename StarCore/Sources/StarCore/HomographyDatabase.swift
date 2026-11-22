@@ -20,7 +20,8 @@ public actor HomographyDatabase {
         case earth = "earth"
     }
 
-    private var db: OpaquePointer?
+    // nonisolated(unsafe): only `deinit` reads it off the actor, when no one else can hold a reference.
+    private nonisolated(unsafe) var db: OpaquePointer?
     public let dbPath: String
 
     public init(tempOutputPath: String) {
@@ -123,6 +124,21 @@ public actor HomographyDatabase {
         }
         sqlite3_bind_int(stmt, 1, Int32(frameIndex))
         _ = sqlite3_step(stmt)
+    }
+
+    /// Closes the connection, releasing the descriptors on `homography.db`, `-wal` and `-shm`.
+    ///
+    /// The WAL is checkpointed first so the data is in the main file. A later call reopens
+    /// through `ensureOpen`, so a straggler writing after the close is harmless.
+    public func close() {
+        guard let handle = db else { return }
+        sqlite3_exec(handle, "PRAGMA wal_checkpoint(TRUNCATE)", nil, nil, nil)
+        sqlite3_close(handle)
+        db = nil
+    }
+
+    deinit {
+        if let db { sqlite3_close(db) }
     }
 
     // MARK: - Private helpers

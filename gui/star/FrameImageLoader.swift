@@ -120,6 +120,14 @@ final class FrameImageLoader {
         return e
     }
 
+    /// The file at `path` was deleted: drop what is cached for it.
+    func forget(path: String) {
+        guard let e = entries[path] else { return }
+        e.retryTask?.cancel()
+        e.task?.cancel()
+        entries[path] = nil
+    }
+
     /// A new picture was written at `path`: load it, keeping the old one on screen meanwhile.
     func invalidate(path: String) {
         guard let e = entries[path] else { return }

@@ -24,4 +24,10 @@ actor AbandonedRunReports {
     static func report(for marker: RunMarker) -> (warning: StarWarning, restartableConfigPath: String?) {
         (marker.asWarning, marker.restartableConfigPath)
     }
+
+    /// The warning that follows a report when the run died during a GPU merge: GPU merge has been turned off, and why. nil for any other run.
+    /// The client acts on it (sets its `useGPUForMerge` preference false); the daemon only says it.
+    static func gpuMergeWarning(for marker: RunMarker) -> StarWarning? {
+        marker.diedDuringGPUMerge ? marker.asGPUMergeWarning : nil
+    }
 }

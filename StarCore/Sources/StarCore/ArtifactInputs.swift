@@ -177,7 +177,10 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
     /// - 4: sky feature files keep the frame's star centroids, and the sky homography is
     ///      refined against them (ImageAligner.cpp, refineSkyHomographyWithStars).  A
     ///      version-3 file has no stars, so it would quietly skip the refinement.
-    public static let detectionAlgorithmVersion = 4
+    /// - 5: 8-bit to 16-bit promotion scales by 257 (255 -> 65535) rather than 256, so 8-bit
+    ///      sources threshold slightly differently, and 16-bit previews and thumbnails are no
+    ///      longer min/max stretched (MatWrapper.cpp).
+    public static let detectionAlgorithmVersion = 5
 
     /// Which version of the homography *fitting* code produced the stored alignment —
     /// `detectionAlgorithmVersion`'s counterpart for the stage after it, for a change to

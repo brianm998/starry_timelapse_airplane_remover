@@ -96,6 +96,11 @@ public struct ImageAccessor: Sendable {
     /// to the frames, which take copies.
     public var horizonChangedClosure: (@Sendable (Int) -> Void)? = nil
 
+    /// Told the frame index, type and size of an image file `deleteImage` actually removed (not
+    /// one that was not there).  How the gui stops offering an image type whose files are gone.
+    /// Set before the accessor is handed to the frames, which take copies; the daemon leaves it unset.
+    public var imageDeletedClosure: (@Sendable (Int, FrameViewMode, ImageDisplaySize) -> Void)? = nil
+
     /// Say that `frameIndex`'s horizon lines have changed (`horizonChangedClosure`).
     public func horizonLinesChanged(frameIndex: Int) {
         horizonChangedClosure?(frameIndex)
@@ -353,7 +358,13 @@ public struct ImageAccessor: Sendable {
                                 numRetries -= 1
                                 continue
                             }
-                            Log.i("file at \(filename) does not exist :(")
+                            // Only a missing original is news; a static sequence never has a
+                            // horizon mask, and an unprocessed frame has no outlier images.
+                            if imageType == .original {
+                                Log.i("file at \(filename) does not exist :(")
+                            } else {
+                                Log.d("file at \(filename) does not exist :(")
+                            }
                             return nil  // original does not exist, nothing to return
                         default:
                             if let image = try await createMissingImage(
@@ -597,7 +608,8 @@ public struct ImageAccessor: Sendable {
                 }
                 if let downScaled {
                     _ = await IOWork.run(path: filename, bytes: downScaled.byteCount) {
-                        downScaled.saveJpeg(withQuality: 60, filename: filename)
+                        downScaled.saveJpeg(withQuality: 60, filename: filename,
+                                            stretched: type.previewsAreStretched)
                     }
                     imageSavedClosure?(downScaled, frameIndex, type, size)
                 }
@@ -850,9 +862,14 @@ public struct ImageAccessor: Sendable {
                                        atSize: size)
         {
             let removedLegacy = removeLegacyFile(frameIndex: frameIndex, ofType: imageType, atSize: size)
-            if removedLegacy, !FileManager.default.fileExists(atPath: filename) { return }
+            if removedLegacy, !FileManager.default.fileExists(atPath: filename) {
+                imageDeletedClosure?(frameIndex, imageType, size)
+                return
+            }
             try FileManager.default.removeItem(atPath: filename)
+            imageDeletedClosure?(frameIndex, imageType, size)
             if imageType.isHorizonMask && size == .original {
+                Task { await horizonColumnsCache.invalidate(path: filename) }
                 horizonLinesChanged(frameIndex: frameIndex)
             }
         }
@@ -938,7 +955,7 @@ public struct ImageAccessor: Sendable {
 
                 // make it 8 bit with scaling
 
-                if let eightBitVersion = scaledImage.ensureEightBit {
+                if let eightBitVersion = scaledImage.ensureEightBit(stretched: type.previewsAreStretched) {
                     // write to file
                     eightBitVersion.saveJpeg(withQuality: 50, filename: filename)
                     Log.d("frame \(frameIndex) wrote preview to \(filename)")
@@ -965,7 +982,7 @@ public struct ImageAccessor: Sendable {
       quality: UInt = 90
     ) async throws -> Bool {
         guard let fullResImage = try await load(frameIndex: frameIndex, type: type, atSize: .original),
-              let eightBit = fullResImage.ensureEightBit
+              let eightBit = fullResImage.ensureEightBit(stretched: type.previewsAreStretched)
         else { return false }
         try ensureParentDirectoriesExist(for: filename)
         if FileManager.default.fileExists(atPath: filename) {
@@ -1096,7 +1113,7 @@ public struct ImageAccessor: Sendable {
                          width: UInt(previewSize.width),
                          height: UInt(previewSize.height)
                        ),
-                       let eightBitVersion = smallerImage.ensureEightBit
+                       let eightBitVersion = smallerImage.ensureEightBit(stretched: false)
                     {
                         eightBitVersion.saveJpeg(
                           withQuality: 50,
@@ -1113,7 +1130,7 @@ public struct ImageAccessor: Sendable {
                          width: UInt(thumbnailSize.width),
                          height: UInt(thumbnailSize.height)
                        ),
-                       let eightBitVersion = smallerImage.ensureEightBit
+                       let eightBitVersion = smallerImage.ensureEightBit(stretched: false)
                     {
                         eightBitVersion.saveJpeg(
                           withQuality: 50,

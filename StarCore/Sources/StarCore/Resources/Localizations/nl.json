@@ -1298,5 +1298,8 @@
   "ui.info_detailed_removal_mask_body": "Na het classificeren van alle uitschietersgroepen van een beeld weten we welke pixels als ruis gelden en welke behouden kunnen worden.\nMet deze gegevens maakt Star een verwijdermasker, vergelijkbaar met een laagmasker in Photoshop of GIMP. Dit masker wordt gebruikt om ruisende pixels te vervangen door gegevens uit het uitgelijnde naburige beeld.",
   "ui.info_detailed_final_title": "Definitieve verwijdering van slechte pixels",
   "ui.info_detailed_final_body": "In deze laatste stap combineert Star het te verwerken beeld simpelweg met het uitgelijnde naburige beeld, waarbij het verwijdermasker als laagmasker dient, zodat slechts een klein aantal pixels in het te verwerken beeld wordt overschreven.",
-  "ui.info_detailed_closing": "Nadat Star klaar is met het verwerken van je beeldreeks, kun je een video van de reeks bekijken in voorbeeldresolutie. Dat kan helpen om correcties aan te brengen.\n\nStar is nog in ontwikkeling."
+  "ui.info_detailed_closing": "Nadat Star klaar is met het verwerken van je beeldreeks, kun je een video van de reeks bekijken in voorbeeldresolutie. Dat kan helpen om correcties aan te brengen.\n\nStar is nog in ontwikkeling.",
+  "warning.title.gpu_merge_turned_off": "GPU-samenvoeging uitgezet",
+  "warning.gpu_merge_turned_off.message": "De vorige run is gestopt tijdens het samenvoegen op de GPU, daarom is samenvoegen op de GPU voor deze sessie uitgezet.",
+  "warning.gpu_merge_turned_off.suggestion": "Als de GPU van deze computer niet de oorzaak is, kunt u het in de verwerkingsinstellingen weer aanzetten."
 }

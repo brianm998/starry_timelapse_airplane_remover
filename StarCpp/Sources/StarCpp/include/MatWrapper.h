@@ -90,11 +90,11 @@ bool          mat_wrapper_write_cache_to(MatWrapperRef ref, const char *filename
 
 /// Write the mat as a JPEG at `quality`. Returns whether it was written.
 bool          mat_wrapper_save_jpeg(MatWrapperRef ref, uint32_t quality,
-                                    const char *filename);
+                                    const char *filename, bool stretched);
 MatWrapperRef mat_wrapper_bottom_crop(MatWrapperRef ref, int n);
 MatWrapperRef mat_wrapper_up_scale(MatWrapperRef ref, uint64_t width, uint64_t height);
 MatWrapperRef mat_wrapper_down_scale(MatWrapperRef ref, uint64_t width, uint64_t height);
-MatWrapperRef mat_wrapper_ensure_eight_bit(MatWrapperRef ref);
+MatWrapperRef mat_wrapper_ensure_eight_bit(MatWrapperRef ref, bool stretched);
 MatWrapperRef mat_wrapper_ensure_gray_8u(MatWrapperRef ref);
 MatWrapperRef mat_wrapper_add_white_rows_on_top(MatWrapperRef ref, int rows);
 bool          mat_wrapper_is_16_bits(MatWrapperRef ref);

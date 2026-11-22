@@ -63,6 +63,10 @@ public struct StarWarning: Sendable, Codable, Equatable {
         /// startup from a `RunMarker` left behind by the run that died.
         case previousRunDied
 
+        /// The previous run died while a GPU (Metal) merge was in flight, so GPU merge has been
+        /// turned off for this session.  Posted right after `previousRunDied`.
+        case gpuMergeTurnedOff
+
         /// star could not write an output frame — almost always a full disk or an output
         /// folder it cannot write to.  Distinct from every other kind here in that it is
         /// about the user's actual product going missing rather than about the machine.
@@ -150,6 +154,7 @@ public struct StarWarning: Sendable, Codable, Equatable {
         case .oversizedReservation:  return localized("warning.title.oversized_reservation")
         case .memoryGatingDisabled:  return localized("warning.title.memory_gating_disabled")
         case .previousRunDied:       return localized("warning.title.previous_run_died")
+        case .gpuMergeTurnedOff:     return localized("warning.title.gpu_merge_turned_off")
         case .outputWriteFailed:     return localized("warning.title.output_write_failed")
         case .lowDiskSpace:          return localized("warning.title.low_disk_space")
         case .artifactsInvalidated:  return localized("warning.title.artifacts_invalidated")
@@ -174,7 +179,7 @@ public struct StarWarning: Sendable, Codable, Equatable {
         case .memoryPressure, .lowSystemMemory, .footprintOverBudget:
             return true
         case .oversizedReservation, .memoryGatingDisabled, .previousRunDied,
-             .outputWriteFailed, .lowDiskSpace, .artifactsInvalidated,
+             .gpuMergeTurnedOff, .outputWriteFailed, .lowDiskSpace, .artifactsInvalidated,
              .groundAlignmentFailed, .frameFinishFailed:
             return false
         }

@@ -133,3 +133,15 @@ public enum FrameViewMode: String,
         localized("view_mode.\(rawValue)")
     }
 }
+
+extension FrameViewMode {
+    /// Whether a 16-bit image of this type is auto-levelled (min/max stretched) when it is
+    /// turned into a preview, thumbnail or display copy. True only for the near-black debug
+    /// types that are shown to be seen; every other type is shown as it is.
+    public var previewsAreStretched: Bool {
+        switch self {
+        case .subtraction, .blobs, .validation, .removeMask: return true
+        default: return false
+        }
+    }
+}
