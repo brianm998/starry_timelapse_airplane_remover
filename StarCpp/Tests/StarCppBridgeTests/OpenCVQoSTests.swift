@@ -17,7 +17,8 @@ import StarCpp
 /// been measured on. On x86_64 (an iMac Pro, macOS 15.8) GCD gives `.background` the same
 /// worker count as `.utility` (36 vs 36) even with the patch compiled in, so the test is
 /// skipped there. The inheritance tests do not prove the patch, so on Intel nothing in this
-/// file guards it.
+/// file guards it; `testParallelForUsesMoreThanTheCallingThread` only makes sure the
+/// inheritance tests are not passing because the loop never left the calling thread.
 final class OpenCVQoSTests: XCTestCase {
 
     /// [user-interactive, user-initiated, default, utility, background, unspecified, threads]
@@ -53,6 +54,24 @@ final class OpenCVQoSTests: XCTestCase {
                           "a .background caller should get a narrower worker set than .utility "
                           + "(DISPATCH_APPLY_AUTO); equal means the OpenCV patch is missing: "
                           + "utility \(utility[6]) threads, background \(background[6])")
+        #endif
+    }
+
+    /// The inheritance tests pass vacuously if `cv::parallel_for_` runs every stripe on the
+    /// calling thread (an OpenCV built without its GCD backend, or with the parallel loop
+    /// collapsed): the caller's own QoS is then all they see. This one runs on every Mac,
+    /// Intel included, and checks the work really is spread over GCD workers.
+    func testParallelForUsesMoreThanTheCallingThread() throws {
+        #if !os(macOS)
+        throw XCTSkip("QoS classes are Apple-only")
+        #else
+        guard ProcessInfo.processInfo.activeProcessorCount >= 2 else {
+            throw XCTSkip("a single core cannot show more than one worker")
+        }
+        let c = observe(at: .utility)
+        XCTAssertGreaterThan(c[6], 1,
+                             "cv::parallel_for_ ran all 256 stripes on one thread, so the QoS "
+                             + "inheritance tests prove nothing: \(c)")
         #endif
     }
 
