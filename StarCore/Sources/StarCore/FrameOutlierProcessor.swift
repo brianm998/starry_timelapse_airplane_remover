@@ -23,7 +23,11 @@ final public actor FrameOutlierProcessor {
     // Outlier state (moved from FrameAirplaneRemover)
     public var outlierGroups: OutlierGroups?
     internal var outliersLoadedFromFile = false
-    internal var isLoadingOutliers = false
+    /// The load in progress, if any. A second `loadOutliers` awaits it instead of returning empty-handed.
+    internal var inFlightLoad: Task<Void, Error>?
+    /// Whether `inFlightLoad` was started `loadOnly` (so it may have found nothing on disk).
+    internal var inFlightLoadIsLoadOnly = false
+    internal var isLoadingOutliers: Bool { inFlightLoad != nil }
 
     init(
         frameIndex: Int,
@@ -240,12 +244,38 @@ final public actor FrameOutlierProcessor {
     }
 
     public func loadOutliers(loadOnly: Bool = false) async throws {
-        if isLoadingOutliers {
-            Log.w("Not loading twice")
-            return
+        // A load already running serves this call too: wait for it.
+        while let running = inFlightLoad {
+            let runningWasLoadOnly = inFlightLoadIsLoadOnly
+            let runningFailed: Bool
+            do {
+                try await running.value
+                runningFailed = false
+            } catch {
+                runningFailed = true
+            }
+            try Task.checkCancellation()
+            // A cancelled load left nothing behind: start fresh. A load-only load that found
+            // nothing on disk is not enough for a caller that must calculate.
+            if !runningFailed && (loadOnly || !runningWasLoadOnly || outlierGroups != nil) {
+                return
+            }
         }
 
-        isLoadingOutliers = true
+        let task = Task<Void, Error> {
+            defer { self.inFlightLoad = nil }
+            try await self.performLoad(loadOnly: loadOnly)
+        }
+        inFlightLoad = task
+        inFlightLoadIsLoadOnly = loadOnly
+        try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private func performLoad(loadOnly: Bool) async throws {
         if outlierGroups == nil {
             // nil outlier groups means that we haven't tried to get outliers for this frame yet
             Log.d("frame \(frameIndex) loading outliers")
@@ -282,10 +312,9 @@ final public actor FrameOutlierProcessor {
                     try await findOutliers()
                 } catch is CancellationError {
                     // Stopped part way: leave the frame as if outliers had never been tried, so
-                    // a later run finds them again instead of being refused ("Not loading
-                    // twice") or taking the empty groups for a finished result.
+                    // a later run finds them again instead of taking the empty groups for a
+                    // finished result.
                     outlierGroups = nil
-                    isLoadingOutliers = false
                     // findOutliers may already have moved the frame on to a classification
                     // stage it never finished; a frame that did not complete is unprocessed.
                     await frame?.set(state: .unprocessed)
@@ -298,7 +327,6 @@ final public actor FrameOutlierProcessor {
                 callbacks.frameOutliersLoadedCallback?(frameIndex, .loaded)
             }
         }
-        isLoadingOutliers = false
     }
 
     public func initializeEmptyOutlierGroups() async {
@@ -738,18 +766,10 @@ final public actor FrameOutlierProcessor {
     /// `foreachOutlierGroupMulti` does nothing while `outlierGroups` is nil, so Remove All, Keep All
     /// and Clear Undecided used on a frame whose groups are still being read from disk (the gui
     /// loads them asynchronously after a frame is shown) silently changed nothing. A load already in
-    /// flight is waited for, because `loadOutliers` returns at once when another is running.
+    /// flight is waited for by `loadOutliers`.
     /// Never calculates outliers: a frame with none on disk stays as it is.
     private func ensureOutliersLoaded() async {
-        // bounded, so a load that never finishes cannot hang the menu command
-        var waits = 0
-        while outlierGroups == nil && isLoadingOutliers && waits < 600 {
-            try? await Task.sleep(nanoseconds: 50_000_000)
-            waits += 1
-        }
-        if outlierGroups == nil && !isLoadingOutliers {
-            try? await loadOutliers(loadOnly: true)
-        }
+        try? await loadOutliers(loadOnly: true)
     }
 
     public func userSelectAllOutliers(toShouldRemove shouldRemove: Bool,
