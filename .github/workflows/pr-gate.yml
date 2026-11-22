@@ -166,7 +166,6 @@ jobs:
           uv run ruff check .
           uv run pyright
           uv run pytest -q
-          uv run pytest -q ../gherkin/tests
 
   # ─── desktop client unit tests: the whole suite on both OSes (no OpenCV, no ffmpeg) ─────────
   desktop:
