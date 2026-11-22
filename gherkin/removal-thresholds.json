@@ -34,5 +34,13 @@
   "removed_fraction_min": {
     "value": 0.7,
     "measured": "aggregate mode for automatic:true on a7sii_10: fraction of measurable objects with median ratio <= removed_max is 188/226 = 0.832 (macos) and 189/226 = 0.836 (linux); individual verdicts differ for 7 objects between the OS while the totals are within one (188 vs 189). The margin on the regression side is not measured: the pre-1b2cb327 build was only measured on one object (frame 92, ratio 1.03)."
+  },
+  "format_parity_verdict_agreement_min": {
+    "value": 0.8,
+    "measured": "PROVISIONAL, not yet measured: gherkin/compare-formats.py (2026-11-21) compares a7sii_10 (JPEG) with a7sii_10_16bit by per-object verdict (median ratio <= removed_max). 0.8 is a guess until the first removal-measure run; replace with that run's agreement minus a margin, then tighten after B1 and B3."
+  },
+  "format_parity_removed_fraction_delta_max": {
+    "value": 0.15,
+    "measured": "PROVISIONAL, not yet measured: same comparison, |removed fraction jpeg - removed fraction tiff|. 0.15 is a guess until the first removal-measure run; replace with that run's gap plus a margin, then tighten after B1 and B3."
   }
 }

@@ -96,6 +96,11 @@ jobs:
         run: |
           python3 gherkin/measure-removal-summary.py measure-out | tee measure-summary.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: JPEG vs 16-bit TIFF parity
+        run: |
+          set -o pipefail
+          python3 gherkin/compare-formats.py measure-out --os linux --gate --json measure-out/format-parity.json | tee format-parity.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload reports, crops and logs
         if: always()
         uses: actions/upload-artifact@v6
@@ -104,6 +109,7 @@ jobs:
           path: |
             measure-out
             measure-summary.md
+            format-parity.md
           retention-days: 30
 
   measure-macos:
@@ -173,6 +179,11 @@ jobs:
         run: |
           python3 gherkin/measure-removal-summary.py measure-out | tee measure-summary.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: JPEG vs 16-bit TIFF parity
+        run: |
+          set -o pipefail
+          python3 gherkin/compare-formats.py measure-out --os macos --tag cpu --gate --json measure-out/format-parity.json | tee format-parity.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload reports, crops and logs
         if: always()
         uses: actions/upload-artifact@v6
@@ -181,4 +192,5 @@ jobs:
           path: |
             measure-out
             measure-summary.md
+            format-parity.md
           retention-days: 30
