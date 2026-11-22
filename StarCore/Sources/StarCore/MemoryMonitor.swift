@@ -342,7 +342,7 @@ public actor MemoryMonitor {
     private struct Waiter {
         let id: Int
         let needed: UInt64
-        let continuation: CheckedContinuation<Void, Never>
+        let continuation: CheckedContinuation<Bool, Never>
         let deadline: Date
     }
 
@@ -399,8 +399,9 @@ public actor MemoryMonitor {
     /// Reserve `bytes` of budget before starting heavy op work.
     /// Suspends until `reservedBytes + bytes <= effectiveBudget()`.
     /// Call `release(bytes:)` when the op finishes.
-    public func reserve(bytes: UInt64) async {
-        guard bytes > 0 else { return }
+    @discardableResult
+    public func reserve(bytes: UInt64) async -> Bool {
+        guard bytes > 0 else { return true }
 
         // A single request bigger than the whole budget can never fit, so queueing it
         // would block until the timeout no matter what else happens.  Admit it now and
@@ -424,7 +425,7 @@ public actor MemoryMonitor {
                                  budget.humanReadableBytes),
               suggestion: localized("warning.oversized_reservation.suggestion")
             ))
-            return
+            return true
         }
 
         startPressureMonitoringIfNeeded()
@@ -443,7 +444,7 @@ public actor MemoryMonitor {
                 {
                     reservedBytes += bytes
                     noteSerialAdmission(bytes, heldBecause: blocked)
-                    return
+                    return true
                 }
                 realityHolds += 1
                 Log.w("MemoryMonitor: ledger has room for \(bytes / (1024*1024))MB but " +
@@ -452,7 +453,7 @@ public actor MemoryMonitor {
                 reservedBytes += bytes
                 Log.d("MemoryMonitor: reserved \(bytes / (1024*1024))MB — " +
                       "total=\(reservedBytes / (1024*1024))MB / \(admissionBudget / (1024*1024))MB")
-                return
+                return true
             }
         }
 
@@ -517,16 +518,27 @@ public actor MemoryMonitor {
                   "\(pooled / (1024*1024))MB of pooled textures")
         }
 
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            let id = nextWaiterId
-            nextWaiterId += 1
-            waiters.append(Waiter(
-                id: id,
-                needed: bytes,
-                continuation: continuation,
-                deadline: Date().addingTimeInterval(maxWaitTime)
-            ))
-            startPollingIfNeeded()
+        let id = nextWaiterId
+        nextWaiterId += 1
+        let deadline = Date().addingTimeInterval(maxWaitTime)
+        let granted = await withTaskCancellationHandler {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+                waiters.append(Waiter(
+                    id: id,
+                    needed: bytes,
+                    continuation: continuation,
+                    deadline: deadline
+                ))
+                startPollingIfNeeded()
+            }
+        } onCancel: {
+            Task { await self.cancelWaiter(id: id) }
+        }
+
+        if !granted {
+            // Cancelled while parked: nothing was booked, so the ledger is untouched.
+            Log.i("MemoryMonitor: reservation of \(bytes / (1024*1024))MB cancelled while waiting")
+            return false
         }
 
         // The drain booked this grant before it resumed us (see `drainReadyWaiters`), so a
@@ -537,6 +549,23 @@ public actor MemoryMonitor {
         totalWaitTime += elapsed
         Log.i("MemoryMonitor: reservation granted after \(String(format: "%.1f", elapsed))s — " +
               "reserved=\(reservedBytes / (1024*1024))MB")
+        return true
+    }
+
+    /// Removes a parked waiter whose task was cancelled and resumes it as not granted.
+    /// A waiter the drain already granted is no longer in the list; it keeps its grant
+    /// and the caller releases it.
+    private func cancelWaiter(id: Int) {
+        guard let index = waiters.firstIndex(where: { $0.id == id }) else { return }
+        let waiter = waiters.remove(at: index)
+        waiter.continuation.resume(returning: false)
+        if waiters.isEmpty {
+            pollTask?.cancel()
+            pollTask = nil
+            if GPUOps.setPoolingAllowed(true) {
+                Log.i("MemoryMonitor: no reservations waiting — GPU resource pools back on")
+            }
+        }
     }
 
     /// Release a previously granted reservation.  Wakes any ops waiting to reserve.
@@ -1022,7 +1051,7 @@ public actor MemoryMonitor {
         // resume left a window in which other reservations saw the headroom as free and the
         // ledger went over budget.
         reservedBytes = speculativeReserved
-        for waiter in released { waiter.continuation.resume() }
+        for waiter in released { waiter.continuation.resume(returning: true) }
 
         if waiters.isEmpty {
             pollTask?.cancel()
