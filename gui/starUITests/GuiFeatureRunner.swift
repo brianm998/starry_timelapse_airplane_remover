@@ -196,7 +196,8 @@ final class GuiFeatureRunner {
                     do { try method(self) } catch {
                         // said here as well: the cleanup that follows can raise issues of its own and bury this one
                         print("STEP FAILED: \(step.description): \(error)")
-                        throw error
+                        // and in the thrown error, so the failure line names the step and not only the app's debugDescription
+                        throw RunnerError("step \"\(step.description)\" failed: \(error)")
                     }
                 }
             }
