@@ -244,6 +244,10 @@ class AppViewModel(
     suspend fun framePicture(index: Int, mode: com.star.proto.FrameViewMode, thumbnail: Boolean = false): androidx.compose.ui.graphics.ImageBitmap? =
         currentSequence?.loadThumb(index, mode, thumbnail)
 
+    /** How many runs the open sequence has started, and whether one is going now (for the Gherkin runner). */
+    val openRunsStarted: Int get() = currentSequence?.runsStarted ?: 0
+    val openIsProcessing: Boolean get() = currentSequence?.isProcessing?.value == true
+
     /** The open sequence's current frame index; 0 without one. */
     val currentFrameIndex: Int get() = currentSequence?.currentIndex?.value ?: 0
 

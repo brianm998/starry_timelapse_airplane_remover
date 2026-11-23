@@ -542,7 +542,10 @@ class DesktopFeatureRunner {
         var sawRunning = false
         var last = "(none)"
         val stall = ProgressStall(STALL_LIMIT_MS * 1_000_000)
-        waitFor(t, "processing to finish", 20L * 60_000, { "(last progress: $last)" }) {
+        val model = vm
+        waitFor(t, "processing to finish", 20L * 60_000, {
+            "(last progress: $last, runsStarted ${model?.openRunsStarted}, isProcessing ${model?.openIsProcessing})"
+        }) {
             val state = semanticsOf(t, "processing.progress")?.getOrNull(SemanticsProperties.StateDescription)
             stall.observe(state)
             if (state == null) return@waitFor false
@@ -550,6 +553,8 @@ class DesktopFeatureRunner {
             val parts = state.split('/')
             if (parts.size != 3) return@waitFor false
             if (parts[2] == "running") sawRunning = true
+            // a run that began and ended between two polls was never read as "running": the view model knows it started and is over
+            if (model != null && model.openRunsStarted > 0 && !model.openIsProcessing) sawRunning = true
             sawRunning && parts[2] == "idle" && (parts[1].toIntOrNull() ?: 0) > 0 && parts[0] == parts[1]
         }
     }
