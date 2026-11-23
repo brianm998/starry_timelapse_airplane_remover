@@ -386,6 +386,39 @@ final class VideoFrameSourceTests: XCTestCase {
         XCTAssertTrue(opened is DirectoryFrameSource)
     }
 
+    func testAnotherFormatReExtractsInsteadOfReusingTheOldFrames() async throws {
+        let video = try proRes("reformat", frames: 6)
+        let first = try await VideoFrameSource.make(videoPath: video, format: .jpeg, settings: .sweepOnly)
+        try await first.waitUntilFinished()
+        let folder = first.outputFolder
+        XCTAssertEqual(files(in: folder).filter { $0.hasSuffix(".jpg") }.count, 6)
+
+        let second = try await VideoFrameSource.make(videoPath: video, format: .tiff16, settings: .sweepOnly)
+        XCTAssertEqual(second.availableFrames.count, 0, "nothing of the old format is reused")
+        try await second.waitUntilFinished()
+        XCTAssertEqual(files(in: folder).filter { $0.hasSuffix(".jpg") }.count, 0)
+        XCTAssertEqual(files(in: folder).filter { $0.hasSuffix(".tiff") }.count, 6)
+        XCTAssertEqual(FrameExtractionSidecar.read(inFolder: folder)?.format.kind, .tiff16)
+    }
+
+    func testTheSameFormatStillResumes() async throws {
+        let video = try proRes("sameformat", frames: 6)
+        let first = try await VideoFrameSource.make(videoPath: video, format: .jpeg, settings: .sweepOnly)
+        try await first.waitUntilFinished()
+        let second = try await VideoFrameSource.make(videoPath: video, format: .jpeg, settings: .sweepOnly)
+        XCTAssertEqual(second.availableFrames.count, 6)
+        try await second.waitUntilFinished()
+    }
+
+    func testADifferentQualityOrCompressionIsADifferentFormat() {
+        XCTAssertTrue(FrameDecodeFormat.jpeg.producesSameFrames(as: .jpeg))
+        XCTAssertFalse(FrameDecodeFormat.jpeg.producesSameFrames(as: FrameDecodeFormat(kind: .jpeg, jpegQuality: 90)))
+        XCTAssertFalse(FrameDecodeFormat.jpeg.producesSameFrames(as: .tiff8))
+        XCTAssertFalse(FrameDecodeFormat.tiff16.producesSameFrames(as: .tiff8))
+        XCTAssertTrue(FrameDecodeFormat.tiff16.producesSameFrames(as: FrameDecodeFormat(kind: .tiff16, jpegQuality: 10)))
+        XCTAssertFalse(FrameDecodeFormat.tiff16.producesSameFrames(as: FrameDecodeFormat(kind: .tiff16, tiffCompression: .none)))
+    }
+
     func testTheFactoryResumesAnIncompleteFolderAndOpensAGoneVideoAsItIs() async throws {
         let video = try h264("factory", frames: 240, size: "1280x720")
         let first = try await VideoFrameSource.make(videoPath: video, settings: .sweepOnly)

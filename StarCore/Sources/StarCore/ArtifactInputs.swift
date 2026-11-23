@@ -304,6 +304,8 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
             "horizonDetectionEnabled":    str(config.horizonDetectionEnabled),
             "useCombinedHorizonDetection": str(config.useCombinedHorizonDetection),
             "intermediateFormatVersion":  str(intermediateFormatVersion),
+            // What the source frames are: a video extracted again in another format must not mix with what was built from the old one.
+            "sourceFrameFormat":          "\(config.fileExtension)/\(config.imageBitsPerComponent)",
         ]
         if config.useCombinedHorizonDetection {
             // A static sequence detects no per-frame masks at all — its merge reads the
@@ -569,6 +571,11 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
 
     // MARK: - Comparison
 
+    /// Keys that were added to a stage's inputs after records already existed on disk.  When the stored record lacks one, it
+    /// is skipped by `differences`, or every existing sequence would be rebuilt once on upgrade just for the key appearing.
+    /// Add a key here when a new input is recorded that an old record could not have had.
+    static let keysAddedLater: Set<String> = ["sourceFrameFormat"]
+
     /// Which recorded settings differ from `other`, per stage, as
     /// `"name 2000 -> 3000"` strings ready for a log line.
     ///
@@ -594,6 +601,8 @@ public struct ArtifactInputs: Codable, Sendable, Equatable {
                 let before = theirs[key]
                 let after = mine[key]
                 guard before != after else { continue }
+                // A record written before this key existed does not say what it was: not evidence of a change.
+                if before == nil, Self.keysAddedLater.contains(key) { continue }
                 let described = "\(key) \(before ?? "<unset>") -> \(after ?? "<unset>")"
                 if before != nil, after != nil {
                     moved.append(described)

@@ -133,6 +133,36 @@ final class ArtifactInvalidationTests: FrameHarnessTestCase {
         XCTAssertEqual(left[.mergedHorizon], 3)
     }
 
+    func testAChangedSourceFrameFormatRebuildsTheSequence() async throws {
+        let harness = try await makeHarness()
+        try await plantEveryArtifact(in: harness)
+        var changed = harness.config
+        changed.fileExtension = changed.fileExtension == "jpg" ? "tiff" : "jpg"
+        try await invalidate(harness, builtWith: harness.config, nowUsing: changed)
+        let left = present(in: harness)
+        XCTAssertNil(left[.horizon])
+        XCTAssertNil(left[.alignment])
+        XCTAssertNil(left[.output])
+    }
+
+    func testARecordWithoutSourceFrameFormatIsNotAChange() async throws {
+        let harness = try await makeHarness()
+        try await plantEveryArtifact(in: harness)
+        let current = ArtifactInputs.current(from: harness.config)
+        var stages = current.stages
+        for (stage, var inputs) in stages {
+            inputs.removeValue(forKey: "sourceFrameFormat")
+            stages[stage] = inputs
+        }
+        try ArtifactInputs(version: current.version, stages: stages).save(toTempOutputPath: harness.config.tempOutputPath)
+        let (range, byIndex) = wholeSequence(harness)
+        let now = await harness.configManager.config()
+        await frameGraphBuilder.invalidateStaleArtifacts(
+          frames: harness.frames, range: range, framesByIndex: byIndex, config: now)
+        XCTAssertEqual(present(in: harness)[.horizon], 3)
+        XCTAssertEqual(present(in: harness)[.alignment], 3)
+    }
+
     /// A record from before the intermediates were lossless TIFF has no
     /// `intermediateFormatVersion`.  That reads as a change in every stage that owns them, so a
     /// sequence with JPEG caches is rebuilt once rather than mixing old and new files.

@@ -52,11 +52,21 @@ extension VideoFrameSource {
             guard sidecar.matchesVideo(), sidecar.videoPath == videoPath else {
                 throw FrameSourceError("\(folder) holds the frames of a different version of this video")
             }
-            usedFormat = sidecar.format
-            digits = sidecar.digits
-            accessKind = sidecar.accessKind
-            if sidecar.countIsExact || !exact { count = sidecar.frameCount; exact = sidecar.countIsExact }
-            existing = existingFrames(inFolder: folder, count: count, digits: digits, fileExtension: usedFormat.fileExtension)
+            if sidecar.format.producesSameFrames(as: format) {
+                usedFormat = sidecar.format
+                digits = sidecar.digits
+                accessKind = sidecar.accessKind
+                if sidecar.countIsExact || !exact { count = sidecar.frameCount; exact = sidecar.countIsExact }
+                existing = existingFrames(inFolder: folder, count: count, digits: digits, fileExtension: usedFormat.fileExtension)
+            } else {
+                // The caller asked for other frames than the ones there: they are star's own (the sidecar says so), so make them again.
+                Log.i("\(folder) holds frames extracted as \(sidecar.format.description); extracting again as \(format.description)")
+                for index in 0..<sidecar.frameCount {
+                    let name = FrameNaming.fileName(forFrame: index, digits: sidecar.digits, fileExtension: sidecar.format.fileExtension)
+                    try? fileManager.removeItem(atPath: "\(folder)/\(name)")
+                }
+                try? fileManager.removeItem(atPath: FrameExtractionSidecar.path(inFolder: folder))
+            }
         } else if fileManager.fileExists(atPath: folder), containsFrames(folder) {
             throw FrameSourceError("\(folder) already holds image files that were not extracted from this video")
         }
