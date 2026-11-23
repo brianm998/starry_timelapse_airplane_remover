@@ -424,6 +424,67 @@ final class ArtifactInvalidationTests: FrameHarnessTestCase {
         XCTAssertNotNil(ArtifactInputs.load(fromTempOutputPath: harness.config.tempOutputPath),
                         "the run should have recorded what it ran with")
     }
+
+    /// Plant only the final images: what an earlier run leaves when its temp folder is gone.
+    private func plantOnlyOutputs(in harness: FrameHarness) async throws {
+        for frame in harness.frames {
+            let index = frame.frameIndex
+            let image = try await harness.imageSequence.getImage(withName:
+                          await harness.imageSequence.filenames[index]).image()
+            try await harness.imageAccessor.save(image, frameIndex: index, as: .final,
+                                                 atSize: .original, overwrite: true)
+        }
+    }
+
+    func testOutputsWithNoRecordAndNoInputsAreRebuilt() async throws {
+        let harness = try await makeHarness()
+        try await plantOnlyOutputs(in: harness)
+        XCTAssertEqual(present(in: harness)[.output], 3)
+
+        let (range, byIndex) = wholeSequence(harness)
+        await frameGraphBuilder.invalidateStaleArtifacts(
+          frames: harness.frames, range: range, framesByIndex: byIndex,
+          config: harness.config)
+
+        XCTAssertNil(present(in: harness)[.output])
+        XCTAssertNotNil(ArtifactInputs.load(fromTempOutputPath: harness.config.tempOutputPath))
+    }
+
+    func testOrphanedOutputsAreKeptWhenReprocessingIsOff() async throws {
+        let harness = try await makeHarness()
+        try await plantOnlyOutputs(in: harness)
+        var config = harness.config
+        config.reprocessOnSettingsChange = false
+
+        let (range, byIndex) = wholeSequence(harness)
+        await frameGraphBuilder.invalidateStaleArtifacts(
+          frames: harness.frames, range: range, framesByIndex: byIndex, config: config)
+
+        XCTAssertEqual(present(in: harness)[.output], 3)
+    }
+
+    func testOnlyFramesInTheOutputRangeLoseOrphanedOutputs() async throws {
+        let harness = try await makeHarness()
+        try await plantOnlyOutputs(in: harness)
+        let (_, byIndex) = wholeSequence(harness)
+        let indices = harness.frames.map(\.frameIndex)
+        let range = FrameGraphRange(sequenceIndices: indices,
+                                    startIndex: 0,
+                                    endIndex: indices[indices.count - 2],
+                                    alignmentNeighbours: [:],
+                                    horizonMergeNeighbours: [:])
+        let left = harness.frames.filter { !range.output.contains($0.frameIndex) }
+        XCTAssertFalse(left.isEmpty, "the range must leave a frame out")
+
+        await frameGraphBuilder.invalidateStaleArtifacts(
+          frames: harness.frames, range: range, framesByIndex: byIndex,
+          config: harness.config)
+
+        for frame in harness.frames {
+            XCTAssertEqual(frame.outputFileExistsOnDisk(),
+                           !range.output.contains(frame.frameIndex))
+        }
+    }
 }
 
 /// `FrameOutlierProcessor.deleteOutliers()` used to go through `outlierGroups?`, so it

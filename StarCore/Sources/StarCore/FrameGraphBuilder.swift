@@ -313,6 +313,33 @@ public final actor FrameGraphBuilder {
                 // `staleStages(comparedTo:)`.
                 Log.i("no artifact input record in \(config.tempOutputPath), recording " +
                       "this run's settings without invalidating anything")
+
+                // Narrower than "no record": an output whose own sky keypoints are
+                // not in this temp folder cannot have been made from it.
+                var orphaned: [FrameAirplaneRemover] = []
+                for frame in frames where range.output.contains(frame.frameIndex) {
+                    guard frame.mergeOutputExistsOnDisk(),
+                          !frame.keypointsExistOnDisk(ofType: .starAligned, config: config)
+                    else { continue }
+                    orphaned.append(frame)
+                }
+                if !orphaned.isEmpty {
+                    if config.reprocessOnSettingsChange {
+                        Log.i("\(orphaned.count) output image(s) in \(config.outputPath) " +
+                              "have no record and none of their inputs in " +
+                              "\(config.tempOutputPath): they came from an earlier run, " +
+                              "rebuilding them")
+                        for frame in orphaned {
+                            await frame.deleteMergeOutput()
+                            await frame.resetStateFromDisk(config: config)
+                        }
+                    } else {
+                        Log.i("\(orphaned.count) output image(s) in \(config.outputPath) " +
+                              "have no record and none of their inputs in " +
+                              "\(config.tempOutputPath), but reprocessOnSettingsChange is " +
+                              "off: keeping them")
+                    }
+                }
             }
             persistArtifactInputs(current,
                                   toTempOutputPath: config.tempOutputPath,
