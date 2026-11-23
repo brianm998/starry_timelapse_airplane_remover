@@ -65,6 +65,24 @@ public struct FrameDecodeFormat: Sendable, Equatable, Codable {
 
     public var fileExtension: String { kind.fileExtension }
 
+    /// Whether frames extracted in `other` are the frames this format asks for: the same kind, and the setting that kind looks at
+    /// (jpeg quality, or tiff compression) the same.
+    public func producesSameFrames(as other: FrameDecodeFormat) -> Bool {
+        guard kind == other.kind else { return false }
+        switch kind {
+        case .jpeg: return jpegQuality == other.jpegQuality
+        case .tiff16, .tiff8: return tiffCompression == other.tiffCompression
+        }
+    }
+
+    /// For a log line: `tiff16 (packBits)`, `jpeg (quality 80)`.
+    public var description: String {
+        switch kind {
+        case .jpeg: return "jpeg (quality \(jpegQuality))"
+        case .tiff16, .tiff8: return "\(kind.rawValue) (\(tiffCompression.rawValue))"
+        }
+    }
+
     /// ffmpeg's name for the quality: its jpeg encoder takes `-q:v` from 2 (best) to 31 (worst).
     var ffmpegQualityScale: Int {
         let fraction = Double(jpegQuality) / 100
