@@ -461,6 +461,7 @@ jobs:
       - name: Build star (release)
         # Do not set CL=/D... globally, it breaks OpenCV's CMake compiler probe (see release_windows.sh).
         run: |
+          scripts/ci/swift-resolve-retry.sh cli
           swift build -c release --package-path cli
           BIN="$(swift build -c release --package-path cli --show-bin-path)"
           ls "$BIN"/star.exe
@@ -742,6 +743,7 @@ jobs:
           STAR_SYSTEM_FLOOR_MB: 512
         run: |
           set -euo pipefail
+          scripts/ci/swift-resolve-retry.sh cli
           swift build -c release --package-path cli
           CLI="$GITHUB_WORKSPACE/cli/.build/release/star"
           if [ ! -x "$CLI" ]; then echo "::error::no star cli at $CLI (smoke (macos-15)): the processed-fixture @ui features cannot run"; exit 1; fi
@@ -1631,6 +1633,7 @@ jobs:
           done
           if [ "$need" = false ]; then echo "no feature of this shard needs the processed fixture"; exit 0; fi
           fail() { echo "::error::$1"; exit 1; }
+          scripts/ci/swift-resolve-retry.sh cli || fail "the star cli dependencies could not be fetched (desktop (ubuntu-24.04))"
           swift build -c release --package-path cli || fail "the star cli could not be built on this runner (desktop (ubuntu-24.04)), so the processed-fixture @ui features cannot run"
           BIN="$(swift build -c release --package-path cli --show-bin-path)/star"
           [ -x "$BIN" ] || fail "the star cli build left no $BIN (desktop (ubuntu-24.04))"
@@ -1915,6 +1918,7 @@ jobs:
           done
           if [ "$need" = false ]; then echo "no feature of this shard needs the processed fixture"; exit 0; fi
           fail() { echo "::error::$1"; exit 1; }
+          scripts/ci/swift-resolve-retry.sh cli || fail "the star cli dependencies could not be fetched (desktop (windows-2022))"
           swift build -c release --package-path cli || fail "the star cli could not be built on this runner (desktop (windows-2022)), so the processed-fixture @ui features cannot run"
           BIN="$(swift build -c release --package-path cli --show-bin-path)/star.exe"
           [ -x "$BIN" ] || fail "the star cli build left no $BIN (desktop (windows-2022))"
