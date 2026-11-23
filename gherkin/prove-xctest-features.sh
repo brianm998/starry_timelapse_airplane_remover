@@ -69,6 +69,8 @@ explain() {
 
 rows=""
 details=""
+tailout=""    # failure output, printed after the passed lines so the end of the job log shows it
+failed_names=""
 for n in "$@"; do
     t="test$(echo "${n:0:1}" | tr a-z A-Z)${n:1}Feature"
     result="did not run"
@@ -83,11 +85,10 @@ for n in "$@"; do
     fi
     if [ "$result" != passed ]; then
         ev=$(explain "$t")
-        echo "::error::$n: $result ($t is not shown as passed in $log)${ev:+ -- $(printf '%s' "$ev" | head -15 | tr '\n' ' ' | cut -c1-900)}"
+        tailout="$tailout::error::$n: $result ($t is not shown as passed in $log)${ev:+ -- $(printf '%s' "$ev" | head -15 | tr '\n' ' ' | cut -c1-900)}"$'\n'
+        failed_names="$failed_names${failed_names:+, }$n ($result)"
         if [ -n "$ev" ]; then
-            echo "---- $n: failure evidence ----"
-            printf '%s\n' "$ev"
-            echo "---- end $n ----"
+            tailout="$tailout---- $n: failure evidence ----"$'\n'"$ev"$'\n'"---- end $n ----"$'\n'
             details="$details"$'\n'"**$n**"$'\n\n```\n'"$ev"$'\n```\n'
         fi
         bad=1
@@ -108,6 +109,14 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
         printf '%s\n' "$details"
         echo
     } >> "$GITHUB_STEP_SUMMARY"
+fi
+
+# the failures last: the end of the job log is what the base-branch watch captures
+[ -z "$tailout" ] || printf '%s' "$tailout"
+if [ -n "$failed_names" ]; then
+    echo "FAILED: $failed_names"
+elif [ "$bad" != 0 ]; then
+    echo "FAILED: log checks (see ::error:: above)"
 fi
 
 exit "$bad"
