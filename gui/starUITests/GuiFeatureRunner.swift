@@ -504,6 +504,7 @@ final class GuiFeatureRunner {
             frame = now
         }
         pendingRightClick = how == .right ? identifier : nil
+        if identifier == "outlier.first" { lastCellClick = describeProbeClick(e, identifier) }
         if isCell { lastCellClick = describeCellClick(e, identifier, how: how, centreSteps: centreSteps) }
         switch how {
         case .plain: e.click()
@@ -514,6 +515,16 @@ final class GuiFeatureRunner {
         // a cell holds its single tap back for the double-click interval, and only a selected cell has a context menu to open: let the
         // selection land before the next step clicks again
         if isCell && how != .right { _ = XCTWaiter.wait(for: [XCTestExpectation(description: "tap settles")], timeout: 1) }
+    }
+
+    /// Where a click on the probe group is about to land: its frame, whether it is hittable, the window's frame and the status counts.
+    private func describeProbeClick(_ e: XCUIElement, _ identifier: String) -> String {
+        let window = app.windows.firstMatch
+        let counts = ["status.keep", "status.remove"].map { id -> String in
+            let s = element(id)
+            return "\(id)=\(s.exists ? s.label : "none")"
+        }
+        return "\nlast click: \(identifier), frame \(e.exists ? "\(e.frame)" : "none"), hittable \(e.exists && e.isHittable), window \(window.exists ? "\(window.frame)" : "none"), status \(counts)"
     }
 
     /// Where a click on a grid cell is about to land: the element's frame (a cell's identifier is on a small text at its top-left, not the whole
@@ -1387,7 +1398,7 @@ final class GuiFeatureRunner {
             app.windows.allElementsBoundByIndex.filter { w in titles.contains(w.title) || prefixes.contains { w.title.hasPrefix($0) } }.count
         }
         try waitFor("the \(name) window to be \(open ? "open" : "closed")", timeout: 15,
-                    detail: { "(windows: \(self.app.windows.allElementsBoundByIndex.map { $0.title }))" }) { count() == (open ? 1 : 0) }
+                    detail: { "(windows: \(self.app.windows.allElementsBoundByIndex.map { $0.title }))\(self.lastCellClick)" }) { count() == (open ? 1 : 0) }
     }
 
     private var preferencesFile: URL { scratch.appendingPathComponent("home/.star.userprefs.json") }

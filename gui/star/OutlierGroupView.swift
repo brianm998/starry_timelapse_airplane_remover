@@ -420,11 +420,16 @@ struct OutlierGroupView: View {
           }
     }
 
+    /// Whether the selection lines drawn across the frame take hits. They never do: they are decoration drawn over the groups, and a
+    /// line over a group would take the click that belongs to it (hypothesis for decision 1060: it did, for undecided groups).
+    static let frameLinesTakeHits = false
+
     public func outlierFrameLine() -> some View {
         Rectangle()
           .foregroundColor(self.groupViewModel.arrowColor)
           .blendMode(.difference)
           .opacity(0.5)
+          .allowsHitTesting(Self.frameLinesTakeHits)
     }
 }
 
