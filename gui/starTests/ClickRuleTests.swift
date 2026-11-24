@@ -29,6 +29,10 @@ final class ClickRuleTests: XCTestCase {
         }
     }
 
+    func testSelectionLinesNeverTakeAClick() {
+        XCTAssertFalse(OutlierGroupView.frameLinesTakeHits, "a line drawn over a group would take the click that belongs to the group")
+    }
+
     func testAClickLeavesTheDecisionTheVectorSays() throws {
         let cases = try XCTUnwrap(try doc()["toggle"] as? [[String: String]])
         XCTAssertEqual(cases.count, 7 * 5, "seven tools, five starting decisions")
