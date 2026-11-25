@@ -1,6 +1,6 @@
 # star: downloads and traffic
 
-Latest snapshot 2026-11-24. 25 snapshots since 2026-10-31.
+Latest snapshot 2026-11-25. 26 snapshots since 2026-10-31.
 
 ## Downloads
 
@@ -35,7 +35,7 @@ Latest snapshot 2026-11-24. 25 snapshots since 2026-10-31.
 
 24 older releases: 234 downloads.
 
-Fixture releases (`test-data`, `ci-assets`): 6415 downloads, nearly all CI. Not counted above.
+Fixture releases (`test-data`, `ci-assets`): 6498 downloads, nearly all CI. Not counted above.
 
 `*` history starts 2026-10-31; the figure is the growth since then.
 
