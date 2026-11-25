@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "Ничто в записи не указывает на причину. Если выше есть журнал, его последние строки — лучшее свидетельство.",
   "run_marker.brief.crashed": "Это ошибка в star — пожалуйста, сообщите о ней.",
   "run_marker.brief.out_of_memory": "Попробуйте --keypoint-divisor 1.5 или меньше одновременных рендеров.",
-  "run_marker.brief.resume": "Продолжить: star {0}",
+  "run_marker.brief.not_restartable": "Его рабочих файлов больше нет там, где они были сохранены, поэтому перезапустить его нельзя.",
   "run_marker.label.doing": "выполняется",
   "run_marker.label.last_seen": "последний раз",
   "run_marker.label.last_warning": "последнее предупреждение",

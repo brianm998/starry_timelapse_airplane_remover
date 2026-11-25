@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "Niets in de registratie wijst op een oorzaak. Staat er hierboven een log, dan zijn de laatste regels het beste aanknopingspunt.",
   "run_marker.brief.crashed": "Dit is een fout in star — meld het alsjeblieft.",
   "run_marker.brief.out_of_memory": "Probeer --keypoint-divisor 1.5, of minder gelijktijdige renders.",
-  "run_marker.brief.resume": "Hervat met: star {0}",
+  "run_marker.brief.not_restartable": "De werkbestanden staan niet meer waar ze zijn opgeslagen, dus de run kan niet opnieuw worden gestart.",
   "run_marker.label.doing": "bezig met",
   "run_marker.label.last_seen": "laatst gezien",
   "run_marker.label.last_warning": "laatste waarschuwing",

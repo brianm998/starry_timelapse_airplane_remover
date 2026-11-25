@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "記録の中に原因を示すものはありません。上にログがあれば、その最後の数行が最良の手がかりです。",
   "run_marker.brief.crashed": "これは star のバグです。報告してください。",
   "run_marker.brief.out_of_memory": "--keypoint-divisor 1.5、または同時レンダリング数を減らして試してください。",
-  "run_marker.brief.resume": "再開するには: star {0}",
+  "run_marker.brief.not_restartable": "作業ファイルが保存した場所に見つからないため、再開できません。",
   "run_marker.label.doing": "処理内容",
   "run_marker.label.last_seen": "最終確認",
   "run_marker.label.last_warning": "直近の警告",

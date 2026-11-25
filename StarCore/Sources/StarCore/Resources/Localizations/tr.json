@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "Kayıtta bir nedene işaret eden hiçbir şey yok. Yukarıda bir günlük varsa son satırları en iyi kanıttır.",
   "run_marker.brief.crashed": "Bu, star'daki bir hatadır — lütfen bildirin.",
   "run_marker.brief.out_of_memory": "--keypoint-divisor 1.5 deneyin ya da eşzamanlı oluşturma sayısını azaltın.",
-  "run_marker.brief.resume": "Şununla devam edin: star {0}",
+  "run_marker.brief.not_restartable": "Çalışma dosyaları artık kaydedildikleri yerde değil, bu yüzden yeniden başlatılamıyor.",
   "run_marker.label.doing": "yapılıyor",
   "run_marker.label.last_seen": "son görülme",
   "run_marker.label.last_warning": "son uyarı",

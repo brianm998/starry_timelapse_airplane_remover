@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "Rien dans l'enregistrement ne désigne une cause. S'il y a un journal ci-dessus, ses dernières lignes sont le meilleur indice.",
   "run_marker.brief.crashed": "C'est un bogue de star — merci de le signaler.",
   "run_marker.brief.out_of_memory": "Essayez --keypoint-divisor 1.5, ou moins de rendus simultanés.",
-  "run_marker.brief.resume": "Reprenez avec : star {0}",
+  "run_marker.brief.not_restartable": "Ses fichiers de travail ne sont plus là où elle les avait enregistrés ; il est donc impossible de la redémarrer.",
   "run_marker.label.doing": "en cours",
   "run_marker.label.last_seen": "vu pour la dernière fois",
   "run_marker.label.last_warning": "dernier avertissement",

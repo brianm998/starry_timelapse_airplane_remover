@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "Nada en el registro apunta a una causa. Si hay un registro arriba, sus últimas líneas son la mejor prueba.",
   "run_marker.brief.crashed": "Esto es un fallo de star — por favor, comunícalo.",
   "run_marker.brief.out_of_memory": "Prueba con --keypoint-divisor 1.5, o con menos renderizados simultáneos.",
-  "run_marker.brief.resume": "Reanuda con: star {0}",
+  "run_marker.brief.not_restartable": "Sus archivos de trabajo ya no están donde los guardó, así que no se puede reiniciar.",
   "run_marker.label.doing": "haciendo",
   "run_marker.label.last_seen": "visto por última vez",
   "run_marker.label.last_warning": "último aviso",

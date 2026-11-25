@@ -132,7 +132,7 @@
   "run_marker.advice.unknown": "Nothing in the record points at a cause. If there is a log above, its last lines are the best evidence.",
   "run_marker.brief.crashed": "This is a bug in star — please report it.",
   "run_marker.brief.out_of_memory": "Try --keypoint-divisor 1.5, or fewer concurrent renders.",
-  "run_marker.brief.resume": "Resume with: star {0}",
+  "run_marker.brief.not_restartable": "Its working files are no longer where it saved them, so it can't be restarted.",
   "run_marker.label.doing": "doing",
   "run_marker.label.last_seen": "last seen",
   "run_marker.label.last_warning": "last warning",

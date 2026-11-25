@@ -509,6 +509,49 @@ final class RunMarkerTests: XCTestCase {
         XCTAssertNil(marker.restartableConfigPath)
     }
 
+    // MARK: - The brief report
+
+    /// The brief report is what a gui puts in an alert, where a command line means nothing:
+    /// a run that can be picked up gets a button there instead.
+    func testTheBriefReportNeverPrintsTheConfigPath() throws {
+        let present = directory.appendingPathComponent("config.json")
+        try Data("{}".utf8).write(to: present)
+        let gone = directory.appendingPathComponent("gone.json")
+
+        for config in [present, gone] {
+            var marker = RunMarker(id: "x", client: "Star")
+            marker.sequenceName = "seq"
+            marker.resumeConfigPath = config.path
+
+            let suggestion = marker.asWarning.suggestion ?? ""
+            for text in [marker.briefReport, suggestion] {
+                XCTAssertFalse(text.contains(config.path), text)
+                XCTAssertFalse(text.contains("star /"), text)
+            }
+        }
+    }
+
+    func testAMarkerWhoseConfigHasGoneSaysItCannotBeRestarted() throws {
+        let sentence = localized("run_marker.brief.not_restartable")
+        XCTAssertNotEqual(sentence, "run_marker.brief.not_restartable", "the key must exist")
+
+        var marker = RunMarker(id: "x", client: "Star")
+        marker.resumeConfigPath = directory.appendingPathComponent("gone.json").path
+        XCTAssertTrue(marker.briefReport.contains(sentence))
+        XCTAssertTrue(marker.asWarning.suggestion?.contains(sentence) == true)
+
+        let config = directory.appendingPathComponent("config.json")
+        try Data("{}".utf8).write(to: config)
+        marker.resumeConfigPath = config.path
+        XCTAssertFalse(marker.briefReport.contains(sentence))
+        XCTAssertFalse(marker.asWarning.suggestion?.contains(sentence) == true)
+        XCTAssertFalse(marker.asWarning.suggestion?.contains(config.path) == true)
+
+        marker.resumeConfigPath = nil
+        XCTAssertFalse(marker.briefReport.contains(sentence),
+                       "a run that never named a config has nothing to say about one")
+    }
+
     // MARK: - Liveness
 
     func testAPidAboveTheSystemMaximumIsNotAlive() throws {

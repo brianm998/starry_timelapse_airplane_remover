@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "Tidak ada dalam catatan yang menunjuk pada suatu sebab. Bila ada log di atas, baris-baris terakhirnya adalah petunjuk terbaik.",
   "run_marker.brief.crashed": "Ini kutu di star — mohon laporkan.",
   "run_marker.brief.out_of_memory": "Coba --keypoint-divisor 1.5, atau kurangi render yang berjalan bersamaan.",
-  "run_marker.brief.resume": "Lanjutkan dengan: star {0}",
+  "run_marker.brief.not_restartable": "Berkas kerjanya sudah tidak ada di tempat penyimpanannya, jadi proses itu tidak dapat dimulai ulang.",
   "run_marker.label.doing": "sedang",
   "run_marker.label.last_seen": "terakhir terlihat",
   "run_marker.label.last_warning": "peringatan terakhir",

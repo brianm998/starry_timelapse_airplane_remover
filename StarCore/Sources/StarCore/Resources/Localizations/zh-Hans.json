@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "记录中没有任何线索指向具体原因。如果上面有日志，它的最后几行是最好的证据。",
   "run_marker.brief.crashed": "这是 star 的缺陷——请反馈给我们。",
   "run_marker.brief.out_of_memory": "可尝试 --keypoint-divisor 1.5，或减少并发渲染数。",
-  "run_marker.brief.resume": "继续运行：star {0}",
+  "run_marker.brief.not_restartable": "它的工作文件已不在原保存位置，因此无法重新开始。",
   "run_marker.label.doing": "正在进行",
   "run_marker.label.last_seen": "最后一次出现",
   "run_marker.label.last_warning": "最近的警告",

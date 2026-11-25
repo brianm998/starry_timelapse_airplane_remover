@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "Nic w zapisie nie wskazuje na przyczynę. Jeśli powyżej jest dziennik, jego ostatnie wiersze są najlepszą poszlaką.",
   "run_marker.brief.crashed": "To błąd w star — prosimy o zgłoszenie.",
   "run_marker.brief.out_of_memory": "Spróbuj --keypoint-divisor 1.5 albo mniejszej liczby równoczesnych renderowań.",
-  "run_marker.brief.resume": "Wznów poleceniem: star {0}",
+  "run_marker.brief.not_restartable": "Jego plików roboczych nie ma już tam, gdzie je zapisał, więc nie można go uruchomić ponownie.",
   "run_marker.label.doing": "w toku",
   "run_marker.label.last_seen": "ostatnio widziany",
   "run_marker.label.last_warning": "ostatnie ostrzeżenie",

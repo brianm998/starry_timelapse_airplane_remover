@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "لا شيء في السجل يشير إلى سبب. إن وُجد سجل أعلاه، فآخر أسطره هي أفضل دليل.",
   "run_marker.brief.crashed": "هذا خلل في star — يُرجى الإبلاغ عنه.",
   "run_marker.brief.out_of_memory": "جرّب --keypoint-divisor 1.5، أو قلّل عمليات الإخراج المتزامنة.",
-  "run_marker.brief.resume": "تابع بالأمر: star {0}",
+  "run_marker.brief.not_restartable": "لم تعد ملفات العمل الخاصة به في المكان الذي حفظها فيه، لذا لا يمكن إعادة تشغيله.",
   "run_marker.label.doing": "الجاري",
   "run_marker.label.last_seen": "آخر ظهور",
   "run_marker.label.last_warning": "آخر تحذير",
