@@ -352,24 +352,31 @@ private fun ConfirmHorizonFrameChange(frame: Int, onConfirm: () -> Unit, onCance
 /**
  * A critical warning over the window (macOS's system alert for them): the machine is about to stop this run, or a previous run was stopped. OK is the
  * default, and does nothing but acknowledge it: starting a run that may take hours is not what a stray Return on a dialog the user did not ask for
- * should do; a report of a run that was killed also offers Restart Now. A click outside does nothing.
+ * should do; a report of a run that was killed also offers Restart Now, stacked above OK as in the macOS app. A click outside does nothing.
  */
 @Composable
-private fun CriticalWarningDialog(warning: com.star.proto.Warning, onOk: () -> Unit, onRestart: (String) -> Unit) {
+internal fun CriticalWarningDialog(warning: com.star.proto.Warning, onOk: () -> Unit, onRestart: (String) -> Unit) {
     PromptCard(onScrimClick = null, onDefaultAction = onOk, onEscape = null) {
         Text(warning.title, color = StarColors.red, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, fontSize = 18.sp)
         Text(warning.message, color = StarColors.textPrimary, fontSize = 13.sp)
         if (warning.suggestion.isNotEmpty()) Text(warning.suggestion, color = StarColors.textSecondary, fontSize = 12.sp)
-        androidx.compose.foundation.layout.Row(
+        // Only the report of a run that stopped, and only one whose config is still on disk, has anything to restart: the others are about the
+        // machine, where there is nothing to pick back up.
+        val restartable = warning.restartableConfigPath.isNotEmpty()
+        Column(
             Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp, Alignment.End),
+            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.End,
         ) {
-            // Only the report of a run that stopped, and only one whose config is still on disk, has anything to restart: the others are about the
-            // machine, where there is nothing to pick back up.
-            if (warning.restartableConfigPath.isNotEmpty()) {
-                OutlinedButton(onClick = { onRestart(warning.restartableConfigPath) }) { Text(localized("ui.restart_now")) }
+            val width = if (restartable) Modifier.fillMaxWidth() else Modifier
+            if (restartable) {
+                OutlinedButton(onClick = { onRestart(warning.restartableConfigPath) }, modifier = width.testTag("warning.restart")) {
+                    Text(localized("ui.restart_now"))
+                }
             }
-            Button(onClick = onOk, colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) { Text(localized("ui.ok")) }
+            Button(onClick = onOk, modifier = width.testTag("warning.ok"), colors = ButtonDefaults.buttonColors(containerColor = StarColors.accent)) {
+                Text(localized("ui.ok"))
+            }
         }
     }
 }

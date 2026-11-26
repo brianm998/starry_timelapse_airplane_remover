@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "अभिलेख में कुछ भी किसी कारण की ओर संकेत नहीं करता। यदि ऊपर कोई लॉग है, तो उसकी अंतिम पंक्तियाँ सबसे अच्छा प्रमाण हैं।",
   "run_marker.brief.crashed": "यह star की एक त्रुटि है — कृपया इसकी सूचना दें।",
   "run_marker.brief.out_of_memory": "--keypoint-divisor 1.5 आज़माएँ, या एक साथ कम रेंडर करें।",
-  "run_marker.brief.resume": "इस तरह जारी रखें: star {0}",
+  "run_marker.brief.not_restartable": "इसकी कार्य फ़ाइलें अब वहाँ नहीं हैं जहाँ इसने उन्हें सहेजा था, इसलिए इसे पुनः आरंभ नहीं किया जा सकता।",
   "run_marker.label.doing": "चल रहा है",
   "run_marker.label.last_seen": "अंतिम बार देखा गया",
   "run_marker.label.last_warning": "अंतिम चेतावनी",

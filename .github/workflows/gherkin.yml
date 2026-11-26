@@ -1409,6 +1409,8 @@ jobs:
           TEST_RUNNER_STAR_CLI_BUILD: 0
         run: |
           set -o pipefail
+          # MASON's CI watch tails the first failed step, which is this one: it ends by naming the failed tests (docs/decisions/1118).
+          trap 'rc=$?; if [ "$rc" != 0 ]; then gherkin/summarize-xctest-failures.sh gherkin-gui.log || true; fi; exit "$rc"' EXIT
           run_xcodebuild() {
             rm -rf "$RUNNER_TEMP/gherkin-gui.xcresult"
             xcodebuild test \

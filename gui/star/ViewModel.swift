@@ -233,6 +233,22 @@ public final class ViewModel {
         return "\(warningMessage)\n\n\(warningSuggestion)"
     }
 
+    /// Whether the warning is up as the system alert: any with nothing to restart.
+    var showSystemWarningAlert: Bool {
+        get { showWarningAlert && restartableRunConfigPath == nil }
+        // A dismissal arriving after a stopped run's report took this alert's place is not
+        // about that report.
+        set { if !newValue, restartableRunConfigPath == nil { showWarningAlert = false } }
+    }
+
+    /// Whether the warning is up as `StoppedRunSheetView`: a run that can be restarted.
+    var showStoppedRunSheet: Bool {
+        get { showWarningAlert && restartableRunConfigPath != nil }
+        // Likewise: once another warning has replaced the report, the sheet going away must
+        // not acknowledge that one unread.
+        set { if !newValue, restartableRunConfigPath != nil { acknowledgeWarning() } }
+    }
+
     /// What the alert currently on screen is about, so acknowledging it silences that
     /// condition rather than whatever happened to be reported since.
     private var alertingWarningKind: StarWarning.Kind?

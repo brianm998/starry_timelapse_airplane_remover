@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "ریکارڈ میں کوئی چیز وجہ کی نشاندہی نہیں کرتی۔ اگر اوپر لاگ موجود ہے تو اس کی آخری سطریں سب سے بہتر شہادت ہیں۔",
   "run_marker.brief.crashed": "یہ star میں خرابی ہے — براہِ کرم اس کی اطلاع دیں۔",
   "run_marker.brief.out_of_memory": "--keypoint-divisor 1.5 آزمائیں یا بیک وقت کم رینڈر چلائیں۔",
-  "run_marker.brief.resume": "اس سے جاری رکھیں: star {0}",
+  "run_marker.brief.not_restartable": "اس کی ورکنگ فائلیں اب وہاں موجود نہیں جہاں اس نے انہیں محفوظ کیا تھا، اس لیے اسے دوبارہ شروع نہیں کیا جا سکتا۔",
   "run_marker.label.doing": "جاری",
   "run_marker.label.last_seen": "آخری بار دیکھا گیا",
   "run_marker.label.last_warning": "آخری تنبیہ",

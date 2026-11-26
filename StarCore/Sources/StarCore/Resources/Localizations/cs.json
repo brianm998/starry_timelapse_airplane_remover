@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "Nic v záznamu na příčinu neukazuje. Je-li výše protokol, jeho poslední řádky jsou nejlepším vodítkem.",
   "run_marker.brief.crashed": "Je to chyba ve star — nahlaste ji prosím.",
   "run_marker.brief.out_of_memory": "Zkuste --keypoint-divisor 1.5 nebo méně souběžných vykreslování.",
-  "run_marker.brief.resume": "Pokračujte příkazem: star {0}",
+  "run_marker.brief.not_restartable": "Jeho pracovní soubory už nejsou tam, kam je uložil, takže ho nelze restartovat.",
   "run_marker.label.doing": "probíhá",
   "run_marker.label.last_seen": "naposledy viděn",
   "run_marker.label.last_warning": "poslední varování",

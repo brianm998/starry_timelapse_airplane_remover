@@ -64,23 +64,20 @@ struct ContentView: View {
         // A system alert is its own window: it contributes nothing to the layout of this one,
         // and its OK button dismisses it through the binding rather than through a button we
         // place ourselves inside the content.
-        .alert(viewModel.warningTitle, isPresented: $bindableViewModel.showWarningAlert) {
-            // Declared first, which is what makes it the rightmost button and the default:
-            // SwiftUI lays an alert's buttons out in reverse of declaration order and gives
-            // the return key to the one that ends up on the right (measured, not assumed).
-            // The safe half of the pair belongs there — reopening a sequence and starting a
-            // run that may take hours is not what a stray return on an alert the user did
-            // not ask for should do.
+        .alert(viewModel.warningTitle, isPresented: $bindableViewModel.showSystemWarningAlert) {
             Button(localized("ui.ok")) { viewModel.acknowledgeWarning() }
-            // Only a report of a run that stopped, and only one whose config is still on
-            // disk, has anything to restart.  The other conditions that reach this alert are
-            // machine warnings — memory pressure, a write that failed — where there is
-            // nothing to pick back up.
-            if viewModel.restartableRunConfigPath != nil {
-                Button(localized("ui.restart_now")) { viewModel.restartAbandonedRun() }
-            }
         } message: {
             Text(viewModel.warningAlertText)
+        }
+        // The one critical warning with something to do about it, the report of a stopped run
+        // that can be picked back up, is a sheet of our own: Restart Now has to sit above OK,
+        // and a system alert puts two short buttons side by side with no say in the matter.
+        // Like the alert, a sheet is its own window.
+        .sheet(isPresented: $bindableViewModel.showStoppedRunSheet) {
+            StoppedRunSheetView(title: viewModel.warningTitle,
+                                message: viewModel.warningAlertText,
+                                restart: { viewModel.restartAbandonedRun() },
+                                ok: { viewModel.acknowledgeWarning() })
         }
     }
 
@@ -462,5 +459,45 @@ struct WarningBannerView: View {
                         : Color.yellow.opacity(0.94))
           .cornerRadius(10)
           .padding(.top, 10)
+    }
+}
+
+/// The report of a stopped run that can be restarted, laid out like a narrow system alert with
+/// its buttons stacked: Restart Now on top, OK below.
+///
+/// OK is the default.  Reopening a sequence and starting a run that may take hours is not what
+/// a stray return on a dialog the user did not ask for should do.
+struct StoppedRunSheetView: View {
+    let title: String
+    let message: String
+    let restart: () -> Void
+    let ok: () -> Void
+
+    private static let width: CGFloat = 260
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(nsImage: NSApplication.shared.applicationIconImage)
+              .resizable()
+              .frame(width: 64, height: 64)
+              .accessibilityHidden(true)
+            Text(title)
+              .font(.headline)
+            Text(message)
+              .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 8) {
+                Button(action: restart) {
+                    Text(localized("ui.restart_now")).frame(maxWidth: .infinity)
+                }
+                Button(action: ok) {
+                    Text(localized("ui.ok")).frame(maxWidth: .infinity)
+                }
+                  .keyboardShortcut(.defaultAction)
+            }
+              .controlSize(.large)
+        }
+          .multilineTextAlignment(.center)
+          .frame(width: StoppedRunSheetView.width)
+          .padding(20)
     }
 }
