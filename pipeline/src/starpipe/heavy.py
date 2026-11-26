@@ -44,6 +44,7 @@ PROGRESS = {"explore": 0, "develop": 1, "fix": 2, "verify": 3, "review": 3, "res
             "landing": 6}
 NO_TICKET_PRIORITY = 9
 REQUEUE_MAX = 5  # masond dropping a queued request this many times in a row is not a blip: the job's run fails
+KILL_WAIT_S = 5.0  # for SIGKILLed processes to exit; bounded, as one in uninterruptible sleep (a disk stall) may not for minutes
 
 
 def default_priority() -> int:
@@ -180,7 +181,9 @@ def _running(p: psutil.Process) -> bool:
 def _kill_group(proc: subprocess.Popen[bytes], grace: float) -> None:
     """TERM then, after the grace, KILL the job's whole tree. The tree is collected first: once the leader dies its
     children are reparented and can no longer be found from it. Children in other process groups are signalled
-    individually, so the lock is never released with part of the job still running."""
+    individually, so the lock is never released with part of the job still running. SIGKILL is delivered asynchronously
+    and only the leader can be waited on, so this returns once every collected process has exited or is a zombie, or
+    after KILL_WAIT_S."""
     tree = [p for p in _tree(proc.pid) if p.pid != proc.pid]
     if grace > 0:
         _signal_tree(proc.pid, tree, signal.SIGTERM)
@@ -191,6 +194,9 @@ def _kill_group(proc: subprocess.Popen[bytes], grace: float) -> None:
             time.sleep(0.05)
     _signal_tree(proc.pid, tree, signal.SIGKILL)  # whatever ignored the TERM, or outlived its leader
     proc.wait()
+    deadline = time.monotonic() + KILL_WAIT_S
+    while time.monotonic() < deadline and any(_running(p) for p in tree):
+        time.sleep(0.05)
 
 
 UI_TESTS_REFUSED = 69  # sysexits' EX_UNAVAILABLE, the same code pipeline/shims/xcodebuild exits with

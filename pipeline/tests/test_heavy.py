@@ -148,6 +148,56 @@ def test_an_interrupted_job_kills_children_in_other_groups(tmp_path: Path) -> No
             os.kill(child, signal.SIGKILL)
 
 
+def _kill_with_the_child_signalled_late(pidfile: Path, monkeypatch: pytest.MonkeyPatch, delay: float | None) -> None:
+    """Run _kill_group on a job whose other-group child gets its signals `delay` seconds late (None: never), and check
+    what is left as soon as it returns."""
+    import signal
+    import threading
+
+    import psutil
+
+    real_signal_tree = heavy._signal_tree  # pyright: ignore[reportPrivateUsage]
+    timers: list[threading.Timer] = []
+
+    def late(leader: int, tree: list[psutil.Process], sig: signal.Signals) -> None:
+        real_signal_tree(leader, [], sig)  # the leader's group at once
+        if delay is not None:
+            timers.append(threading.Timer(delay, real_signal_tree, (leader, tree, sig)))
+            timers[-1].start()
+
+    proc = subprocess.Popen([sys.executable, "-c", _spawn_tree_script(pidfile)], process_group=0)
+    child = 0
+    try:
+        assert wait_until(lambda: pidfile.exists() and pidfile.read_text() != "")
+        child = int(pidfile.read_text())
+        monkeypatch.setattr(heavy, "_signal_tree", late)
+        started = time.monotonic()
+        heavy._kill_group(proc, 0)  # pyright: ignore[reportPrivateUsage]
+        took = time.monotonic() - started
+        if delay is None:
+            assert took < 5 and not _gone(child)
+        else:
+            assert _gone(child)
+    finally:
+        for t in timers:
+            t.join()
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+        if child and not _gone(child):
+            os.kill(child, signal.SIGKILL)
+
+
+def test_kill_group_waits_for_a_child_whose_kill_lands_late(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """SIGKILL is asynchronous: a child in another group can outlive the leader's wait (#1189)."""
+    _kill_with_the_child_signalled_late(tmp_path / "child.pid", monkeypatch, 0.5)
+
+
+def test_kill_group_returns_when_a_child_does_not_exit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(heavy, "KILL_WAIT_S", 0.3)
+    _kill_with_the_child_signalled_late(tmp_path / "child.pid", monkeypatch, None)
+
+
 def test_busy_job_is_not_killed(tmp_path: Path) -> None:
     spin = "import time;t=time.time()\nwhile time.time()-t<4: pass"
     writer = "import time,sys\nfor _ in range(14):\n  print('x',flush=True);time.sleep(0.3)"
