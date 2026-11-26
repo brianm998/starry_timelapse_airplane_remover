@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "Không có gì trong bản ghi chỉ ra nguyên nhân. Nếu phía trên có nhật ký, những dòng cuối của nó là manh mối tốt nhất.",
   "run_marker.brief.crashed": "Đây là lỗi của star — xin hãy báo lại.",
   "run_marker.brief.out_of_memory": "Hãy thử --keypoint-divisor 1.5, hoặc giảm số lần kết xuất đồng thời.",
-  "run_marker.brief.resume": "Tiếp tục bằng: star {0}",
+  "run_marker.brief.not_restartable": "Các tệp làm việc của lần chạy này không còn ở nơi đã lưu, nên không thể khởi động lại.",
   "run_marker.label.doing": "đang làm",
   "run_marker.label.last_seen": "thấy lần cuối",
   "run_marker.label.last_warning": "cảnh báo gần nhất",

@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "ไม่มีอะไรในบันทึกที่ชี้ถึงสาเหตุ ถ้ามีไฟล์บันทึกอยู่ด้านบน บรรทัดท้าย ๆ ของมันคือหลักฐานที่ดีที่สุด",
   "run_marker.brief.crashed": "นี่เป็นข้อบกพร่องใน star โปรดแจ้งให้ทราบ",
   "run_marker.brief.out_of_memory": "ลอง --keypoint-divisor 1.5 หรือลดจำนวนการเรนเดอร์พร้อมกัน",
-  "run_marker.brief.resume": "ทำต่อด้วย: star {0}",
+  "run_marker.brief.not_restartable": "ไฟล์ทำงานของการรันนี้ไม่อยู่ในตำแหน่งที่บันทึกไว้แล้ว จึงเริ่มใหม่ไม่ได้",
   "run_marker.label.doing": "กำลังทำ",
   "run_marker.label.last_seen": "พบครั้งล่าสุด",
   "run_marker.label.last_warning": "คำเตือนล่าสุด",

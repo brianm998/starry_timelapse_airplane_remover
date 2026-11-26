@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "রেকর্ডের কিছুই কোনো কারণের দিকে ইঙ্গিত করে না। উপরে কোনো লগ থাকলে তার শেষ লাইনগুলিই সবচেয়ে ভালো প্রমাণ।",
   "run_marker.brief.crashed": "এটি star-এর একটি ত্রুটি — অনুগ্রহ করে জানান।",
   "run_marker.brief.out_of_memory": "--keypoint-divisor 1.5 চেষ্টা করুন, অথবা একসঙ্গে কম রেন্ডার করুন।",
-  "run_marker.brief.resume": "এভাবে আবার শুরু করুন: star {0}",
+  "run_marker.brief.not_restartable": "এর কাজের ফাইলগুলি যেখানে সংরক্ষণ করা হয়েছিল সেখানে আর নেই, তাই এটি পুনরায় শুরু করা যাবে না।",
   "run_marker.label.doing": "চলছে",
   "run_marker.label.last_seen": "সর্বশেষ দেখা",
   "run_marker.label.last_warning": "সর্বশেষ সতর্কতা",

@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "Nulla nella registrazione indica una causa. Se sopra c'è un log, le sue ultime righe sono l'indizio migliore.",
   "run_marker.brief.crashed": "È un bug di star — segnalalo, per favore.",
   "run_marker.brief.out_of_memory": "Prova con --keypoint-divisor 1.5 o con meno render simultanei.",
-  "run_marker.brief.resume": "Riprendi con: star {0}",
+  "run_marker.brief.not_restartable": "I suoi file di lavoro non sono più dove li aveva salvati, quindi non può essere riavviata.",
   "run_marker.label.doing": "in corso",
   "run_marker.label.last_seen": "visto l'ultima volta",
   "run_marker.label.last_warning": "ultimo avviso",

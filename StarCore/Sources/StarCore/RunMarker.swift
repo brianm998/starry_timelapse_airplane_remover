@@ -70,7 +70,7 @@ public struct RunMarker: Codable, Sendable, Equatable {
     public var sequenceName: String?
     public var sequencePath: String?
 
-    /// The `config.json` a resume would be pointed at, so the report can print a command
+    /// The `config.json` a resume would be pointed at, so the full report can print a command
     /// the user can actually run.
     public var resumeConfigPath: String?
 
@@ -427,6 +427,9 @@ public struct RunMarker: Codable, Sendable, Equatable {
 
     /// The report condensed to fit somewhere with no room for it — a gui banner, a
     /// notification.  `report` is what goes in the log and the terminal.
+    ///
+    /// Names no config path and no command: a client that can restart the run offers a button
+    /// for it (`restartableConfigPath`), so words are needed only when it cannot.
     public var briefReport: String {
         var text = summary
         switch diagnosis {
@@ -437,8 +440,8 @@ public struct RunMarker: Codable, Sendable, Equatable {
         case .unknown:
             break
         }
-        if let resumeConfigPath {
-            text += " " + localized("run_marker.brief.resume", resumeConfigPath)
+        if resumeConfigPath != nil, restartableConfigPath == nil {
+            text += " " + localized("run_marker.brief.not_restartable")
         }
         return text
     }

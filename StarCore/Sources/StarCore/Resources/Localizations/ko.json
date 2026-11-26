@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "기록에서 원인을 가리키는 것은 없습니다. 위에 로그가 있다면 마지막 몇 줄이 가장 좋은 단서입니다.",
   "run_marker.brief.crashed": "star의 결함입니다. 신고해 주세요.",
   "run_marker.brief.out_of_memory": "--keypoint-divisor 1.5를 쓰거나 동시 렌더 수를 줄여 보세요.",
-  "run_marker.brief.resume": "이어서 진행: star {0}",
+  "run_marker.brief.not_restartable": "작업 파일이 저장했던 위치에 더 이상 없어 다시 시작할 수 없습니다.",
   "run_marker.label.doing": "진행 중",
   "run_marker.label.last_seen": "마지막 확인",
   "run_marker.label.last_warning": "최근 경고",

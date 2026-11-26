@@ -147,7 +147,7 @@
   "run_marker.advice.unknown": "Nichts in der Aufzeichnung deutet auf eine Ursache hin. Falls oben ein Protokoll steht, sind dessen letzte Zeilen der beste Anhaltspunkt.",
   "run_marker.brief.crashed": "Das ist ein Fehler in star — bitte melden Sie ihn.",
   "run_marker.brief.out_of_memory": "Versuchen Sie --keypoint-divisor 1.5 oder weniger gleichzeitige Renderings.",
-  "run_marker.brief.resume": "Fortsetzen mit: star {0}",
+  "run_marker.brief.not_restartable": "Seine Arbeitsdateien liegen nicht mehr dort, wo er sie gespeichert hat, daher kann er nicht neu gestartet werden.",
   "run_marker.label.doing": "Tätigkeit",
   "run_marker.label.last_seen": "zuletzt gesehen",
   "run_marker.label.last_warning": "letzte Warnung",

@@ -394,6 +394,90 @@ final class WarningAlertTests: XCTestCase {
         XCTAssertTrue(viewModel.showWarningAlert)
     }
 
+    /// From the marker to the alert: a run that can be restarted gets the button, and the
+    /// text names neither its config nor a command to type.
+    func testAStoppedRunsAlertOffersARestartAndNamesNoPath() throws {
+        let directory = FileManager.default.temporaryDirectory
+          .appendingPathComponent("warning-alert-tests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let config = directory.appendingPathComponent("config.json")
+        try Data("{}".utf8).write(to: config)
+
+        var marker = RunMarker(id: "x", client: "Star")
+        marker.sequenceName = "seq"
+        marker.resumeConfigPath = config.path
+        let viewModel = ViewModel()
+        viewModel.reportAbandonedRuns([marker], turnOffGPUMerge: {})
+
+        XCTAssertTrue(viewModel.showWarningAlert)
+        XCTAssertEqual(viewModel.restartableRunConfigPath, config.path)
+        XCTAssertFalse(viewModel.warningAlertText.contains(config.path),
+                       viewModel.warningAlertText)
+        XCTAssertFalse(viewModel.warningAlertText.contains("star /"),
+                       viewModel.warningAlertText)
+    }
+
+    /// Restart Now above OK, OK the default, and the window left alone: a system alert would
+    /// put the two side by side, so this report has a sheet of its own.
+    func testTheStoppedRunSheetStacksRestartNowAboveOK() throws {
+        let viewModel = ViewModel()
+        let host = NSHostingView(rootView: ContentView().environment(viewModel))
+        host.sizingOptions = [.minSize, .intrinsicContentSize, .maxSize]
+
+        let window = OffDisplayWindow(contentRect: OffDisplayWindow.farAway,
+                                      styleMask: [.titled, .resizable, .closable],
+                                      backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil); window.contentView = nil; window.close() }
+        window.contentView = host
+        window.setContentSize(NSSize(width: 900, height: 600))
+        // A SwiftUI sheet, unlike an alert, is only presented over a window that is ordered in.
+        window.orderFront(nil)
+        settle()
+        OffDisplayWindow.assertNothingShowsOnADisplay()
+        let quietMinimum = window.contentMinSize
+        let quietContent = host.frame.size
+
+        viewModel.report(warning: warning(.previousRunDied, .critical),
+                         restartableConfigPath: "/tmp/star_temp_seq/config.json")
+        XCTAssertTrue(viewModel.showStoppedRunSheet)
+        XCTAssertFalse(viewModel.showSystemWarningAlert)
+        settle(1.0)
+        OffDisplayWindow.assertNothingShowsOnADisplay()
+
+        let content = try XCTUnwrap(window.attachedSheet?.contentView)
+        let found = buttons(in: content)
+        XCTAssertEqual(found.count, 2)
+        let restart = try XCTUnwrap(found.first { $0.keyEquivalent != "\r" })
+        let ok = try XCTUnwrap(found.first { $0.keyEquivalent == "\r" })
+        let restartFrame = restart.convert(restart.bounds, to: nil)
+        let okFrame = ok.convert(ok.bounds, to: nil)
+        // Window coordinates: y grows upwards.
+        XCTAssertGreaterThan(restartFrame.midY, okFrame.midY,
+                             "Restart Now \(restartFrame) must be above OK \(okFrame)")
+        XCTAssertEqual(restartFrame.midX, okFrame.midX, accuracy: 1)
+        XCTAssertEqual(window.contentMinSize, quietMinimum)
+        XCTAssertEqual(host.frame.size, quietContent)
+
+        ok.performClick(nil)
+        settle()
+        XCTAssertFalse(viewModel.showWarningAlert, "OK is the one with the return key")
+        XCTAssertNil(viewModel.restartableRunConfigPath)
+    }
+
+    /// A machine warning that arrives over the stopped run's sheet takes its place, and the
+    /// sheet going away must not count as the user having read it.
+    func testTheSheetGivingWayDoesNotAcknowledgeTheNextWarning() {
+        let viewModel = ViewModel()
+        viewModel.report(warning: warning(.previousRunDied, .critical),
+                         restartableConfigPath: "/tmp/star_temp_seq/config.json")
+        viewModel.report(warning: warning(.memoryPressure, .critical))
+        viewModel.showStoppedRunSheet = false
+
+        XCTAssertTrue(viewModel.showSystemWarningAlert)
+    }
+
     // MARK: - the alert's text
 
     /// The system alert takes one body string, so the suggestion has to be folded into it —
@@ -419,6 +503,11 @@ final class WarningAlertTests: XCTestCase {
     }
 
     // MARK: - helpers
+
+    private func buttons(in view: NSView) -> [NSButton] {
+        if let button = view as? NSButton { return [button] }
+        return view.subviews.flatMap { buttons(in: $0) }
+    }
 
     private func warning(_ kind: StarWarning.Kind,
                          _ severity: StarWarning.Severity) -> StarWarning
