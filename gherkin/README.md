@@ -468,3 +468,6 @@ artifacts; `gherkin/measure-removal.sh <os> <out>` does the same locally (`MEASU
 A red mac gui feature prints its failure: `prove-xctest-features.sh` writes the feature's first XCTest failure lines (or, when no test
 started, the log's last 40 lines and crash markers) into the job log, the `::error::` annotation and the step summary, and an
 `if: failure()` step prints the xcresult summary with `xcresulttool`.
+The failing xcodebuild step itself ends with a summary (`gherkin/summarize-xctest-failures.sh`): each failed test with its failure line
+and the runner's click evidence, and on the very last line `FAILED UI TESTS (N): ...`. A CI watch that tails the first failed step
+sees the names there.
