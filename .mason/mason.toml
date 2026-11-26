@@ -154,9 +154,6 @@ pass_regex = "^T0-I18N-OK$"
 level = "t0"
 
 [suite.t0-pipeline-static]
-# uv is on this Mac but a node need not have it (nodes only report Rust, Xcode and Java), so this stays here:
-# on 2026-11-25 node marmot answered `uv: command not found` (#1131).
-remote = false
 command = "export STAR_USE_GPU_FOR_MERGE=0 && uv run --project pipeline ruff check pipeline && uv run --project pipeline pyright --project pipeline/pyproject.toml && echo T0-PIPELINE-OK"
 parser = "regex"
 pass_regex = "^T0-PIPELINE-OK$"
@@ -443,7 +440,6 @@ narrow_smoke = ["com.star.desktop.ui.NoHardCodedStringsTest", "com.star.desktop.
 whole_later = "ci" # pr-gate.yml:204 (desktop job, gradlew test on both OSes)
 
 [suite.test-pipeline]
-remote = false # needs uv, which a node need not have (see t0-pipeline-static)
 command = "cd pipeline && STAR_USE_GPU_FOR_MERGE=0 uv run pytest -v 2>&1"
 parser = "pytest"
 min_tests = 480 # floor: ~90% of a static count of test functions (2026-11, #601)
