@@ -67,6 +67,18 @@ def test_mac_gui_failure_evidence_step_is_last() -> None:
     assert "gui-prove.txt" in body and "gui-xcresult-summary.txt" in body
 
 
+def test_mac_gui_xcodebuild_step_ends_with_the_failed_tests() -> None:
+    body = job_text("mac-gui")
+    start = body.index("      - name: Run the Gherkin features in Star.app (XCUITest)")
+    step = body[start : body.index("      - name: ", start + 1)]
+    trap = (
+        """trap 'rc=$?; if [ "$rc" != 0 ]; then gherkin/summarize-xctest-failures.sh gherkin-gui.log || true; fi; """
+        """exit "$rc"' EXIT"""
+    )
+    assert trap in step
+    assert step.index(trap) < step.index("run_xcodebuild gherkin-gui.log")
+
+
 def test_desktop_linux_failure_evidence_step_is_last():
     body = job_text("desktop-linux")
     names = re.findall(r"^      - name: (.+)$", body, re.MULTILINE)
