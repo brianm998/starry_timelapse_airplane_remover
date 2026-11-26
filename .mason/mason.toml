@@ -139,6 +139,14 @@ when = ["development", "test_step", "batch"]
 when = ["test_step", "batch"]
 
 # ---------------------------------------------------------------------------------------------
+# Suites that stay on this Mac (`remote = false`, owner's decision, docs/decisions/1129). A node has
+# no linked OpenCV or StarDecisionTrees (link-artifacts.sh links them from the main checkout, #1175),
+# so nothing that builds StarCpp or a dependent can compile there; the desktop suites name Android
+# Studio's JDK and the gui suites sign with the owner's certificate. Drop a line only once a node is
+# provisioned for it. pipeline/tests/test_mason_toml_nodes.py pins this.
+# ---------------------------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------------------------
 # T0: static checks. Never heavy except proto-sync and the Gherkin generator (a build).
 # ---------------------------------------------------------------------------------------------
 [suite.t0-diff-check]
@@ -162,6 +170,7 @@ pass_regex = "^T0-PIPELINE-OK$"
 level = "t0"
 
 [suite.t0-proto-sync]
+remote = false # needs Android Studio's JAVA_HOME; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop checkProtoSync --no-daemon 2>&1 && echo T0-PROTO-OK"
 parser = "regex"
 pass_regex = "^T0-PROTO-OK$"
@@ -187,6 +196,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-StarCpp]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path StarCpp 2>&1 && echo BUILD-build-StarCpp-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-StarCpp-OK$"
@@ -195,6 +205,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-StarCore]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path StarCore 2>&1 && echo BUILD-build-StarCore-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-StarCore-OK$"
@@ -203,6 +214,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-cli]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path cli 2>&1 && echo BUILD-build-cli-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-cli-OK$"
@@ -211,6 +223,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-daemon]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path daemon -c release 2>&1 && echo BUILD-build-daemon-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-daemon-OK$"
@@ -219,6 +232,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-trail_tools]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path trail_tools 2>&1 && echo BUILD-build-trail_tools-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-trail_tools-OK$"
@@ -227,6 +241,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-decision_tree_generator]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift build --disable-build-manifest-caching --package-path decision_tree_generator 2>&1 && echo BUILD-build-decision_tree_generator-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-decision_tree_generator-OK$"
@@ -243,6 +258,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-gui]
+remote = false # needs this Mac's signing identity; see "Suites that stay on this Mac"
 # Builds the app only. It runs no tests, so it never touches the display.
 # Signed with the owner's Apple Development certificate, not ad hoc (`-`): an ad-hoc build's identity is its
 # cdhash, new every build, so the "access files on a removable volume" Allow (worktrees are on /Volumes/sp)
@@ -255,6 +271,7 @@ level = "t1"
 uses = { compile = 1 }
 
 [suite.build-desktop]
+remote = false # needs Android Studio's JAVA_HOME; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop compileKotlin compileTestKotlin --no-daemon 2>&1 && echo BUILD-build-desktop-OK"
 parser = "regex"
 pass_regex = "^BUILD-build-desktop-OK$"
@@ -282,6 +299,7 @@ uses = { test-suite = 1 }
 
 # StarCpp: parallel, with the one class that measures QoS skipped here and run alone below.
 [suite.test-StarCpp]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path StarCpp --filter StarCppBridgeTests --parallel --num-workers 8 --xunit-output .build/test-StarCpp.xml --skip OpenCVQoSTests 2>&1"
 parser = "junit"
 results_file = ".build/test-StarCpp.xml"
@@ -298,6 +316,7 @@ narrow_never = ["StarCpp/Package.swift", "StarCpp/Package.resolved", "StarCpp/Te
 whole_later = "batch"
 
 [suite.test-StarCpp-qos]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 # OpenCVQoSTests measures QoS-dependent worker counts: timing sensitivity. Any other load on the
 # cores changes the counts it observes, so it keeps the whole machine (exclusive, kept on purpose).
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path StarCpp --filter OpenCVQoSTests 2>&1"
@@ -310,6 +329,7 @@ uses = { exclusive = 1 }
 # worktrees by link-artifacts.sh. Measured 2026-11-14: 20 tests, 2 benchmarks skipped (STAR_WGPU_BENCH),
 # 18 run. The two Metal comparisons hold to the CPU bounds when the CPU merge is forced (#352).
 [suite.test-StarCpp-wgpu]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 STAR_WGPU=1 swift test --disable-build-manifest-caching --package-path StarCpp --filter StarCppWGPUTests 2>&1"
 parser = "xctest"
 min_tests = 18
@@ -319,6 +339,7 @@ uses = { test-suite = 1 }
 # StarCore and daemon run as class shards (scripts/shards.py): one build, several `xcrun xctest`
 # processes, JUnit out. A class named in no shard runs in the catch-all shard, so none is lost.
 [suite.test-StarCore]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 python3 .mason/scripts/shards.py --package-path StarCore --junit .build/test-StarCore.xml --workers 8 --shard HorizonConsensusTests --shard VideoFrameSourceTests --shard TemporalHorizonDetectorTests,FullFrameBlobberIdentityTests,VideoConvertTests --serial-shard MemoryMonitorTests 2>&1"
 parser = "junit"
 results_file = ".build/test-StarCore.xml"
@@ -338,6 +359,7 @@ narrow_smoke = ["LocalizationTests", "ConfigRoundTripTests", "ArtifactInputsTest
 whole_later = "ci" # pr-gate.yml:255 (static job, StarCore package tests) and :332 (macos job)
 
 [suite.test-daemon]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 python3 .mason/scripts/shards.py --package-path daemon --junit .build/test-daemon.xml --workers 8 --shard ExportSequenceTests --shard ExportVideoAudioTests,SessionConfigPersistenceTests --serial-shard BackgroundExtractionSessionTests 2>&1"
 parser = "junit"
 results_file = ".build/test-daemon.xml"
@@ -354,6 +376,7 @@ narrow_never = ["daemon/Package.swift", "daemon/Package.resolved", "daemon/Tests
 whole_later = "ci" # pr-gate.yml:258 (daemon package tests)
 
 [suite.test-cli]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path cli --skip GherkinTests 2>&1"
 parser = "xctest"
 min_tests = 70 # floor: ~90% of the 78 starTests functions on develop (GherkinTests is skipped and not counted; #937)
@@ -369,6 +392,7 @@ narrow_never = ["cli/Package.swift", "cli/Package.resolved"]
 whole_later = "batch"
 
 [suite.test-trail_tools]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path trail_tools 2>&1"
 parser = "xctest"
 min_tests = 22 # floor: ~90% of a static count of test functions (2026-11, #601)
@@ -376,6 +400,7 @@ level = "t1"
 uses = { test-suite = 1 }
 
 [suite.test-decision_tree_generator]
+remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path decision_tree_generator 2>&1"
 parser = "xctest"
 min_tests = 1 # floor: ~90% of a static count of test functions (2026-11, #601)
@@ -401,6 +426,7 @@ uses = { exclusive = 1 }
 # with no windows, drives no mouse or keyboard, and asserts no time budget, so it needs neither the
 # display nor the cores. The display stays untouched whatever the share.
 [suite.test-gui]
+remote = false # needs this Mac's signing identity; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 .mason/scripts/xcodebuild-signed.sh -project gui/star.xcodeproj -scheme star -configuration Debug -derivedDataPath .build/gui-dd -only-testing:starTests test 2>&1"
 parser = "xctest"
 min_tests = 340 # floor: ~90% of a static count of test functions (2026-11, #601)
@@ -419,6 +445,7 @@ narrow_smoke = ["NoHardCodedStringsTests", "IdRegistryTests"]
 whole_later = "batch"
 
 [suite.test-desktop]
+remote = false # needs Android Studio's JAVA_HOME; see "Suites that stay on this Mac"
 command = "env STAR_USE_GPU_FOR_MERGE=0 JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\" star-desktop/gradlew -p star-desktop test --rerun --no-daemon 2>&1"
 parser = "junit"
 # results_file is a literal path, not a glob: MASON reads it with fs::read.
