@@ -33,6 +33,12 @@ final class ClickRuleTests: XCTestCase {
         XCTAssertFalse(OutlierGroupView.frameLinesTakeHits, "a line drawn over a group would take the click that belongs to the group")
     }
 
+    func testArrowsAreBehindEveryGroupAndSmallerGroupsOnTop() {
+        XCTAssertTrue(OutlierGroupView.arrowsAreBehindGroups)
+        XCTAssertGreaterThan(OutlierGroupView.groupZIndex(position: 0), 0, "above the arrows layer")
+        XCTAssertGreaterThan(OutlierGroupView.groupZIndex(position: 3), OutlierGroupView.groupZIndex(position: 2), "a later, smaller group on top")
+    }
+
     func testAClickLeavesTheDecisionTheVectorSays() throws {
         let cases = try XCTUnwrap(try doc()["toggle"] as? [[String: String]])
         XCTAssertEqual(cases.count, 7 * 5, "seven tools, five starting decisions")

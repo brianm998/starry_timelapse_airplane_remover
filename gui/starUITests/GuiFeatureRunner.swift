@@ -506,6 +506,8 @@ final class GuiFeatureRunner {
         pendingRightClick = how == .right ? identifier : nil
         if identifier == "outlier.first" { lastCellClick = describeProbeClick(e, identifier) }
         if isCell { lastCellClick = describeCellClick(e, identifier, how: how, centreSteps: centreSteps) }
+        let clickPoint = e.exists ? CGPoint(x: e.frame.midX, y: e.frame.midY) : nil
+        defer { if identifier == "outlier.first" { lastCellClick += describePostClick(identifier, at: clickPoint) } }
         switch how {
         case .plain: e.click()
         case .command: XCUIElement.perform(withKeyModifiers: .command) { e.click() }
@@ -525,6 +527,27 @@ final class GuiFeatureRunner {
             return "\(id)=\(s.exists ? s.label : "none")"
         }
         return "\nlast click: \(identifier), frame \(e.exists ? "\(e.frame)" : "none"), hittable \(e.exists && e.isHittable), window \(window.exists ? "\(window.frame)" : "none"), status \(counts)"
+    }
+
+    /// What a click on the probe group left: the status counts afterwards, how many `outlier.first` elements there are, and the elements whose
+    /// frame holds the click point (the smallest first), which names whatever covers the group.
+    private func describePostClick(_ identifier: String, at point: CGPoint?) -> String {
+        _ = XCTWaiter.wait(for: [XCTestExpectation(description: "click lands")], timeout: 1)
+        let counts = ["status.keep", "status.remove"].map { id -> String in
+            let s = element(id)
+            return "\(id)=\(s.exists ? s.label : "none")"
+        }
+        var covering = "n/a"
+        if let point {
+            let hits = app.descendants(matching: .any).allElementsBoundByIndex.prefix(400).compactMap { el -> (CGFloat, String)? in
+                guard el.exists else { return nil }
+                let f = el.frame
+                guard f.contains(point) else { return nil }
+                return (f.width * f.height, "\(el.elementType.rawValue) id '\(el.identifier)' \(f)")
+            }.sorted { $0.0 < $1.0 }.prefix(6).map { $0.1 }
+            covering = "\(hits)"
+        }
+        return "\nafter click: status \(counts), outlier.first elements \(app.descendants(matching: .any).matching(identifier: identifier).count), elements at the click point \(covering)"
     }
 
     /// Where a click on a grid cell is about to land: the element's frame (a cell's identifier is on a small text at its top-left, not the whole

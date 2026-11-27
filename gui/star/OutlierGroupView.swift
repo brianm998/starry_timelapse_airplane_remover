@@ -16,6 +16,18 @@ struct OutlierGroupView: View {
     /// The id a UI test finds this group by (`gherkin/ui/ids.json`), for the one group that carries it, and only under `-StarUITestProbes YES`.
     var probeId: String? = nil
 
+    /// Which part of the group this view draws. The frame draws every group's arrows and lines first and every group's tappable view after,
+    /// so no arrow or line of one group can sit over another group's view and take its click (decision 1176).
+    enum Layer { case both, arrows, group }
+    var layer: Layer = .both
+
+    /// The arrows and lines of every group are drawn below the tappable view of every group.
+    static let arrowsAreBehindGroups = true
+
+    /// The z-order of a group's tappable view, from its position in the drawing order (0 is the biggest group, drawn first). Always above the
+    /// arrows layer (0), and a smaller group, drawn later, above a bigger one.
+    static func groupZIndex(position: Int) -> Double { Double(position + 1) }
+
     @Environment(\.openWindow) private var openWindow
 
     /// What a click on a group does once the trash and information tools have had theirs.
@@ -102,7 +114,7 @@ struct OutlierGroupView: View {
 
             let half_arrow_length = arrow_length/2
 
-            if groupViewModel.arrowSelected || will_paint || unknown_paint || groupViewModel.isSelected {
+            if layer != .group, groupViewModel.arrowSelected || will_paint || unknown_paint || groupViewModel.isSelected {
                 // arrow indicators on the side of the image
 
                 // arrow on left side
@@ -135,7 +147,7 @@ struct OutlierGroupView: View {
                           y: half_arrow_length + half_frame_height)
             }
             
-            if groupViewModel.arrowSelected || groupViewModel.isSelected {
+            if layer != .group, groupViewModel.arrowSelected || groupViewModel.isSelected {
                 
                 // lines across the frame between the arrows and outlier group bounds
                 let left_line_width = CGFloat(bounds.min.x)
@@ -182,7 +194,9 @@ struct OutlierGroupView: View {
                             bottom_line_height / 2 + half_bounds_height)
             }
 
+            if layer != .arrows {
             self.outlierView
+              .contentShape(Rectangle())
               .tagged(probeId)
 
             // tap gesture toggles paintability of the tapped group
@@ -216,7 +230,8 @@ struct OutlierGroupView: View {
                           }
                       }
                   }
-            } 
+            }
+            }
         }
     }
 
@@ -406,6 +421,7 @@ struct OutlierGroupView: View {
         Image(systemName: imageName)
           .resizable()
           .foregroundColor(self.groupViewModel.arrowColor)
+          .contentShape(Rectangle())
           .onHover { self.groupViewModel.selectArrow($0) }
           .onTapGesture {
               let group = self.groupViewModel.group
