@@ -8,10 +8,17 @@ import Observation
 final class FrameObserverObservationTests: XCTestCase {
 
     private func fires(_ read: () -> Void, _ change: () -> Void) -> Bool {
-        var fired = false
-        withObservationTracking { read() } onChange: { fired = true }
+        let flag = FiredFlag()
+        withObservationTracking { read() } onChange: { flag.set() }
         change()
-        return fired
+        return flag.value
+    }
+
+    private final class FiredFlag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var fired = false
+        func set() { lock.lock(); fired = true; lock.unlock() }
+        var value: Bool { lock.lock(); defer { lock.unlock() }; return fired }
     }
 
     func testEachOutlierCountInvalidatesTrackingRead() {
