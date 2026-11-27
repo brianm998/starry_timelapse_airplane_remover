@@ -15,10 +15,12 @@
 # landing are still not wired.
 mode = "direct-ci"
 base = "develop"
-window = "20m"
+window = "5m"
 # Cap a batch at 10 tasks (was 0, no cap), the cap MASON uses on itself. A bounded union means fewer
 # conflict re-merges when the base moves mid-CI, and a red batch bisects over fewer tasks.
-# window stays 20m: star's pr-gate run is long, and a shorter window would only make smaller batches.
+# window is 5m (was 20m, task #1169): 17 of 30 landed batches held one task and ten of those waited the full 20.0 min
+# for no companion, a third to a half of their landing time. Compare batch size and conflict send-backs
+# (docs/decisions/1179-short-landing-window.md).
 # Compare afterwards: landing_idle_ms and conflict send-backs per landed task (docs/decisions/0613).
 max_size = 10
 parallel = 1
