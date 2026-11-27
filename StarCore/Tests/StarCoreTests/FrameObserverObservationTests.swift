@@ -1,3 +1,4 @@
+#if canImport(Observation)
 import XCTest
 import Observation
 @testable import StarCore
@@ -42,3 +43,4 @@ final class FrameObserverObservationTests: XCTestCase {
         XCTAssertTrue(fires({ _ = o.shouldRemove }, { o.set(shouldRemove: .userSelected(true)) }))
     }
 }
+#endif
