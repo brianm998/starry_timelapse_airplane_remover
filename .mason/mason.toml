@@ -531,7 +531,8 @@ whole_later = "ci" # pr-gate.yml:163 (static job, uv run pytest)
 ".claude/**" = []
 # MASON configuration and exit scripts: pipeline tooling, no star code to build or run on a GPU.
 ".mason/**" = ["test-pipeline", "t0-pipeline-static"]
-"scripts/**" = ["test-pipeline", "t0-pipeline-static"]
+# Not scripts/**: entries are unioned, so that glob also matched every task's scripts/exit/*.sh (#1170).
+"scripts/ci/**" = ["test-pipeline", "t0-pipeline-static"]
 "CLAUDE.md" = []
 ".github/**" = []
 "docs/**" = []
@@ -552,7 +553,7 @@ whole_later = "ci" # pr-gate.yml:163 (static job, uv run pytest)
 "test_data/**" = []
 # Paths every task touches that run no code of their own. Unmapped, each selected every suite
 # (~2,300 tests a round): on 2026-11-12, 10 of 13 star task branches ran everything only for these.
-"scripts/exit/**" = []   # each task's own exit script; no suite runs them (scripts/** above still adds the pipeline suites)
+"scripts/exit/**" = []   # each task's own exit script; no suite runs them (the pipeline entry lists scripts/ci/** only, as entries are unioned)
 "art/**" = []            # source art and its export script; exported images land under gui/ and star-desktop/, which are mapped
 ".gitattributes" = []
 "**/*.md" = []
