@@ -1,6 +1,12 @@
 import Foundation
 import StarCppBridge
+#if canImport(Observation)
+import Observation
+#endif
 
+#if canImport(Observation)
+@Observable
+#endif
 @MainActor
 public class FrameObserver {
     public init() { }

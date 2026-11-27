@@ -15,10 +15,16 @@ You should have received a copy of the GNU General Public License along with sta
 import Foundation
 import StarCppBridge
 import logging
+#if canImport(Observation)
+import Observation
+#endif
 #if canImport(CoreGraphics)
 import CoreGraphics
 #endif
 
+#if canImport(Observation)
+@Observable
+#endif
 @MainActor
 public class OutlierRemovalObserver {
     public init() { }
