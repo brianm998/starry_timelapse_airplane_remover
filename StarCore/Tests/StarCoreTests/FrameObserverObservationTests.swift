@@ -1,4 +1,6 @@
-#if canImport(Observation)
+// Apple platforms only: swift-corelibs XCTest on Linux does not run a @MainActor test class
+// on the main thread, and the whole StarCore test run died there (batch #848).
+#if canImport(Observation) && !os(Linux)
 import XCTest
 import Observation
 @testable import StarCore
