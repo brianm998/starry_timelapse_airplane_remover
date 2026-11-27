@@ -52,3 +52,9 @@ def test_suites_needing_this_mac_are_not_remote() -> None:
     suites = _suites()
     placeable = {n: why for n, why in _local_only().items() if suites[n].get("remote") is not False}
     assert not placeable, f"add `remote = false` to these suites (what a node lacks): {placeable}"
+
+
+def test_suites_running_uv_are_not_remote() -> None:
+    """A node may lack uv (exit 127, task #1165): suites that call it stay on this Mac."""
+    placeable = [n for n, s in _suites().items() if re.search(r"\buv\b", s["command"]) and s.get("remote") is not False]
+    assert not placeable, f"add `remote = false` to these suites (nodes may have no uv): {placeable}"
