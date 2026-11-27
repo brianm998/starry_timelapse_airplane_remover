@@ -267,21 +267,37 @@ jobs:
           # installer parsing --installPath as just "C:\Program" and silently
           # ignoring the rest. Wrap in literal double quotes so the path stays
           # intact across the process boundary.
-          $proc = Start-Process -FilePath $installer -ArgumentList @(
-              'modify',
-              '--installPath', "`"$vsPath`"",
-              '--add', 'Microsoft.VisualStudio.Component.VC.14.40.17.10.x86.x64',
-              '--quiet', '--norestart', '--nocache'
-          ) -Wait -PassThru -NoNewWindow
-          if ($proc.ExitCode -notin 0,3010) {
-              throw "VS Installer failed (exit code $($proc.ExitCode))"
+          $findToolset = {
+              Get-ChildItem "$vsPath\VC\Tools\MSVC" -Directory -ErrorAction SilentlyContinue `
+                  | Where-Object { $_.Name -like '14.40.*' } | Select-Object -First 1
           }
-          # Verify the toolset is actually present so we fail fast if the
-          # component ID drifts.
-          $toolsetDir = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Directory `
-              | Where-Object { $_.Name -like '14.40.*' } | Select-Object -First 1
+          $toolsetDir = & $findToolset
+          if ($toolsetDir) {
+              Write-Host "MSVC 14.40 toolset already present: $($toolsetDir.Name)"
+              exit 0
+          }
+          # The VS Installer sometimes cannot fetch its channel feed from the runner
+          # ("Didn't find any channel feed", exit 1), so retry with a backoff and
+          # judge success by whether the toolset exists afterwards.
+          $lastExit = $null
+          foreach ($attempt in 1..3) {
+              Write-Host "VS Installer attempt $attempt of 3"
+              $proc = Start-Process -FilePath $installer -ArgumentList @(
+                  'modify',
+                  '--installPath', "`"$vsPath`"",
+                  '--add', 'Microsoft.VisualStudio.Component.VC.14.40.17.10.x86.x64',
+                  '--quiet', '--norestart', '--nocache'
+              ) -Wait -PassThru -NoNewWindow
+              $lastExit = $proc.ExitCode
+              if ($lastExit -notin 0,3010) {
+                  Write-Warning "VS Installer failed (exit code $lastExit)"
+              }
+              $toolsetDir = & $findToolset
+              if ($toolsetDir) { break }
+              if ($attempt -lt 3) { Start-Sleep -Seconds (30 * $attempt) }
+          }
           if (-not $toolsetDir) {
-              throw "MSVC 14.40 toolset not found under $vsPath\VC\Tools\MSVC after install"
+              throw "MSVC 14.40 toolset not found under $vsPath\VC\Tools\MSVC after install (last installer exit code $lastExit)"
           }
           Write-Host "Installed: $($toolsetDir.Name)"
 
