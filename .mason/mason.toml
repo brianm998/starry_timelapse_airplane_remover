@@ -283,6 +283,9 @@ uses = { compile = 1 }
 # T1 tests (starpipe `test:*`). Minimum counts are starpipe's own, from adapter_star.py's comments
 # (StarCore 1,625, daemon 314, StarCpp 254). The others are floors from a static count of test functions.
 # ---------------------------------------------------------------------------------------------
+# min_tests policy (#1171): a floor is checked against what a base run EXECUTED (skips excluded), never a static count of
+# test functions. When a suite's definition changes, re-measure on develop; when a run is green but under its floor,
+# compare with the base's executed count before blaming the task.
 [suite.test-logging]
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path logging 2>&1"
 parser = "xctest"
@@ -321,7 +324,7 @@ remote = false # needs the linked OpenCV/StarDecisionTrees artifacts; see "Suite
 # cores changes the counts it observes, so it keeps the whole machine (exclusive, kept on purpose).
 command = "env STAR_USE_GPU_FOR_MERGE=0 swift test --disable-build-manifest-caching --package-path StarCpp --filter OpenCVQoSTests 2>&1"
 parser = "xctest"
-min_tests = 3 # floor: ~90% of a static count of test functions (2026-11, #601)
+min_tests = 2 # one test skips on x86_64 and 2 run there; a floor of 3 failed healthy runs (#1171)
 level = "t1"
 uses = { exclusive = 1 }
 
