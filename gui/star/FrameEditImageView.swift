@@ -197,10 +197,20 @@ public struct FrameEditImageView: View {
                             // a test finds one group, one a click can hit at the size the frame is shown at
                             // (`-StarUITestProbes YES`, `outlier.first` in `gherkin/ui/ids.json`, `OutlierGroupView.probeGroupId`)
                             let probe = self.probeGroupId(drawn: sorted)
+                            // every group's arrows and lines first, under every group's tappable view (decision 1176)
                             ForEach(sorted) { outlierViewModel in
+                                if outlierViewModel.group.size > 40 {
+                                    OutlierGroupView(groupViewModel: outlierViewModel, layer: .arrows)
+                                      .zIndex(0)
+                                      .id("arrows-\(outlierViewModel.group.id)")
+                                }
+                            }
+                            ForEach(Array(sorted.enumerated()), id: \.element.id) { position, outlierViewModel in
                                 if outlierViewModel.group.size > 40 { // XXX use a constant here
                                     OutlierGroupView(groupViewModel: outlierViewModel,
-                                                     probeId: outlierViewModel.group.id == probe ? "outlier.first" : nil)
+                                                     probeId: outlierViewModel.group.id == probe ? "outlier.first" : nil,
+                                                     layer: .group)
+                                      .zIndex(OutlierGroupView.groupZIndex(position: position))
                                       .id(outlierViewModel.group.id)
                                 }
                             }
