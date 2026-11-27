@@ -1,6 +1,8 @@
 import Foundation
 import StarCppBridge
+import Observation
 
+@Observable
 @MainActor
 public class FrameObserver {
     public init() { }

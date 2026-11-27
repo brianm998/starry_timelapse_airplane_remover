@@ -1,3 +1,4 @@
+import Observation
 /*
 This file is part of the Starry Timelapse Airplane Remover (star).
 
@@ -19,6 +20,7 @@ import logging
 import CoreGraphics
 #endif
 
+@Observable
 @MainActor
 public class OutlierRemovalObserver {
     public init() { }
