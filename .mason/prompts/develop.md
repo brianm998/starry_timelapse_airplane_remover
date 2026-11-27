@@ -55,4 +55,12 @@ one queue. Prefer `mason run --needs compile -- <cmd>` (or `--exclusive` for sta
 unrecognised command) for your own runs.
 
 Put the work in the worktree you are in, commit it there, and say in the commit what changed and why.
+**When a landing or test red is sent back to you.** Compare every file named in the red's errors
+with `git diff --name-only $(git merge-base HEAD origin/develop)`. If none of them is in your diff,
+do not edit to chase it and do not just answer "No code change". Probe the base: build or run the
+same suite on `origin/develop` in a scratch worktree, and rebuild with a fresh `.build` (a stale
+SwiftPM plan caused this once). Report both results with the commands and their output. If the same
+red comes back and your head is unchanged, say so explicitly: an unchanged head returning the same
+red must not be treated as cached-trustworthy, so report it and ask for an uncached rerun in your
+final message.
 {feedback}
